@@ -1,11 +1,10 @@
 use super::VadModelRunner;
-use ndarray::{Array1, Array2, Array3};
+use ndarray::{Array1, Array3, ArrayView2};
 use ort::session::Session;
-use ort::session::builder::GraphOptimizationLevel;
 use ort::value::Value;
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::Path;
-
+use std::sync::Arc;
 pub const DEFAULT_SILERO_WINDOW_SIZE: usize = 512; // 32ms @ 16kHz
 pub const SILERO_CONTEXT_SIZE: usize = 64; // 4ms context @ 16kHz
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,7 +14,7 @@ enum SileroVersion {
 }
 
 pub struct SileroVadRunner {
-    session: Session,
+    session: Arc<Session>,
     version: SileroVersion,
     audio_input_name: String,
     sr_input_name: Option<String>,
@@ -30,21 +29,7 @@ pub struct SileroVadRunner {
 }
 
 impl SileroVadRunner {
-    pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
-        let session = Session::builder()
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .with_intra_threads(1)
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .commit_from_file(path)
-            .map_err(|e| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Model,
-                    format!("Failed to load Silero VAD from {}: {e}", path.display()),
-                )
-            })?;
-
+    pub fn from_session(session: Arc<Session>) -> Result<Self, AsrPortError> {
         let mut audio_input_name = "input".to_string();
         let mut sr_input_name = None;
         let mut has_h = false;
@@ -63,10 +48,7 @@ impl SileroVadRunner {
         if !has_h && !has_state {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
-                format!(
-                    "Unsupported Silero model at {}: missing recurrent state inputs ('state' or 'h')",
-                    path.display()
-                ),
+                "Unsupported Silero model: missing recurrent state inputs ('state' or 'h')",
             ));
         }
 
@@ -86,6 +68,11 @@ impl SileroVadRunner {
             c: Array3::zeros((2, 1, 64)),
             window_size: DEFAULT_SILERO_WINDOW_SIZE,
         })
+    }
+
+    pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
+        let session = crate::engine::get_or_create_session(path)?;
+        Self::from_session(session)
     }
 }
 
@@ -127,28 +114,29 @@ impl VadModelRunner for SileroVadRunner {
 
         match self.version {
             SileroVersion::V5OrV6 => {
-                let mut audio_samples = Vec::with_capacity(SILERO_CONTEXT_SIZE + self.window_size);
-                audio_samples.extend_from_slice(&self.context);
-                audio_samples.extend_from_slice(chunk);
+                let mut audio_buf = [0.0f32; SILERO_CONTEXT_SIZE + DEFAULT_SILERO_WINDOW_SIZE];
+                audio_buf[..SILERO_CONTEXT_SIZE].copy_from_slice(&self.context);
+                audio_buf[SILERO_CONTEXT_SIZE..SILERO_CONTEXT_SIZE + self.window_size]
+                    .copy_from_slice(chunk);
 
-                let audio_arr = Array2::from_shape_vec(
+                let audio_view = ArrayView2::from_shape(
                     (1, SILERO_CONTEXT_SIZE + self.window_size),
-                    audio_samples,
+                    &audio_buf[..SILERO_CONTEXT_SIZE + self.window_size],
                 )
                 .map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
-                        format!("Failed to construct audio tensor: {e}"),
+                        format!("Failed to construct audio tensor view: {e}"),
                     )
                 })?;
-                let audio_val = Value::from_array(audio_arr).map_err(|e| {
+                let audio_val = Value::from_array(audio_view).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind audio value: {e}"),
                     )
                 })?;
 
-                let state_val = Value::from_array(self.state.clone()).map_err(|e| {
+                let state_val = Value::from_array(self.state.view()).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind state: {e}"),
@@ -227,24 +215,24 @@ impl VadModelRunner for SileroVadRunner {
                 Ok(prob)
             }
             SileroVersion::V4 => {
-                let audio_arr = Array2::from_shape_vec((1, self.window_size), chunk.to_vec())
-                    .map_err(|e| {
+                let audio_view =
+                    ArrayView2::from_shape((1, self.window_size), chunk).map_err(|e| {
                         AsrPortError::new(
                             AsrPortErrorKind::Runtime,
-                            format!("Failed to construct audio tensor: {e}"),
+                            format!("Failed to construct audio tensor view: {e}"),
                         )
                     })?;
-                let audio_val = Value::from_array(audio_arr).map_err(|e| {
+                let audio_val = Value::from_array(audio_view).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind audio value: {e}"),
                     )
                 })?;
 
-                let h_val = Value::from_array(self.h.clone()).map_err(|e| {
+                let h_val = Value::from_array(self.h.view()).map_err(|e| {
                     AsrPortError::new(AsrPortErrorKind::Runtime, format!("Failed to bind h: {e}"))
                 })?;
-                let c_val = Value::from_array(self.c.clone()).map_err(|e| {
+                let c_val = Value::from_array(self.c.view()).map_err(|e| {
                     AsrPortError::new(AsrPortErrorKind::Runtime, format!("Failed to bind c: {e}"))
                 })?;
 

@@ -6,7 +6,7 @@ use sona_core::ports::asr::{
     AsrAudioFrame, AsrPortError, AsrRuntimeObserver, AsrStreamBoundaryEvent, AsrStreamingSession,
     AsrTranscriptUpdateEvent, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
-use sona_core::ports::vad::StreamingVadPort;
+use sona_core::ports::vad::{StreamingVadPort, VadStreamEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::pseudo_streaming::{
     DecodeStage, PseudoStreamDecodeResult, PseudoStreamDecoder, PseudoStreamingSession,
@@ -15,16 +15,76 @@ use sona_core::transcription::pseudo_streaming::{
 
 struct TestStreamingVad {
     speech_detected: Arc<AtomicBool>,
+    last_state: bool,
+    sample_cursor: usize,
+    speech_start_sample: usize,
+    configured_end_sample: Option<usize>,
+    max_speech_samples: Option<usize>,
+}
+
+impl TestStreamingVad {
+    fn new(speech_detected: Arc<AtomicBool>) -> Self {
+        Self {
+            speech_detected,
+            last_state: false,
+            sample_cursor: 0,
+            speech_start_sample: 0,
+            configured_end_sample: None,
+            max_speech_samples: None,
+        }
+    }
 }
 
 impl StreamingVadPort for TestStreamingVad {
-    fn accept_samples(&mut self, _samples: &[f32]) {}
+    fn accept_samples(&mut self, samples: &[f32]) -> Vec<VadStreamEvent> {
+        let current = self.speech_detected.load(Ordering::Acquire);
+        let mut events = Vec::new();
+        let frame_start = self.sample_cursor;
+        self.sample_cursor += samples.len();
+
+        if current && !self.last_state {
+            self.last_state = true;
+            self.speech_start_sample = frame_start;
+            events.push(VadStreamEvent::SpeechStart {
+                sample_offset: frame_start,
+            });
+        } else if self.last_state {
+            if let Some(max_samples) = self.max_speech_samples
+                && self.sample_cursor.saturating_sub(self.speech_start_sample) >= max_samples
+            {
+                events.push(VadStreamEvent::SpeechEnd {
+                    start_sample: self.speech_start_sample,
+                    end_sample: self.sample_cursor,
+                });
+                self.speech_start_sample = self.sample_cursor;
+                if current {
+                    events.push(VadStreamEvent::SpeechStart {
+                        sample_offset: self.sample_cursor,
+                    });
+                } else {
+                    self.last_state = false;
+                }
+            } else if !current {
+                self.last_state = false;
+                let end_sample = self.configured_end_sample.unwrap_or(frame_start);
+                events.push(VadStreamEvent::SpeechEnd {
+                    start_sample: self.speech_start_sample,
+                    end_sample,
+                });
+            }
+        }
+        events
+    }
 
     fn is_speech_detected(&self) -> bool {
         self.speech_detected.load(Ordering::Acquire)
     }
 
-    fn reset(&mut self) {}
+    fn reset(&mut self) {
+        self.last_state = false;
+        self.sample_cursor = 0;
+        self.speech_start_sample = 0;
+    }
 }
 
 struct TestDecoder;
@@ -74,9 +134,7 @@ impl AsrRuntimeObserver for TestObserver {
 #[tokio::test]
 async fn pseudo_streaming_session_end_to_end_flow() {
     let speech_flag = Arc::new(AtomicBool::new(false));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -159,9 +217,7 @@ async fn pseudo_streaming_session_end_to_end_flow() {
 #[tokio::test]
 async fn pseudo_streaming_session_sentence_only_flow() {
     let speech_flag = Arc::new(AtomicBool::new(false));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -267,9 +323,7 @@ impl PseudoStreamDecoder for DurationsTestDecoder {
 #[tokio::test]
 async fn pseudo_streaming_empty_durations_falls_back_to_synthesize() {
     let speech_flag = Arc::new(AtomicBool::new(true));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -325,9 +379,7 @@ async fn pseudo_streaming_empty_durations_falls_back_to_synthesize() {
 #[tokio::test]
 async fn pseudo_streaming_explicit_durations_are_preserved() {
     let speech_flag = Arc::new(AtomicBool::new(true));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -397,9 +449,7 @@ impl PseudoStreamDecoder for MismatchedDurationsTestDecoder {
 #[tokio::test]
 async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
     let speech_flag = Arc::new(AtomicBool::new(true));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -454,9 +504,8 @@ async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
 #[tokio::test]
 async fn natural_speech_offset_trims_confirmation_silence() {
     let speech_flag = Arc::new(AtomicBool::new(false));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let mut vad = TestStreamingVad::new(speech_flag.clone());
+    vad.configured_end_sample = Some(3200);
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -513,11 +562,8 @@ async fn natural_speech_offset_trims_confirmation_silence() {
         let updates = observer.transcript_updates.lock().unwrap();
         let last = updates.last().expect("should have emitted final update");
         assert_eq!(last.stage, "final");
-        // Total buffered while speech was active: 3200 + 8000 = 11200 samples.
-        // Expected silence: 500ms = 8000 samples. Release kept: 100ms = 1600 samples.
-        // Trim: 8000 - 1600 = 6400 samples (400ms).
-        // Decoded samples: 11200 - 6400 = 4800 samples (3200 speech + 1600 release).
-        assert_eq!(last.update.upsert_segments[0].text, "hello final (4800)");
+        // Exact state-machine event trimming down to end_sample (3200)
+        assert_eq!(last.update.upsert_segments[0].text, "hello final (3200)");
     }
 
     session.stop().await.unwrap();
@@ -526,9 +572,7 @@ async fn natural_speech_offset_trims_confirmation_silence() {
 #[tokio::test]
 async fn flush_preserves_audio_without_tail_trimming() {
     let speech_flag = Arc::new(AtomicBool::new(false));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let vad = TestStreamingVad::new(speech_flag.clone());
     let observer = Arc::new(TestObserver::default());
 
     let config = PseudoStreamingSessionConfig {
@@ -578,9 +622,8 @@ async fn flush_preserves_audio_without_tail_trimming() {
 #[tokio::test]
 async fn continuous_speech_exceeding_max_duration_forces_utterance_finalization() {
     let speech_flag = Arc::new(AtomicBool::new(false));
-    let vad = TestStreamingVad {
-        speech_detected: speech_flag.clone(),
-    };
+    let mut vad = TestStreamingVad::new(speech_flag.clone());
+    vad.max_speech_samples = Some(3200);
     let observer = Arc::new(TestObserver::default());
 
     // Set max speech duration to 200ms (3200 samples at 16kHz) for testing

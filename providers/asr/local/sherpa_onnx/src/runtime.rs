@@ -1,7 +1,7 @@
-use crate::audio::{SafeVad, load_vad, reset_vad};
 use crate::punctuation::Punctuation;
 use crate::recognizer::{Recognizer, SafeStream};
 use sona_core::ports::asr::TranscriptNormalizationOptions;
+use sona_core::ports::vad::StreamingVadPort;
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -16,7 +16,6 @@ pub type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 pub struct RecognizerPool {
     recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
     punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
-    vads: Arc<Mutex<HashMap<String, Vec<SafeVad>>>>,
 }
 
 impl Default for RecognizerPool {
@@ -30,7 +29,6 @@ impl RecognizerPool {
         Self {
             recognizers: Arc::new(Mutex::new(HashMap::new())),
             punctuations: Arc::new(Mutex::new(HashMap::new())),
-            vads: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -86,10 +84,6 @@ impl RecognizerPool {
         Self::prune_idle_punctuations_locked(&mut punctuations, None);
         drop(punctuations);
 
-        let mut vads = self.vads.lock().await;
-        vads.clear();
-        drop(vads);
-
         crate::speaker::clear_speaker_caches();
         crate::batch::prune_offline_batch_caches();
     }
@@ -103,63 +97,8 @@ impl RecognizerPool {
         punctuations.clear();
         drop(punctuations);
 
-        let mut vads = self.vads.lock().await;
-        vads.clear();
-        drop(vads);
-
         crate::speaker::clear_speaker_caches();
         crate::batch::prune_offline_batch_caches();
-    }
-    pub async fn prepare_vad(&self, vad_model_path: &str) -> bool {
-        if vad_model_path.trim().is_empty() {
-            return false;
-        }
-        {
-            let mut vads = self.vads.lock().await;
-            let pool = vads.entry(vad_model_path.to_string()).or_default();
-            if !pool.is_empty() {
-                return true;
-            }
-        }
-
-        if let Some(mut vad) = load_vad(Some(vad_model_path.to_string())) {
-            reset_vad(&mut vad);
-            let mut vads = self.vads.lock().await;
-            let pool = vads.entry(vad_model_path.to_string()).or_default();
-            if pool.is_empty() {
-                pool.push(vad);
-            }
-            true
-        } else {
-            false
-        }
-    }
-
-    pub async fn get_or_create_vad(&self, vad_model_path: &str) -> Option<SafeVad> {
-        if vad_model_path.trim().is_empty() {
-            return None;
-        }
-        {
-            let mut vads = self.vads.lock().await;
-            if let Some(mut vad) = vads.get_mut(vad_model_path).and_then(|pool| pool.pop()) {
-                reset_vad(&mut vad);
-                return Some(vad);
-            }
-        }
-
-        load_vad(Some(vad_model_path.to_string()))
-    }
-
-    pub async fn recycle_vad(&self, vad_model_path: &str, mut vad: SafeVad) {
-        if vad_model_path.trim().is_empty() {
-            return;
-        }
-        reset_vad(&mut vad);
-        let mut vads = self.vads.lock().await;
-        let pool = vads.entry(vad_model_path.to_string()).or_default();
-        if pool.len() < 2 {
-            pool.push(vad);
-        }
     }
 
     pub async fn prune_idle_punctuations(&self, active_path: Option<&str>) {
@@ -218,10 +157,6 @@ impl RecognizerPool {
     #[cfg(test)]
     pub async fn cached_punctuation_count(&self) -> usize {
         self.punctuations.lock().await.len()
-    }
-    #[cfg(test)]
-    pub async fn cached_vad_count(&self) -> usize {
-        self.vads.lock().await.values().map(|v| v.len()).sum()
     }
 }
 
@@ -310,7 +245,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
 pub struct SherpaInstance {
     recognizer: Option<Arc<Recognizer>>,
     stream: Option<SafeStream>,
-    vad: Option<SafeVad>,
+    vad: Option<Box<dyn StreamingVadPort>>,
     punctuation: Option<Arc<Punctuation>>,
     pub total_samples: usize,
     pub segment_start_time: f64,
@@ -388,15 +323,9 @@ impl SherpaInstance {
         self.punctuation = punctuation;
     }
 
-    pub fn configure_vad(&mut self, vad_model: Option<String>, vad_buffer: f32) {
-        self.vad = load_vad(vad_model.clone());
-        self.vad_model = vad_model;
-        self.vad_buffer = vad_buffer;
-    }
-
     pub fn configure_vad_instance(
         &mut self,
-        vad: Option<SafeVad>,
+        vad: Option<Box<dyn StreamingVadPort>>,
         vad_model: Option<String>,
         vad_buffer: f32,
     ) {
@@ -405,34 +334,26 @@ impl SherpaInstance {
         self.vad_buffer = vad_buffer;
     }
 
-    pub fn take_vad(&mut self) -> Option<SafeVad> {
-        self.vad.take()
-    }
-
     pub fn vad_model(&self) -> Option<&str> {
         self.vad_model.as_deref()
     }
 
     pub fn reset_or_reload_vad(&mut self) {
-        if self.vad_model.is_none() {
-            return;
-        }
-
         if let Some(vad) = self.vad.as_mut() {
-            reset_vad(vad);
-        } else {
-            self.vad = load_vad(self.vad_model.clone());
+            vad.reset();
         }
     }
-
     pub fn has_vad_configuration(&self) -> bool {
         self.vad_model.is_some()
     }
 
-    pub fn vad(&self) -> Option<&SafeVad> {
-        self.vad.as_ref()
+    pub fn vad(&self) -> Option<&dyn StreamingVadPort> {
+        self.vad.as_deref()
     }
 
+    pub fn vad_mut(&mut self) -> Option<&mut (dyn StreamingVadPort + 'static)> {
+        self.vad.as_deref_mut()
+    }
     pub fn vad_buffer(&self) -> f32 {
         self.vad_buffer
     }
@@ -991,26 +912,11 @@ mod tests {
         pool.prune_all_idle().await;
         assert_eq!(pool.cached_punctuation_count().await, 0);
     }
-    #[tokio::test]
-    async fn vad_pool_caches_recycles_and_prunes_vad() {
-        let pool = RecognizerPool::new();
-        assert_eq!(pool.cached_vad_count().await, 0);
-
-        // Empty path returns false / None
-        assert!(!pool.prepare_vad("").await);
-        assert!(pool.get_or_create_vad("").await.is_none());
-        assert_eq!(pool.cached_vad_count().await, 0);
-
-        // Prune all clears any idle vads
-        pool.prune_all_idle().await;
-        assert_eq!(pool.cached_vad_count().await, 0);
-    }
-
     #[test]
     fn vad_configuration_is_owned_by_the_runtime_instance() {
         let mut instance = SherpaInstance::default();
 
-        instance.configure_vad(Some(String::new()), 0.75);
+        instance.configure_vad_instance(None, Some(String::new()), 0.75);
 
         assert!(instance.has_vad_configuration());
         assert_eq!(instance.vad_buffer(), 0.75);

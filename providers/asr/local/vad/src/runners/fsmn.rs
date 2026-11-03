@@ -2,26 +2,30 @@ use super::VadModelRunner;
 use crate::fbank::{
     CmvnParams, FRAME_LENGTH_SAMPLES, FRAME_SHIFT_SAMPLES, FbankExtractor, apply_lfr_and_cmvn,
 };
-use ndarray::{Array4, ArrayD, IxDyn};
+use ndarray::{Array4, ArrayD, ArrayView4, ArrayViewD, IxDyn};
 use ort::session::Session;
-use ort::session::builder::GraphOptimizationLevel;
 use ort::value::Value;
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::Arc;
 
 const CACHE_SHAPE: [usize; 4] = [1, 128, 19, 1];
 const CACHE_LEN: usize = 128 * 19;
 
 pub struct FsmnVadRunner {
-    session: Session,
+    session: Arc<Session>,
     fbank: FbankExtractor,
     cmvn: CmvnParams,
-    // Caches for 4 FSMN layers
+    // Ping-pong caches for 4 FSMN layers
     cache0: Vec<f32>,
     cache1: Vec<f32>,
     cache2: Vec<f32>,
     cache3: Vec<f32>,
+    out_cache0: Vec<f32>,
+    out_cache1: Vec<f32>,
+    out_cache2: Vec<f32>,
+    out_cache3: Vec<f32>,
     // Streaming sample buffer
     sample_buffer: Vec<f32>,
     // Streaming recent 80-dim fbank frame history with silence flags (up to 5 frames for symmetric LFR)
@@ -30,29 +34,16 @@ pub struct FsmnVadRunner {
 }
 
 impl FsmnVadRunner {
-    pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
-        let session = Session::builder()
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .with_intra_threads(1)
-            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-            .commit_from_file(path)
-            .map_err(|e| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Model,
-                    format!("Failed to load FSMN VAD from {}: {e}", path.display()),
-                )
-            })?;
-
-        // Attempt to load external am.mvn / vad.mvn from the same directory if present
+    pub fn from_session(session: Arc<Session>, path: Option<&Path>) -> Result<Self, AsrPortError> {
         let mut cmvn = CmvnParams::default();
-        if let Some(parent) = path.parent() {
+        if let Some(p) = path
+            && let Some(parent) = p.parent()
+        {
             let candidates = ["am.mvn", "vad.mvn"];
             for candidate in &candidates {
-                let p = parent.join(candidate);
-                if p.is_file()
-                    && let Ok(loaded) = CmvnParams::load_am_mvn(&p)
+                let cand_path = parent.join(candidate);
+                if cand_path.is_file()
+                    && let Ok(loaded) = CmvnParams::load_am_mvn(&cand_path)
                 {
                     cmvn = loaded;
                     break;
@@ -68,10 +59,19 @@ impl FsmnVadRunner {
             cache1: vec![0.0f32; CACHE_LEN],
             cache2: vec![0.0f32; CACHE_LEN],
             cache3: vec![0.0f32; CACHE_LEN],
+            out_cache0: vec![0.0f32; CACHE_LEN],
+            out_cache1: vec![0.0f32; CACHE_LEN],
+            out_cache2: vec![0.0f32; CACHE_LEN],
+            out_cache3: vec![0.0f32; CACHE_LEN],
             sample_buffer: Vec::with_capacity(1600),
             fbank_history: VecDeque::with_capacity(6),
             window_size: FRAME_SHIFT_SAMPLES, // 160 samples (10ms) hop
         })
+    }
+
+    pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
+        let session = crate::engine::get_or_create_session(path)?;
+        Self::from_session(session, Some(path))
     }
 
     fn extract_prob_from_slice(slice: &[f32], is_silence_audio: bool) -> f32 {
@@ -109,6 +109,10 @@ impl VadModelRunner for FsmnVadRunner {
         self.cache1.fill(0.0);
         self.cache2.fill(0.0);
         self.cache3.fill(0.0);
+        self.out_cache0.fill(0.0);
+        self.out_cache1.fill(0.0);
+        self.out_cache2.fill(0.0);
+        self.out_cache3.fill(0.0);
         self.sample_buffer.clear();
         self.fbank_history.clear();
     }
@@ -162,52 +166,52 @@ impl VadModelRunner for FsmnVadRunner {
         }
         self.fbank_history.pop_front();
         // 3. Bind ONNX inputs: speech [1, 1, 400] and in_cache0..3 [1, 128, 19, 1]
-        let speech_arr = ArrayD::from_shape_vec(IxDyn(&[1, 1, 400]), stacked_400.to_vec())
-            .map_err(|e| {
+        let speech_view =
+            ArrayViewD::from_shape(IxDyn(&[1, 1, 400]), &stacked_400).map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
-                    format!("Failed to build FSMN speech tensor: {e}"),
+                    format!("Failed to build FSMN speech tensor view: {e}"),
                 )
             })?;
-        let speech_val = Value::from_array(speech_arr).map_err(|e| {
+        let speech_val = Value::from_array(speech_view).map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("Failed to bind FSMN speech input: {e}"),
             )
         })?;
 
-        let c0_arr = Array4::from_shape_vec(CACHE_SHAPE, self.cache0.clone())
+        let c0_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache0)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c1_arr = Array4::from_shape_vec(CACHE_SHAPE, self.cache1.clone())
+        let c1_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache1)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c2_arr = Array4::from_shape_vec(CACHE_SHAPE, self.cache2.clone())
+        let c2_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache2)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c3_arr = Array4::from_shape_vec(CACHE_SHAPE, self.cache3.clone())
+        let c3_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache3)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
         let inputs =
             vec![
                 ("speech", ort::session::SessionInputValue::from(speech_val)),
                 (
                     "in_cache0",
-                    ort::session::SessionInputValue::from(Value::from_array(c0_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c0_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache1",
-                    ort::session::SessionInputValue::from(Value::from_array(c1_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c1_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache2",
-                    ort::session::SessionInputValue::from(Value::from_array(c2_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c2_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache3",
-                    ort::session::SessionInputValue::from(Value::from_array(c3_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c3_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
@@ -262,12 +266,17 @@ impl VadModelRunner for FsmnVadRunner {
                 ));
             }
             match i {
-                0 => self.cache0.copy_from_slice(data),
-                1 => self.cache1.copy_from_slice(data),
-                2 => self.cache2.copy_from_slice(data),
-                _ => self.cache3.copy_from_slice(data),
+                0 => self.out_cache0.copy_from_slice(data),
+                1 => self.out_cache1.copy_from_slice(data),
+                2 => self.out_cache2.copy_from_slice(data),
+                _ => self.out_cache3.copy_from_slice(data),
             }
         }
+
+        std::mem::swap(&mut self.cache0, &mut self.out_cache0);
+        std::mem::swap(&mut self.cache1, &mut self.out_cache1);
+        std::mem::swap(&mut self.cache2, &mut self.out_cache2);
+        std::mem::swap(&mut self.cache3, &mut self.out_cache3);
 
         Ok(prob)
     }

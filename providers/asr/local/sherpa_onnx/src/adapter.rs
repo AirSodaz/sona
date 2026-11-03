@@ -73,6 +73,7 @@ impl LocalAsrAdapter for SherpaOnnxAdapter {
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
         Some(Arc::new(SherpaOnnxStreamingFactory {
             recognizer_pool: self.recognizer_pool.clone(),
+            vad_engines: self.vad_engines.clone(),
         }))
     }
 
@@ -89,6 +90,7 @@ impl LocalAsrAdapter for SherpaOnnxAdapter {
 #[derive(Clone)]
 struct SherpaOnnxStreamingFactory {
     recognizer_pool: RecognizerPool,
+    vad_engines: VadEngineSet,
 }
 
 #[async_trait]
@@ -111,8 +113,13 @@ impl StreamingAsrFactoryPort for SherpaOnnxStreamingFactory {
             pipeline_id.to_string(),
             request,
         )?;
-        create_streaming_session(self.recognizer_pool.clone(), request, observer)
-            .await
-            .map(|session| session as Arc<dyn AsrStreamingSession>)
+        create_streaming_session(
+            self.recognizer_pool.clone(),
+            self.vad_engines.clone(),
+            request,
+            observer,
+        )
+        .await
+        .map(|session| session as Arc<dyn AsrStreamingSession>)
     }
 }
