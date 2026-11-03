@@ -159,7 +159,7 @@ impl UniversalVadStateMachine {
             };
             let end_sample = self.temp_end_sample.unwrap_or(fallback_end);
 
-            if end_sample > self.speech_start_sample {
+            if end_sample >= self.speech_start_sample {
                 events.push(VadStreamEvent::SpeechEnd {
                     start_sample: self.speech_start_sample,
                     end_sample,
@@ -715,5 +715,57 @@ mod tests {
         assert_eq!(sm.flush(), None);
         assert!(sm.candidate_start_sample.is_none());
         assert_eq!(sm.current_sample, 0);
+    }
+
+    #[test]
+    fn max_duration_split_deactivation_emits_speech_end_on_equal_boundary() {
+        let frame_samples = 512;
+        // max_speech = 5 frames (0.16s), min_speech = 2 frames (0.064s), min_silence = 7 frames (0.224s)
+        let opts = test_options(0.50, 0.35, 0.224, 0.064, 0.16);
+        let mut sm = UniversalVadStateMachine::new(&opts, 16_000);
+
+        // Frames 1-2 trigger speech onset
+        sm.accept_prob(0.8, frame_samples);
+        sm.accept_prob(0.8, frame_samples);
+        assert!(sm.is_speech_active());
+
+        // Frames 3-4 continue speech
+        sm.accept_prob(0.8, frame_samples);
+        sm.accept_prob(0.8, frame_samples);
+
+        // Frame 5 hits max_speech (5 frames = 2560 samples), splitting the segment
+        let cut_events = sm.accept_prob(0.8, frame_samples);
+        assert_eq!(
+            cut_events,
+            vec![
+                VadStreamEvent::SpeechEnd {
+                    start_sample: 0,
+                    end_sample: 2560,
+                },
+                VadStreamEvent::SpeechStart { start_sample: 2560 },
+            ]
+        );
+        assert!(sm.is_speech_active());
+
+        // Frames 6-9: silence (prob 0.1), accumulating temp_end at 2560
+        for _ in 6..=9 {
+            let e = sm.accept_prob(0.1, frame_samples);
+            assert!(e.is_empty());
+            assert!(sm.is_speech_active());
+        }
+
+        // Frame 10: hits max_speech (5 frames from 2560 = 5120 samples) before min_silence (7 frames).
+        // Must emit SpeechEnd on equal boundary (start_sample == end_sample == 2560)
+        // so downstream consumers are not stranded in active speech.
+        let e_final = sm.accept_prob(0.1, frame_samples);
+        assert_eq!(
+            e_final,
+            vec![VadStreamEvent::SpeechEnd {
+                start_sample: 2560,
+                end_sample: 2560,
+            }]
+        );
+        assert!(!sm.is_speech_active());
+        assert_eq!(sm.flush(), None);
     }
 }

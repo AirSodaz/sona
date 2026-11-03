@@ -362,6 +362,7 @@ pub struct FbankExtractor {
     window: [f32; FRAME_LENGTH_SAMPLES],
     filters: Vec<MelFilter>,
     bit_rev: [u16; FFT_SIZE],
+    twiddles: [(f32, f32); FFT_SIZE / 2],
 }
 
 impl Default for FbankExtractor {
@@ -430,11 +431,18 @@ impl FbankExtractor {
             }
             *slot = r;
         }
+        // 4. Precompute FFT twiddle factors: W_512^k = exp(-2*pi*i*k/512)
+        let mut twiddles = [(0.0f32, 0.0f32); FFT_SIZE / 2];
+        for (k, slot) in twiddles.iter_mut().enumerate() {
+            let angle = -2.0 * PI * k as f32 / FFT_SIZE as f32;
+            *slot = (angle.cos(), angle.sin());
+        }
 
         Self {
             window,
             filters,
             bit_rev,
+            twiddles,
         }
     }
 
@@ -475,11 +483,10 @@ impl FbankExtractor {
         let mut m = 2;
         while m <= FFT_SIZE {
             let half_m = m / 2;
-            let angle = -2.0 * PI / m as f32;
-            let mut w_re = 1.0f32;
-            let mut w_im = 0.0f32;
+            let step = FFT_SIZE / m;
 
             for j in 0..half_m {
+                let (w_re, w_im) = self.twiddles[j * step];
                 let mut k = 0;
                 while k < FFT_SIZE {
                     let u_re = re[k + j];
@@ -497,9 +504,6 @@ impl FbankExtractor {
 
                     k += m;
                 }
-                let angle_j = angle * (j + 1) as f32;
-                w_re = angle_j.cos();
-                w_im = angle_j.sin();
             }
             m *= 2;
         }
@@ -569,6 +573,19 @@ pub fn apply_lfr_and_cmvn(
     let t = frames.len();
     let t_lfr = t.div_ceil(lfr_n);
     let left_pad = (lfr_m - 1) / 2;
+
+    // Pre-apply CMVN to all input frames once
+    let norm_frames: Vec<[f32; NUM_MEL_BINS]> = frames
+        .iter()
+        .map(|f| {
+            let mut norm = [0.0f32; NUM_MEL_BINS];
+            for b in 0..NUM_MEL_BINS {
+                norm[b] = (f[b] + cmvn.shifts[b]) * cmvn.rescales[b];
+            }
+            norm
+        })
+        .collect();
+
     let mut out = Vec::with_capacity(t_lfr);
     for i in 0..t_lfr {
         let mut stacked = [0.0f32; 400];
@@ -577,13 +594,10 @@ pub fn apply_lfr_and_cmvn(
             // Index in original frames with left/right padding
             let idx = (i * lfr_n + m).saturating_sub(left_pad);
             let clamped_idx = idx.min(t - 1);
-            let frame = &frames[clamped_idx];
+            let norm_frame = &norm_frames[clamped_idx];
 
             let dst_start = m * NUM_MEL_BINS;
-            for b in 0..NUM_MEL_BINS {
-                // Apply CMVN per 80-dim frame component
-                stacked[dst_start + b] = (frame[b] + cmvn.shifts[b]) * cmvn.rescales[b];
-            }
+            stacked[dst_start..dst_start + NUM_MEL_BINS].copy_from_slice(norm_frame);
         }
 
         out.push(stacked);
@@ -591,7 +605,6 @@ pub fn apply_lfr_and_cmvn(
 
     out
 }
-
 #[inline]
 fn mel_scale(freq: f32) -> f32 {
     1127.0 * (1.0 + freq / 700.0).ln()

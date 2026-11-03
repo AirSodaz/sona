@@ -60,11 +60,14 @@ impl SileroVadRunner {
                 "Unsupported Silero model: missing recurrent state inputs ('state' or 'h')",
             ));
         }
-        let has_output = session.outputs.iter().any(|o| o.name == "output");
+        let has_output = session
+            .outputs
+            .iter()
+            .any(|o| o.name == "output" || o.name == "prob");
         if !has_output {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
-                "Unsupported Silero model: missing 'output' node in model outputs",
+                "Unsupported Silero model: missing 'output' or 'prob' node in model outputs",
             ));
         }
 
@@ -220,12 +223,15 @@ impl VadModelRunner for SileroVadRunner {
                     )
                 })?;
 
-                let output_tensor = outputs.get("output").ok_or_else(|| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Runtime,
-                        "Missing 'output' in Silero outputs",
-                    )
-                })?;
+                let output_tensor = outputs
+                    .get("output")
+                    .or_else(|| outputs.get("prob"))
+                    .ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Missing 'output' or 'prob' in Silero outputs",
+                        )
+                    })?;
                 let raw_prob = {
                     let (_, output_data) =
                         output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
@@ -331,12 +337,15 @@ impl VadModelRunner for SileroVadRunner {
                     )
                 })?;
 
-                let output_tensor = outputs.get("output").ok_or_else(|| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Runtime,
-                        "Missing 'output' in Silero outputs",
-                    )
-                })?;
+                let output_tensor = outputs
+                    .get("output")
+                    .or_else(|| outputs.get("prob"))
+                    .ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Missing 'output' or 'prob' in Silero outputs",
+                        )
+                    })?;
                 let raw_prob = {
                     let (_, output_data) =
                         output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
