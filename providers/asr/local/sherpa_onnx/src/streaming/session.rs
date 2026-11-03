@@ -500,6 +500,8 @@ async fn flush_session_impl_inner(
             info!("[Sherpa] {label} flush found no pending offline speech buffer.");
         }
         instance.current_segment_id = None;
+        instance.total_samples = 0;
+        instance.reset_or_reload_vad();
         let initial_refresh = instance.offline_state.backoff().initial_interval_ms();
         instance.offline_state = OfflineState::with_initial_refresh_rate(initial_refresh);
         instance.last_partial_decode_ms.store(0, Ordering::Release);
@@ -792,7 +794,7 @@ async fn feed_audio_samples_inner(
                     if let Some(label) = diagnostics_instance_label(instance_id) {
                         info!(
                             "[Sherpa] {label} triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
-                            seg_id,
+                            seg_id_copy,
                             offline_copy.len(),
                             buffered_sample_count(&offline_copy),
                             global_start

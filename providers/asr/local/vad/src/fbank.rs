@@ -224,35 +224,35 @@ impl CmvnParams {
             let line = lines[i].trim();
             if line.starts_with("<AddShift>") {
                 let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
-                if vals.len() != NUM_MEL_BINS {
+                if vals.len() != NUM_MEL_BINS && vals.len() != 400 {
                     return Err(AsrPortError::new(
                         AsrPortErrorKind::Model,
                         format!(
-                            "Invalid <AddShift> vector dimension in {}: expected {}, got {}",
+                            "Invalid <AddShift> vector dimension in {}: expected {} or 400, got {}",
                             path.display(),
                             NUM_MEL_BINS,
                             vals.len()
                         ),
                     ));
                 }
-                shifts.copy_from_slice(&vals);
+                shifts.copy_from_slice(&vals[..NUM_MEL_BINS]);
                 found_shift = true;
                 i = next_i;
                 continue;
             } else if line.starts_with("<Rescale>") {
                 let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
-                if vals.len() != NUM_MEL_BINS {
+                if vals.len() != NUM_MEL_BINS && vals.len() != 400 {
                     return Err(AsrPortError::new(
                         AsrPortErrorKind::Model,
                         format!(
-                            "Invalid <Rescale> vector dimension in {}: expected {}, got {}",
+                            "Invalid <Rescale> vector dimension in {}: expected {} or 400, got {}",
                             path.display(),
                             NUM_MEL_BINS,
                             vals.len()
                         ),
                     ));
                 }
-                rescales.copy_from_slice(&vals);
+                rescales.copy_from_slice(&vals[..NUM_MEL_BINS]);
                 found_rescale = true;
                 i = next_i;
                 continue;
@@ -282,12 +282,21 @@ fn parse_kaldi_vector_multiline(
         let line = lines[current_idx].trim();
         let start = if !collecting {
             if current_idx > start_idx && line.starts_with('<') {
-                return Err(AsrPortError::new(
-                    AsrPortErrorKind::Model,
-                    format!("Unexpected tag '{line}' while searching for vector start '['"),
-                ));
-            }
-            if let Some(pos) = line.find('[') {
+                if line.starts_with("<LearnRateCoef>") {
+                    if let Some(pos) = line.find('[') {
+                        collecting = true;
+                        pos + 1
+                    } else {
+                        current_idx += 1;
+                        continue;
+                    }
+                } else {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        format!("Unexpected tag '{line}' while searching for vector start '['"),
+                    ));
+                }
+            } else if let Some(pos) = line.find('[') {
                 collecting = true;
                 pos + 1
             } else {
@@ -467,9 +476,6 @@ impl FbankExtractor {
         while m <= FFT_SIZE {
             let half_m = m / 2;
             let angle = -2.0 * PI / m as f32;
-            let w_step_re = angle.cos();
-            let w_step_im = angle.sin();
-
             let mut w_re = 1.0f32;
             let mut w_im = 0.0f32;
 
@@ -491,10 +497,9 @@ impl FbankExtractor {
 
                     k += m;
                 }
-                let next_w_re = w_re * w_step_re - w_im * w_step_im;
-                let next_w_im = w_re * w_step_im + w_im * w_step_re;
-                w_re = next_w_re;
-                w_im = next_w_im;
+                let angle_j = angle * (j + 1) as f32;
+                w_re = angle_j.cos();
+                w_im = angle_j.sin();
             }
             m *= 2;
         }
@@ -721,5 +726,31 @@ mod tests {
         let bad_str = "<AddShift>\n<Rescale> [ 1.0 ]";
         let bad_lines: Vec<&str> = bad_str.lines().collect();
         assert!(parse_kaldi_vector_multiline(&bad_lines, 0).is_err());
+    }
+
+    #[test]
+    fn parse_kaldi_vector_with_learn_rate_coef_and_400_dim() {
+        let mut cmvn_str = String::from("<AddShift> 400 400\n<LearnRateCoef> 0 [\n");
+        for _ in 0..400 {
+            cmvn_str.push_str(" -3.5");
+        }
+        cmvn_str.push_str(" ]\n<Rescale> 400 400\n<LearnRateCoef> 0 [\n");
+        for _ in 0..400 {
+            cmvn_str.push_str(" 0.5");
+        }
+        cmvn_str.push_str(" ]\n");
+
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join(format!("test_cmvn_{}.mvn", std::process::id()));
+        std::fs::write(&file_path, &cmvn_str).unwrap();
+
+        let loaded =
+            CmvnParams::load_am_mvn(&file_path).expect("must parse 400-dim with learn rate coef");
+        let _ = std::fs::remove_file(&file_path);
+
+        assert_eq!(loaded.shifts.len(), 80);
+        assert_eq!(loaded.rescales.len(), 80);
+        assert!((loaded.shifts[0] - (-3.5)).abs() < 1e-5);
+        assert!((loaded.rescales[0] - 0.5).abs() < 1e-5);
     }
 }

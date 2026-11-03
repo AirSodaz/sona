@@ -65,16 +65,12 @@ pub struct PseudoStreamingSession {
     last_frame_end_sample: AtomicU64,
     is_running: AtomicBool,
     enable_partial_decoding: bool,
-    _vad_min_silence_duration_ms: u32,
-    _vad_max_speech_duration_ms: u32,
 }
 
 impl PseudoStreamingSession {
     pub fn new(config: PseudoStreamingSessionConfig) -> Result<Self, AsrPortError> {
         let initial_refresh = config.initial_refresh_rate_ms.unwrap_or(200) as u64;
         let enable_partial_decoding = config.enable_partial_decoding.unwrap_or(true);
-        let vad_min_silence_duration_ms = config.vad_min_silence_duration_ms.unwrap_or(500);
-        let vad_max_speech_duration_ms = config.vad_max_speech_duration_ms.unwrap_or(30_000);
         let postprocessor = TranscriptPostprocessor::compile(config.postprocess_options)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
 
@@ -96,8 +92,6 @@ impl PseudoStreamingSession {
             last_frame_end_sample: AtomicU64::new(0),
             is_running: AtomicBool::new(false),
             enable_partial_decoding,
-            _vad_min_silence_duration_ms: vad_min_silence_duration_ms,
-            _vad_max_speech_duration_ms: vad_max_speech_duration_ms,
         })
     }
 

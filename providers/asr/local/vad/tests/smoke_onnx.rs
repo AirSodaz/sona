@@ -22,7 +22,7 @@ fn generate_speech_like_audio(duration_secs: f32) -> Vec<f32> {
         let carrier = (2.0 * PI * 220.0 * t).sin() * 0.4
             + (2.0 * PI * 440.0 * t).sin() * 0.3
             + (2.0 * PI * 880.0 * t).sin() * 0.2;
-        let envelope = (2.0 * PI * 3.0 * t).sin().abs(); // 3 Hz syllable rate
+        let envelope = 0.2 + 0.8 * (2.0 * PI * 3.0 * t).sin().abs(); // 3 Hz syllable rate
         *sample = carrier * envelope * 0.6;
     }
     audio

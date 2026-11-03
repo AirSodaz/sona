@@ -69,11 +69,19 @@ impl FsmnVadRunner {
             let candidates = ["am.mvn", "vad.mvn"];
             for candidate in &candidates {
                 let cand_path = search_dir.join(candidate);
-                if cand_path.is_file()
-                    && let Ok(loaded) = CmvnParams::load_am_mvn(&cand_path)
-                {
-                    cmvn = loaded;
-                    break;
+                if cand_path.is_file() {
+                    match CmvnParams::load_am_mvn(&cand_path) {
+                        Ok(loaded) => {
+                            cmvn = loaded;
+                            break;
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to load candidate CMVN file at {}: {err}. Falling back to default CMVN.",
+                                cand_path.display()
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -127,8 +135,6 @@ impl FsmnVadRunner {
             let s = slice[0];
             if !s.is_finite() {
                 0.0
-            } else if (0.0..=1.0).contains(&s) {
-                s
             } else {
                 (1.0 / (1.0 + (-s).exp())).clamp(0.0, 1.0)
             }
@@ -282,9 +288,14 @@ impl VadModelRunner for FsmnVadRunner {
                 format!("Failed to extract FSMN logits: {e}"),
             )
         })?;
+        if logits_data.is_empty() {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                "FSMN logits tensor is empty",
+            ));
+        }
 
         let prob = Self::extract_prob_from_slice(logits_data, center_is_silence);
-
         // Update caches and fail if missing or malformed
         for i in 0..4 {
             let name = match i {
@@ -312,6 +323,14 @@ impl VadModelRunner for FsmnVadRunner {
                         "Expected {CACHE_LEN} elements for {name}, got {}",
                         data.len()
                     ),
+                ));
+            }
+            if data.iter().any(|v| !v.is_finite()) {
+                drop(outputs);
+                self.reset_state();
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Runtime,
+                    format!("FSMN {name} output contains non-finite values"),
                 ));
             }
             match i {

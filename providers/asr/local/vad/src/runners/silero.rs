@@ -60,6 +60,13 @@ impl SileroVadRunner {
                 "Unsupported Silero model: missing recurrent state inputs ('state' or 'h')",
             ));
         }
+        let has_output = session.outputs.iter().any(|o| o.name == "output");
+        if !has_output {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Unsupported Silero model: missing 'output' node in model outputs",
+            ));
+        }
 
         if has_h && !has_c {
             return Err(AsrPortError::new(
@@ -67,7 +74,6 @@ impl SileroVadRunner {
                 "Unsupported Silero V4 model: found 'h' input but missing 'c' (cell state)",
             ));
         }
-
         let version = if has_h {
             SileroVersion::V4
         } else {
@@ -117,7 +123,7 @@ impl VadModelRunner for SileroVadRunner {
         }
 
         let sr_val = if self.sr_input_name.is_some() {
-            let sr_arr = ArrayView1::from(&[16_000i64]);
+            let sr_arr = ArrayView1::from(&[crate::shared::SUPPORTED_SAMPLE_RATE as i64]);
             Some(Value::from_array(sr_arr).map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
@@ -130,7 +136,15 @@ impl VadModelRunner for SileroVadRunner {
 
         match self.version {
             SileroVersion::V5OrV6 => {
-                debug_assert_eq!(self.window_size, DEFAULT_SILERO_WINDOW_SIZE);
+                if self.window_size != DEFAULT_SILERO_WINDOW_SIZE {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Unsupported,
+                        format!(
+                            "Silero V5/V6 requires window size {DEFAULT_SILERO_WINDOW_SIZE}, got {}",
+                            self.window_size
+                        ),
+                    ));
+                }
                 let mut audio_buf = [0.0f32; SILERO_CONTEXT_SIZE + DEFAULT_SILERO_WINDOW_SIZE];
                 audio_buf[..SILERO_CONTEXT_SIZE].copy_from_slice(&self.context);
                 audio_buf[SILERO_CONTEXT_SIZE..SILERO_CONTEXT_SIZE + self.window_size]
@@ -187,19 +201,22 @@ impl VadModelRunner for SileroVadRunner {
                         "Missing 'output' in Silero outputs",
                     )
                 })?;
-                let (_, output_data) =
-                    output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
-                        AsrPortError::new(
-                            AsrPortErrorKind::Runtime,
-                            format!("Failed to extract output probability: {e}"),
-                        )
-                    })?;
-                let raw_prob = output_data.first().copied().unwrap_or(0.0);
-                let prob = if !raw_prob.is_finite() {
-                    0.0
-                } else {
-                    raw_prob.clamp(0.0, 1.0)
+                let raw_prob = {
+                    let (_, output_data) =
+                        output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                            AsrPortError::new(
+                                AsrPortErrorKind::Runtime,
+                                format!("Failed to extract output probability: {e}"),
+                            )
+                        })?;
+                    output_data.first().copied().unwrap_or(0.0)
                 };
+                if !raw_prob.is_finite() {
+                    drop(outputs);
+                    self.reset_state();
+                    return Ok(0.0);
+                }
+                let prob = raw_prob.clamp(0.0, 1.0);
                 let next_state_tensor = outputs
                     .get("stateN")
                     .or_else(|| outputs.get("state"))
@@ -222,6 +239,11 @@ impl VadModelRunner for SileroVadRunner {
                         AsrPortErrorKind::Runtime,
                         format!("Expected 256 state elements, got {}", data.len()),
                     ));
+                }
+                if data.iter().any(|v| !v.is_finite()) {
+                    drop(outputs);
+                    self.reset_state();
+                    return Ok(0.0);
                 }
                 if let Some(slice) = self.state.as_slice_mut() {
                     slice.copy_from_slice(data);
@@ -285,19 +307,22 @@ impl VadModelRunner for SileroVadRunner {
                         "Missing 'output' in Silero outputs",
                     )
                 })?;
-                let (_, output_data) =
-                    output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
-                        AsrPortError::new(
-                            AsrPortErrorKind::Runtime,
-                            format!("Failed to extract output probability: {e}"),
-                        )
-                    })?;
-                let raw_prob = output_data.first().copied().unwrap_or(0.0);
-                let prob = if !raw_prob.is_finite() {
-                    0.0
-                } else {
-                    raw_prob.clamp(0.0, 1.0)
+                let raw_prob = {
+                    let (_, output_data) =
+                        output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                            AsrPortError::new(
+                                AsrPortErrorKind::Runtime,
+                                format!("Failed to extract output probability: {e}"),
+                            )
+                        })?;
+                    output_data.first().copied().unwrap_or(0.0)
                 };
+                if !raw_prob.is_finite() {
+                    drop(outputs);
+                    self.reset_state();
+                    return Ok(0.0);
+                }
+                let prob = raw_prob.clamp(0.0, 1.0);
                 let hn_tensor = outputs
                     .get("hn")
                     .or_else(|| outputs.get("new_h"))
@@ -318,6 +343,11 @@ impl VadModelRunner for SileroVadRunner {
                         AsrPortErrorKind::Runtime,
                         format!("Expected 128 hn elements, got {}", h_data.len()),
                     ));
+                }
+                if h_data.iter().any(|v| !v.is_finite()) {
+                    drop(outputs);
+                    self.reset_state();
+                    return Ok(0.0);
                 }
 
                 let cn_tensor = outputs
@@ -341,7 +371,11 @@ impl VadModelRunner for SileroVadRunner {
                         format!("Expected 128 cn elements, got {}", c_data.len()),
                     ));
                 }
-
+                if c_data.iter().any(|v| !v.is_finite()) {
+                    drop(outputs);
+                    self.reset_state();
+                    return Ok(0.0);
+                }
                 if let Some(slice) = self.h.as_slice_mut() {
                     slice.copy_from_slice(h_data);
                 } else {

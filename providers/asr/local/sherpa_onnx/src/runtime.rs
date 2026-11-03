@@ -235,6 +235,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     instance.record_diagnostics = RecordDiagnosticsState::default();
     instance.last_partial_decode_ms.store(0, Ordering::Release);
     instance.current_turn_samples.clear();
+    instance.reset_or_reload_vad();
     if let Some(tracker) = instance.speaker_tracker.as_ref()
         && let Ok(mut guard) = tracker.lock()
     {
