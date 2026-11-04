@@ -302,6 +302,8 @@ impl VadModelRunner for FsmnVadRunner {
             )
         })?;
         if logits_data.is_empty() {
+            drop(outputs);
+            self.reset_state();
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 "FSMN logits tensor is empty",
@@ -317,25 +319,35 @@ impl VadModelRunner for FsmnVadRunner {
                 2 => "out_cache2",
                 _ => "out_cache3",
             };
-            let cache_tensor = outputs.get(name).ok_or_else(|| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("Missing {name} in FSMN output"),
-                )
-            })?;
-            let (_, data) = cache_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("Failed to extract {name}: {e}"),
-                )
-            })?;
+            let cache_tensor = match outputs.get(name) {
+                Some(t) => t,
+                None => {
+                    drop(outputs);
+                    self.reset_state();
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Missing {name} in FSMN output"),
+                    ));
+                }
+            };
+            let (_, data) = match cache_tensor.try_extract_raw_tensor::<f32>() {
+                Ok(res) => res,
+                Err(e) => {
+                    drop(outputs);
+                    self.reset_state();
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to extract {name}: {e}"),
+                    ));
+                }
+            };
             if data.len() != CACHE_LEN {
+                let len = data.len();
+                drop(outputs);
+                self.reset_state();
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::Runtime,
-                    format!(
-                        "Expected {CACHE_LEN} elements for {name}, got {}",
-                        data.len()
-                    ),
+                    format!("Expected {CACHE_LEN} elements for {name}, got {len}"),
                 ));
             }
             if data.iter().any(|v| !v.is_finite()) {

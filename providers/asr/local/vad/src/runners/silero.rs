@@ -271,9 +271,12 @@ impl VadModelRunner for SileroVadRunner {
                         )
                     })?;
                 if data.len() != 2 * 128 {
+                    let len = data.len();
+                    drop(outputs);
+                    self.reset_state();
                     return Err(AsrPortError::new(
                         AsrPortErrorKind::Runtime,
-                        format!("Expected 256 state elements, got {}", data.len()),
+                        format!("Expected 256 state elements, got {len}"),
                     ));
                 }
                 if data.iter().any(|v| !v.is_finite()) {
@@ -383,9 +386,12 @@ impl VadModelRunner for SileroVadRunner {
                     )
                 })?;
                 if h_data.len() != 2 * 64 {
+                    let len = h_data.len();
+                    drop(outputs);
+                    self.reset_state();
                     return Err(AsrPortError::new(
                         AsrPortErrorKind::Runtime,
-                        format!("Expected 128 hn elements, got {}", h_data.len()),
+                        format!("Expected 128 hn elements, got {len}"),
                     ));
                 }
                 if h_data.iter().any(|v| !v.is_finite()) {
@@ -410,9 +416,12 @@ impl VadModelRunner for SileroVadRunner {
                     )
                 })?;
                 if c_data.len() != 2 * 64 {
+                    let len = c_data.len();
+                    drop(outputs);
+                    self.reset_state();
                     return Err(AsrPortError::new(
                         AsrPortErrorKind::Runtime,
-                        format!("Expected 128 cn elements, got {}", c_data.len()),
+                        format!("Expected 128 cn elements, got {len}"),
                     ));
                 }
                 if c_data.iter().any(|v| !v.is_finite()) {

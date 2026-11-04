@@ -466,6 +466,7 @@ impl FbankExtractor {
         for i in (1..FRAME_LENGTH_SAMPLES).rev() {
             buf[i] -= PREEMPHASIS * buf[i - 1];
         }
+        // Follows Kaldi spec: (*waveform)(0) -= preemph_coeff * (*waveform)(0) (feat/feature-window.cc)
         buf[0] -= PREEMPHASIS * buf[0];
 
         // 3. Apply Hamming window

@@ -7,8 +7,12 @@ use sona_core::ports::vad::{SpeechSpan, VadDetectionOptions, VadStreamEvent};
 /// minimum speech duration filtering, minimum silence duration boundary detection, threshold
 /// escalation for natural sentence termination, and hard maximum segment ceilings.
 ///
-/// Emits RAW, unpadded [`SpeechSpan`]s. Padding and micro-pause RMS splitting are owned
-/// solely by Core (`core::transcription::segmentation::segment_batch_audio`).
+/// Emits [`SpeechSpan`]s and streaming [`VadStreamEvent`]s for detected voice activity.
+///
+/// In streaming detection, emitted `SpeechEnd` events incorporate `speech_pad_samples` to prevent
+/// clipping natural sentence terminations. In batch detection (`detect`), padding is set to 0.0 so that
+/// downstream segmentation (`core::transcription::segmentation::segment_batch_audio`) can manage
+/// padding and micro-pause RMS splitting without double-padding.
 #[derive(Clone, Debug)]
 pub struct UniversalVadStateMachine {
     threshold: f32,
@@ -100,7 +104,7 @@ impl UniversalVadStateMachine {
             prob.clamp(0.0, 1.0)
         };
         let frame_start = self.current_sample;
-        self.current_sample += frame_samples;
+        self.current_sample = self.current_sample.saturating_add(frame_samples);
 
         let rate = self.sample_rate.max(1) as f32;
         let jitter_tolerance_frames = (0.020 * rate / (frame_samples.max(1) as f32))
