@@ -78,6 +78,27 @@ describe('ProviderLogo', () => {
       'cerebras',
       'google_translate',
       'google_translate_free',
+      // New LLM providers
+      'amazon_bedrock',
+      'cloudflare_workers_ai',
+      'huggingface',
+      'nvidia_nim',
+      'fireworks',
+      'deepinfra',
+      'novita',
+      'anyscale',
+      'baseten',
+      'databricks',
+      'friendliai',
+      'vllm',
+      'laya',
+      // New ASR providers
+      'azure_speech',
+      'google_gemini',
+      'xai',
+      'gladia',
+      'revai',
+      'fal_whisper',
     ];
 
     for (const id of expectedProviders) {

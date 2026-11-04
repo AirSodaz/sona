@@ -578,7 +578,18 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                           <div key={model.id} className="model-version-row">
                             <div className="model-version-main">
                               <div className="model-version-info">
-                                <span className="model-version-label">{model.name}</span>
+                                <span
+                                  className="model-version-label"
+                                  title={
+                                    model.description
+                                      ? t(model.description)
+                                      : model.descriptionKey
+                                        ? t(model.descriptionKey)
+                                        : undefined
+                                  }
+                                >
+                                  {model.name}
+                                </span>
                                 {displayTags.map((tag) => (
                                   <span key={tag} className="model-tag">
                                     {tag}

@@ -2,12 +2,16 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   AssemblyAiLogo,
+  AzureSpeechLogo,
   DeepgramLogo,
   DolphinLogo,
   ElevenLabsLogo,
+  FalLogo,
   FireRedLogo,
   FunAsrNanoLogo,
   GenericModelLogo,
+  GladiaLogo,
+  GoogleGeminiLogo,
   GroqLogo,
   isAsrModel,
   MetaLogo,
@@ -19,10 +23,12 @@ import {
   ParaformerLogo,
   QwenLogo,
   R2t2Logo,
+  RevAiLogo,
   resolveModelBrand,
   SenseVoiceLogo,
   VolcengineLogo,
   WhisperLogo,
+  XAiLogo,
   ZipformerLogo,
 } from '../ModelLogos';
 
@@ -193,6 +199,12 @@ describe('ModelLogos - resolveModelBrand', () => {
     expect(resolveModelBrand({ id: 'deepgram', name: 'Deepgram' })).toBe('deepgram');
     expect(resolveModelBrand({ id: 'assemblyai', name: 'AssemblyAI' })).toBe('assemblyai');
     expect(resolveModelBrand({ id: 'elevenlabs', name: 'ElevenLabs' })).toBe('elevenlabs');
+    expect(resolveModelBrand({ id: 'azure-speech', name: 'Azure Speech' })).toBe('azure');
+    expect(resolveModelBrand({ id: 'google-gemini', name: 'Google Gemini' })).toBe('gemini');
+    expect(resolveModelBrand({ id: 'xai', name: 'xAI Audio' })).toBe('xai');
+    expect(resolveModelBrand({ id: 'gladia', name: 'Gladia' })).toBe('gladia');
+    expect(resolveModelBrand({ id: 'revai', name: 'Rev.ai' })).toBe('revai');
+    expect(resolveModelBrand({ id: 'fal-whisper', name: 'FAL AI Whisper' })).toBe('fal');
   });
 
   it('falls back to generic for unrecognized ASR models', () => {
@@ -347,6 +359,12 @@ describe('ModelLogos - Component Rendering', () => {
     expect(render(<AssemblyAiLogo size={32} />).container.querySelector('img')).toBeTruthy();
     expect(render(<ElevenLabsLogo size={32} />).container.querySelector('img')).toBeTruthy();
     expect(render(<SenseVoiceLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<AzureSpeechLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<GoogleGeminiLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<XAiLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<GladiaLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<RevAiLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<FalLogo size={32} />).container.querySelector('img')).toBeTruthy();
 
     const brands = [
       'volcengine',
@@ -357,6 +375,12 @@ describe('ModelLogos - Component Rendering', () => {
       'assemblyai',
       'elevenlabs',
       'r2t2',
+      'azure',
+      'gemini',
+      'xai',
+      'gladia',
+      'revai',
+      'fal',
     ] as const;
 
     for (const brand of brands) {

@@ -1,12 +1,14 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use sona_core::ports::asr::{
-    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
-    AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID,
-    ELEVENLABS_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
+    ASSEMBLYAI_PROVIDER_ID, AZURE_SPEECH_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError,
+    AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
+    DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID, FAL_WHISPER_PROVIDER_ID, GLADIA_PROVIDER_ID,
+    GOOGLE_GEMINI_ASR_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
     OPENAI_WHISPER_PROVIDER_ID, OnlineBatchTranscriberPort, OnlineBatchTranscriptionOutput,
-    OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort, StreamingInferenceSpec,
-    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    OnlineBatchTranscriptionRequest, REVAI_PROVIDER_ID, StreamingAsrFactoryPort,
+    StreamingInferenceSpec, VOLCENGINE_DOUBAO_PROVIDER_ID, XAI_ASR_PROVIDER_ID,
+    find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
@@ -41,7 +43,7 @@ pub use test_connection::test_online_asr_provider;
 pub use volcengine::VolcengineTranscriptionModel;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 
-pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 7] = [
+pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 13] = [
     AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
     AsrProviderCapability::new(OPENAI_WHISPER_PROVIDER_ID, false),
     AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
@@ -49,6 +51,12 @@ pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 7] 
     AsrProviderCapability::new(DEEPGRAM_PROVIDER_ID, true),
     AsrProviderCapability::new(ASSEMBLYAI_PROVIDER_ID, true),
     AsrProviderCapability::new(ELEVENLABS_PROVIDER_ID, true),
+    AsrProviderCapability::new(AZURE_SPEECH_PROVIDER_ID, false),
+    AsrProviderCapability::new(GOOGLE_GEMINI_ASR_PROVIDER_ID, false),
+    AsrProviderCapability::new(XAI_ASR_PROVIDER_ID, false),
+    AsrProviderCapability::new(GLADIA_PROVIDER_ID, false),
+    AsrProviderCapability::new(REVAI_PROVIDER_ID, false),
+    AsrProviderCapability::new(FAL_WHISPER_PROVIDER_ID, false),
 ];
 
 pub fn resolve_online_asr_provider_id(
@@ -812,11 +820,13 @@ mod tests {
     use crate::SherpaError;
     use serde_json::json;
     use sona_core::ports::asr::{
-        ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortErrorKind,
-        AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+        ASSEMBLYAI_PROVIDER_ID, AZURE_SPEECH_PROVIDER_ID, AsrEngineConfig, AsrMode,
+        AsrPortErrorKind, AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+        FAL_WHISPER_PROVIDER_ID, GLADIA_PROVIDER_ID, GOOGLE_GEMINI_ASR_PROVIDER_ID,
         GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver,
         OPENAI_WHISPER_PROVIDER_ID, OnlineAsrProviderRequest, OnlineBatchTranscriberPort,
-        OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        OnlineBatchTranscriptionRequest, REVAI_PROVIDER_ID, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        XAI_ASR_PROVIDER_ID,
     };
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -868,6 +878,12 @@ mod tests {
                 (DEEPGRAM_PROVIDER_ID, true),
                 (ASSEMBLYAI_PROVIDER_ID, true),
                 (ELEVENLABS_PROVIDER_ID, true),
+                (AZURE_SPEECH_PROVIDER_ID, false),
+                (GOOGLE_GEMINI_ASR_PROVIDER_ID, false),
+                (XAI_ASR_PROVIDER_ID, false),
+                (GLADIA_PROVIDER_ID, false),
+                (REVAI_PROVIDER_ID, false),
+                (FAL_WHISPER_PROVIDER_ID, false),
             ]
         );
     }
@@ -993,13 +1009,19 @@ mod tests {
             DEEPGRAM_PROVIDER_ID,
             ASSEMBLYAI_PROVIDER_ID,
             ELEVENLABS_PROVIDER_ID,
+            AZURE_SPEECH_PROVIDER_ID,
+            GOOGLE_GEMINI_ASR_PROVIDER_ID,
+            XAI_ASR_PROVIDER_ID,
+            GLADIA_PROVIDER_ID,
+            REVAI_PROVIDER_ID,
+            FAL_WHISPER_PROVIDER_ID,
         ] {
             let provider = find_online_asr_provider(provider_id)
                 .unwrap_or_else(|| panic!("{provider_id} should exist in the manifest"));
             assert_eq!(provider.language_mode, LanguageMode::Selectable);
             assert!(!provider.languages.is_empty());
         }
-        assert_eq!(online_asr_providers().len(), 7);
+        assert_eq!(online_asr_providers().len(), 13);
         let volcengine = find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID).unwrap();
         assert!(volcengine.languages.contains(&"zh".to_string()));
     }

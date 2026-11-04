@@ -626,3 +626,34 @@ async fn native_stream_propagates_upstream_error_event() {
         err.message
     );
 }
+
+#[test]
+fn creates_aimux_provider_for_new_strategies() {
+    use sona_online_llm::aimux_adapter::create_aimux_provider;
+
+    let strategies = [
+        LlmProviderStrategy::AmazonBedrock,
+        LlmProviderStrategy::CloudflareWorkersAi,
+        LlmProviderStrategy::HuggingFace,
+        LlmProviderStrategy::NvidiaNim,
+        LlmProviderStrategy::Fireworks,
+        LlmProviderStrategy::DeepInfra,
+        LlmProviderStrategy::Novita,
+        LlmProviderStrategy::Anyscale,
+        LlmProviderStrategy::Baseten,
+        LlmProviderStrategy::Databricks,
+        LlmProviderStrategy::FriendliAi,
+        LlmProviderStrategy::Vllm,
+        LlmProviderStrategy::Laya,
+    ];
+
+    for strategy in strategies {
+        let provider =
+            create_aimux_provider(strategy, "test-api-key", "https://api.example.com", None);
+        assert!(
+            provider.is_ok(),
+            "Failed to create provider for {:?}",
+            strategy
+        );
+    }
+}

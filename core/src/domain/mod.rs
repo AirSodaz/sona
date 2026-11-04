@@ -155,6 +155,27 @@ pub enum BuiltinLlmProvider {
     Stepfun,
     Lingyiwanwu,
     Cerebras,
+    #[serde(alias = "bedrock")]
+    AmazonBedrock,
+    #[serde(alias = "cloudflare")]
+    CloudflareWorkersAi,
+    #[serde(rename = "huggingface", alias = "hugging_face")]
+    HuggingFace,
+    #[serde(rename = "nvidia_nim", alias = "nvidia")]
+    NvidiaNim,
+    #[serde(alias = "fireworks_ai")]
+    Fireworks,
+    #[serde(rename = "deepinfra", alias = "deep_infra")]
+    DeepInfra,
+    #[serde(alias = "novita_ai")]
+    Novita,
+    Anyscale,
+    Baseten,
+    Databricks,
+    #[serde(rename = "friendliai", alias = "friendli_ai", alias = "friendli")]
+    FriendliAi,
+    Vllm,
+    Laya,
     #[serde(
         rename = "custom-openai-compatible",
         alias = "openai_compatible",
@@ -203,6 +224,21 @@ impl BuiltinLlmProvider {
             Self::Stepfun => "https://api.stepfun.com/v1",
             Self::Lingyiwanwu => "https://api.lingyiwanwu.com/v1",
             Self::Cerebras => "https://api.cerebras.ai/v1",
+            Self::AmazonBedrock => "",
+            Self::CloudflareWorkersAi => {
+                "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+            }
+            Self::HuggingFace => "https://api-inference.huggingface.co/v1",
+            Self::NvidiaNim => "https://integrate.api.nvidia.com/v1",
+            Self::Fireworks => "https://api.fireworks.ai/inference/v1",
+            Self::DeepInfra => "https://api.deepinfra.com/v1/openai",
+            Self::Novita => "https://api.novita.ai/v3/openai",
+            Self::Anyscale => "https://api.endpoints.anyscale.com/v1",
+            Self::Baseten => "https://bridge.baseten.co/v1",
+            Self::Databricks => "https://{workspace}.cloud.databricks.com/serving-endpoints",
+            Self::FriendliAi => "https://inference.friendli.ai/v1",
+            Self::Vllm => "http://localhost:8000/v1",
+            Self::Laya => "http://localhost:8000/v1",
             Self::CustomOpenAiCompatible | Self::Local => "",
         }
     }
@@ -215,6 +251,8 @@ impl BuiltinLlmProvider {
                 | Self::LmStudio
                 | Self::Llamafile
                 | Self::Local
+                | Self::Vllm
+                | Self::Laya
         )
     }
 }

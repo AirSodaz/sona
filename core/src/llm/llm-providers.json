@@ -595,6 +595,238 @@
         "requiresApiKey": true,
         "editableApiHost": true
       }
+    },
+    {
+      "id": "amazon_bedrock",
+      "aliases": [
+        "bedrock"
+      ],
+      "strategy": "amazon_bedrock",
+      "ui": {
+        "labelKey": "settings.llm_providers.amazon_bedrock",
+        "labelDefault": "Amazon Bedrock"
+      },
+      "defaults": {
+        "apiHost": ""
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "cloudflare_workers_ai",
+      "aliases": [
+        "cloudflare"
+      ],
+      "strategy": "cloudflare_workers_ai",
+      "ui": {
+        "labelKey": "settings.llm_providers.cloudflare_workers_ai",
+        "labelDefault": "Cloudflare Workers AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "huggingface",
+      "aliases": [
+        "hugging_face"
+      ],
+      "strategy": "huggingface",
+      "ui": {
+        "labelKey": "settings.llm_providers.huggingface",
+        "labelDefault": "Hugging Face"
+      },
+      "defaults": {
+        "apiHost": "https://api-inference.huggingface.co/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "nvidia_nim",
+      "aliases": [
+        "nvidia"
+      ],
+      "strategy": "nvidia_nim",
+      "ui": {
+        "labelKey": "settings.llm_providers.nvidia_nim",
+        "labelDefault": "NVIDIA NIM"
+      },
+      "defaults": {
+        "apiHost": "https://integrate.api.nvidia.com/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "fireworks",
+      "aliases": [
+        "fireworks_ai"
+      ],
+      "strategy": "fireworks",
+      "ui": {
+        "labelKey": "settings.llm_providers.fireworks",
+        "labelDefault": "Fireworks AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.fireworks.ai/inference/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "deepinfra",
+      "aliases": [
+        "deep_infra"
+      ],
+      "strategy": "deepinfra",
+      "ui": {
+        "labelKey": "settings.llm_providers.deepinfra",
+        "labelDefault": "DeepInfra"
+      },
+      "defaults": {
+        "apiHost": "https://api.deepinfra.com/v1/openai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "novita",
+      "aliases": [
+        "novita_ai"
+      ],
+      "strategy": "novita",
+      "ui": {
+        "labelKey": "settings.llm_providers.novita",
+        "labelDefault": "Novita AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.novita.ai/v3/openai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "anyscale",
+      "strategy": "anyscale",
+      "ui": {
+        "labelKey": "settings.llm_providers.anyscale",
+        "labelDefault": "Anyscale"
+      },
+      "defaults": {
+        "apiHost": "https://api.endpoints.anyscale.com/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "baseten",
+      "strategy": "baseten",
+      "ui": {
+        "labelKey": "settings.llm_providers.baseten",
+        "labelDefault": "Baseten"
+      },
+      "defaults": {
+        "apiHost": "https://bridge.baseten.co/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "databricks",
+      "strategy": "databricks",
+      "ui": {
+        "labelKey": "settings.llm_providers.databricks",
+        "labelDefault": "Databricks"
+      },
+      "defaults": {
+        "apiHost": "https://{workspace}.cloud.databricks.com/serving-endpoints"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "friendliai",
+      "aliases": [
+        "friendli"
+      ],
+      "strategy": "friendliai",
+      "ui": {
+        "labelKey": "settings.llm_providers.friendliai",
+        "labelDefault": "FriendliAI"
+      },
+      "defaults": {
+        "apiHost": "https://inference.friendli.ai/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "vllm",
+      "strategy": "vllm",
+      "ui": {
+        "labelKey": "settings.llm_providers.vllm",
+        "labelDefault": "vLLM"
+      },
+      "defaults": {
+        "apiHost": "http://localhost:8000/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "laya",
+      "strategy": "laya",
+      "ui": {
+        "labelKey": "settings.llm_providers.laya",
+        "labelDefault": "Laya"
+      },
+      "defaults": {
+        "apiHost": "http://localhost:8000/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
+        "editableApiHost": true
+      }
     }
   ]
 }

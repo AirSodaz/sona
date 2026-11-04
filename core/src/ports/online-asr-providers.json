@@ -3,7 +3,31 @@
   "providers": [
     {
       "id": "volcengine-doubao",
-      "languages": ["ar", "bn", "de", "el", "en", "es", "fil", "fr", "id", "it", "ja", "ko", "ms", "ne", "nl", "pl", "pt", "ro", "ru", "th", "tr", "vi", "zh"],
+      "languages": [
+        "ar",
+        "bn",
+        "de",
+        "el",
+        "en",
+        "es",
+        "fil",
+        "fr",
+        "id",
+        "it",
+        "ja",
+        "ko",
+        "ms",
+        "ne",
+        "nl",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "th",
+        "tr",
+        "vi",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "volcengine-doubao-default",
       "apiKeyEnv": "SONA_VOLCENGINE_ASR_API_KEY",
@@ -25,17 +49,30 @@
         {
           "id": "volc.bigasr.auc_turbo",
           "name": "Seed-ASR 极速版 (Flash)",
-          "modes": ["batch"],
-          "description": "极速同步直回，秒级出字，适合批量音频文件导入",
-          "tags": ["Flash", "Turbo", "2.0"],
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.volc_bigasr_auc_turbo",
+          "descriptionKey": "settings.descriptions.volc_bigasr_auc_turbo",
+          "tags": [
+            "Flash",
+            "Turbo",
+            "2.0"
+          ],
           "isDefault": true
         },
         {
           "id": "volc.seedasr.sauc.duration",
           "name": "Seed-ASR 流式版 (Streaming)",
-          "modes": ["streaming"],
-          "description": "双向流式实时出字，高抗噪，适合麦克风实时转写",
-          "tags": ["Streaming", "2.0"],
+          "modes": [
+            "streaming"
+          ],
+          "description": "settings.descriptions.volc_seedasr_sauc_duration",
+          "descriptionKey": "settings.descriptions.volc_seedasr_sauc_duration",
+          "tags": [
+            "Streaming",
+            "2.0"
+          ],
           "isDefault": true
         }
       ],
@@ -65,13 +102,114 @@
           "supported": true,
           "endpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
           "resourceId": "volc.bigasr.auc_turbo",
-          "unsupportedMessage": "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。"
+          "unsupportedMessage": "Local batch file mode only supports recognize/flash; standard and off-peak async modes require publicly accessible audio URLs."
         }
       }
     },
     {
       "id": "groq-whisper",
-      "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "groq-whisper-default",
       "apiKeyEnv": "GROQ_API_KEY",
@@ -80,9 +218,21 @@
         "titleKey": "settings.asr.groq_title",
         "onlineUploadHintKey": "settings.asr.groq_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model" },
-          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
         ]
       },
       "spec": {
@@ -97,25 +247,43 @@
         {
           "id": "whisper-large-v3-turbo",
           "name": "Whisper Large v3 Turbo",
-          "modes": ["batch"],
-          "description": "基于 Groq LPU 极速硬件推理，数百倍实时转写速度",
-          "tags": ["Turbo", "25MB max"],
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.whisper_large_v3_turbo",
+          "descriptionKey": "settings.descriptions.whisper_large_v3_turbo",
+          "tags": [
+            "Turbo",
+            "25MB max"
+          ],
           "isDefault": true
         },
         {
           "id": "whisper-large-v3",
           "name": "Whisper Large v3",
-          "modes": ["batch"],
-          "description": "全精度 Whisper v3 模型，最高识别精度与多语种表现",
-          "tags": ["High-Acc", "25MB max"],
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.whisper_large_v3",
+          "descriptionKey": "settings.descriptions.whisper_large_v3",
+          "tags": [
+            "High-Acc",
+            "25MB max"
+          ],
           "isDefault": false
         },
         {
           "id": "distil-whisper-large-v3-en",
           "name": "Distil-Whisper Large v3 (EN)",
-          "modes": ["batch"],
-          "description": "蒸馏轻量化英文 Whisper 模型，极致低延迟与吞吐",
-          "tags": ["English", "25MB max"],
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.distil_whisper_large_v3_en",
+          "descriptionKey": "settings.descriptions.distil_whisper_large_v3_en",
+          "tags": [
+            "English",
+            "25MB max"
+          ],
           "isDefault": false
         }
       ],
@@ -146,7 +314,21 @@
     },
     {
       "id": "mistral-voxtral",
-      "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "zh"],
+      "languages": [
+        "ar",
+        "de",
+        "en",
+        "es",
+        "fr",
+        "hi",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pt",
+        "ru",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "mistral-voxtral-default",
       "apiKeyEnv": "MISTRAL_API_KEY",
@@ -155,7 +337,11 @@
         "titleKey": "settings.asr.mistral_title",
         "onlineUploadHintKey": "settings.asr.mistral_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          }
         ]
       },
       "spec": {
@@ -170,9 +356,16 @@
         {
           "id": "mistral-small-latest",
           "name": "Voxtral Small",
-          "modes": ["streaming", "batch"],
-          "description": "Mistral 全语种多模态语音识别，实时流式与批量导入两用",
-          "tags": ["Multilingual", "Smart-Punct"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.voxtral_small_latest",
+          "descriptionKey": "settings.descriptions.voxtral_small_latest",
+          "tags": [
+            "Multilingual",
+            "Smart-Punct"
+          ],
           "isDefault": true
         }
       ],
@@ -204,7 +397,108 @@
     },
     {
       "id": "openai-whisper",
-      "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "openai-whisper-default",
       "apiKeyEnv": "OPENAI_API_KEY",
@@ -213,9 +507,21 @@
         "titleKey": "settings.asr.openai_title",
         "onlineUploadHintKey": "settings.asr.openai_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model" },
-          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
         ]
       },
       "spec": {
@@ -230,9 +536,14 @@
         {
           "id": "whisper-1",
           "name": "Whisper 1",
-          "modes": ["batch"],
-          "description": "OpenAI 官方通用语音识别大模型，多语种强健性标杆",
-          "tags": ["25MB max"],
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.openai_whisper_1",
+          "descriptionKey": "settings.descriptions.openai_whisper_1",
+          "tags": [
+            "25MB max"
+          ],
           "isDefault": true
         }
       ],
@@ -263,7 +574,38 @@
     },
     {
       "id": "deepgram",
-      "languages": ["ar", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "id", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sv", "ta", "th", "tr", "uk", "vi", "zh"],
+      "languages": [
+        "ar",
+        "cs",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "fi",
+        "fr",
+        "he",
+        "hi",
+        "id",
+        "it",
+        "ja",
+        "ko",
+        "ms",
+        "nl",
+        "no",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "sk",
+        "sv",
+        "ta",
+        "th",
+        "tr",
+        "uk",
+        "vi",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "deepgram-default",
       "apiKeyEnv": "DEEPGRAM_API_KEY",
@@ -272,8 +614,16 @@
         "titleKey": "settings.asr.deepgram_title",
         "onlineUploadHintKey": "settings.asr.deepgram_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          }
         ]
       },
       "spec": {
@@ -288,25 +638,43 @@
         {
           "id": "nova-3",
           "name": "Nova-3",
-          "modes": ["streaming", "batch"],
-          "description": "Deepgram 最新旗舰语音大模型，极低时延与最高准确率",
-          "tags": ["Fastest"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.deepgram_nova_3",
+          "descriptionKey": "settings.descriptions.deepgram_nova_3",
+          "tags": [
+            "Fastest"
+          ],
           "isDefault": true
         },
         {
           "id": "nova-2",
           "name": "Nova-2",
-          "modes": ["streaming", "batch"],
-          "description": "工业级通用语音模型，兼具高稳定性与说话人分离",
-          "tags": ["General"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.deepgram_nova_2",
+          "descriptionKey": "settings.descriptions.deepgram_nova_2",
+          "tags": [
+            "General"
+          ],
           "isDefault": false
         },
         {
           "id": "enhanced",
           "name": "Enhanced",
-          "modes": ["streaming", "batch"],
-          "description": "增强型音频识别引擎，适合复杂背景噪声场景",
-          "tags": ["Noise-Robust"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.deepgram_enhanced",
+          "descriptionKey": "settings.descriptions.deepgram_enhanced",
+          "tags": [
+            "Noise-Robust"
+          ],
           "isDefault": false
         }
       ],
@@ -336,7 +704,24 @@
     },
     {
       "id": "assemblyai",
-      "languages": ["de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pl", "pt", "ru", "tr", "uk", "vi", "zh"],
+      "languages": [
+        "de",
+        "en",
+        "es",
+        "fr",
+        "hi",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pl",
+        "pt",
+        "ru",
+        "tr",
+        "uk",
+        "vi",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "assemblyai-default",
       "apiKeyEnv": "ASSEMBLYAI_API_KEY",
@@ -345,8 +730,16 @@
         "titleKey": "settings.asr.assemblyai_title",
         "onlineUploadHintKey": "settings.asr.assemblyai_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          }
         ]
       },
       "spec": {
@@ -361,17 +754,29 @@
         {
           "id": "best",
           "name": "Speech-to-Text Best",
-          "modes": ["streaming", "batch"],
-          "description": "AssemblyAI 旗舰高准确率模型，长语音与多说话人聚类",
-          "tags": ["High-Acc"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.assemblyai_best",
+          "descriptionKey": "settings.descriptions.assemblyai_best",
+          "tags": [
+            "High-Acc"
+          ],
           "isDefault": true
         },
         {
           "id": "nano",
           "name": "Speech-to-Text Nano",
-          "modes": ["streaming", "batch"],
-          "description": "轻量经济模型，低时延快速出稿",
-          "tags": ["Fast"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.assemblyai_nano",
+          "descriptionKey": "settings.descriptions.assemblyai_nano",
+          "tags": [
+            "Fast"
+          ],
           "isDefault": false
         }
       ],
@@ -401,7 +806,26 @@
     },
     {
       "id": "elevenlabs",
-      "languages": ["de", "en", "es", "fr", "hi", "id", "it", "ja", "ko", "ms", "nl", "pl", "pt", "ru", "sv", "tr", "vi", "zh"],
+      "languages": [
+        "de",
+        "en",
+        "es",
+        "fr",
+        "hi",
+        "id",
+        "it",
+        "ja",
+        "ko",
+        "ms",
+        "nl",
+        "pl",
+        "pt",
+        "ru",
+        "sv",
+        "tr",
+        "vi",
+        "zh"
+      ],
       "languageMode": "selectable",
       "profileId": "elevenlabs-default",
       "apiKeyEnv": "ELEVENLABS_API_KEY",
@@ -410,8 +834,16 @@
         "titleKey": "settings.asr.elevenlabs_title",
         "onlineUploadHintKey": "settings.asr.elevenlabs_online_upload_hint",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          }
         ]
       },
       "spec": {
@@ -426,9 +858,16 @@
         {
           "id": "scribe_v1",
           "name": "Scribe v1",
-          "modes": ["streaming", "batch"],
-          "description": "ElevenLabs 语音大模型，99+ 语言精细音素级对齐",
-          "tags": ["Accents", "Word Timestamps"],
+          "modes": [
+            "streaming",
+            "batch"
+          ],
+          "description": "settings.descriptions.elevenlabs_scribe_v1",
+          "descriptionKey": "settings.descriptions.elevenlabs_scribe_v1",
+          "tags": [
+            "Accents",
+            "Word Timestamps"
+          ],
           "isDefault": true
         }
       ],
@@ -451,6 +890,1081 @@
         "localFileMode": {
           "supported": true,
           "endpoint": "https://api.elevenlabs.io/v1/speech-to-text",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "azure-speech",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "azure-speech-default",
+      "apiKeyEnv": "AZURE_SPEECH_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.azure_speech_option",
+        "titleKey": "settings.asr.azure_speech_title",
+        "onlineUploadHintKey": "settings.asr.azure_speech_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "Azure Speech / Whisper",
+        "descriptionKey": "settings.asr.azure_speech_spec_desc",
+        "strengthsKey": "settings.asr.azure_speech_spec_strengths",
+        "bestForKey": "settings.asr.azure_speech_spec_best_for",
+        "limitsKey": "settings.asr.azure_speech_spec_limits",
+        "consoleUrl": "https://portal.azure.com"
+      },
+      "models": [
+        {
+          "id": "whisper-1",
+          "name": "Azure Whisper",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.azure_speech_transcription",
+          "descriptionKey": "settings.descriptions.azure_speech_transcription",
+          "tags": [
+            "Azure",
+            "High-Acc"
+          ],
+          "isDefault": true
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://eastus.api.cognitive.microsoft.com",
+        "model": "whisper-1",
+        "speakerDiarization": true
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "batchEndpoint",
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://eastus.api.cognitive.microsoft.com",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "google-gemini",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "google-gemini-default",
+      "apiKeyEnv": "GEMINI_API_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.google_gemini_option",
+        "titleKey": "settings.asr.google_gemini_title",
+        "onlineUploadHintKey": "settings.asr.google_gemini_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "Gemini 2.0 / 1.5",
+        "descriptionKey": "settings.asr.google_gemini_spec_desc",
+        "strengthsKey": "settings.asr.google_gemini_spec_strengths",
+        "bestForKey": "settings.asr.google_gemini_spec_best_for",
+        "limitsKey": "settings.asr.google_gemini_spec_limits",
+        "consoleUrl": "https://aistudio.google.com/app/apikey"
+      },
+      "models": [
+        {
+          "id": "gemini-2.0-flash",
+          "name": "Gemini 2.0 Flash",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.google_gemini_transcription",
+          "descriptionKey": "settings.descriptions.google_gemini_transcription",
+          "tags": [
+            "Fast",
+            "Multimodal"
+          ],
+          "isDefault": true
+        },
+        {
+          "id": "gemini-1.5-flash",
+          "name": "Gemini 1.5 Flash",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.google_gemini_transcription_flash_lite",
+          "descriptionKey": "settings.descriptions.google_gemini_transcription_flash_lite",
+          "tags": [
+            "Lightweight"
+          ],
+          "isDefault": false
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://generativelanguage.googleapis.com",
+        "model": "gemini-2.0-flash",
+        "speakerDiarization": false
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://generativelanguage.googleapis.com",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "xai",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "xai-default",
+      "apiKeyEnv": "XAI_API_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.xai_option",
+        "titleKey": "settings.asr.xai_title",
+        "onlineUploadHintKey": "settings.asr.xai_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "xAI Audio",
+        "descriptionKey": "settings.asr.xai_spec_desc",
+        "strengthsKey": "settings.asr.xai_spec_strengths",
+        "bestForKey": "settings.asr.xai_spec_best_for",
+        "limitsKey": "settings.asr.xai_spec_limits",
+        "consoleUrl": "https://console.x.ai"
+      },
+      "models": [
+        {
+          "id": "default",
+          "name": "xAI Audio Standard",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.xai_audio_transcription",
+          "descriptionKey": "settings.descriptions.xai_audio_transcription",
+          "tags": [
+            "xAI",
+            "Batch"
+          ],
+          "isDefault": true
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://api.x.ai/v1",
+        "model": "default",
+        "speakerDiarization": false
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.x.ai/v1",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "gladia",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "gladia-default",
+      "apiKeyEnv": "GLADIA_API_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.gladia_option",
+        "titleKey": "settings.asr.gladia_title",
+        "onlineUploadHintKey": "settings.asr.gladia_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "Gladia v2",
+        "descriptionKey": "settings.asr.gladia_spec_desc",
+        "strengthsKey": "settings.asr.gladia_spec_strengths",
+        "bestForKey": "settings.asr.gladia_spec_best_for",
+        "limitsKey": "settings.asr.gladia_spec_limits",
+        "consoleUrl": "https://app.gladia.io"
+      },
+      "models": [
+        {
+          "id": "default",
+          "name": "Gladia Speech-to-Text",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.gladia_transcription",
+          "descriptionKey": "settings.descriptions.gladia_transcription",
+          "tags": [
+            "v2",
+            "Diarization"
+          ],
+          "isDefault": true
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://api.gladia.io",
+        "model": "default",
+        "speakerDiarization": true
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.gladia.io",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "revai",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "revai-default",
+      "apiKeyEnv": "REVAI_API_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.revai_option",
+        "titleKey": "settings.asr.revai_title",
+        "onlineUploadHintKey": "settings.asr.revai_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "Rev.ai Speech-to-Text",
+        "descriptionKey": "settings.asr.revai_spec_desc",
+        "strengthsKey": "settings.asr.revai_spec_strengths",
+        "bestForKey": "settings.asr.revai_spec_best_for",
+        "limitsKey": "settings.asr.revai_spec_limits",
+        "consoleUrl": "https://www.rev.ai"
+      },
+      "models": [
+        {
+          "id": "default",
+          "name": "Rev.ai Standard",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.revai_transcription",
+          "descriptionKey": "settings.descriptions.revai_transcription",
+          "tags": [
+            "High-Accuracy"
+          ],
+          "isDefault": true
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://api.rev.ai",
+        "model": "default",
+        "speakerDiarization": true
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.rev.ai",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "fal-whisper",
+      "languages": [
+        "af",
+        "am",
+        "ar",
+        "as",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "fi",
+        "fo",
+        "fr",
+        "gl",
+        "gu",
+        "ha",
+        "haw",
+        "he",
+        "hi",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "id",
+        "is",
+        "it",
+        "ja",
+        "jw",
+        "ka",
+        "kk",
+        "km",
+        "kn",
+        "ko",
+        "la",
+        "lb",
+        "ln",
+        "lo",
+        "lt",
+        "lv",
+        "mg",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "nn",
+        "no",
+        "oc",
+        "pa",
+        "pl",
+        "ps",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sd",
+        "si",
+        "sk",
+        "sl",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "tk",
+        "tl",
+        "tr",
+        "tt",
+        "uk",
+        "ur",
+        "uz",
+        "vi",
+        "yi",
+        "yo",
+        "yue",
+        "zh"
+      ],
+      "languageMode": "selectable",
+      "profileId": "fal-whisper-default",
+      "apiKeyEnv": "FAL_KEY",
+      "ui": {
+        "optionLabelKey": "settings.asr.fal_whisper_option",
+        "titleKey": "settings.asr.fal_whisper_title",
+        "onlineUploadHintKey": "settings.asr.fal_whisper_online_upload_hint",
+        "fields": [
+          {
+            "name": "apiKey",
+            "type": "password",
+            "labelKey": "settings.asr.api_key"
+          },
+          {
+            "name": "model",
+            "type": "text",
+            "labelKey": "settings.asr.model"
+          },
+          {
+            "name": "batchEndpoint",
+            "type": "text",
+            "labelKey": "settings.asr.endpoint"
+          }
+        ]
+      },
+      "spec": {
+        "modelName": "FAL AI Whisper",
+        "descriptionKey": "settings.asr.fal_whisper_spec_desc",
+        "strengthsKey": "settings.asr.fal_whisper_spec_strengths",
+        "bestForKey": "settings.asr.fal_whisper_spec_best_for",
+        "limitsKey": "settings.asr.fal_whisper_spec_limits",
+        "consoleUrl": "https://fal.ai/dashboard/keys"
+      },
+      "models": [
+        {
+          "id": "whisper",
+          "name": "FAL Whisper",
+          "modes": [
+            "batch"
+          ],
+          "description": "settings.descriptions.fal_whisper_transcription",
+          "descriptionKey": "settings.descriptions.fal_whisper_transcription",
+          "tags": [
+            "Serverless",
+            "Turbo"
+          ],
+          "isDefault": true
+        }
+      ],
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://queue.fal.run",
+        "model": "whisper",
+        "speakerDiarization": false
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://queue.fal.run",
           "resourceId": "",
           "unsupportedMessage": ""
         }

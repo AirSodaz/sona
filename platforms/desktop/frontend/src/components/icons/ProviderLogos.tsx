@@ -1,30 +1,46 @@
 import type React from 'react';
 import anthropicSvg from '../../assets/providers/anthropic.svg';
+import anyscaleSvg from '../../assets/providers/anyscale.svg';
 import azureSvg from '../../assets/providers/azure.svg';
 import baiduSvg from '../../assets/providers/baidu.svg';
+import basetenSvg from '../../assets/providers/baseten.svg';
+import bedrockSvg from '../../assets/providers/bedrock.svg';
 import cerebrasSvg from '../../assets/providers/cerebras.svg';
+import cloudflareSvg from '../../assets/providers/cloudflare.svg';
 import cohereSvg from '../../assets/providers/cohere.svg';
 import copilotSvg from '../../assets/providers/copilot.svg';
+import databricksSvg from '../../assets/providers/databricks.svg';
+import deepinfraSvg from '../../assets/providers/deepinfra.svg';
 import deepseekSvg from '../../assets/providers/deepseek.svg';
+import falSvg from '../../assets/providers/fal.svg';
+import fireworksSvg from '../../assets/providers/fireworks.svg';
+import friendliaiSvg from '../../assets/providers/friendliai.svg';
 import geminiSvg from '../../assets/providers/gemini.svg';
+import gladiaSvg from '../../assets/providers/gladia.svg';
 import googletranslateSvg from '../../assets/providers/googletranslate.svg';
 import groqSvg from '../../assets/providers/groq.svg';
+import huggingfaceSvg from '../../assets/providers/huggingface.svg';
 import hyperbolicSvg from '../../assets/providers/hyperbolic.svg';
+import layaSvg from '../../assets/providers/laya.svg';
 import llamafileSvg from '../../assets/providers/llamafile.svg';
 import lmstudioSvg from '../../assets/providers/lmstudio.svg';
 import minimaxSvg from '../../assets/providers/minimax.svg';
 import mistralSvg from '../../assets/providers/mistral.svg';
 import moonshotSvg from '../../assets/providers/moonshot.svg';
+import novitaSvg from '../../assets/providers/novita.svg';
+import nvidiaSvg from '../../assets/providers/nvidia.svg';
 import ollamaSvg from '../../assets/providers/ollama.svg';
 import openaiSvg from '../../assets/providers/openai.svg';
 import openrouterSvg from '../../assets/providers/openrouter.svg';
 import perplexitySvg from '../../assets/providers/perplexity.svg';
 import qwenSvg from '../../assets/providers/qwen.svg';
+import revaiSvg from '../../assets/providers/revai.svg';
 import siliconflowSvg from '../../assets/providers/siliconflow.svg';
 import stepfunSvg from '../../assets/providers/stepfun.svg';
 import tencentSvg from '../../assets/providers/tencent.svg';
 import togetherSvg from '../../assets/providers/together.svg';
 import veniceSvg from '../../assets/providers/venice.svg';
+import vllmSvg from '../../assets/providers/vllm.svg';
 import volcengineSvg from '../../assets/providers/volcengine.svg';
 import xaiSvg from '../../assets/providers/xai.svg';
 import xiaomiSvg from '../../assets/providers/xiaomi.svg';
@@ -106,6 +122,56 @@ export const PROVIDER_ICON_MAP: Record<string, ProviderIconMeta> = {
   // Google Translate
   google_translate: { src: googletranslateSvg },
   google_translate_free: { src: googletranslateSvg },
+  // Amazon Bedrock
+  amazon_bedrock: { src: bedrockSvg },
+  bedrock: { src: bedrockSvg },
+  // Cloudflare Workers AI
+  cloudflare_workers_ai: { src: cloudflareSvg },
+  cloudflare: { src: cloudflareSvg },
+  // Hugging Face
+  huggingface: { src: huggingfaceSvg },
+  hugging_face: { src: huggingfaceSvg },
+  // NVIDIA NIM
+  nvidia_nim: { src: nvidiaSvg },
+  nvidia: { src: nvidiaSvg },
+  // Fireworks
+  fireworks: { src: fireworksSvg },
+  fireworks_ai: { src: fireworksSvg },
+  // DeepInfra
+  deepinfra: { src: deepinfraSvg },
+  deep_infra: { src: deepinfraSvg },
+  // Novita
+  novita: { src: novitaSvg },
+  novita_ai: { src: novitaSvg },
+  // Anyscale
+  anyscale: { src: anyscaleSvg },
+  // Baseten
+  baseten: { src: basetenSvg, monochrome: true },
+  // Databricks
+  databricks: { src: databricksSvg },
+  // FriendliAI
+  friendliai: { src: friendliaiSvg },
+  friendli_ai: { src: friendliaiSvg },
+  friendli: { src: friendliaiSvg },
+  // vLLM
+  vllm: { src: vllmSvg },
+  // Laya
+  laya: { src: layaSvg },
+  // ASR Providers (supporting unified lookups in ProviderLogo)
+  azure_speech: { src: azureSvg },
+  'azure-speech': { src: azureSvg },
+  google_gemini: { src: geminiSvg },
+  'google-gemini': { src: geminiSvg },
+  xai: { src: xaiSvg, monochrome: true },
+  gladia: { src: gladiaSvg },
+  gladia_v2: { src: gladiaSvg },
+  'gladia-v2': { src: gladiaSvg },
+  revai: { src: revaiSvg },
+  rev_ai: { src: revaiSvg },
+  'rev-ai': { src: revaiSvg },
+  fal_whisper: { src: falSvg },
+  'fal-whisper': { src: falSvg },
+  fal: { src: falSvg },
 };
 
 export interface ProviderLogoProps extends React.ImgHTMLAttributes<HTMLImageElement> {

@@ -562,6 +562,17 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::Venice => "venice",
         LlmProviderStrategy::Hyperbolic => "hyperbolic",
         LlmProviderStrategy::Cerebras => "cerebras",
+        LlmProviderStrategy::AmazonBedrock => "amazon-bedrock",
+        LlmProviderStrategy::CloudflareWorkersAi => "cloudflare-workers-ai",
+        LlmProviderStrategy::HuggingFace => "huggingface",
+        LlmProviderStrategy::NvidiaNim => "nvidia",
+        LlmProviderStrategy::Fireworks => "fireworks",
+        LlmProviderStrategy::DeepInfra => "deepinfra",
+        LlmProviderStrategy::Novita => "novita-ai",
+        LlmProviderStrategy::Anyscale => "anyscale",
+        LlmProviderStrategy::Baseten => "baseten",
+        LlmProviderStrategy::Databricks => "databricks",
+        LlmProviderStrategy::FriendliAi => "friendli",
         LlmProviderStrategy::Llamafile
         | LlmProviderStrategy::Local
         | LlmProviderStrategy::LocalNmt
@@ -573,7 +584,9 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         | LlmProviderStrategy::Baidu
         | LlmProviderStrategy::Tencent
         | LlmProviderStrategy::Stepfun
-        | LlmProviderStrategy::Lingyiwanwu => return None,
+        | LlmProviderStrategy::Lingyiwanwu
+        | LlmProviderStrategy::Vllm
+        | LlmProviderStrategy::Laya => return None,
     })
 }
 
@@ -589,6 +602,8 @@ pub fn should_enrich_model_metadata(provider: &LlmProvider, base_url: &str) -> b
                     | sona_core::domain::BuiltinLlmProvider::LmStudio
                     | sona_core::domain::BuiltinLlmProvider::GoogleTranslate
                     | sona_core::domain::BuiltinLlmProvider::GoogleTranslateFree
+                    | sona_core::domain::BuiltinLlmProvider::Vllm
+                    | sona_core::domain::BuiltinLlmProvider::Laya
             ),
             LlmProvider::Custom(_) => false,
         };
