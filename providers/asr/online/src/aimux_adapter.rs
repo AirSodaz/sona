@@ -1,11 +1,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use aimux_core::shared::SharedProviderOptions;
 use aimux_core::transcription_model::{AudioInput, TranscriptionCallOptions, TranscriptionModel};
-use aimux_providers::assemblyai::{AssemblyAIConfig, AssemblyAITranscriptionModel};
-use aimux_providers::deepgram::{DeepgramConfig, DeepgramTranscriptionModel};
-use aimux_providers::elevenlabs::{ElevenLabsConfig, ElevenLabsTranscriptionModel};
-use aimux_providers::openai::{OpenAIConfig, OpenAITranscriptionModel};
+use aimux_providers::assemblyai::{AssemblyAIProviderSettings, create_assemblyai};
+use aimux_providers::deepgram::{DeepgramProviderSettings, create_deepgram};
+use aimux_providers::elevenlabs::{ElevenLabsProviderSettings, create_elevenlabs};
+use aimux_providers::openai::{OpenAIProviderSettings, create_openai};
 use serde_json::Value;
 use sona_core::ports::asr::{
     ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
@@ -155,116 +156,125 @@ pub fn create_aimux_transcription_model(
         }
         OPENAI_WHISPER_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, OPENAI_WHISPER_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "whisper-1".to_string()
+                "whisper-1"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         GROQ_WHISPER_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, GROQ_WHISPER_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                name: Some("groq".to_string()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
-            openai_config.provider = "groq".to_string();
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "whisper-large-v3-turbo".to_string()
+                "whisper-large-v3-turbo"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         MISTRAL_VOXTRAL_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, MISTRAL_VOXTRAL_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                name: Some("mistral".to_string()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
-            openai_config.provider = "mistral".to_string();
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "mistral-small-latest".to_string()
+                "mistral-small-latest"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         DEEPGRAM_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, DEEPGRAM_PROVIDER_ID)?;
-            let mut dg_config = DeepgramConfig::new(&config.api_key);
+            let mut settings = DeepgramProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v1/listen")
                     .trim_end_matches('/');
-                dg_config = dg_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_deepgram(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "nova-2".to_string()
+                "nova-2"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(DeepgramTranscriptionModel::new(
-                model_id, dg_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         ASSEMBLYAI_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, ASSEMBLYAI_PROVIDER_ID)?;
-            let mut aai_config = AssemblyAIConfig::new(&config.api_key);
+            let mut settings = AssemblyAIProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v2/transcript")
                     .trim_end_matches('/');
-                aai_config = aai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_assemblyai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "best".to_string()
+                "best"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(AssemblyAITranscriptionModel::new(
-                model_id, aai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         ELEVENLABS_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, ELEVENLABS_PROVIDER_ID)?;
-            let mut el_config = ElevenLabsConfig::new(&config.api_key);
+            let mut settings = ElevenLabsProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v1/speech-to-text")
                     .trim_end_matches('/');
-                el_config = el_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_elevenlabs(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "scribe_v1".to_string()
+                "scribe_v1"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(ElevenLabsTranscriptionModel::new(
-                model_id, el_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         _ => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
@@ -504,7 +514,7 @@ pub async fn execute_aimux_batch(
     let buffered_samples = bytes.len() / 2;
     let mut call_options = TranscriptionCallOptions::new(AudioInput::Binary(bytes), media_type);
     // Build provider options
-    let mut po = std::collections::HashMap::new();
+    let mut po = SharedProviderOptions::new();
 
     // 1. OpenAI-compatible options
     let mut openai_options = serde_json::Map::new();
@@ -523,10 +533,7 @@ pub async fn execute_aimux_batch(
         );
     }
     if !openai_options.is_empty() {
-        po.insert(
-            "openai".to_string(),
-            serde_json::Value::Object(openai_options),
-        );
+        po.insert("openai".to_string(), openai_options);
     }
 
     let speaker_diarization_enabled = is_cloud_speaker_diarization_enabled(&input.request);
@@ -557,10 +564,7 @@ pub async fn execute_aimux_batch(
             serde_json::Value::String(hotwords.to_string()),
         );
     }
-    po.insert(
-        "volcengine".to_string(),
-        serde_json::Value::Object(volc_options),
-    );
+    po.insert("volcengine".to_string(), volc_options);
 
     // 3. Deepgram options
     let mut deepgram_options = serde_json::Map::new();
@@ -573,10 +577,7 @@ pub async fn execute_aimux_batch(
         deepgram_options.insert("language".to_string(), serde_json::Value::String(language));
     }
     if !deepgram_options.is_empty() {
-        po.insert(
-            "deepgram".to_string(),
-            serde_json::Value::Object(deepgram_options),
-        );
+        po.insert("deepgram".to_string(), deepgram_options);
     }
 
     // 4. AssemblyAI options
@@ -606,10 +607,7 @@ pub async fn execute_aimux_batch(
         }
     }
     if !assemblyai_options.is_empty() {
-        po.insert(
-            "assemblyai".to_string(),
-            serde_json::Value::Object(assemblyai_options),
-        );
+        po.insert("assemblyai".to_string(), assemblyai_options);
     }
 
     // 5. ElevenLabs options
@@ -624,10 +622,7 @@ pub async fn execute_aimux_batch(
         );
     }
     if !elevenlabs_options.is_empty() {
-        po.insert(
-            "elevenlabs".to_string(),
-            serde_json::Value::Object(elevenlabs_options),
-        );
+        po.insert("elevenlabs".to_string(), elevenlabs_options);
     }
 
     if !po.is_empty() {
@@ -689,7 +684,12 @@ pub async fn execute_aimux_batch(
     };
 
     let audio_duration_ms = result.duration_in_seconds.unwrap_or(0.0) * 1000.0;
-    let stage = format!("{}_batch_complete", model.provider().replace('-', "_"));
+    let base_provider = model
+        .provider()
+        .split('.')
+        .next()
+        .unwrap_or(model.provider());
+    let stage = format!("{}_batch_complete", base_provider.replace('-', "_"));
 
     Ok(OnlineBatchTranscriptionOutput {
         segments,
@@ -736,7 +736,8 @@ pub fn parse_raw_provider_segments(
     provider: &str,
     raw_body: &Value,
 ) -> Option<Vec<TranscriptSegment>> {
-    match provider {
+    let base_provider = provider.split('.').next().unwrap_or(provider);
+    match base_provider {
         "volcengine" => segments_from_volcengine_response(raw_body, true, "volc-batch").ok(),
         "assemblyai" => parse_assemblyai_raw_segments(raw_body),
         "deepgram" => parse_deepgram_raw_segments(raw_body),
@@ -1426,7 +1427,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "openai");
+        assert_eq!(model.provider(), "openai.transcription");
         assert_eq!(model.model_id(), "whisper-1");
     }
 
@@ -1441,7 +1442,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "groq");
+        assert_eq!(model.provider(), "groq.transcription");
         assert_eq!(model.model_id(), "whisper-large-v3-turbo");
     }
 
@@ -1456,7 +1457,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "mistral");
+        assert_eq!(model.provider(), "mistral.transcription");
         assert_eq!(model.model_id(), "mistral-small-latest");
     }
 
@@ -1471,7 +1472,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "deepgram");
+        assert_eq!(model.provider(), "deepgram.transcription");
         assert_eq!(model.model_id(), "nova-2");
     }
 
@@ -1486,7 +1487,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "assemblyai");
+        assert_eq!(model.provider(), "assemblyai.transcription");
         assert_eq!(model.model_id(), "best");
     }
 
@@ -1501,7 +1502,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "elevenlabs");
+        assert_eq!(model.provider(), "elevenlabs.transcription");
         assert_eq!(model.model_id(), "scribe_v1");
     }
 
@@ -1548,6 +1549,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1564,6 +1567,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: true,
         }));
         assert_eq!(
@@ -1580,6 +1585,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: true,
         }));
         assert_eq!(
@@ -1602,6 +1609,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1618,6 +1627,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1625,7 +1636,7 @@ mod tests {
             AsrPortErrorKind::InvalidRequest
         );
 
-        let invalid_arg_error = AiMuxError::InvalidArgument("bad param".to_string());
+        let invalid_arg_error = AiMuxError::invalid_argument("bad param");
         assert_eq!(
             map_aimux_asr_error(invalid_arg_error).kind,
             AsrPortErrorKind::InvalidRequest
@@ -1642,6 +1653,9 @@ mod tests {
 
         let no_provider_error = AiMuxError::NoSuchProvider {
             provider_id: "unknown".to_string(),
+            model_id: "whisper-1".to_string(),
+            model_type: "transcriptionModel".to_string(),
+            available_providers: vec![],
         };
         assert_eq!(
             map_aimux_asr_error(no_provider_error).kind,
@@ -1655,7 +1669,7 @@ mod tests {
             AsrPortErrorKind::Unsupported
         );
 
-        let parse_error = AiMuxError::JsonParse("failed to parse".to_string());
+        let parse_error = AiMuxError::json_parse("failed to parse");
         assert_eq!(
             map_aimux_asr_error(parse_error).kind,
             AsrPortErrorKind::Protocol
@@ -1737,6 +1751,11 @@ mod tests {
 
         let segments = parse_assemblyai_raw_segments(&raw).expect("parsed segments");
         assert_eq!(segments.len(), 2);
+
+        // Verify aimux 0.6 namespaced provider string works with parse_raw_provider_segments
+        let parsed_namespaced = parse_raw_provider_segments("assemblyai.transcription", &raw)
+            .expect("parsed namespaced provider segments");
+        assert_eq!(parsed_namespaced.len(), 2);
 
         assert_eq!(segments[0].id, "aai-0");
         assert_eq!(segments[0].text, "Hello world.");

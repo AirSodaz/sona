@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use aimux_core::content::ContentPart;
 use aimux_core::error::AiMuxError;
 use aimux_core::language_model::LanguageModel;
-use aimux_core::language_model_message::{LanguageModelPrompt, LanguageModelPromptMessage};
-use aimux_core::message::Role;
+use aimux_core::language_model_message::{LanguageModelMessage, LanguageModelPrompt};
 use aimux_core::options::{CallOptions, ResponseFormat};
 use aimux_core::provider::Provider;
 use aimux_core::result::GenerateContent;
+use aimux_core::shared::SharedProviderOptions;
 use aimux_core::stream_part::StreamPart;
 use aimux_core::types::ReasoningEffort;
 use futures_util::StreamExt;
@@ -94,7 +93,11 @@ pub fn normalize_openai_base_url(
     api_path: Option<&str>,
 ) -> String {
     let mut trimmed = base_url.trim_end_matches('/');
-    if strategy == LlmProviderStrategy::OpenAiResponses && trimmed.ends_with("/responses") {
+    if matches!(
+        strategy,
+        LlmProviderStrategy::OpenAi | LlmProviderStrategy::OpenAiResponses
+    ) && trimmed.ends_with("/responses")
+    {
         trimmed = trimmed.trim_end_matches("/responses").trim_end_matches('/');
     }
     if let Some(path) = api_path {
@@ -106,7 +109,11 @@ pub fn normalize_openai_base_url(
             } else {
                 format!("{trimmed}/{base_part}")
             }
-        } else if strategy == LlmProviderStrategy::OpenAiResponses && p.ends_with("responses") {
+        } else if matches!(
+            strategy,
+            LlmProviderStrategy::OpenAi | LlmProviderStrategy::OpenAiResponses
+        ) && p.ends_with("responses")
+        {
             let base_part = p.trim_end_matches("responses").trim_end_matches('/');
             if base_part.is_empty() || trimmed.ends_with(base_part) {
                 trimmed.to_string()
@@ -138,7 +145,7 @@ pub fn create_aimux_provider(
     api_key: &str,
     base_url: &str,
     api_path: Option<&str>,
-) -> Result<Box<dyn Provider>, LlmPortError> {
+) -> Result<Arc<dyn Provider>, LlmPortError> {
     create_aimux_provider_with_version(strategy, api_key, base_url, api_path, None)
 }
 
@@ -148,17 +155,17 @@ pub fn create_aimux_provider_with_version(
     base_url: &str,
     api_path: Option<&str>,
     api_version: Option<&str>,
-) -> Result<Box<dyn Provider>, LlmPortError> {
+) -> Result<Arc<dyn Provider>, LlmPortError> {
     let base_url = base_url.trim();
 
     match strategy {
         LlmProviderStrategy::AzureOpenAi => {
-            let mut azure_config = aimux_providers::AzureConfig::new();
+            let mut azure_settings = aimux_providers::AzureOpenAIProviderSettings::default();
             if !api_key.is_empty() {
-                azure_config = azure_config.with_api_key(api_key);
+                azure_settings.api_key = Some(api_key.to_string().into());
             }
             if let Some(version) = api_version {
-                azure_config = azure_config.with_api_version(version);
+                azure_settings.api_version = Some(version.to_string());
             }
             if !base_url.is_empty() {
                 let trimmed = base_url.trim_end_matches('/');
@@ -168,29 +175,35 @@ pub fn create_aimux_provider_with_version(
                     } else {
                         trimmed.to_string()
                     };
-                azure_config = azure_config.with_base_url(effective_base);
+                azure_settings.base_url = Some(effective_base);
             }
             let provider =
-                aimux_providers::AzureProvider::new(azure_config).map_err(map_aimux_error)?;
-            Ok(Box::new(provider))
+                aimux_providers::create_azure(azure_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::Anthropic => {
-            let mut anthropic_config = aimux_providers::anthropic::AnthropicConfig::new(api_key);
-            if !base_url.is_empty() {
-                anthropic_config = anthropic_config.with_base_url(base_url);
+            let mut anthropic_settings = aimux_providers::AnthropicProviderSettings::default();
+            if !api_key.is_empty() {
+                anthropic_settings.api_key = Some(api_key.to_string());
             }
-            Ok(Box::new(
-                aimux_providers::anthropic::AnthropicProvider::new(anthropic_config),
-            ))
+            if !base_url.is_empty() {
+                anthropic_settings.base_url = Some(base_url.to_string());
+            }
+            let provider =
+                aimux_providers::create_anthropic(anthropic_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::Gemini => {
-            let mut google_config = aimux_providers::google::GoogleConfig::new(api_key);
-            if !base_url.is_empty() {
-                google_config = google_config.with_base_url(base_url);
+            let mut google_settings = aimux_providers::GoogleProviderSettings::default();
+            if !api_key.is_empty() {
+                google_settings.api_key = Some(api_key.to_string());
             }
-            Ok(Box::new(aimux_providers::google::GoogleProvider::new(
-                google_config,
-            )))
+            if !base_url.is_empty() {
+                google_settings.base_url = Some(base_url.to_string());
+            }
+            let provider =
+                aimux_providers::create_google(google_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::Cohere => {
             let effective_base = if base_url.is_empty() {
@@ -203,84 +216,113 @@ pub fn create_aimux_provider_with_version(
                     trimmed.to_string()
                 }
             };
-            let cohere_config =
-                aimux_providers::cohere::CohereConfig::new(api_key).with_base_url(effective_base);
-            Ok(Box::new(aimux_providers::cohere::CohereProvider::new(
-                cohere_config,
-            )))
+            let mut cohere_settings = aimux_providers::CohereProviderSettings::default();
+            if !api_key.is_empty() {
+                cohere_settings.api_key = Some(api_key.to_string());
+            }
+            cohere_settings.base_url = Some(effective_base);
+            let provider =
+                aimux_providers::create_cohere(cohere_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::XAi => {
-            let mut xai_config = aimux_providers::XAIConfig::new(api_key);
+            let mut xai_settings = aimux_providers::XAIProviderSettings::default();
+            if !api_key.is_empty() {
+                xai_settings.api_key = Some(api_key.to_string());
+            }
             if !base_url.is_empty() {
                 let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                xai_config = xai_config.with_base_url(effective_base);
+                xai_settings.base_url = Some(effective_base);
             }
-            Ok(Box::new(aimux_providers::XAIProvider::new(xai_config)))
+            let provider = aimux_providers::create_xai(xai_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::MistralAi => {
-            let mut mistral_config = aimux_providers::MistralConfig::new(api_key);
+            let mut mistral_settings = aimux_providers::MistralProviderSettings::default();
+            if !api_key.is_empty() {
+                mistral_settings.api_key = Some(api_key.to_string());
+            }
             if !base_url.is_empty() {
                 let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                mistral_config.base_url = effective_base;
+                mistral_settings.base_url = Some(effective_base);
             }
-            Ok(Box::new(aimux_providers::MistralProvider::new(
-                mistral_config,
-            )))
+            let provider =
+                aimux_providers::create_mistral(mistral_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         LlmProviderStrategy::OpenRouter => {
-            let mut openrouter_config = aimux_providers::OpenRouterConfig::new(api_key);
-            if !base_url.is_empty() {
-                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                openrouter_config = openrouter_config.with_base_url(effective_base);
-            }
-            Ok(Box::new(aimux_providers::OpenRouterProvider::new(
-                openrouter_config,
-            )))
+            let effective_base = if !base_url.is_empty() {
+                normalize_openai_base_url(strategy, base_url, api_path)
+            } else {
+                "https://openrouter.ai/api/v1".to_string()
+            };
+            let settings = aimux_providers::PresetSettings {
+                api_key: if !api_key.is_empty() {
+                    Some(api_key.to_string().into())
+                } else {
+                    None
+                },
+                base_url: Some(effective_base),
+                ..Default::default()
+            };
+            aimux_providers::create_provider("openrouter", settings).map_err(map_aimux_error)
         }
         LlmProviderStrategy::Ollama => {
+            let effective_base = if !base_url.is_empty() {
+                Some(normalize_openai_base_url(strategy, base_url, api_path))
+            } else {
+                None
+            };
             let key = if api_key.is_empty() {
                 "ollama"
             } else {
                 api_key
             };
-            let mut ollama_config = aimux_providers::OllamaConfig::new(key);
-            if !base_url.is_empty() {
-                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                ollama_config = ollama_config.with_base_url(effective_base);
-            }
-            Ok(Box::new(aimux_providers::OllamaProvider::new(
-                ollama_config,
-            )))
+            let settings = aimux_providers::PresetSettings {
+                api_key: Some(key.to_string().into()),
+                base_url: effective_base,
+                ..Default::default()
+            };
+            aimux_providers::create_provider("ollama", settings).map_err(map_aimux_error)
         }
         LlmProviderStrategy::LmStudio => {
+            let effective_base = if !base_url.is_empty() {
+                normalize_openai_base_url(strategy, base_url, api_path)
+            } else {
+                "http://localhost:1234/v1".to_string()
+            };
             let key = if api_key.is_empty() {
                 "lmstudio"
             } else {
                 api_key
             };
-            let mut lmstudio_config = aimux_providers::LmStudioConfig::new(key);
-            if !base_url.is_empty() {
-                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                lmstudio_config = lmstudio_config.with_base_url(effective_base);
-            }
-            Ok(Box::new(aimux_providers::LmStudioProvider::new(
-                lmstudio_config,
-            )))
+            let settings = aimux_providers::PresetSettings {
+                api_key: Some(key.to_string().into()),
+                base_url: Some(effective_base),
+                ..Default::default()
+            };
+            aimux_providers::create_provider("lmstudio", settings).map_err(map_aimux_error)
         }
         LlmProviderStrategy::Llamafile => {
-            let key = if api_key.is_empty() {
-                "llamafile"
+            let effective_base = if !base_url.is_empty() {
+                normalize_openai_base_url(strategy, base_url, api_path)
             } else {
-                api_key
+                "http://localhost:8080/v1".to_string()
             };
-            let mut llamafile_config = aimux_providers::LlamafileConfig::new(key);
-            if !base_url.is_empty() {
-                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
-                llamafile_config = llamafile_config.with_base_url(effective_base);
-            }
-            Ok(Box::new(aimux_providers::LlamafileProvider::new(
-                llamafile_config,
-            )))
+            let key = if api_key.is_empty() {
+                None
+            } else {
+                Some(api_key.to_string())
+            };
+            let settings = aimux_providers::openai_compatible::OpenAICompatibleProviderSettings {
+                name: "llamafile".to_string(),
+                base_url: effective_base,
+                api_key: key,
+                ..Default::default()
+            };
+            let provider = aimux_providers::openai_compatible::create_openai_compatible(settings)
+                .map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
         _ => {
             let registry_name = match strategy {
@@ -316,28 +358,35 @@ pub fn create_aimux_provider_with_version(
             };
 
             if let Some(name) = registry_name {
-                let options =
-                    effective_base
-                        .as_ref()
-                        .map(|base| aimux_providers::ProviderOptions {
-                            base_url: Some(base.clone()),
-                            ..Default::default()
-                        });
-                if let Ok(handle) =
-                    aimux_providers::provider_handle(name, Some(api_key.to_string()), options)
-                {
+                let settings = aimux_providers::PresetSettings {
+                    api_key: if !api_key.is_empty() {
+                        Some(api_key.to_string().into())
+                    } else {
+                        None
+                    },
+                    base_url: effective_base.clone(),
+                    ..Default::default()
+                };
+                if let Ok(handle) = aimux_providers::create_provider(name, settings) {
                     return Ok(handle);
                 }
             }
 
             let fallback_base =
                 effective_base.unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-            let openai_config = aimux_providers::openai::OpenAIConfig::new(api_key)
-                .with_provider("openai")
-                .with_base_url(&fallback_base);
-            Ok(Box::new(aimux_providers::openai::OpenAIProvider::new(
-                openai_config,
-            )))
+            let openai_settings = aimux_providers::OpenAIProviderSettings {
+                api_key: if !api_key.is_empty() {
+                    Some(api_key.to_string())
+                } else {
+                    None
+                },
+                base_url: Some(fallback_base),
+                name: Some("openai".to_string()),
+                ..Default::default()
+            };
+            let provider =
+                aimux_providers::create_openai(openai_settings).map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
         }
     }
 }
@@ -347,17 +396,6 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
     let api_key = &config.api_key;
     let model = &config.model;
 
-    if config.strategy == LlmProviderStrategy::OpenAiResponses {
-        let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key);
-        if !base_url.is_empty() {
-            let effective_base =
-                normalize_openai_base_url(config.strategy, base_url, config.api_path.as_deref());
-            openai_config = openai_config.with_base_url(&effective_base);
-        }
-        let provider = aimux_providers::openai::OpenAIProvider::new(openai_config);
-        return Ok(Arc::new(provider.responses_model(model)));
-    }
-
     let provider = create_aimux_provider_with_version(
         config.strategy,
         api_key,
@@ -365,8 +403,7 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
         config.api_path.as_deref(),
         config.api_version.as_deref(),
     )?;
-    let model = provider.language_model(model).map_err(map_aimux_error)?;
-    Ok(Arc::from(model))
+    provider.language_model(model).map_err(map_aimux_error)
 }
 
 pub fn build_aimux_call_options(
@@ -375,21 +412,15 @@ pub fn build_aimux_call_options(
     let mut prompt: LanguageModelPrompt = Vec::new();
 
     if let Some(sys) = &request.system_prompt {
-        prompt.push(LanguageModelPromptMessage {
-            role: Role::System,
-            content: vec![ContentPart::text(sys)],
+        prompt.push(LanguageModelMessage::System {
+            content: sys.clone(),
             provider_options: None,
         });
     }
 
-    prompt.push(LanguageModelPromptMessage {
-        role: Role::User,
-        content: vec![ContentPart::text(&request.input)],
-        provider_options: None,
-    });
+    prompt.push(LanguageModelMessage::user_text(&request.input));
 
     let mut options = CallOptions::new(prompt);
-    options.max_retries = Some(0);
     options.temperature = if request.capabilities().supports_temperature {
         request.options.temperature.map(f64::from)
     } else {
@@ -420,6 +451,8 @@ pub fn build_aimux_call_options(
         }
     }
 
+    let mut provider_options = SharedProviderOptions::new();
+
     if request.effective_reasoning_enabled() {
         let level = request.effective_reasoning_level();
         let thinking_level = ThinkingLevel::from_legacy_options(Some(true), level);
@@ -444,24 +477,33 @@ pub fn build_aimux_call_options(
             }
             ThinkingLevel::Budget(budget) => {
                 options.reasoning = Some(ReasoningEffort::Medium);
-                // Also provide body overrides for providers supporting explicit budget_tokens
-                options.body_overrides = Some(json!({
-                    "thinking": {
+                let mut anthropic_map = serde_json::Map::new();
+                anthropic_map.insert(
+                    "thinking".to_string(),
+                    json!({
                         "type": "enabled",
                         "budget_tokens": budget
-                    }
-                }));
+                    }),
+                );
+                provider_options.insert("anthropic".to_string(), anthropic_map);
             }
         }
     } else {
         options.reasoning = Some(ReasoningEffort::None);
         if request.config.strategy == LlmProviderStrategy::Gemini {
-            options.body_overrides = Some(json!({
-                "thinkingConfig": {
+            let mut google_map = serde_json::Map::new();
+            google_map.insert(
+                "thinkingConfig".to_string(),
+                json!({
                     "thinkingBudget": 0
-                }
-            }));
+                }),
+            );
+            provider_options.insert("google".to_string(), google_map);
         }
+    }
+
+    if !provider_options.is_empty() {
+        options.provider_options = Some(provider_options);
     }
 
     Ok(options)
@@ -483,8 +525,8 @@ pub async fn execute_aimux_completion(
             GenerateContent::Text { text, .. } => {
                 text_acc.push_str(&text);
             }
-            GenerateContent::Reasoning { text, .. } => {
-                thought_acc.push_str(&text);
+            GenerateContent::Reasoning(reasoning) => {
+                thought_acc.push_str(&reasoning.text);
             }
             _ => {}
         }

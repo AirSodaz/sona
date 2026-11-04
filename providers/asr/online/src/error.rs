@@ -335,16 +335,19 @@ pub fn map_aimux_asr_error(error: aimux_core::error::AiMuxError) -> AsrPortError
         Some(400 | 404 | 413 | 422) => AsrPortErrorKind::InvalidRequest,
         Some(500..=599) => AsrPortErrorKind::Unavailable,
         _ => match &error {
-            aimux_core::error::AiMuxError::InvalidArgument(_)
+            aimux_core::error::AiMuxError::LoadApiKey { .. }
+            | aimux_core::error::AiMuxError::TokenExpired(_) => AsrPortErrorKind::Authentication,
+            aimux_core::error::AiMuxError::InvalidArgument { .. }
             | aimux_core::error::AiMuxError::NoSuchModel { .. }
-            | aimux_core::error::AiMuxError::NoSuchProvider { .. } => {
-                AsrPortErrorKind::InvalidRequest
-            }
+            | aimux_core::error::AiMuxError::NoSuchProvider { .. }
+            | aimux_core::error::AiMuxError::LoadSetting { .. } => AsrPortErrorKind::InvalidRequest,
             aimux_core::error::AiMuxError::UnsupportedFunctionality(_) => {
                 AsrPortErrorKind::Unsupported
             }
-            aimux_core::error::AiMuxError::JsonParse(_)
-            | aimux_core::error::AiMuxError::InvalidResponseData(_) => AsrPortErrorKind::Protocol,
+            aimux_core::error::AiMuxError::JsonParse { .. }
+            | aimux_core::error::AiMuxError::InvalidResponseData { .. } => {
+                AsrPortErrorKind::Protocol
+            }
             _ => {
                 if lower.contains("unauthorized")
                     || lower.contains("api key")

@@ -211,28 +211,33 @@ async fn streaming_transport_preserves_retryable_status_metadata() {
 }
 
 #[tokio::test]
-async fn openai_adapter_posts_to_chat_completions_with_messages() {
+async fn openai_adapter_posts_to_responses_with_input() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let request_str = read_http_request(&mut stream);
         assert!(
-            request_str.starts_with("POST /v1/chat/completions HTTP/1.1"),
-            "expected POST /v1/chat/completions but got request line: {}",
+            request_str.starts_with("POST /v1/responses HTTP/1.1"),
+            "expected POST /v1/responses but got request line: {}",
             request_str.lines().next().unwrap_or_default()
         );
         let body = request_str.split("\r\n\r\n").nth(1).unwrap_or_default();
         let parsed: serde_json::Value = serde_json::from_str(body).unwrap();
         assert!(
-            parsed.get("messages").is_some(),
-            "expected 'messages' field in payload, got: {body}"
+            parsed.get("input").is_some(),
+            "expected 'input' field in Responses payload, got: {body}"
         );
         assert!(
-            parsed.get("input").is_none(),
-            "did not expect 'input' field in chat payload"
+            parsed.get("messages").is_none(),
+            "did not expect 'messages' field in Responses payload"
         );
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"id\":\"chatcmpl-test\",\"object\":\"chat.completion\",\"created\":12345,\"model\":\"test-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"test answer\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}";
+        assert_eq!(
+            parsed.get("max_output_tokens").and_then(|v| v.as_u64()),
+            Some(256),
+            "expected 'max_output_tokens' to be 256 in Responses payload"
+        );
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"id\":\"resp-test\",\"object\":\"response\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"test answer\"}]}],\"usage\":{\"input_tokens\":5,\"output_tokens\":2}}";
         stream.write_all(response.as_bytes()).unwrap();
     });
 
@@ -244,9 +249,13 @@ async fn openai_adapter_posts_to_chat_completions_with_messages() {
     let response = OnlineLlmAdapter.complete(completion_request).await.unwrap();
     server.join().unwrap();
     assert_eq!(response.text, "test answer");
+    let usage = response.usage.expect("expected usage in response");
+    assert_eq!(usage.prompt_tokens, 5);
+    assert_eq!(usage.completion_tokens, 2);
+    assert_eq!(usage.total_tokens, 7);
 }
 #[tokio::test]
-async fn azure_openai_adapter_posts_to_deployment_endpoint_with_api_key_header() {
+async fn azure_openai_adapter_posts_to_responses_endpoint_with_api_key_header() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
 
@@ -254,10 +263,8 @@ async fn azure_openai_adapter_posts_to_deployment_endpoint_with_api_key_header()
         let (mut stream, _) = listener.accept().unwrap();
         let request_str = read_http_request(&mut stream);
         assert!(
-            request_str.starts_with(
-                "POST /openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21 HTTP/1.1"
-            ),
-            "expected Azure deployment path, got: '{}'",
+            request_str.starts_with("POST /openai/responses"),
+            "expected Azure responses path, got: '{}'",
             request_str.lines().next().unwrap_or_default()
         );
         assert!(
@@ -267,7 +274,7 @@ async fn azure_openai_adapter_posts_to_deployment_endpoint_with_api_key_header()
             "expected api-key header in Azure request, got:\n{}",
             request_str
         );
-        let mock_response = r#"{"id":"az-1","object":"chat.completion","created":123,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"azure ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+        let mock_response = r#"{"id":"az-1","object":"response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"azure ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}"#;
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             mock_response.len(),
@@ -340,8 +347,13 @@ async fn native_providers_post_to_expected_endpoint_paths() {
         ),
         (
             LlmProviderStrategy::XAi,
-            "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"xai-1","object":"chat.completion","created":123,"model":"grok-2","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+            "POST /v1/responses HTTP/1.1",
+            r#"{"id":"xai-1","object":"response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}"#,
+        ),
+        (
+            LlmProviderStrategy::OpenAiResponses,
+            "POST /v1/responses HTTP/1.1",
+            r#"{"id":"resp-1","object":"response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}"#,
         ),
         (
             LlmProviderStrategy::OpenRouter,
@@ -444,10 +456,14 @@ async fn native_stream_separates_thought_and_content_from_sse() {
         let (mut stream, _) = listener.accept().unwrap();
         let _request_str = read_http_request(&mut stream);
         let sse_body = concat!(
-            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Thinking step 1... \"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Thinking step 2...\\n\"}}]}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\"Final result\"}}]}\n\n",
-            "data: [DONE]\n\n"
+            "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\"}}\n\n",
+            "data: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"delta\":\"Thinking step 1... \"}\n\n",
+            "data: {\"type\":\"response.reasoning_summary_text.delta\",\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"delta\":\"Thinking step 2...\\n\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\"}}\n\n",
+            "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\n",
+            "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":1,\"delta\":\"Final result\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"
         );
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
@@ -470,6 +486,14 @@ async fn native_stream_separates_thought_and_content_from_sse() {
     server.join().unwrap();
 
     assert_eq!(res.text, "Final result");
+    assert_eq!(
+        res.thought.as_deref(),
+        Some("Thinking step 1... Thinking step 2...\n")
+    );
+    let usage = res.usage.expect("expected usage in stream response");
+    assert_eq!(usage.prompt_tokens, 1);
+    assert_eq!(usage.completion_tokens, 1);
+    assert_eq!(usage.total_tokens, 2);
     assert_eq!(deltas.len(), 3);
     assert!(deltas[0].is_thought());
     assert_eq!(deltas[0].delta, "Thinking step 1... ");
@@ -488,8 +512,10 @@ async fn native_stream_demuxes_inline_think_tags_from_sse() {
         let (mut stream, _) = listener.accept().unwrap();
         let _request_str = read_http_request(&mut stream);
         let sse_body = concat!(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"<think>Local reasoning</think>Hello world\"}}]}\n\n",
-            "data: [DONE]\n\n"
+            "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\n",
+            "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"delta\":\"<think>Local reasoning</think>Hello world\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"
         );
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
@@ -532,7 +558,7 @@ async fn native_stream_handles_multibyte_utf8_split_across_chunks() {
         stream.write_all(headers.as_bytes()).unwrap();
 
         // Chinese character "好" is 3 bytes: 0xE5 0xA5 0xBD
-        let part1 = "data: {\"choices\":[{\"delta\":{\"content\":\"\u{4f60}";
+        let part1 = "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"delta\":\"\u{4f60}";
         stream.write_all(part1.as_bytes()).unwrap();
         stream.flush().unwrap();
 
@@ -544,7 +570,7 @@ async fn native_stream_handles_multibyte_utf8_split_across_chunks() {
         // Write remainder of "好" + closing json
         let mut part2 = Vec::new();
         part2.extend_from_slice(&hao_bytes[2..]);
-        part2.extend_from_slice(b"\"}}]}\n\ndata: [DONE]\n\n");
+        part2.extend_from_slice(b"\"}\n\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n");
         stream.write_all(&part2).unwrap();
         stream.flush().unwrap();
     });
@@ -564,6 +590,9 @@ async fn native_stream_handles_multibyte_utf8_split_across_chunks() {
     server.join().unwrap();
 
     assert_eq!(res.text, "你好");
+    assert_eq!(deltas.len(), 1);
+    assert_eq!(deltas[0].delta, "你好");
+    assert!(!deltas[0].is_thought());
 }
 
 #[tokio::test]
@@ -574,7 +603,7 @@ async fn native_stream_propagates_upstream_error_event() {
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let _request_str = read_http_request(&mut stream);
-        let sse_body = "data: {\"error\":{\"message\":\"Upstream context window exceeded\"}}\n\n";
+        let sse_body = "data: {\"type\":\"error\",\"error\":{\"message\":\"Upstream context window exceeded\"}}\n\n";
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
         );

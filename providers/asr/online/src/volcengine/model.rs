@@ -46,7 +46,12 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
             AudioInput::Binary(bytes) => bytes.clone(),
             AudioInput::Base64(b64) => {
                 base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64)
-                    .map_err(|e| AiMuxError::InvalidArgument(format!("invalid base64: {e}")))?
+                    .map_err(|e| AiMuxError::invalid_argument(format!("invalid base64: {e}")))?
+            }
+            AudioInput::Url(url) => {
+                return Err(AiMuxError::invalid_argument(format!(
+                    "AudioInput::Url is not supported directly in Volcengine model: {url}"
+                )));
             }
         };
 
@@ -131,6 +136,8 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
                     response_headers: None,
                     data: None,
                     is_retryable: e.is_connect() || e.is_timeout(),
+                    cause: Some(aimux_core::error::SourceError::new(&e).into()),
+                    origin: aimux_core::error::ApiCallErrorOrigin::Transport,
                 }))
             })?;
 
@@ -176,17 +183,19 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
                 response_headers: None,
                 data: None,
                 is_retryable: effective_status == 429 || (500..=599).contains(&effective_status),
+                cause: None,
+                origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             })));
         }
 
         let response_value = response.json::<Value>().await.map_err(|e| {
-            AiMuxError::InvalidResponseData(format!(
+            AiMuxError::invalid_response_data(format!(
                 "Volcengine batch response parsing failed: {e}"
             ))
         })?;
 
         let segments_raw = segments_from_volcengine_response(&response_value, true, "volc-batch")
-            .map_err(|e| AiMuxError::InvalidResponseData(e.to_string()))?;
+            .map_err(|e| AiMuxError::invalid_response_data(e.to_string()))?;
 
         let duration_in_seconds = response_value
             .get("audio_info")
