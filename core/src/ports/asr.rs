@@ -30,6 +30,12 @@ pub const OPENAI_WHISPER_PROVIDER_ID: &str = "openai-whisper";
 pub const DEEPGRAM_PROVIDER_ID: &str = "deepgram";
 pub const ASSEMBLYAI_PROVIDER_ID: &str = "assemblyai";
 pub const ELEVENLABS_PROVIDER_ID: &str = "elevenlabs";
+pub const AZURE_SPEECH_PROVIDER_ID: &str = "azure-speech";
+pub const GOOGLE_GEMINI_ASR_PROVIDER_ID: &str = "google-gemini";
+pub const XAI_ASR_PROVIDER_ID: &str = "xai";
+pub const GLADIA_PROVIDER_ID: &str = "gladia";
+pub const REVAI_PROVIDER_ID: &str = "revai";
+pub const FAL_WHISPER_PROVIDER_ID: &str = "fal-whisper";
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
@@ -916,6 +922,8 @@ pub struct OnlineAsrSupportedModel {
     #[serde(default)]
     pub modes: Vec<String>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub description_key: Option<String>,
     #[serde(default)]
     pub is_default: Option<bool>,
 }

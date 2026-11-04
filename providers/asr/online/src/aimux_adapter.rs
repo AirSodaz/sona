@@ -1,18 +1,25 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use aimux_core::shared::SharedProviderOptions;
 use aimux_core::transcription_model::{AudioInput, TranscriptionCallOptions, TranscriptionModel};
-use aimux_providers::assemblyai::{AssemblyAIConfig, AssemblyAITranscriptionModel};
-use aimux_providers::deepgram::{DeepgramConfig, DeepgramTranscriptionModel};
-use aimux_providers::elevenlabs::{ElevenLabsConfig, ElevenLabsTranscriptionModel};
-use aimux_providers::openai::{OpenAIConfig, OpenAITranscriptionModel};
+use aimux_providers::assemblyai::{AssemblyAIProviderSettings, create_assemblyai};
+use aimux_providers::deepgram::{DeepgramProviderSettings, create_deepgram};
+use aimux_providers::elevenlabs::{ElevenLabsProviderSettings, create_elevenlabs};
+use aimux_providers::openai::{OpenAIProviderSettings, create_openai};
+use aimux_providers::{
+    AzureOpenAIProviderSettings, FalProviderSettings, GladiaProviderSettings,
+    GoogleProviderSettings, RevaiProviderSettings, XAIProviderSettings, create_azure, create_fal,
+    create_gladia, create_google, create_revai, create_xai,
+};
 use serde_json::Value;
 use sona_core::ports::asr::{
-    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
-    AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+    ASSEMBLYAI_PROVIDER_ID, AZURE_SPEECH_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError,
+    AsrPortErrorKind, AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+    FAL_WHISPER_PROVIDER_ID, GLADIA_PROVIDER_ID, GOOGLE_GEMINI_ASR_PROVIDER_ID,
     GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID,
-    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
-    find_online_asr_provider,
+    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, REVAI_PROVIDER_ID,
+    VOLCENGINE_DOUBAO_PROVIDER_ID, XAI_ASR_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
@@ -155,116 +162,223 @@ pub fn create_aimux_transcription_model(
         }
         OPENAI_WHISPER_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, OPENAI_WHISPER_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "whisper-1".to_string()
+                "whisper-1"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         GROQ_WHISPER_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, GROQ_WHISPER_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                name: Some("groq".to_string()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
-            openai_config.provider = "groq".to_string();
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "whisper-large-v3-turbo".to_string()
+                "whisper-large-v3-turbo"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         MISTRAL_VOXTRAL_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, MISTRAL_VOXTRAL_PROVIDER_ID)?;
-            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            let mut settings = OpenAIProviderSettings {
+                api_key: Some(config.api_key),
+                name: Some("mistral".to_string()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/audio/transcriptions")
                     .trim_end_matches('/');
-                openai_config = openai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
-            openai_config.provider = "mistral".to_string();
+            let provider = create_openai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "mistral-small-latest".to_string()
+                "mistral-small-latest"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(OpenAITranscriptionModel::new(
-                model_id,
-                openai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         DEEPGRAM_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, DEEPGRAM_PROVIDER_ID)?;
-            let mut dg_config = DeepgramConfig::new(&config.api_key);
+            let mut settings = DeepgramProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v1/listen")
                     .trim_end_matches('/');
-                dg_config = dg_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_deepgram(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "nova-2".to_string()
+                "nova-2"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(DeepgramTranscriptionModel::new(
-                model_id, dg_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         ASSEMBLYAI_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, ASSEMBLYAI_PROVIDER_ID)?;
-            let mut aai_config = AssemblyAIConfig::new(&config.api_key);
+            let mut settings = AssemblyAIProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v2/transcript")
                     .trim_end_matches('/');
-                aai_config = aai_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_assemblyai(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "best".to_string()
+                "best"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(AssemblyAITranscriptionModel::new(
-                model_id, aai_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         ELEVENLABS_PROVIDER_ID => {
             let config = resolve_online_provider_config(request, ELEVENLABS_PROVIDER_ID)?;
-            let mut el_config = ElevenLabsConfig::new(&config.api_key);
+            let mut settings = ElevenLabsProviderSettings {
+                api_key: Some(config.api_key.into()),
+                ..Default::default()
+            };
             if let Some(endpoint) = &config.batch_endpoint {
                 let base_url = endpoint
                     .trim_end_matches("/v1/speech-to-text")
                     .trim_end_matches('/');
-                el_config = el_config.with_base_url(base_url);
+                settings.base_url = Some(base_url.to_string());
             }
+            let provider = create_elevenlabs(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
-                "scribe_v1".to_string()
+                "scribe_v1"
             } else {
-                config.model
+                &config.model
             };
-            Ok(Arc::new(ElevenLabsTranscriptionModel::new(
-                model_id, el_config,
-            )))
+            Ok(Arc::new(provider.transcription(model_id)))
+        }
+        AZURE_SPEECH_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, AZURE_SPEECH_PROVIDER_ID)?;
+            let mut settings = AzureOpenAIProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key.into());
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+                settings.speech_base_url = Some(endpoint.clone());
+            }
+            let provider = create_azure(settings).map_err(map_aimux_asr_error)?;
+            let model_id = if config.model.is_empty() {
+                "whisper-1"
+            } else {
+                &config.model
+            };
+            Ok(Arc::new(provider.transcription(model_id)))
+        }
+        GOOGLE_GEMINI_ASR_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, GOOGLE_GEMINI_ASR_PROVIDER_ID)?;
+            let mut settings = GoogleProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key);
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+            }
+            let provider = create_google(settings).map_err(map_aimux_asr_error)?;
+            let model_id = if config.model.is_empty() {
+                "gemini-2.0-flash"
+            } else {
+                &config.model
+            };
+            Ok(Arc::new(provider.transcription(model_id)))
+        }
+        XAI_ASR_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, XAI_ASR_PROVIDER_ID)?;
+            let mut settings = XAIProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key);
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+            }
+            let provider = create_xai(settings).map_err(map_aimux_asr_error)?;
+            Ok(Arc::new(provider.transcription()))
+        }
+        GLADIA_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, GLADIA_PROVIDER_ID)?;
+            let mut settings = GladiaProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key.into());
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+            }
+            let provider = create_gladia(settings).map_err(map_aimux_asr_error)?;
+            let model_id = if config.model.is_empty() {
+                "default"
+            } else {
+                &config.model
+            };
+            Ok(Arc::new(provider.transcription(model_id)))
+        }
+        REVAI_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, REVAI_PROVIDER_ID)?;
+            let mut settings = RevaiProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key.into());
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+            }
+            let provider = create_revai(settings).map_err(map_aimux_asr_error)?;
+            let model_id = if config.model.is_empty() {
+                "default"
+            } else {
+                &config.model
+            };
+            Ok(Arc::new(provider.transcription(model_id)))
+        }
+        FAL_WHISPER_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, FAL_WHISPER_PROVIDER_ID)?;
+            let mut settings = FalProviderSettings::default();
+            if !config.api_key.is_empty() {
+                settings.api_key = Some(config.api_key.into());
+            }
+            if let Some(endpoint) = &config.batch_endpoint {
+                settings.base_url = Some(endpoint.clone());
+            }
+            let provider = create_fal(settings).map_err(map_aimux_asr_error)?;
+            let model_id = if config.model.is_empty() {
+                "whisper"
+            } else {
+                &config.model
+            };
+            Ok(Arc::new(provider.transcription(model_id)))
         }
         _ => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
@@ -504,7 +618,7 @@ pub async fn execute_aimux_batch(
     let buffered_samples = bytes.len() / 2;
     let mut call_options = TranscriptionCallOptions::new(AudioInput::Binary(bytes), media_type);
     // Build provider options
-    let mut po = std::collections::HashMap::new();
+    let mut po = SharedProviderOptions::new();
 
     // 1. OpenAI-compatible options
     let mut openai_options = serde_json::Map::new();
@@ -523,10 +637,7 @@ pub async fn execute_aimux_batch(
         );
     }
     if !openai_options.is_empty() {
-        po.insert(
-            "openai".to_string(),
-            serde_json::Value::Object(openai_options),
-        );
+        po.insert("openai".to_string(), openai_options);
     }
 
     let speaker_diarization_enabled = is_cloud_speaker_diarization_enabled(&input.request);
@@ -557,10 +668,7 @@ pub async fn execute_aimux_batch(
             serde_json::Value::String(hotwords.to_string()),
         );
     }
-    po.insert(
-        "volcengine".to_string(),
-        serde_json::Value::Object(volc_options),
-    );
+    po.insert("volcengine".to_string(), volc_options);
 
     // 3. Deepgram options
     let mut deepgram_options = serde_json::Map::new();
@@ -573,10 +681,7 @@ pub async fn execute_aimux_batch(
         deepgram_options.insert("language".to_string(), serde_json::Value::String(language));
     }
     if !deepgram_options.is_empty() {
-        po.insert(
-            "deepgram".to_string(),
-            serde_json::Value::Object(deepgram_options),
-        );
+        po.insert("deepgram".to_string(), deepgram_options);
     }
 
     // 4. AssemblyAI options
@@ -606,10 +711,7 @@ pub async fn execute_aimux_batch(
         }
     }
     if !assemblyai_options.is_empty() {
-        po.insert(
-            "assemblyai".to_string(),
-            serde_json::Value::Object(assemblyai_options),
-        );
+        po.insert("assemblyai".to_string(), assemblyai_options);
     }
 
     // 5. ElevenLabs options
@@ -624,10 +726,98 @@ pub async fn execute_aimux_batch(
         );
     }
     if !elevenlabs_options.is_empty() {
-        po.insert(
-            "elevenlabs".to_string(),
-            serde_json::Value::Object(elevenlabs_options),
+        po.insert("elevenlabs".to_string(), elevenlabs_options);
+    }
+
+    // 6. Azure Speech options
+    let mut azure_options = serde_json::Map::new();
+    azure_options.insert("api".to_string(), serde_json::json!("speech"));
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        azure_options.insert("locales".to_string(), serde_json::json!([language]));
+    }
+    if speaker_diarization_enabled {
+        azure_options.insert(
+            "diarization".to_string(),
+            serde_json::json!({ "enabled": true }),
         );
+    }
+    if let Some(hotwords) = input
+        .request
+        .hotwords
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let words = hotwords
+            .lines()
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>();
+        if !words.is_empty() {
+            azure_options.insert(
+                "phraseList".to_string(),
+                serde_json::json!({ "phrases": words }),
+            );
+        }
+    }
+    po.insert("azure".to_string(), azure_options);
+
+    // 7. FAL options
+    let mut fal_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        fal_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    fal_options.insert(
+        "diarize".to_string(),
+        serde_json::Value::Bool(speaker_diarization_enabled),
+    );
+    po.insert("fal".to_string(), fal_options);
+
+    // 8. Google options
+    let mut google_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        google_options.insert("languageCodes".to_string(), serde_json::json!([language]));
+    }
+    if speaker_diarization_enabled {
+        google_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
+    }
+    if let Some(hotwords) = input
+        .request
+        .hotwords
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let words = hotwords
+            .lines()
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>();
+        if !words.is_empty() {
+            google_options.insert("customVocabulary".to_string(), serde_json::json!(words));
+        }
+    }
+    if !google_options.is_empty() {
+        po.insert("google".to_string(), google_options);
+    }
+
+    // 9. Gladia options
+    let mut gladia_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        gladia_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    if speaker_diarization_enabled {
+        gladia_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
+    }
+    if !gladia_options.is_empty() {
+        po.insert("gladia".to_string(), gladia_options);
+    }
+
+    // 10. Rev.ai options
+    let mut revai_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        revai_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    if !revai_options.is_empty() {
+        po.insert("revai".to_string(), revai_options);
     }
 
     if !po.is_empty() {
@@ -689,7 +879,12 @@ pub async fn execute_aimux_batch(
     };
 
     let audio_duration_ms = result.duration_in_seconds.unwrap_or(0.0) * 1000.0;
-    let stage = format!("{}_batch_complete", model.provider().replace('-', "_"));
+    let base_provider = model
+        .provider()
+        .split('.')
+        .next()
+        .unwrap_or(model.provider());
+    let stage = format!("{}_batch_complete", base_provider.replace('-', "_"));
 
     Ok(OnlineBatchTranscriptionOutput {
         segments,
@@ -729,6 +924,7 @@ fn extract_speaker_id_from_value(v: &Value) -> Option<String> {
     v.as_str()
         .map(ToString::to_string)
         .or_else(|| v.as_i64().map(|n| n.to_string()))
+        .or_else(|| v.as_f64().map(|n| (n as i64).to_string()))
 }
 
 /// Attempt to parse rich provider-specific transcription segments from raw response body.
@@ -736,12 +932,19 @@ pub fn parse_raw_provider_segments(
     provider: &str,
     raw_body: &Value,
 ) -> Option<Vec<TranscriptSegment>> {
-    match provider {
+    let base_provider = provider.split('.').next().unwrap_or(provider);
+    match base_provider {
         "volcengine" => segments_from_volcengine_response(raw_body, true, "volc-batch").ok(),
         "assemblyai" => parse_assemblyai_raw_segments(raw_body),
         "deepgram" => parse_deepgram_raw_segments(raw_body),
         "elevenlabs" => parse_elevenlabs_raw_segments(raw_body),
-        "openai" | "groq" | "mistral" => parse_openai_compatible_raw_segments(raw_body),
+        "azure" => parse_azure_raw_segments(raw_body)
+            .or_else(|| parse_openai_compatible_raw_segments(raw_body)),
+        "gladia" => parse_gladia_raw_segments(raw_body),
+        "revai" => parse_revai_raw_segments(raw_body),
+        "openai" | "groq" | "mistral" | "xai" | "fal" => {
+            parse_openai_compatible_raw_segments(raw_body)
+        }
         _ => None,
     }
 }
@@ -1309,6 +1512,201 @@ pub fn parse_openai_compatible_raw_segments(body: &Value) -> Option<Vec<Transcri
     }
 }
 
+/// Parse Azure Speech REST API response containing `phrases` with `offsetMilliseconds` and `speaker`.
+pub fn parse_azure_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment>> {
+    let phrases = body.get("phrases").and_then(Value::as_array)?;
+    if phrases.is_empty() {
+        return None;
+    }
+
+    let mut segments = Vec::new();
+    for (i, p) in phrases.iter().enumerate() {
+        let text = p.get("text").and_then(Value::as_str)?.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let offset_ms = p
+            .get("offsetMilliseconds")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let duration_ms = p
+            .get("durationMilliseconds")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let start = offset_ms / 1000.0;
+        let end = start + (duration_ms / 1000.0);
+
+        let speaker_id = p
+            .get("speaker")
+            .or_else(|| p.get("speaker_id"))
+            .and_then(extract_speaker_id_from_value);
+
+        let (speaker, speaker_attribution) = match &speaker_id {
+            Some(id) => {
+                let (tag, attr) = create_cloud_speaker(id);
+                (Some(tag), Some(attr))
+            }
+            None => (None, None),
+        };
+
+        segments.push(TranscriptSegment {
+            id: format!("azure-seg-{i}"),
+            text: text.to_string(),
+            start,
+            end: end.max(start),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker,
+            speaker_attribution,
+        });
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
+}
+
+/// Parse Gladia API response containing utterances with speaker diarization.
+pub fn parse_gladia_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment>> {
+    let utterances = body
+        .get("utterances")
+        .or_else(|| {
+            body.get("result")
+                .and_then(|r| r.get("transcription"))
+                .and_then(|t| t.get("utterances"))
+        })
+        .or_else(|| body.get("prediction").and_then(|p| p.get("utterances")))
+        .and_then(Value::as_array)?;
+
+    if utterances.is_empty() {
+        return None;
+    }
+
+    let mut segments = Vec::new();
+    for (i, u) in utterances.iter().enumerate() {
+        let text = u.get("text").and_then(Value::as_str)?.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let start = u.get("start").and_then(Value::as_f64).unwrap_or(0.0);
+        let end = u.get("end").and_then(Value::as_f64).unwrap_or(start);
+
+        let speaker_id = u
+            .get("speaker")
+            .or_else(|| u.get("speaker_id"))
+            .and_then(extract_speaker_id_from_value);
+
+        let (speaker, speaker_attribution) = match &speaker_id {
+            Some(id) => {
+                let (tag, attr) = create_cloud_speaker(id);
+                (Some(tag), Some(attr))
+            }
+            None => (None, None),
+        };
+
+        segments.push(TranscriptSegment {
+            id: format!("gladia-seg-{i}"),
+            text: text.to_string(),
+            start,
+            end: end.max(start),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker,
+            speaker_attribution,
+        });
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
+}
+
+/// Parse Rev.ai API response containing `monologues` with `speaker` and `elements`.
+pub fn parse_revai_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment>> {
+    let monologues = body.get("monologues").and_then(Value::as_array)?;
+    if monologues.is_empty() {
+        return None;
+    }
+
+    let mut segments = Vec::new();
+    for (i, m) in monologues.iter().enumerate() {
+        let elements = m.get("elements").and_then(Value::as_array);
+        let mut text = String::new();
+        let mut start: Option<f64> = None;
+        let mut end: Option<f64> = None;
+
+        if let Some(elems) = elements {
+            for elem in elems {
+                if let Some(val) = elem.get("value").and_then(Value::as_str) {
+                    text.push_str(val);
+                }
+                if start.is_none() {
+                    start = elem.get("ts").and_then(Value::as_f64);
+                }
+                if let Some(e) = elem.get("end_ts").and_then(Value::as_f64) {
+                    end = Some(e);
+                }
+            }
+        }
+
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let s = start.unwrap_or(0.0);
+        let e = end.unwrap_or(s);
+
+        let speaker_id = m
+            .get("speaker")
+            .or_else(|| m.get("speaker_id"))
+            .and_then(extract_speaker_id_from_value);
+
+        let (speaker, speaker_attribution) = match &speaker_id {
+            Some(id) => {
+                let (tag, attr) = create_cloud_speaker(id);
+                (Some(tag), Some(attr))
+            }
+            None => (None, None),
+        };
+
+        segments.push(TranscriptSegment {
+            id: format!("revai-seg-{i}"),
+            text: trimmed.to_string(),
+            start: s,
+            end: e.max(s),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker,
+            speaker_attribution,
+        });
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1426,7 +1824,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "openai");
+        assert_eq!(model.provider(), "openai.transcription");
         assert_eq!(model.model_id(), "whisper-1");
     }
 
@@ -1441,7 +1839,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "groq");
+        assert_eq!(model.provider(), "groq.transcription");
         assert_eq!(model.model_id(), "whisper-large-v3-turbo");
     }
 
@@ -1456,7 +1854,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "mistral");
+        assert_eq!(model.provider(), "mistral.transcription");
         assert_eq!(model.model_id(), "mistral-small-latest");
     }
 
@@ -1471,7 +1869,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "deepgram");
+        assert_eq!(model.provider(), "deepgram.transcription");
         assert_eq!(model.model_id(), "nova-2");
     }
 
@@ -1486,7 +1884,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "assemblyai");
+        assert_eq!(model.provider(), "assemblyai.transcription");
         assert_eq!(model.model_id(), "best");
     }
 
@@ -1501,7 +1899,7 @@ mod tests {
         );
 
         let model = create_aimux_transcription_model(&request).unwrap();
-        assert_eq!(model.provider(), "elevenlabs");
+        assert_eq!(model.provider(), "elevenlabs.transcription");
         assert_eq!(model.model_id(), "scribe_v1");
     }
 
@@ -1548,6 +1946,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1564,6 +1964,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: true,
         }));
         assert_eq!(
@@ -1580,6 +1982,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: true,
         }));
         assert_eq!(
@@ -1602,6 +2006,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1618,6 +2024,8 @@ mod tests {
             response_body: None,
             response_headers: None,
             data: None,
+            cause: None,
+            origin: aimux_core::error::ApiCallErrorOrigin::HttpResponse,
             is_retryable: false,
         }));
         assert_eq!(
@@ -1625,7 +2033,7 @@ mod tests {
             AsrPortErrorKind::InvalidRequest
         );
 
-        let invalid_arg_error = AiMuxError::InvalidArgument("bad param".to_string());
+        let invalid_arg_error = AiMuxError::invalid_argument("bad param");
         assert_eq!(
             map_aimux_asr_error(invalid_arg_error).kind,
             AsrPortErrorKind::InvalidRequest
@@ -1642,6 +2050,9 @@ mod tests {
 
         let no_provider_error = AiMuxError::NoSuchProvider {
             provider_id: "unknown".to_string(),
+            model_id: "whisper-1".to_string(),
+            model_type: "transcriptionModel".to_string(),
+            available_providers: vec![],
         };
         assert_eq!(
             map_aimux_asr_error(no_provider_error).kind,
@@ -1655,7 +2066,7 @@ mod tests {
             AsrPortErrorKind::Unsupported
         );
 
-        let parse_error = AiMuxError::JsonParse("failed to parse".to_string());
+        let parse_error = AiMuxError::json_parse("failed to parse");
         assert_eq!(
             map_aimux_asr_error(parse_error).kind,
             AsrPortErrorKind::Protocol
@@ -1737,6 +2148,11 @@ mod tests {
 
         let segments = parse_assemblyai_raw_segments(&raw).expect("parsed segments");
         assert_eq!(segments.len(), 2);
+
+        // Verify aimux 0.6 namespaced provider string works with parse_raw_provider_segments
+        let parsed_namespaced = parse_raw_provider_segments("assemblyai.transcription", &raw)
+            .expect("parsed namespaced provider segments");
+        assert_eq!(parsed_namespaced.len(), 2);
 
         assert_eq!(segments[0].id, "aai-0");
         assert_eq!(segments[0].text, "Hello world.");
@@ -1968,5 +2384,180 @@ mod tests {
         assert_eq!(sniff_audio_mime_type(b"\0\0\0\x18ftyp"), Some("audio/m4a"));
         assert_eq!(sniff_audio_mime_type(b"fLaC\0\0"), Some("audio/flac"));
         assert_eq!(sniff_audio_mime_type(b"unknown bytes"), None);
+    }
+
+    #[test]
+    fn creates_aimux_model_for_azure_speech() {
+        let request = online_request(
+            AZURE_SPEECH_PROVIDER_ID,
+            json!({
+                "apiKey": "test-azure-key",
+                "model": "whisper-1",
+                "batchEndpoint": "https://eastus.api.cognitive.microsoft.com"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "azure.transcription");
+        assert_eq!(model.model_id(), "whisper-1");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_google_gemini() {
+        let request = online_request(
+            GOOGLE_GEMINI_ASR_PROVIDER_ID,
+            json!({
+                "apiKey": "test-google-key",
+                "model": "gemini-2.0-flash"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "google.generative-ai.transcription");
+        assert_eq!(model.model_id(), "gemini-2.0-flash");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_xai() {
+        let request = online_request(
+            XAI_ASR_PROVIDER_ID,
+            json!({
+                "apiKey": "test-xai-key",
+                "model": "default"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "xai.transcription");
+        assert_eq!(model.model_id(), "");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_gladia() {
+        let request = online_request(
+            GLADIA_PROVIDER_ID,
+            json!({
+                "apiKey": "test-gladia-key",
+                "model": "default"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "gladia.transcription");
+        assert_eq!(model.model_id(), "default");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_revai() {
+        let request = online_request(
+            REVAI_PROVIDER_ID,
+            json!({
+                "apiKey": "test-revai-key",
+                "model": "default"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "revai.transcription");
+        assert_eq!(model.model_id(), "default");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_fal() {
+        let request = online_request(
+            FAL_WHISPER_PROVIDER_ID,
+            json!({
+                "apiKey": "test-fal-key",
+                "model": "whisper"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "fal.transcription");
+        assert_eq!(model.model_id(), "whisper");
+    }
+
+    #[test]
+    fn test_parse_azure_raw_segments() {
+        let raw = json!({
+            "phrases": [
+                {
+                    "text": "Hello Azure",
+                    "offsetMilliseconds": 0.0,
+                    "durationMilliseconds": 1200.0,
+                    "speaker": 1
+                },
+                {
+                    "text": "World Azure",
+                    "offsetMilliseconds": 1300.0,
+                    "durationMilliseconds": 1000.0,
+                    "speaker": 2
+                }
+            ]
+        });
+        let segments = parse_azure_raw_segments(&raw).expect("parsed azure segments");
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "Hello Azure");
+        assert_eq!(segments[0].speaker.as_ref().unwrap().label, "Speaker 2");
+        assert_eq!(segments[1].text, "World Azure");
+        assert_eq!(segments[1].speaker.as_ref().unwrap().label, "Speaker 3");
+    }
+
+    #[test]
+    fn test_parse_gladia_raw_segments() {
+        let raw = json!({
+            "utterances": [
+                {
+                    "text": "Hello Gladia",
+                    "start": 0.5,
+                    "end": 1.5,
+                    "speaker": 0
+                }
+            ]
+        });
+        let segments = parse_gladia_raw_segments(&raw).expect("parsed gladia segments");
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].text, "Hello Gladia");
+        assert_eq!(segments[0].start, 0.5);
+        assert_eq!(segments[0].end, 1.5);
+    }
+
+    #[test]
+    fn test_parse_revai_raw_segments() {
+        let raw = json!({
+            "monologues": [
+                {
+                    "speaker": 1,
+                    "elements": [
+                        {"type": "text", "value": "Hello", "ts": 0.0, "end_ts": 0.5},
+                        {"type": "punct", "value": " "},
+                        {"type": "text", "value": "Revai", "ts": 0.6, "end_ts": 1.2}
+                    ]
+                }
+            ]
+        });
+        let segments = parse_revai_raw_segments(&raw).expect("parsed revai segments");
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].text, "Hello Revai");
+        assert_eq!(segments[0].start, 0.0);
+        assert_eq!(segments[0].end, 1.2);
+        assert_eq!(segments[0].speaker.as_ref().unwrap().label, "Speaker 2");
+    }
+
+    #[test]
+    fn test_extract_speaker_id_from_value() {
+        assert_eq!(
+            extract_speaker_id_from_value(&json!("speaker_1")),
+            Some("speaker_1".to_string())
+        );
+        assert_eq!(
+            extract_speaker_id_from_value(&json!(1)),
+            Some("1".to_string())
+        );
+        assert_eq!(
+            extract_speaker_id_from_value(&json!(2.0)),
+            Some("2".to_string())
+        );
+        assert_eq!(extract_speaker_id_from_value(&json!(null)), None);
     }
 }

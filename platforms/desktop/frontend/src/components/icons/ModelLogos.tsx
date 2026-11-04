@@ -17,6 +17,12 @@ import sensevoiceImg from '../../assets/models/sensevoice.png';
 import volcengineImg from '../../assets/models/volcengine.png';
 import whisperImg from '../../assets/models/whisper.png';
 import zipformerImg from '../../assets/models/zipformer.png';
+import azureSvg from '../../assets/providers/azure.svg';
+import falSvg from '../../assets/providers/fal.svg';
+import geminiSvg from '../../assets/providers/gemini.svg';
+import gladiaSvg from '../../assets/providers/gladia.svg';
+import revaiSvg from '../../assets/providers/revai.svg';
+import xaiSvg from '../../assets/providers/xai.svg';
 
 export type AsrBrand =
   | 'qwen'
@@ -38,6 +44,12 @@ export type AsrBrand =
   | 'deepgram'
   | 'assemblyai'
   | 'elevenlabs'
+  | 'azure'
+  | 'gemini'
+  | 'xai'
+  | 'gladia'
+  | 'revai'
+  | 'fal'
   | 'generic';
 
 export interface ModelLogoProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -446,6 +458,132 @@ export function ElevenLabsLogo({
   );
 }
 
+/** 19. Azure Speech Logo */
+export function AzureSpeechLogo({
+  size = 32,
+  className = '',
+  alt = 'Azure Speech',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={azureSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 20. Google Gemini ASR Logo */
+export function GoogleGeminiLogo({
+  size = 32,
+  className = '',
+  alt = 'Google Gemini',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={geminiSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 21. xAI Grok Audio Logo */
+export function XAiLogo({
+  size = 32,
+  className = '',
+  alt = 'xAI',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={xaiSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 22. Gladia Logo */
+export function GladiaLogo({
+  size = 32,
+  className = '',
+  alt = 'Gladia',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={gladiaSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 23. Rev.ai Logo */
+export function RevAiLogo({
+  size = 32,
+  className = '',
+  alt = 'Rev.ai',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={revaiSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 24. FAL AI Whisper Logo */
+export function FalLogo({
+  size = 32,
+  className = '',
+  alt = 'FAL AI',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={falSvg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
 /** Generic fallback model logo */
 export function GenericModelLogo({ size = 32, ...props }: GenericLogoProps): React.JSX.Element {
   return (
@@ -499,6 +637,16 @@ export const ASR_MODEL_TYPES = new Set([
   'deepgram',
   'assemblyai',
   'elevenlabs',
+  'azure-speech',
+  'azure',
+  'google-gemini',
+  'gemini',
+  'xai',
+  'gladia',
+  'revai',
+  'rev.ai',
+  'fal-whisper',
+  'fal',
   'canary',
 ]);
 
@@ -568,6 +716,17 @@ export function isAsrModel(model: {
     token.includes('assemblyai') ||
     token.includes('assembly') ||
     token.includes('elevenlabs') ||
+    token.includes('azure') ||
+    token.includes('gemini') ||
+    token.includes('xai') ||
+    token.includes('gladia') ||
+    token.includes('revai') ||
+    token.includes('rev.ai') ||
+    token.includes('fal-whisper') ||
+    token.includes('fal.ai') ||
+    token.includes('fal_ai') ||
+    token.startsWith('fal-') ||
+    token.includes(' fal') ||
     token.includes('r2t2') ||
     token.includes('canary')
   ) {
@@ -613,6 +772,30 @@ export function resolveModelBrand(model: {
   }
   if (token.includes('elevenlabs')) {
     return 'elevenlabs';
+  }
+  if (token.includes('azure-speech') || token.includes('azure')) {
+    return 'azure';
+  }
+  if (token.includes('google-gemini') || token.includes('gemini')) {
+    return 'gemini';
+  }
+  if (
+    token.includes('fal-whisper') ||
+    token.includes('fal.ai') ||
+    token.includes('fal_ai') ||
+    token.startsWith('fal-') ||
+    token.includes(' fal')
+  ) {
+    return 'fal';
+  }
+  if (token.includes('gladia')) {
+    return 'gladia';
+  }
+  if (token.includes('revai') || token.includes('rev.ai')) {
+    return 'revai';
+  }
+  if (token.includes('xai') || token.includes('x.ai')) {
+    return 'xai';
   }
   if (token.includes('r2t2')) {
     return 'r2t2';
@@ -723,6 +906,18 @@ export function ModelBrandLogo({
       return <AssemblyAiLogo size={size} className={className} {...props} />;
     case 'elevenlabs':
       return <ElevenLabsLogo size={size} className={className} {...props} />;
+    case 'azure':
+      return <AzureSpeechLogo size={size} className={className} {...props} />;
+    case 'gemini':
+      return <GoogleGeminiLogo size={size} className={className} {...props} />;
+    case 'xai':
+      return <XAiLogo size={size} className={className} {...props} />;
+    case 'gladia':
+      return <GladiaLogo size={size} className={className} {...props} />;
+    case 'revai':
+      return <RevAiLogo size={size} className={className} {...props} />;
+    case 'fal':
+      return <FalLogo size={size} className={className} {...props} />;
     case 'generic':
       return <GenericModelLogo size={size} className={className} />;
     default:

@@ -22,6 +22,7 @@ export interface OnlineAsrSupportedModel {
   name: string;
   modes: ('streaming' | 'batch')[];
   description?: string;
+  descriptionKey?: string;
   tags?: string[];
   isDefault?: boolean;
 }
@@ -59,6 +60,12 @@ export const ONLINE_ASR_PROVIDER_DEFAULT_NAMES: Record<string, string> = {
   deepgram: 'Deepgram',
   assemblyai: 'AssemblyAI',
   elevenlabs: 'ElevenLabs',
+  'azure-speech': 'Azure Speech',
+  'google-gemini': 'Google Gemini',
+  xai: 'xAI Audio',
+  gladia: 'Gladia',
+  revai: 'Rev.ai',
+  'fal-whisper': 'FAL AI Whisper',
 };
 
 export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG =
@@ -83,6 +90,9 @@ export const DIARIZATION_SUPPORTED_PROVIDER_IDS: Record<string, true> = {
   assemblyai: true,
   elevenlabs: true,
   'openai-whisper': true,
+  'azure-speech': true,
+  gladia: true,
+  revai: true,
 };
 
 export function providerSupportsSpeakerDiarization(providerId: string | null | undefined): boolean {

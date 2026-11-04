@@ -3,7 +3,7 @@ use sona_core::llm::provider_protocol::{
 };
 use sona_core::llm::requests::LlmModelsRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::aimux_adapter::{create_aimux_provider, map_aimux_error};
 use crate::models_dev::{
@@ -36,7 +36,13 @@ pub async fn list_models_with_provider(
             // 2. Fall back to standard aimux model listing
             let provider =
                 create_aimux_provider(strategy, &request.api_key, &request.base_url, None)?;
-            let runtime_models = provider.list_models().await.map_err(map_aimux_error)?;
+            let discovery = provider.discovery().ok_or_else(|| {
+                LlmPortError::new(
+                    LlmPortErrorKind::Unsupported,
+                    format!("Provider {:?} does not support model discovery", strategy),
+                )
+            })?;
+            let runtime_models = discovery.list_models().await.map_err(map_aimux_error)?;
             runtime_models
                 .into_iter()
                 .map(|m| LlmModelSummary {
