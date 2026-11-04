@@ -581,10 +581,10 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                 <span
                                   className="model-version-label"
                                   title={
-                                    model.description
-                                      ? t(model.description)
-                                      : model.descriptionKey
-                                        ? t(model.descriptionKey)
+                                    model.descriptionKey
+                                      ? t(model.descriptionKey)
+                                      : model.description
+                                        ? t(model.description)
                                         : undefined
                                   }
                                 >

@@ -722,7 +722,11 @@ export function isAsrModel(model: {
     token.includes('gladia') ||
     token.includes('revai') ||
     token.includes('rev.ai') ||
-    token.includes('fal') ||
+    token.includes('fal-whisper') ||
+    token.includes('fal.ai') ||
+    token.includes('fal_ai') ||
+    token.startsWith('fal-') ||
+    token.includes(' fal') ||
     token.includes('r2t2') ||
     token.includes('canary')
   ) {

@@ -290,6 +290,7 @@ pub fn create_aimux_transcription_model(
             }
             if let Some(endpoint) = &config.batch_endpoint {
                 settings.base_url = Some(endpoint.clone());
+                settings.speech_base_url = Some(endpoint.clone());
             }
             let provider = create_azure(settings).map_err(map_aimux_asr_error)?;
             let model_id = if config.model.is_empty() {
@@ -728,6 +729,97 @@ pub async fn execute_aimux_batch(
         po.insert("elevenlabs".to_string(), elevenlabs_options);
     }
 
+    // 6. Azure Speech options
+    let mut azure_options = serde_json::Map::new();
+    azure_options.insert("api".to_string(), serde_json::json!("speech"));
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        azure_options.insert("locales".to_string(), serde_json::json!([language]));
+    }
+    if speaker_diarization_enabled {
+        azure_options.insert(
+            "diarization".to_string(),
+            serde_json::json!({ "enabled": true }),
+        );
+    }
+    if let Some(hotwords) = input
+        .request
+        .hotwords
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let words = hotwords
+            .lines()
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>();
+        if !words.is_empty() {
+            azure_options.insert(
+                "phraseList".to_string(),
+                serde_json::json!({ "phrases": words }),
+            );
+        }
+    }
+    po.insert("azure".to_string(), azure_options);
+
+    // 7. FAL options
+    let mut fal_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        fal_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    fal_options.insert(
+        "diarize".to_string(),
+        serde_json::Value::Bool(speaker_diarization_enabled),
+    );
+    po.insert("fal".to_string(), fal_options);
+
+    // 8. Google options
+    let mut google_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        google_options.insert("languageCodes".to_string(), serde_json::json!([language]));
+    }
+    if speaker_diarization_enabled {
+        google_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
+    }
+    if let Some(hotwords) = input
+        .request
+        .hotwords
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let words = hotwords
+            .lines()
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>();
+        if !words.is_empty() {
+            google_options.insert("customVocabulary".to_string(), serde_json::json!(words));
+        }
+    }
+    if !google_options.is_empty() {
+        po.insert("google".to_string(), google_options);
+    }
+
+    // 9. Gladia options
+    let mut gladia_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        gladia_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    if speaker_diarization_enabled {
+        gladia_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
+    }
+    if !gladia_options.is_empty() {
+        po.insert("gladia".to_string(), gladia_options);
+    }
+
+    // 10. Rev.ai options
+    let mut revai_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        revai_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    if !revai_options.is_empty() {
+        po.insert("revai".to_string(), revai_options);
+    }
+
     if !po.is_empty() {
         call_options.provider_options = Some(po);
     }
@@ -832,6 +924,7 @@ fn extract_speaker_id_from_value(v: &Value) -> Option<String> {
     v.as_str()
         .map(ToString::to_string)
         .or_else(|| v.as_i64().map(|n| n.to_string()))
+        .or_else(|| v.as_f64().map(|n| (n as i64).to_string()))
 }
 
 /// Attempt to parse rich provider-specific transcription segments from raw response body.
@@ -2449,5 +2542,22 @@ mod tests {
         assert_eq!(segments[0].start, 0.0);
         assert_eq!(segments[0].end, 1.2);
         assert_eq!(segments[0].speaker.as_ref().unwrap().label, "Speaker 2");
+    }
+
+    #[test]
+    fn test_extract_speaker_id_from_value() {
+        assert_eq!(
+            extract_speaker_id_from_value(&json!("speaker_1")),
+            Some("speaker_1".to_string())
+        );
+        assert_eq!(
+            extract_speaker_id_from_value(&json!(1)),
+            Some("1".to_string())
+        );
+        assert_eq!(
+            extract_speaker_id_from_value(&json!(2.0)),
+            Some("2".to_string())
+        );
+        assert_eq!(extract_speaker_id_from_value(&json!(null)), None);
     }
 }

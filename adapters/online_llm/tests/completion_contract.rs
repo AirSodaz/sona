@@ -254,6 +254,47 @@ async fn openai_adapter_posts_to_responses_with_input() {
     assert_eq!(usage.completion_tokens, 2);
     assert_eq!(usage.total_tokens, 7);
 }
+
+#[tokio::test]
+async fn openai_compatible_adapter_posts_to_chat_completions_with_messages() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request_str = read_http_request(&mut stream);
+        assert!(
+            request_str.starts_with("POST /v1/chat/completions HTTP/1.1"),
+            "expected POST /v1/chat/completions but got request line: {}",
+            request_str.lines().next().unwrap_or_default()
+        );
+        let body = request_str.split("\r\n\r\n").nth(1).unwrap_or_default();
+        let parsed: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert!(
+            parsed.get("messages").is_some(),
+            "expected 'messages' field in chat payload, got: {body}"
+        );
+        assert!(
+            parsed.get("input").is_none(),
+            "did not expect 'input' field in chat payload"
+        );
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"id\":\"chatcmpl-test\",\"object\":\"chat.completion\",\"created\":12345,\"model\":\"test-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"compat answer\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":2,\"total_tokens\":6}}";
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut completion_request = request();
+    completion_request.config.strategy = LlmProviderStrategy::OpenAiCompatible;
+    completion_request.config.base_url = format!("http://{address}");
+    completion_request.options.reasoning_enabled = Some(false);
+    completion_request.options.response_format = LlmResponseFormat::Text;
+
+    let response = OnlineLlmAdapter.complete(completion_request).await.unwrap();
+    server.join().unwrap();
+    assert_eq!(response.text, "compat answer");
+    let usage = response.usage.expect("expected usage in response");
+    assert_eq!(usage.prompt_tokens, 4);
+    assert_eq!(usage.completion_tokens, 2);
+    assert_eq!(usage.total_tokens, 6);
+}
 #[tokio::test]
 async fn azure_openai_adapter_posts_to_responses_endpoint_with_api_key_header() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

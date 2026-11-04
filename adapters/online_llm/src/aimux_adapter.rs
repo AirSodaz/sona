@@ -324,6 +324,27 @@ pub fn create_aimux_provider_with_version(
                 .map_err(map_aimux_error)?;
             Ok(Arc::new(provider))
         }
+        LlmProviderStrategy::OpenAiCompatible | LlmProviderStrategy::OpenAiCompatibleCustomPath => {
+            let effective_base = if !base_url.is_empty() {
+                normalize_openai_base_url(strategy, base_url, api_path)
+            } else {
+                "https://api.openai.com/v1".to_string()
+            };
+            let key = if api_key.is_empty() {
+                None
+            } else {
+                Some(api_key.to_string())
+            };
+            let settings = aimux_providers::openai_compatible::OpenAICompatibleProviderSettings {
+                name: "openai_compatible".to_string(),
+                base_url: effective_base,
+                api_key: key,
+                ..Default::default()
+            };
+            let provider = aimux_providers::openai_compatible::create_openai_compatible(settings)
+                .map_err(map_aimux_error)?;
+            Ok(Arc::new(provider))
+        }
         _ => {
             let registry_name = match strategy {
                 LlmProviderStrategy::DeepSeek => Some("deepseek"),
@@ -380,9 +401,7 @@ pub fn create_aimux_provider_with_version(
                     base_url: effective_base.clone(),
                     ..Default::default()
                 };
-                if let Ok(handle) = aimux_providers::create_provider(name, settings) {
-                    return Ok(handle);
-                }
+                return aimux_providers::create_provider(name, settings).map_err(map_aimux_error);
             }
 
             let fallback_base =
