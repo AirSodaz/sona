@@ -17,6 +17,7 @@ pub struct UniversalVadStateMachine {
     min_speech_samples: usize,
     max_speech_samples: usize,
     escalation_samples: usize,
+    speech_pad_samples: usize,
     sample_rate: u32,
 
     // Runtime state
@@ -50,6 +51,7 @@ impl UniversalVadStateMachine {
         } else {
             usize::MAX
         };
+        let speech_pad_samples = (options.speech_pad_seconds.max(0.0) * rate).round() as usize;
 
         Self {
             threshold,
@@ -58,6 +60,7 @@ impl UniversalVadStateMachine {
             min_speech_samples,
             max_speech_samples,
             escalation_samples,
+            speech_pad_samples,
             sample_rate,
             current_sample: 0,
             triggered: false,
@@ -157,7 +160,11 @@ impl UniversalVadStateMachine {
             } else {
                 self.current_sample
             };
-            let end_sample = self.temp_end_sample.unwrap_or(fallback_end);
+            let raw_end = self.temp_end_sample.unwrap_or(fallback_end);
+            let end_sample = raw_end
+                .saturating_add(self.speech_pad_samples)
+                .min(self.current_sample)
+                .max(self.speech_start_sample);
 
             if end_sample >= self.speech_start_sample {
                 events.push(VadStreamEvent::SpeechEnd {
@@ -194,7 +201,10 @@ impl UniversalVadStateMachine {
             // Normal silence deactivation condition reached
             if silence_samples >= self.min_silence_samples {
                 let start_sample = self.speech_start_sample;
-                let end_sample = temp_end.max(start_sample);
+                let end_sample = temp_end
+                    .saturating_add(self.speech_pad_samples)
+                    .min(self.current_sample)
+                    .max(start_sample);
 
                 self.triggered = false;
                 self.speech_start_sample = 0;
@@ -221,9 +231,10 @@ impl UniversalVadStateMachine {
             return None;
         }
 
-        let end_sample = self
-            .temp_end_sample
-            .unwrap_or(self.current_sample)
+        let raw_end = self.temp_end_sample.unwrap_or(self.current_sample);
+        let end_sample = raw_end
+            .saturating_add(self.speech_pad_samples)
+            .min(self.current_sample)
             .max(self.speech_start_sample);
         let start_sample = self.speech_start_sample;
 
@@ -292,7 +303,7 @@ mod tests {
             min_silence_duration: min_silence,
             min_speech_duration: min_speech,
             buffer_seconds: 5.0,
-            speech_pad_seconds: 0.25,
+            speech_pad_seconds: 0.0,
             max_speech_duration: max_speech,
             threshold_escalation_duration: 25.0,
         }
@@ -767,5 +778,42 @@ mod tests {
         );
         assert!(!sm.is_speech_active());
         assert_eq!(sm.flush(), None);
+    }
+
+    #[test]
+    fn speech_pad_extends_speech_end_boundary_clamped_to_current_sample() {
+        let frame_samples = 512;
+        // min_speech = 64ms (2 frames), min_silence = 96ms (3 frames)
+        let mut opts = test_options(0.50, 0.35, 0.096, 0.064, 30.0);
+        // Set speech_pad_seconds = 0.05 (50ms = 800 samples @ 16kHz)
+        opts.speech_pad_seconds = 0.05;
+        let mut sm = UniversalVadStateMachine::new(&opts, 16_000);
+
+        // Frame 0-1: speech onset
+        assert_eq!(sm.accept_prob(0.60, frame_samples), vec![]);
+        let events = sm.accept_prob(0.65, frame_samples);
+        assert_eq!(
+            events,
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
+        );
+
+        // Frame 2: speech continues
+        assert_eq!(sm.accept_prob(0.70, frame_samples), vec![]);
+
+        // Frame 3: silence frame 1 -> temp_end = 1536
+        assert_eq!(sm.accept_prob(0.10, frame_samples), vec![]);
+        // Frame 4: silence frame 2
+        assert_eq!(sm.accept_prob(0.10, frame_samples), vec![]);
+        // Frame 5: silence frame 3 -> reaches min_silence (96ms)
+        // temp_end was 1536. With 800 samples pad: 1536 + 800 = 2336.
+        // current_sample is 6 * 512 = 3072. 2336 < 3072, so end_sample = 2336.
+        let events = sm.accept_prob(0.10, frame_samples);
+        assert_eq!(
+            events,
+            vec![VadStreamEvent::SpeechEnd {
+                start_sample: 0,
+                end_sample: 2336,
+            }]
+        );
     }
 }

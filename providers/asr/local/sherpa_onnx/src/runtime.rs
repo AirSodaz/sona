@@ -1,7 +1,7 @@
 use crate::punctuation::Punctuation;
 use crate::recognizer::{Recognizer, SafeStream};
 use sona_core::ports::asr::TranscriptNormalizationOptions;
-use sona_core::ports::vad::StreamingVadPort;
+use sona_core::ports::vad::{StreamingVadPort, VadEngineSet};
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -16,6 +16,7 @@ pub type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 pub struct RecognizerPool {
     recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
     punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
+    pub(crate) vad_engines: Arc<Mutex<Option<VadEngineSet>>>,
 }
 
 impl Default for RecognizerPool {
@@ -29,7 +30,21 @@ impl RecognizerPool {
         Self {
             recognizers: Arc::new(Mutex::new(HashMap::new())),
             punctuations: Arc::new(Mutex::new(HashMap::new())),
+            vad_engines: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn with_vad_engines(vad_engines: VadEngineSet) -> Self {
+        Self {
+            recognizers: Arc::new(Mutex::new(HashMap::new())),
+            punctuations: Arc::new(Mutex::new(HashMap::new())),
+            vad_engines: Arc::new(Mutex::new(Some(vad_engines))),
+        }
+    }
+
+    pub async fn set_vad_engines(&self, vad_engines: VadEngineSet) {
+        let mut vads = self.vad_engines.lock().await;
+        *vads = Some(vad_engines);
     }
 
     fn prune_idle_recognizers_locked(
@@ -84,6 +99,12 @@ impl RecognizerPool {
         Self::prune_idle_punctuations_locked(&mut punctuations, None);
         drop(punctuations);
 
+        let vads = self.vad_engines.lock().await;
+        if let Some(ref engines) = *vads {
+            engines.prune_idle(None);
+        }
+        drop(vads);
+
         crate::speaker::clear_speaker_caches();
         crate::batch::prune_offline_batch_caches();
     }
@@ -97,6 +118,12 @@ impl RecognizerPool {
         punctuations.clear();
         drop(punctuations);
 
+        let vads = self.vad_engines.lock().await;
+        if let Some(ref engines) = *vads {
+            engines.clear();
+        }
+        drop(vads);
+
         crate::speaker::clear_speaker_caches();
         crate::batch::prune_offline_batch_caches();
     }
@@ -104,6 +131,18 @@ impl RecognizerPool {
     pub async fn prune_idle_punctuations(&self, active_path: Option<&str>) {
         let mut punctuations = self.punctuations.lock().await;
         Self::prune_idle_punctuations_locked(&mut punctuations, active_path);
+    }
+
+    pub async fn prune_idle_vads(&self, active_path: Option<&str>) {
+        let vads = self.vad_engines.lock().await;
+        if let Some(ref engines) = *vads {
+            engines.prune_idle(active_path.map(std::path::Path::new));
+        }
+    }
+
+    pub async fn cached_vad_count(&self) -> usize {
+        let vads = self.vad_engines.lock().await;
+        vads.as_ref().map(|e| e.cached_count()).unwrap_or(0)
     }
 
     pub async fn recognizer_cell_for_gpu_plan(
@@ -916,6 +955,24 @@ mod tests {
         pool.prune_all_idle().await;
         assert_eq!(pool.cached_punctuation_count().await, 0);
     }
+
+    #[tokio::test]
+    async fn vad_pool_caches_recycles_and_prunes_vad() {
+        let pool = RecognizerPool::new();
+        assert_eq!(pool.cached_vad_count().await, 0);
+
+        pool.set_vad_engines(VadEngineSet::empty()).await;
+        assert_eq!(pool.cached_vad_count().await, 0);
+
+        // Pruning on empty cache is safe
+        pool.prune_idle_vads(None).await;
+        assert_eq!(pool.cached_vad_count().await, 0);
+
+        // Prune all clears any idle vads
+        pool.prune_all_idle().await;
+        assert_eq!(pool.cached_vad_count().await, 0);
+    }
+
     #[test]
     fn vad_configuration_is_owned_by_the_runtime_instance() {
         let mut instance = SherpaInstance::default();

@@ -256,6 +256,9 @@ async fn load_streaming_resources(
     if punctuation.is_none() {
         recognizer_pool.prune_idle_punctuations(None).await;
     }
+    recognizer_pool
+        .prune_idle_vads(request.vad_model.as_deref())
+        .await;
     Ok(LocalStreamingResources {
         recognizer,
         punctuation,
@@ -291,6 +294,7 @@ pub async fn create_streaming_session(
     request: LocalSherpaStreamingRequest,
     observer: Arc<dyn AsrRuntimeObserver>,
 ) -> Result<Arc<LocalSherpaSession>, AsrPortError> {
+    recognizer_pool.set_vad_engines(vad_engines.clone()).await;
     let resources =
         load_streaming_resources(&recognizer_pool, &request, Some(observer.as_ref())).await?;
     let LocalSherpaStreamingRequest {
@@ -742,9 +746,8 @@ async fn feed_audio_samples_inner(
                     }
                     instance.offline_state.finish_speech();
 
-                    let pad_samples = (SAMPLE_RATE * 0.10) as usize;
                     let trailing_silence = stream_total
-                        .saturating_sub(end_sample.saturating_add(pad_samples))
+                        .saturating_sub(end_sample)
                         .min(instance.offline_state.buffered_speech_sample_count());
                     let mut offline_copy = instance.offline_state.speech_chunks().to_vec();
                     let mut remaining_to_trim = trailing_silence;

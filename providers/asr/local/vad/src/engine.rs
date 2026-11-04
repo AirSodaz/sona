@@ -17,6 +17,49 @@ use std::sync::{Arc, LazyLock, Mutex};
 static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Session>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Prunes idle VAD sessions from the global cache.
+///
+/// Retains any session currently held by an active runner or stream (`Arc::strong_count > 1`)
+/// or matching the designated active model path.
+pub fn prune_idle_sessions(active_path: Option<&Path>) {
+    let mut cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let active_canonical = active_path
+        .map(|p| resolve_model_onnx_path(p).unwrap_or_else(|_| p.to_path_buf()))
+        .map(|p| p.canonicalize().unwrap_or_else(|_| p.to_path_buf()));
+    cache.retain(|path, session| {
+        if let Some(ref active) = active_canonical
+            && path == active
+        {
+            return true;
+        }
+        Arc::strong_count(session) > 1
+    });
+}
+
+/// Clears all cached ONNX sessions unconditionally.
+pub fn clear_session_cache() {
+    let mut cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.clear();
+}
+
+/// Returns the current number of cached sessions.
+pub fn cached_session_count() -> usize {
+    SESSION_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .len()
+}
+
+/// Returns the current number of cached sessions matching a predicate.
+pub fn cached_session_count_matching<F: Fn(&Path) -> bool>(predicate: F) -> usize {
+    SESSION_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .keys()
+        .filter(|p| predicate(p))
+        .count()
+}
+
 pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPortError> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     {
@@ -75,7 +118,9 @@ impl VadEnginePort for SileroOnnxEngine {
         let mut runner = SileroVadRunner::from_session(session)?;
 
         let probs = runner.predict_probs_batch(samples)?;
-        let mut state_machine = UniversalVadStateMachine::new(options, sample_rate);
+        let mut batch_options = options.clone();
+        batch_options.speech_pad_seconds = 0.0;
+        let mut state_machine = UniversalVadStateMachine::new(&batch_options, sample_rate);
         let mut spans = state_machine.batch_detect(&probs, runner.window_size());
         for span in &mut spans {
             span.start_sample = span.start_sample.min(samples.len());
@@ -98,6 +143,18 @@ impl VadEnginePort for SileroOnnxEngine {
             options,
             SUPPORTED_SAMPLE_RATE,
         )))
+    }
+
+    fn prune_idle(&self, active_path: Option<&Path>) {
+        prune_idle_sessions(active_path);
+    }
+
+    fn clear_cache(&self) {
+        clear_session_cache();
+    }
+
+    fn cached_count(&self) -> usize {
+        cached_session_count_matching(|p| self.can_handle(p))
     }
 }
 
@@ -130,7 +187,9 @@ impl VadEnginePort for FsmnVadOnnxEngine {
         let mut runner = FsmnVadRunner::from_session(session, Some(&onnx_path))?;
 
         let probs = runner.predict_probs_batch(samples)?;
-        let mut state_machine = UniversalVadStateMachine::new(options, sample_rate);
+        let mut batch_options = options.clone();
+        batch_options.speech_pad_seconds = 0.0;
+        let mut state_machine = UniversalVadStateMachine::new(&batch_options, sample_rate);
         let mut spans = state_machine.batch_detect(&probs, runner.window_size());
         for span in &mut spans {
             span.start_sample = span.start_sample.min(samples.len());
@@ -153,6 +212,18 @@ impl VadEnginePort for FsmnVadOnnxEngine {
             options,
             SUPPORTED_SAMPLE_RATE,
         )))
+    }
+
+    fn prune_idle(&self, active_path: Option<&Path>) {
+        prune_idle_sessions(active_path);
+    }
+
+    fn clear_cache(&self) {
+        clear_session_cache();
+    }
+
+    fn cached_count(&self) -> usize {
+        cached_session_count_matching(|p| self.can_handle(p))
     }
 }
 
@@ -275,6 +346,35 @@ mod tests {
                 Arc::ptr_eq(&s1, &s2),
                 "Session Arc pointer should be identical across calls"
             );
+        }
+    }
+
+    #[test]
+    fn test_session_cache_prune_and_clear() {
+        let silero_candidates = [
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../models/silero_vad.onnx"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../models/silero_vad_v5.onnx"),
+        ];
+        if let Some(path) = silero_candidates.iter().find(|p| p.is_file()) {
+            let session = get_or_create_session(path).expect("session loads");
+            assert!(cached_session_count() >= 1);
+
+            // Active path retention
+            prune_idle_sessions(Some(path));
+            assert!(cached_session_count() >= 1);
+
+            // Strong count retention when held by runner/external Arc
+            drop(session); // Now only held by cache (strong_count == 1)
+
+            // Pruning without active path removes idle session
+            prune_idle_sessions(None);
+            assert_eq!(cached_session_count(), 0);
+
+            // Repopulate and clear
+            let _ = get_or_create_session(path);
+            assert!(cached_session_count() >= 1);
+            clear_session_cache();
+            assert_eq!(cached_session_count(), 0);
         }
     }
 }

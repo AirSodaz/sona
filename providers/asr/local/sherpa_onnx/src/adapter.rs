@@ -31,6 +31,9 @@ impl SherpaOnnxAdapter {
         vad_engines: VadEngineSet,
         punct_engines: PunctuationEngineSet,
     ) -> Self {
+        if let Ok(mut vads) = recognizer_pool.vad_engines.try_lock() {
+            *vads = Some(vad_engines.clone());
+        }
         Self {
             recognizer_pool,
             vad_engines,
@@ -99,6 +102,9 @@ impl StreamingAsrFactoryPort for SherpaOnnxStreamingFactory {
         let request = spec.engine_request();
         let request =
             LocalSherpaStreamingRequest::from_local_sherpa_request("prepare".to_string(), request)?;
+        self.recognizer_pool
+            .set_vad_engines(self.vad_engines.clone())
+            .await;
         if let Some(vad_path) = request
             .vad_model
             .as_deref()

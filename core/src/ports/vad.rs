@@ -68,7 +68,7 @@ impl VadDetectionOptions {
             min_silence_duration: 0.5,
             min_speech_duration: 0.15,
             buffer_seconds: 5.0,
-            speech_pad_seconds: 0.20,
+            speech_pad_seconds: 0.10,
             max_speech_duration: 30.0,
             threshold_escalation_duration: 25.0,
         }
@@ -142,6 +142,17 @@ pub trait VadEnginePort: Send + Sync {
             crate::ports::asr::AsrPortErrorKind::Unsupported,
             "Streaming VAD is not supported by this engine",
         ))
+    }
+
+    /// Prunes idle cached resources from this engine.
+    fn prune_idle(&self, _active_path: Option<&Path>) {}
+
+    /// Clears all cached resources unconditionally.
+    fn clear_cache(&self) {}
+
+    /// Returns the number of cached model sessions/instances currently held.
+    fn cached_count(&self) -> usize {
+        0
     }
 }
 
@@ -236,6 +247,25 @@ impl VadEngineSet {
         })?;
         engine.create_stream_detector(options)
     }
+
+    /// Prunes idle model sessions across all registered VAD engines.
+    pub fn prune_idle(&self, active_path: Option<&Path>) {
+        for engine in &self.engines {
+            engine.prune_idle(active_path);
+        }
+    }
+
+    /// Clears all cached model sessions across all registered VAD engines.
+    pub fn clear(&self) {
+        for engine in &self.engines {
+            engine.clear_cache();
+        }
+    }
+
+    /// Returns the total number of cached model sessions across all registered engines.
+    pub fn cached_count(&self) -> usize {
+        self.engines.iter().map(|e| e.cached_count()).sum()
+    }
 }
 
 impl fmt::Debug for VadEngineSet {
@@ -308,7 +338,7 @@ mod tests {
         assert_eq!(options.min_silence_duration, 0.5);
         assert_eq!(options.min_speech_duration, 0.15);
         assert_eq!(options.buffer_seconds, 5.0);
-        assert_eq!(options.speech_pad_seconds, 0.20);
+        assert_eq!(options.speech_pad_seconds, 0.10);
         assert_eq!(options.max_speech_duration, 30.0);
         assert_eq!(options.threshold_escalation_duration, 25.0);
     }
