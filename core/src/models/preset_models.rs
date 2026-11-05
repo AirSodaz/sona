@@ -224,6 +224,7 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
     ("punctuation", DEFAULT_PUNCTUATION_MODEL_ID),
     ("punct", DEFAULT_PUNCTUATION_MODEL_ID),
     ("vad", DEFAULT_SILERO_VAD_MODEL_ID),
+    ("ten-vad", DEFAULT_SILERO_VAD_MODEL_ID),
 ];
 
 /// Resolves an alias or canonical model identifier to its canonical preset model ID.

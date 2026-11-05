@@ -11,7 +11,7 @@ use crate::ports::asr::{
     AsrTranscriptUpdateEvent, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
 use crate::ports::punctuation::{PunctuationModel, apply_optional_punctuation};
-use crate::ports::vad::StreamingVadPort;
+use crate::ports::vad::{StreamingVadPort, VadStreamEvent};
 use crate::transcription::asr_metrics::{AsrInferenceMetric, duration_to_ms};
 use crate::transcription::postprocess::TranscriptPostprocessor;
 use crate::transcription::transcript::{
@@ -26,8 +26,6 @@ const SAMPLE_RATE: f64 = 16_000.0;
 const PRE_ROLL_DURATION_SECONDS: f64 = 0.4;
 const PRE_ROLL_SAMPLES: usize = (SAMPLE_RATE * PRE_ROLL_DURATION_SECONDS) as usize;
 const RING_BUFFER_TRIM_SLACK_SAMPLES: usize = 4_000;
-const VAD_RELEASE_SECONDS: f64 = 0.10;
-const MIN_VALID_SPEECH_SECONDS: f64 = 0.10;
 
 type PendingInferenceTask = JoinHandle<Result<(), AsrPortError>>;
 
@@ -67,16 +65,12 @@ pub struct PseudoStreamingSession {
     last_frame_end_sample: AtomicU64,
     is_running: AtomicBool,
     enable_partial_decoding: bool,
-    vad_min_silence_duration_ms: u32,
-    vad_max_speech_duration_ms: u32,
 }
 
 impl PseudoStreamingSession {
     pub fn new(config: PseudoStreamingSessionConfig) -> Result<Self, AsrPortError> {
         let initial_refresh = config.initial_refresh_rate_ms.unwrap_or(200) as u64;
         let enable_partial_decoding = config.enable_partial_decoding.unwrap_or(true);
-        let vad_min_silence_duration_ms = config.vad_min_silence_duration_ms.unwrap_or(500);
-        let vad_max_speech_duration_ms = config.vad_max_speech_duration_ms.unwrap_or(30_000);
         let postprocessor = TranscriptPostprocessor::compile(config.postprocess_options)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
 
@@ -98,8 +92,6 @@ impl PseudoStreamingSession {
             last_frame_end_sample: AtomicU64::new(0),
             is_running: AtomicBool::new(false),
             enable_partial_decoding,
-            vad_min_silence_duration_ms,
-            vad_max_speech_duration_ms,
         })
     }
 
@@ -348,6 +340,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
         }
 
         *self.current_segment_id.lock().await = None;
+        self.vad.lock().await.reset();
         buffer.reset();
         self.last_partial_decode_ms.store(0, Ordering::Release);
 
@@ -364,13 +357,15 @@ impl AsrStreamingSession for PseudoStreamingSession {
         if !self.is_running.load(Ordering::Acquire) {
             return Ok(());
         }
+        if frame.samples.is_empty() {
+            return Ok(());
+        }
 
         let samples = &frame.samples;
         let mut vad = self.vad.lock().await;
-        vad.accept_samples(samples);
-        let currently_speaking = vad.is_speech_detected();
+        let events = vad.accept_samples(samples);
+        let is_vad_speaking = vad.is_speech_detected();
         drop(vad);
-
         let mut current_id_guard = self.current_segment_id.lock().await;
         if current_id_guard.is_none() {
             *current_id_guard = Some(uuid::Uuid::new_v4().to_string());
@@ -378,129 +373,157 @@ impl AsrStreamingSession for PseudoStreamingSession {
         let seg_id = current_id_guard.as_ref().unwrap().clone();
         drop(current_id_guard);
 
-        let mut buffer = self.buffer.lock().await;
         let mut pending = self.pending_inference.lock().await;
+        let mut buffer = self.buffer.lock().await;
 
-        if currently_speaking && !buffer.is_speech_active() {
-            // Speech onset: capture pre-roll context
-            buffer.begin_speech(PRE_ROLL_SAMPLES);
-        }
-        let max_speech_samples =
-            (SAMPLE_RATE * (self.vad_max_speech_duration_ms as f64 / 1000.0)) as usize;
-        let is_over_max_duration = buffer.is_speech_active()
-            && buffer.buffered_speech_sample_count() + samples.len() >= max_speech_samples;
+        let mut had_speech_end = false;
+        let stream_total = buffer.total_samples().saturating_add(samples.len());
 
-        if currently_speaking && !is_over_max_duration {
-            buffer.push_speech_chunk(samples.to_vec());
-
-            if self.enable_partial_decoding {
-                let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
-                if prev_decode_ms > 0 {
-                    buffer.record_decode_duration(prev_decode_ms);
-                }
-
-                let now = Instant::now();
-                if buffer.should_run_partial(now) {
-                    let slot_available = prepare_partial_inference_slot(&mut pending).await?;
-                    if !slot_available {
-                        buffer.record_overrun();
-                    } else {
-                        let audio_samples = buffer.flatten_speech_buffer();
-                        let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
-                        let decoder = self.decoder.clone();
-                        let punctuation = self.punctuation.clone();
-                        let observer = self.observer.clone();
-                        let postprocessor = self.postprocessor.clone();
-                        let normalization_options = self.normalization_options;
-                        let instance_id = self.instance_id.clone();
-                        let triggered_at = Instant::now();
-                        let seg_id_copy = seg_id.clone();
-                        let decode_target = self.last_partial_decode_ms.clone();
-
-                        let task = move || {
-                            execute_inference_pass(
-                                &decoder,
-                                &audio_samples,
-                                DecodeStage::Partial,
-                                punctuation.as_ref(),
-                                &seg_id_copy,
-                                global_start,
-                                &instance_id,
-                                normalization_options,
-                                &postprocessor,
-                                &observer,
-                                triggered_at,
-                                Some(&decode_target),
-                            )
+        for event in events {
+            match event {
+                VadStreamEvent::SpeechStart { start_sample: _ } => {
+                    if !buffer.is_speech_active() {
+                        let anchor = if had_speech_end {
+                            stream_total
+                        } else {
+                            buffer.total_samples()
                         };
-
-                        *pending = Some(queue_inference_task(None, task));
-                        buffer.mark_inference_time(now);
+                        buffer.begin_speech_at(anchor, PRE_ROLL_SAMPLES);
                     }
                 }
-            }
-        } else {
-            let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
-            if prev_decode_ms > 0 {
-                buffer.record_decode_duration(prev_decode_ms);
-            }
-
-            if buffer.is_speech_active() {
-                if is_over_max_duration {
+                VadStreamEvent::SpeechEnd {
+                    start_sample: _,
+                    end_sample,
+                } => {
+                    if !buffer.is_speech_active() {
+                        continue;
+                    }
+                    had_speech_end = true;
                     buffer.push_speech_chunk(samples.to_vec());
+
+                    let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+                    if prev_decode_ms > 0 {
+                        buffer.record_decode_duration(prev_decode_ms);
+                    }
+
+                    let trailing_silence = stream_total
+                        .saturating_sub(end_sample)
+                        .min(buffer.buffered_speech_sample_count());
+                    buffer.finish_speech();
+                    let mut audio_samples = buffer.flatten_speech_buffer();
+                    let trailing_silence_len = trailing_silence.min(audio_samples.len());
+                    let silence_start = audio_samples.len() - trailing_silence_len;
+                    let trailing_chunk = audio_samples[silence_start..].to_vec();
+                    audio_samples.truncate(silence_start);
+
+                    if !trailing_chunk.is_empty() {
+                        buffer.push_ring_chunk_with_sample_limit(
+                            trailing_chunk,
+                            PRE_ROLL_SAMPLES,
+                            RING_BUFFER_TRIM_SLACK_SAMPLES,
+                        );
+                    }
+
+                    let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
+                    let decoder = self.decoder.clone();
+                    let punctuation = self.punctuation.clone();
+                    let observer = self.observer.clone();
+                    let postprocessor = self.postprocessor.clone();
+                    let normalization_options = self.normalization_options;
+                    let instance_id = self.instance_id.clone();
+                    let triggered_at = Instant::now();
+                    let seg_id_copy = {
+                        let mut current_id_guard = self.current_segment_id.lock().await;
+                        let id = current_id_guard
+                            .take()
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                        *current_id_guard = Some(uuid::Uuid::new_v4().to_string());
+                        id
+                    };
+                    let boundary = self.current_boundary();
+
+                    let task = move || {
+                        execute_inference_pass(
+                            &decoder,
+                            &audio_samples,
+                            DecodeStage::Final,
+                            punctuation.as_ref(),
+                            &seg_id_copy,
+                            global_start,
+                            &instance_id,
+                            normalization_options,
+                            &postprocessor,
+                            &observer,
+                            triggered_at,
+                            None,
+                        )?;
+                        observer.on_stream_boundary(&boundary);
+                        Ok(())
+                    };
+                    *pending = Some(queue_inference_task(pending.take(), task));
+
+                    buffer.on_utterance_end(true);
+                    buffer.clear_speech_buffer();
                 }
-                // Speech offset: finalize utterance
-                buffer.finish_speech();
-                let mut audio_samples = buffer.flatten_speech_buffer();
-
-                if !is_over_max_duration {
-                    let release_samples = (SAMPLE_RATE * VAD_RELEASE_SECONDS) as usize;
-                    let expected_silence_samples =
-                        (SAMPLE_RATE * (self.vad_min_silence_duration_ms as f64 / 1000.0)) as usize;
-                    let trim_samples = expected_silence_samples.saturating_sub(release_samples);
-                    let min_valid_samples = (SAMPLE_RATE * MIN_VALID_SPEECH_SECONDS) as usize;
-                    let max_trimmable = audio_samples.len().saturating_sub(min_valid_samples);
-                    let actual_trim = trim_samples.min(max_trimmable);
-                    audio_samples.truncate(audio_samples.len() - actual_trim);
-                }
-
-                let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
-                let decoder = self.decoder.clone();
-                let punctuation = self.punctuation.clone();
-                let observer = self.observer.clone();
-                let postprocessor = self.postprocessor.clone();
-                let normalization_options = self.normalization_options;
-                let instance_id = self.instance_id.clone();
-                let triggered_at = Instant::now();
-                let seg_id_copy = seg_id;
-                let boundary = self.current_boundary();
-
-                let task = move || {
-                    execute_inference_pass(
-                        &decoder,
-                        &audio_samples,
-                        DecodeStage::Final,
-                        punctuation.as_ref(),
-                        &seg_id_copy,
-                        global_start,
-                        &instance_id,
-                        normalization_options,
-                        &postprocessor,
-                        &observer,
-                        triggered_at,
-                        None,
-                    )?;
-                    observer.on_stream_boundary(&boundary);
-                    Ok(())
-                };
-                *pending = Some(queue_inference_task(pending.take(), task));
-
-                buffer.on_utterance_end(true);
-                buffer.clear_speech_buffer();
-                *self.current_segment_id.lock().await = Some(uuid::Uuid::new_v4().to_string());
             }
+        }
 
-            if !currently_speaking {
+        if !had_speech_end && !buffer.is_speech_active() && is_vad_speaking {
+            let total = buffer.total_samples();
+            buffer.begin_speech_at(total, PRE_ROLL_SAMPLES);
+        }
+
+        if !had_speech_end {
+            if buffer.is_speech_active() {
+                buffer.push_speech_chunk(samples.to_vec());
+
+                if self.enable_partial_decoding {
+                    let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+                    if prev_decode_ms > 0 {
+                        buffer.record_decode_duration(prev_decode_ms);
+                    }
+
+                    let now = Instant::now();
+                    if buffer.should_run_partial(now) {
+                        let slot_available = prepare_partial_inference_slot(&mut pending).await?;
+                        if !slot_available {
+                            buffer.record_overrun();
+                        } else {
+                            let audio_samples = buffer.flatten_speech_buffer();
+                            let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
+                            let decoder = self.decoder.clone();
+                            let punctuation = self.punctuation.clone();
+                            let observer = self.observer.clone();
+                            let postprocessor = self.postprocessor.clone();
+                            let normalization_options = self.normalization_options;
+                            let instance_id = self.instance_id.clone();
+                            let triggered_at = Instant::now();
+                            let seg_id_copy = seg_id.clone();
+                            let decode_target = self.last_partial_decode_ms.clone();
+
+                            let task = move || {
+                                execute_inference_pass(
+                                    &decoder,
+                                    &audio_samples,
+                                    DecodeStage::Partial,
+                                    punctuation.as_ref(),
+                                    &seg_id_copy,
+                                    global_start,
+                                    &instance_id,
+                                    normalization_options,
+                                    &postprocessor,
+                                    &observer,
+                                    triggered_at,
+                                    Some(&decode_target),
+                                )
+                            };
+
+                            *pending = Some(queue_inference_task(None, task));
+                            buffer.mark_inference_time(now);
+                        }
+                    }
+                }
+            } else {
                 buffer.push_ring_chunk_with_sample_limit(
                     samples.to_vec(),
                     PRE_ROLL_SAMPLES,
@@ -508,7 +531,6 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 );
             }
         }
-
         buffer.advance_total_samples(samples.len());
         Ok(())
     }

@@ -3035,26 +3035,50 @@
     ]
   },
   {
-    "id": "ten-vad",
-    "name": "TEN - VAD",
-    "description": "settings.descriptions.ten_vad",
+    "id": "silero-v6-vad",
+    "name": "Silero V6 - VAD",
+    "description": "settings.descriptions.silero_v6_vad",
     "type": "vad",
     "languages": [],
     "languageMode": "none",
-    "size": "~315 KB",
+    "size": "~2.4 MB",
     "ratings": {
-      "accuracy": 4,
+      "accuracy": 5,
       "speed": 5
     },
     "isArchive": false,
-    "filename": "ten-vad.onnx",
+    "filename": "silero_vad_v6.onnx",
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://huggingface.co/TigreGotico/ten-vad-onnx/resolve/main/ten-vad.onnx",
-        "filename": "ten-vad.onnx",
-        "sha256": "e10b98a0cab1c98e847fbdda14cb3d45a38336d47535a3f63a0fb6c4e0f4cdf4",
-        "sizeBytes": 315449
+        "url": "https://huggingface.co/bitsydarel/silero-vad-onnx/resolve/main/silero_vad_v6.2.1.onnx",
+        "filename": "silero_vad_v6.onnx",
+        "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+        "sizeBytes": 2327524
+      }
+    ]
+  },
+  {
+    "id": "fsmn-vad",
+    "name": "FSMN - VAD",
+    "description": "settings.descriptions.fsmn_vad",
+    "type": "vad",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~1.7 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 5
+    },
+    "isArchive": false,
+    "filename": "fsmn_vad.onnx",
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/manyeyes/speech_fsmn_vad_zh-cn-16k-common-onnx/resolve/main/model.onnx",
+        "filename": "fsmn_vad.onnx",
+        "sha256": "3b10ac401cf3e73290d3734c22ac328f485697008f183a54e2ae2cbef6a4a1e4",
+        "sizeBytes": 1723188
       }
     ]
   },

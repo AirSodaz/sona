@@ -6895,7 +6895,8 @@ name = "sona-vad"
 version = "0.10.3"
 dependencies = [
  "log",
- "sherpa-onnx",
+ "ndarray",
+ "ort",
  "sona-core",
 ]
 

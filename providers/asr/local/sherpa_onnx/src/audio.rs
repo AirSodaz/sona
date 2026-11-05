@@ -1,5 +1,5 @@
 use hound::{SampleFormat, WavSpec, WavWriter};
-use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
+use sherpa_onnx::{SileroVadModelConfig, VadModelConfig};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 pub use sona_core::ports::asr::{
     find_available_ffmpeg, find_available_ffmpeg_from_exe, pcm_i16_to_f32, pcm_s16le_bytes_to_f32,
@@ -9,12 +9,6 @@ pub use sona_core::ports::asr::{
 use std::path::{Path, PathBuf};
 
 pub(crate) type VadConfig = VadModelConfig;
-pub(crate) type VadDetector = VoiceActivityDetector;
-
-pub struct SafeVad(VadDetector);
-unsafe impl Send for SafeVad {}
-unsafe impl Sync for SafeVad {}
-
 #[derive(Debug, Clone, Copy)]
 pub struct VadDetectorOptions {
     pub threshold: f32,
@@ -451,59 +445,6 @@ pub(crate) fn create_vad_config(
         num_threads: options.num_threads,
         ..Default::default()
     })
-}
-
-pub(crate) fn create_vad_detector(
-    vad_model: &Path,
-    detector_capacity_seconds: f32,
-) -> Result<VadDetector, AsrPortError> {
-    let vad_config = create_vad_config(vad_model, VadDetectorOptions::default())?;
-    let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
-        detector_capacity_seconds
-    } else {
-        60.0
-    };
-    VoiceActivityDetector::create(&vad_config, detector_capacity_seconds)
-        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))
-}
-
-pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
-    let v_path = vad_model?;
-
-    if v_path.is_empty() {
-        log::warn!(
-            "[Sherpa] load_vad: Path is empty or does not exist: {}",
-            v_path
-        );
-        return None;
-    }
-
-    match create_vad_detector(Path::new(&v_path), 60.0) {
-        Ok(vad) => {
-            log::info!("[Sherpa] load_vad: VAD successfully created!");
-            Some(SafeVad(vad))
-        }
-        Err(error) => {
-            log::warn!("[Sherpa] load_vad: {error}");
-            None
-        }
-    }
-}
-
-pub fn reset_vad(vad: &mut SafeVad) {
-    vad.0.reset();
-    vad.0.clear();
-}
-
-pub fn accept_vad_samples(vad: &SafeVad, samples: &[f32]) {
-    vad.0.accept_waveform(samples);
-    while !vad.0.is_empty() {
-        vad.0.pop();
-    }
-}
-
-pub fn vad_detected(vad: &SafeVad) -> bool {
-    vad.0.detected()
 }
 
 #[cfg(test)]

@@ -151,6 +151,7 @@ pub(crate) async fn create_asr_streaming_session(
                 LOCAL_RECOGNIZER_POOL
                     .get_or_init(RecognizerPool::new)
                     .clone(),
+                sona_vad::built_in_engines(),
                 request,
                 observer,
             )

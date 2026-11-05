@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub enum VadEngineKind {
     #[default]
     SileroOnnx,
-    TenVadOnnx,
+    FsmnVadOnnx,
 }
 
 /// Tuning parameters for one voice activity detection pass.
@@ -16,11 +16,14 @@ pub enum VadEngineKind {
 pub struct VadDetectionOptions {
     /// Model directory or file backing this detection pass.
     pub model_path: PathBuf,
+    /// Audio sample rate in Hz. Native VAD engines require 16_000 Hz.
+    pub sample_rate: u32,
     pub threshold: f32,
     /// Negative threshold for speech offset detection hysteresis.
     ///
-    /// NOTE: Currently ignored by underlying provider implementations (Silero and TEN),
-    /// as upstream sherpa-onnx model configs do not support negative threshold tuning.
+    /// Enforced by `UniversalVadStateMachine` during speech segmentation:
+    /// `threshold` triggers speech onset, while falling below `neg_threshold`
+    /// triggers speech offset.
     pub neg_threshold: Option<f32>,
     pub min_silence_duration: f32,
     pub min_speech_duration: f32,
@@ -31,7 +34,7 @@ pub struct VadDetectionOptions {
     pub speech_pad_seconds: f32,
     /// Maximum allowed speech duration in seconds for an individual segment (hard ceiling).
     pub max_speech_duration: f32,
-    /// Duration in seconds after which detector escalates speech threshold to 0.9
+    /// Duration in seconds after which detector escalates the deactivation silence threshold
     /// to encourage natural voice dip termination before the hard limit.
     pub threshold_escalation_duration: f32,
 }
@@ -42,10 +45,11 @@ impl VadDetectionOptions {
     pub fn batch_defaults(model_path: impl Into<PathBuf>) -> Self {
         Self {
             model_path: model_path.into(),
+            sample_rate: 16_000,
             threshold: 0.50,
             neg_threshold: Some(0.35),
             min_silence_duration: 1.2,
-            min_speech_duration: 0.25,
+            min_speech_duration: 0.15,
             buffer_seconds: 5.0,
             speech_pad_seconds: 0.25,
             max_speech_duration: 30.0,
@@ -58,12 +62,13 @@ impl VadDetectionOptions {
     pub fn streaming_defaults(model_path: impl Into<PathBuf>) -> Self {
         Self {
             model_path: model_path.into(),
+            sample_rate: 16_000,
             threshold: 0.50,
             neg_threshold: Some(0.35),
             min_silence_duration: 0.5,
             min_speech_duration: 0.15,
             buffer_seconds: 5.0,
-            speech_pad_seconds: 0.20,
+            speech_pad_seconds: 0.10,
             max_speech_duration: 30.0,
             threshold_escalation_duration: 25.0,
         }
@@ -138,6 +143,30 @@ pub trait VadEnginePort: Send + Sync {
             "Streaming VAD is not supported by this engine",
         ))
     }
+
+    /// Prunes idle cached resources from this engine.
+    fn prune_idle(&self, _active_path: Option<&Path>) {}
+
+    /// Clears all cached resources unconditionally.
+    fn clear_cache(&self) {}
+
+    /// Returns the number of cached model sessions/instances currently held.
+    fn cached_count(&self) -> usize {
+        0
+    }
+}
+
+/// Discrete speech state transitions emitted during online VAD streaming.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VadStreamEvent {
+    /// Speech onset detected. `start_sample` denotes the exact sample index
+    /// where speech began in the continuous stream.
+    SpeechStart { start_sample: usize },
+    /// Speech offset detected. `start_sample` and `end_sample` bound the speech utterance.
+    SpeechEnd {
+        start_sample: usize,
+        end_sample: usize,
+    },
 }
 
 /// Stream-oriented voice activity detector interface.
@@ -146,7 +175,9 @@ pub trait VadEnginePort: Send + Sync {
 /// online/pseudo-streaming speech segmentation chunk by chunk.
 pub trait StreamingVadPort: Send {
     /// Feed incoming mono PCM audio samples (typically 16 kHz) to the detector.
-    fn accept_samples(&mut self, samples: &[f32]);
+    ///
+    /// Returns zero or more discrete speech boundary events detected during this chunk.
+    fn accept_samples(&mut self, samples: &[f32]) -> Vec<VadStreamEvent>;
 
     /// Returns whether speech is currently detected in the stream.
     fn is_speech_detected(&self) -> bool;
@@ -199,6 +230,12 @@ impl VadEngineSet {
         &self,
         options: &VadDetectionOptions,
     ) -> Result<Box<dyn StreamingVadPort>, AsrPortError> {
+        if options.sample_rate != 16_000 {
+            return Err(AsrPortError::new(
+                crate::ports::asr::AsrPortErrorKind::Unsupported,
+                "VAD engine requires 16000 Hz input",
+            ));
+        }
         let engine = self.resolve(Some(&options.model_path)).ok_or_else(|| {
             AsrPortError::new(
                 crate::ports::asr::AsrPortErrorKind::Model,
@@ -209,6 +246,25 @@ impl VadEngineSet {
             )
         })?;
         engine.create_stream_detector(options)
+    }
+
+    /// Prunes idle model sessions across all registered VAD engines.
+    pub fn prune_idle(&self, active_path: Option<&Path>) {
+        for engine in &self.engines {
+            engine.prune_idle(active_path);
+        }
+    }
+
+    /// Clears all cached model sessions across all registered VAD engines.
+    pub fn clear(&self) {
+        for engine in &self.engines {
+            engine.clear_cache();
+        }
+    }
+
+    /// Returns the total number of cached model sessions across all registered engines.
+    pub fn cached_count(&self) -> usize {
+        self.engines.iter().map(|e| e.cached_count()).sum()
     }
 }
 
@@ -260,10 +316,11 @@ mod tests {
         let options = VadDetectionOptions::batch_defaults("models/silero-vad");
 
         assert_eq!(options.model_path, PathBuf::from("models/silero-vad"));
+        assert_eq!(options.sample_rate, 16_000);
         assert_eq!(options.threshold, 0.50);
         assert_eq!(options.neg_threshold, Some(0.35));
         assert_eq!(options.min_silence_duration, 1.2);
-        assert_eq!(options.min_speech_duration, 0.25);
+        assert_eq!(options.min_speech_duration, 0.15);
         assert_eq!(options.buffer_seconds, 5.0);
         assert_eq!(options.speech_pad_seconds, 0.25);
         assert_eq!(options.max_speech_duration, 30.0);
@@ -275,14 +332,29 @@ mod tests {
         let options = VadDetectionOptions::streaming_defaults("models/silero-vad");
 
         assert_eq!(options.model_path, PathBuf::from("models/silero-vad"));
+        assert_eq!(options.sample_rate, 16_000);
         assert_eq!(options.threshold, 0.50);
         assert_eq!(options.neg_threshold, Some(0.35));
         assert_eq!(options.min_silence_duration, 0.5);
         assert_eq!(options.min_speech_duration, 0.15);
         assert_eq!(options.buffer_seconds, 5.0);
-        assert_eq!(options.speech_pad_seconds, 0.20);
+        assert_eq!(options.speech_pad_seconds, 0.10);
         assert_eq!(options.max_speech_duration, 30.0);
         assert_eq!(options.threshold_escalation_duration, 25.0);
+    }
+
+    #[test]
+    fn create_stream_detector_rejects_unsupported_sample_rate() {
+        let set = VadEngineSet::empty().register(Arc::new(FakeVad));
+        let mut options = VadDetectionOptions::streaming_defaults("models/silero-vad");
+        options.sample_rate = 8_000;
+
+        let err = match set.create_stream_detector(&options) {
+            Err(e) => e,
+            Ok(_) => panic!("expected error for unsupported sample rate"),
+        };
+        assert_eq!(err.kind, AsrPortErrorKind::Unsupported);
+        assert!(err.message.contains("16000 Hz"));
     }
 
     #[test]
