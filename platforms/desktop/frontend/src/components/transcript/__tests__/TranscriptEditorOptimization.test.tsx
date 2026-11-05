@@ -7,11 +7,6 @@ import TranscriptEditor from '../TranscriptEditor';
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-// Mock useAutoScroll
-vi.mock('../../../hooks/useAutoScroll', () => ({
-  useAutoScroll: vi.fn(),
-}));
-
 // Mock Virtuoso to render items
 vi.mock('react-virtuoso', async () => {
   const React = await import('react');

@@ -504,7 +504,9 @@
     "underline": "Underline",
     "strikethrough": "Strikethrough",
     "code": "Code",
-    "split_segment": "Split segment"
+    "split_segment": "Split segment",
+    "locate_playing": "Locate playing segment",
+    "follow_bottom": "Scroll to bottom and resume follow"
   },
   "export": {
     "button": "Export",

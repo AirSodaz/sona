@@ -8,15 +8,17 @@ import TranscriptEditor from '../TranscriptEditor';
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // Mock Virtuoso
-const { mockScrollToIndex, segmentRenderCounts } = vi.hoisted(() => ({
+const { mockScrollToIndex, segmentRenderCounts, lastVirtuosoProps } = vi.hoisted(() => ({
   mockScrollToIndex: vi.fn(),
   segmentRenderCounts: new Map<string, number>(),
+  lastVirtuosoProps: { current: null as any },
 }));
 
 vi.mock('react-virtuoso', async () => {
   const React = await import('react');
   return {
     Virtuoso: React.forwardRef((props: any, ref: any) => {
+      lastVirtuosoProps.current = props;
       React.useImperativeHandle(ref, () => ({
         scrollToIndex: mockScrollToIndex,
       }));
@@ -192,5 +194,58 @@ describe('TranscriptEditor', () => {
     const { container } = render(<TranscriptEditor />);
     expect(container.querySelector('.empty-state')).toBeTruthy();
     expect(container.querySelector('.transcript-ghost-segment')).toBeNull();
+  });
+
+  it('scrolls to end when recording receives new segments and shows resume button when detached', () => {
+    const segments = [
+      { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, tokens: [], timestamps: [] },
+    ];
+
+    act(() => {
+      useTranscriptStore.setState({ segments, isRecording: true, isPaused: false });
+    });
+
+    const { container } = render(<TranscriptEditor />);
+
+    // When a second segment arrives during recording, auto-scrolls to bottom
+    act(() => {
+      useTranscriptStore.setState({
+        segments: [
+          ...segments,
+          { id: '2', start: 1, end: 2, text: 'World', isFinal: false, tokens: [], timestamps: [] },
+        ],
+      });
+    });
+
+    expect(mockScrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 1,
+        align: 'end',
+      })
+    );
+
+    // User scrolls up (virtuoso signals atBottom = false)
+    act(() => {
+      lastVirtuosoProps.current.atBottomStateChange(false);
+    });
+
+    // Resume button appears
+    const resumeBtn = container.querySelector('[data-testid="scroll-follow-resume-btn"]');
+    expect(resumeBtn).toBeTruthy();
+
+    mockScrollToIndex.mockClear();
+
+    // Clicking resume scrolls to bottom
+    act(() => {
+      resumeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mockScrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 1,
+        align: 'end',
+        behavior: 'smooth',
+      })
+    );
   });
 });
