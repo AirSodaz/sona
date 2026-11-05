@@ -113,6 +113,72 @@ describe('useTranscriptScrollFollow', () => {
       });
     });
 
+    it('follows when the last segment translation or finalization state changes', () => {
+      act(() => {
+        useTranscriptStore.setState({ isRecording: true });
+      });
+
+      const streamingSegments: TranscriptSegment[] = [
+        ...initialSegments,
+        {
+          id: 'seg-3',
+          start: 2,
+          end: 3,
+          text: 'Interim text',
+          isFinal: false,
+          tokens: [],
+          timestamps: [],
+        },
+      ];
+
+      const { rerender } = renderHook(
+        ({ segments }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments,
+          }),
+        { initialProps: { segments: streamingSegments } }
+      );
+
+      mockScrollToIndex.mockClear();
+
+      // Interim text receives translation
+      const translatedSegments = [
+        initialSegments[0],
+        initialSegments[1],
+        {
+          ...streamingSegments[2],
+          translation: 'Translated interim',
+        },
+      ];
+      rerender({ segments: translatedSegments });
+
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 2,
+        align: 'end',
+        behavior: 'auto',
+      });
+
+      mockScrollToIndex.mockClear();
+
+      // Segment finalizes
+      const finalizedSegments = [
+        initialSegments[0],
+        initialSegments[1],
+        {
+          ...translatedSegments[2],
+          isFinal: true,
+        },
+      ];
+      rerender({ segments: finalizedSegments });
+
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 2,
+        align: 'end',
+        behavior: 'auto',
+      });
+    });
+
     it('detaches follow when user scrolls away from bottom and stops auto-scrolling', () => {
       act(() => {
         useTranscriptStore.setState({ isRecording: true });

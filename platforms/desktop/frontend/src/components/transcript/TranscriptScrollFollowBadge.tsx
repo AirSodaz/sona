@@ -1,5 +1,6 @@
 import { ArrowDown, LocateFixed } from 'lucide-react';
 import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ScrollDetachMode } from '../../hooks/useTranscriptScrollFollow';
 
@@ -25,10 +26,30 @@ export function TranscriptScrollFollowBadge({
   className = '',
 }: TranscriptScrollFollowBadgeProps): React.JSX.Element {
   const { t } = useTranslation();
+  const [isExiting, setIsExiting] = useState(false);
+  const activeModeRef = useRef<ScrollDetachMode>(detachMode);
+
+  if (detachMode !== null) {
+    activeModeRef.current = detachMode;
+  }
+
   const isDetached = detachMode !== null;
+  const displayMode = detachMode ?? activeModeRef.current;
+  const shouldRenderButton = isDetached || isExiting;
+
+  useEffect(() => {
+    if (detachMode === null && activeModeRef.current !== null) {
+      setIsExiting(true);
+      const timer = window.setTimeout(() => {
+        setIsExiting(false);
+        activeModeRef.current = null;
+      }, 300);
+      return () => window.clearTimeout(timer);
+    }
+  }, [detachMode]);
 
   const tooltipText =
-    detachMode === 'playback'
+    displayMode === 'playback'
       ? t('editor.locate_playing', { defaultValue: 'Locate playing segment' })
       : t('editor.follow_bottom', { defaultValue: 'Scroll to bottom and resume follow' });
 
@@ -43,7 +64,7 @@ export function TranscriptScrollFollowBadge({
       data-testid="transcript-scroll-badge"
     >
       <div className={`scroll-badge-action-slot ${isDetached ? 'is-visible' : ''}`}>
-        {isDetached && (
+        {shouldRenderButton && (
           <button
             type="button"
             className="scroll-badge-action-btn"
@@ -52,8 +73,11 @@ export function TranscriptScrollFollowBadge({
             data-tooltip-pos="top"
             aria-label={tooltipText}
             data-testid="scroll-follow-resume-btn"
+            tabIndex={isDetached ? 0 : -1}
+            aria-hidden={!isDetached}
+            style={isDetached ? undefined : { pointerEvents: 'none' }}
           >
-            {detachMode === 'playback' ? (
+            {displayMode === 'playback' ? (
               <LocateFixed size={13} aria-hidden="true" />
             ) : (
               <ArrowDown size={13} aria-hidden="true" />

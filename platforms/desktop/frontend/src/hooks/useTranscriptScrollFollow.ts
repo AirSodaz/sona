@@ -181,10 +181,13 @@ export function useTranscriptScrollFollow({
     }
   }, [editingSegmentId]);
 
-  // Follow latest output when streaming and new segments arrive or segment changes
-  const lastSegmentText = segments[segments.length - 1]?.text;
+  // Follow latest output when streaming and new segments arrive or segment content changes
+  const lastSegment = segments[segments.length - 1];
+  const lastSegmentKey = lastSegment
+    ? `${lastSegment.id}:${lastSegment.text}:${lastSegment.translation ?? ''}:${lastSegment.isFinal ? 1 : 0}`
+    : '';
   useEffect(() => {
-    void lastSegmentText;
+    void lastSegmentKey;
     if (isStreamingActiveRef.current && isStreamingFollowRef.current && segments.length > 0) {
       virtuosoRef.current?.scrollToIndex({
         index: segments.length - 1,
@@ -192,7 +195,7 @@ export function useTranscriptScrollFollow({
         behavior: 'auto',
       });
     }
-  }, [segments.length, lastSegmentText, virtuosoRef]);
+  }, [segments.length, lastSegmentKey, virtuosoRef]);
 
   // Virtuoso atBottom callback for streaming follow
   const atBottomStateChange = useCallback((atBottom: boolean) => {

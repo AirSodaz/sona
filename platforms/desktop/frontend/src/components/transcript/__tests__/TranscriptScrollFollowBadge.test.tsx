@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import TranscriptScrollFollowBadge from '../TranscriptScrollFollowBadge';
 
@@ -50,5 +50,41 @@ describe('TranscriptScrollFollowBadge', () => {
 
     fireEvent.click(btn);
     expect(onResume).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps button mounted with disabled pointer-events during collapse animation, then unmounts', () => {
+    vi.useFakeTimers();
+    try {
+      const onResume = vi.fn();
+      const { rerender } = render(
+        <TranscriptScrollFollowBadge detachMode="streaming" onResume={onResume} wordCount={200} />
+      );
+
+      const btn = screen.getByTestId('scroll-follow-resume-btn');
+      expect(btn).toBeDefined();
+
+      // Transition to null
+      act(() => {
+        rerender(
+          <TranscriptScrollFollowBadge detachMode={null} onResume={onResume} wordCount={200} />
+        );
+      });
+
+      // Button is still mounted for smooth exit animation, but inert
+      const exitingBtn = screen.getByTestId('scroll-follow-resume-btn');
+      expect(exitingBtn).toBeDefined();
+      expect(exitingBtn.getAttribute('aria-hidden')).toBe('true');
+      expect(exitingBtn.getAttribute('tabindex')).toBe('-1');
+
+      // Fast-forward past the 300ms transition timer
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
+
+      // Button should now be unmounted
+      expect(screen.queryByTestId('scroll-follow-resume-btn')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
