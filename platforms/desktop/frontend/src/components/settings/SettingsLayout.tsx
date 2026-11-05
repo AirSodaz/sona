@@ -9,14 +9,16 @@ export function SettingsTabContainer({
   children,
   id,
   ariaLabelledby,
+  className = '',
 }: {
   children: ReactNode;
   id?: string;
   ariaLabelledby?: string;
+  className?: string;
 }) {
   return (
     <div
-      className="settings-tab-container"
+      className={`settings-tab-container ${className}`.trim()}
       role="tabpanel"
       id={id}
       aria-labelledby={ariaLabelledby}
@@ -72,7 +74,7 @@ export function SettingsSection({
 }: SettingsSectionProps) {
   return (
     <section id={id} className={`settings-section ${className}`.trim()}>
-      {(title || description) && (
+      {(title || description || actions) && (
         <div className="settings-section-header">
           <div className="settings-section-header-main">
             {title && (

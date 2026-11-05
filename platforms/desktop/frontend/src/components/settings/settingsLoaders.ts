@@ -15,7 +15,7 @@ export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
   },
   {
     labelKey: 'settings.group.intelligence',
-    tabs: ['llm_service', 'automation'],
+    tabs: ['automation'],
   },
   {
     labelKey: 'settings.group.infrastructure',
@@ -126,7 +126,7 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
   sync: () => loadSettingsSyncTab().then(() => undefined),
   api_server: () => Promise.resolve(),
   mcp: () => Promise.resolve(),
-  llm_service: () => loadSettingsLLMServiceTab().then(() => undefined),
+  llm_service: () => loadSettingsModelsPane().then(() => undefined),
   shortcuts: () => loadSettingsShortcutsTab().then(() => undefined),
   about: () => loadSettingsAboutTab().then(() => undefined),
 };

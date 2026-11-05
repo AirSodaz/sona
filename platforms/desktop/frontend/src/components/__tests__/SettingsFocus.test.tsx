@@ -212,7 +212,6 @@ describe('Settings Focus Trap & Navigation', () => {
       'settings.input_device',
       'settings.model_hub',
       'settings.vocabulary',
-      'settings.llm.title',
       'settings.automation',
       'settings.storage.title',
       'settings.sync.title',
