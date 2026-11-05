@@ -89,7 +89,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
     if (meta.sessionId) {
-      applyTranscriptUpdateToSession(meta.sessionId, update, latestSegment?.id ?? null);
+      applyTranscriptUpdateToSession(meta.sessionId, update);
     }
 
     // Auto-Polish Logic

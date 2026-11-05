@@ -216,6 +216,8 @@
   bottom: var(--spacing-md);
   right: var(--spacing-lg);
   z-index: 90;
+  display: inline-flex;
+  align-items: center;
   padding: 4px 10px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
@@ -225,12 +227,77 @@
   font-weight: 500;
   font-family: var(--font-mono);
   box-shadow: var(--shadow-sm);
-  pointer-events: none; /* Don't block clicks underneath */
+  pointer-events: none; /* Don't block clicks underneath when idle */
   user-select: none;
   opacity: 0.8;
-  transition: opacity var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    padding 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .transcript-editor:hover .word-count-badge {
   opacity: 1;
+}
+
+.transcript-scroll-badge.is-detached {
+  pointer-events: auto;
+  opacity: 1;
+  padding-left: 6px;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
+  border-color: var(--color-primary-light, var(--color-border));
+}
+
+.scroll-badge-action-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  margin-right: 0;
+  transition:
+    max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    margin-right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scroll-badge-action-slot.is-visible {
+  max-width: 32px;
+  opacity: 1;
+  margin-right: 6px;
+}
+
+.scroll-badge-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-primary-border, transparent);
+  background: var(--color-primary-subtle, rgba(99, 102, 241, 0.12));
+  color: var(--color-primary, #6366f1);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.scroll-badge-action-btn:hover {
+  background: var(--color-primary, #6366f1);
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.scroll-badge-action-btn:active {
+  transform: scale(0.94);
+}
+
+.scroll-badge-word-count {
+  line-height: 1;
+  white-space: nowrap;
 }

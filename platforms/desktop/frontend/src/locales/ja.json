@@ -504,7 +504,9 @@
     "underline": "下線",
     "strikethrough": "取り消し線",
     "code": "コード",
-    "split_segment": "分割セグメント"
+    "split_segment": "分割セグメント",
+    "locate_playing": "再生中のセグメントを表示",
+    "follow_bottom": "一番下までスクロールして追従を再開"
   },
   "export": {
     "button": "エクスポート",

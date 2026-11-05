@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { useAutoScroll } from '../../hooks/useAutoScroll';
+import { useTranscriptScrollFollow } from '../../hooks/useTranscriptScrollFollow';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
 import { resolveCurrentSessionAudioPath } from '../../services/sessionAudioService';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -23,6 +23,7 @@ import { SearchUI } from '../SearchUI';
 import { EnrollSpeakerSampleModal } from './EnrollSpeakerSampleModal';
 import { SegmentItem } from './SegmentItem';
 import { TranscriptAnticipationIndicator } from './TranscriptAnticipationIndicator';
+import { TranscriptScrollFollowBadge } from './TranscriptScrollFollowBadge';
 import { TranscriptUIContext } from './TranscriptUIContext';
 
 function TranscriptListHeader(): React.JSX.Element {
@@ -69,6 +70,7 @@ export function TranscriptEditor(): React.JSX.Element {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const segments = useTranscriptSessionStore((state) => state.segments);
+  const editingSegmentId = useTranscriptSessionStore((state) => state.editingSegmentId);
   const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
@@ -90,8 +92,13 @@ export function TranscriptEditor(): React.JSX.Element {
     segmentsRef.current = segments;
   }, [segments]);
 
-  // Auto-scroll to active segment during playback
-  useAutoScroll(virtuosoRef);
+  // Unified scroll follow: streaming output auto-scroll + playback active centering
+  const { detachMode, resumeFollow, atBottomStateChange, onUserInteraction } =
+    useTranscriptScrollFollow({
+      virtuosoRef,
+      segments,
+      editingSegmentId,
+    });
 
   const handleSeek = useCallback(
     (time: number) => {
@@ -313,12 +320,14 @@ export function TranscriptEditor(): React.JSX.Element {
   }
 
   return (
-    <div className="transcript-editor">
+    <div className="transcript-editor" onWheel={onUserInteraction} onTouchMove={onUserInteraction}>
       <EditorToolbar />
-      {wordCount > 0 && (
-        <div className="word-count-badge">
-          {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}
-        </div>
+      {(wordCount > 0 || detachMode !== null) && (
+        <TranscriptScrollFollowBadge
+          detachMode={detachMode}
+          onResume={resumeFollow}
+          wordCount={wordCount}
+        />
       )}
       <TranscriptUIContext.Provider value={uiStore}>
         <Virtuoso<TranscriptSegment, TranscriptContext>
@@ -328,6 +337,8 @@ export function TranscriptEditor(): React.JSX.Element {
           context={contextValue}
           itemContent={itemContent}
           components={virtuosoComponents}
+          atBottomStateChange={atBottomStateChange}
+          atBottomThreshold={60}
         />
       </TranscriptUIContext.Provider>
       <SearchUI />

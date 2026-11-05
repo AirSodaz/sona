@@ -504,7 +504,9 @@
     "underline": "밑줄",
     "strikethrough": "취소선",
     "code": "코드",
-    "split_segment": "세그먼트 나누기"
+    "split_segment": "세그먼트 나누기",
+    "locate_playing": "재생 중인 세그먼트로 이동",
+    "follow_bottom": "맨 아래로 스크롤하여 따라가기 재개"
   },
   "export": {
     "button": "내보내기",

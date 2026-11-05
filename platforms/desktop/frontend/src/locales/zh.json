@@ -504,7 +504,9 @@
     "underline": "下划线",
     "strikethrough": "删除线",
     "code": "行内代码",
-    "split_segment": "拆分段落"
+    "split_segment": "拆分段落",
+    "locate_playing": "定位到正在播放段落",
+    "follow_bottom": "回到底部并恢复跟随"
   },
   "export": {
     "button": "导出",
