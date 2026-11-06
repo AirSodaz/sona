@@ -87,8 +87,7 @@ where
     validate_transport(result)
 }
 
-/// Reject values that cannot cross the generated TypeScript boundary safely.
-pub fn validate_transport<T: Serialize>(value: T) -> Result<T, String> {
-    sona_ts_bind::validate_typescript_safe_integers(&value).map_err(map_err_string)?;
+/// Pure Rust GPUI transport passthrough (no JS boundary integer truncations).
+pub fn validate_transport<T>(value: T) -> Result<T, String> {
     Ok(value)
 }

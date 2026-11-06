@@ -16,13 +16,13 @@ use super::types::{
 };
 
 pub(crate) struct AgentAsrRuntimeObserver {
-    inner: crate::integrations::asr::TauriAsrRuntimeObserver,
+    inner: crate::integrations::asr::DesktopAsrRuntimeObserver,
     segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
 }
 
 impl AgentAsrRuntimeObserver {
     pub(crate) fn new(
-        inner: crate::integrations::asr::TauriAsrRuntimeObserver,
+        inner: crate::integrations::asr::DesktopAsrRuntimeObserver,
         segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
     ) -> Self {
         Self { inner, segments }
@@ -80,7 +80,6 @@ pub struct ActiveRecordingSession {
 
 pub async fn start_recording(
     services: &DesktopServices,
-    app_handle: Option<&tauri::AppHandle>,
     active_session: &Arc<Mutex<Option<ActiveRecordingSession>>>,
     recording_op_lock: &Arc<Mutex<()>>,
     req: StartRecordingRequest,
@@ -187,7 +186,7 @@ pub async fn start_recording(
     };
 
     let segments = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let inner_observer = crate::integrations::asr::TauriAsrRuntimeObserver::new(
+    let inner_observer = crate::integrations::asr::DesktopAsrRuntimeObserver::new(
         services.emitter.clone(),
         services.asr.metrics_store(),
     );
@@ -279,10 +278,6 @@ pub async fn start_recording(
         "agent-control-recording-status",
         serde_json::json!({ "active": true, "isPaused": false, "historyId": &draft.item.id }),
     );
-    if let Some(app) = app_handle {
-        crate::app::tray::set_recording_active(app, true);
-    }
-
     Ok(StartRecordingResult {
         history_id: draft.item.id,
         started_at: now_epoch_secs,
@@ -291,7 +286,6 @@ pub async fn start_recording(
 
 pub async fn stop_recording(
     services: &DesktopServices,
-    app_handle: Option<&tauri::AppHandle>,
     active_session: &Arc<Mutex<Option<ActiveRecordingSession>>>,
     recording_op_lock: &Arc<Mutex<()>>,
     req: StopRecordingRequest,
@@ -329,9 +323,6 @@ pub async fn stop_recording(
             "agent-control-recording-status",
             serde_json::json!({ "active": false, "isPaused": false }),
         );
-        if let Some(app) = app_handle {
-            crate::app::tray::set_recording_active(app, false);
-        }
         return Ok(StopRecordingResult {
             history_id: String::new(),
             duration_seconds: 0.0,
@@ -535,9 +526,7 @@ pub async fn stop_recording(
             "agent-control-recording-status",
             serde_json::json!({ "active": false, "isPaused": false }),
         );
-        if let Some(app) = app_handle {
-            crate::app::tray::set_recording_active(app, false);
-        }
+
 
         let segment_count = if req.discard {
             0
@@ -650,9 +639,6 @@ pub async fn stop_recording(
         "agent-control-recording-status",
         serde_json::json!({ "active": false, "isPaused": false }),
     );
-    if let Some(app) = app_handle {
-        crate::app::tray::set_recording_active(app, false);
-    }
 
     Ok(StopRecordingResult {
         history_id: session_snapshot.history_id,
@@ -765,7 +751,7 @@ pub async fn resume_recording(
 
     let mut coordinator_acquired = false;
     if let Some(asr_req) = asr_request {
-        let inner_observer = crate::integrations::asr::TauriAsrRuntimeObserver::new(
+        let inner_observer = crate::integrations::asr::DesktopAsrRuntimeObserver::new(
             services.emitter.clone(),
             services.asr.metrics_store(),
         );

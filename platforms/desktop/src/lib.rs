@@ -1,211 +1,105 @@
+//! Sona Desktop Native Library
+//!
+//! Milestone 1: Desktop Foundation, Core Linking & Tauri Excision
+
 pub mod app;
-pub mod commands;
+pub mod event_bus;
 pub mod integrations;
 pub mod platform;
 pub mod services;
+pub mod theme;
+pub mod views;
 
-use tauri::{Emitter, Manager};
+pub use app::bootstrap;
+pub use event_bus::AppEventBus;
+pub use services::DesktopServices;
 
-#[derive(Debug, thiserror::Error)]
-pub enum DesktopTypescriptBindingError {
-    #[error(transparent)]
-    Binding(#[from] sona_ts_bind::TypescriptBindingError),
-
-    #[error("Failed to write TypeScript bindings: {0}")]
-    Write(#[from] std::io::Error),
-}
-
-/// Initializes and runs the Tauri application.
-///
-/// Sets up the download state, plugins (opener, dialog, fs, shell, http),
-/// and registers invoke handlers.
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Initializes and runs the Sona desktop application.
 pub fn run() {
     if let Err(e) = run_app() {
-        panic!("error while running tauri application: {:?}", e);
+        panic!("Error while running desktop application: {:?}", e);
     }
 }
 
-#[cfg(debug_assertions)]
-fn export_typescript_bindings() -> Result<(), DesktopTypescriptBindingError> {
-    let bindings_path = typescript_bindings_path();
-    export_typescript_bindings_to(&bindings_path)?;
-    Ok(())
-}
-
-pub fn export_typescript_bindings_to(
-    bindings_path: &std::path::Path,
-) -> Result<bool, DesktopTypescriptBindingError> {
-    let generated_bindings = sona_ts_bind::render_desktop_typescript_bindings()?;
-    write_bindings_if_changed(bindings_path, generated_bindings.as_bytes()).map_err(Into::into)
-}
-
-fn typescript_bindings_path() -> std::path::PathBuf {
-    sona_ts_bind::desktop_bindings_output("frontend")
-}
-
-fn write_bindings_if_changed(
-    path: &std::path::Path,
-    generated_bindings: &[u8],
-) -> std::io::Result<bool> {
-    match std::fs::read(path) {
-        Ok(existing_bindings) if existing_bindings == generated_bindings => Ok(false),
-        Ok(_) => {
-            std::fs::write(path, generated_bindings)?;
-            Ok(true)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::write(path, generated_bindings)?;
-            Ok(true)
-        }
-        Err(error) => Err(error),
-    }
-}
-
-pub fn run_app() -> Result<(), tauri::Error> {
-    let app_settings = crate::app::settings::AppSettings::new();
-    let log_level_filter = app_settings.log_level_filter();
-
-    // Enable browser reload, devtools, and right-click context menu in debug builds;
-    // block them in production builds for a native desktop application experience.
-    #[cfg(debug_assertions)]
-    let prevent_default = tauri_plugin_prevent_default::debug();
-    #[cfg(not(debug_assertions))]
-    let prevent_default = tauri_plugin_prevent_default::Builder::new().build();
-
-    #[cfg(debug_assertions)]
-    export_typescript_bindings().expect("Failed to export typescript bindings");
-
-    tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Trace)
-                .filter(move |metadata| log_level_filter.should_log(metadata))
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
-                .max_file_size(10 * 1024 * 1024) // 10MB
-                .clear_targets()
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("appsona".to_string()),
-                    }),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                ])
-                .format(|out, message, record| {
-                    out.finish(format_args!(
-                        "{}",
-                        serde_json::json!({
-                            "time": crate::platform::time::unix_timestamp_secs(),
-                            "level": record.level().to_string(),
-                            "target": record.target(),
-                            "file": record.file(),
-                            "line": record.line(),
-                            "message": message.to_string(),
-                        })
-                    ));
-                })
-                .build(),
+/// Sets up the runtime environment and starts the GPUI desktop application.
+pub fn run_app() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Ensure Tokio multi-threaded runtime is active
+    let _tokio_rt = if tokio::runtime::Handle::try_current().is_err() {
+        Some(
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?,
         )
-        .setup(crate::app::setup::init)
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let app = window.app_handle();
-                let state = app.state::<crate::app::settings::AppSettings>();
-                let minimize = state.minimize_to_tray();
-
-                match crate::app::settings::resolve_main_window_close_action(
-                    window.label(),
-                    minimize,
-                ) {
-                    crate::app::settings::MainWindowCloseAction::Ignore => {}
-                    crate::app::settings::MainWindowCloseAction::HideToTray => {
-                        let _ = window.hide();
-                        api.prevent_close();
-                    }
-                    crate::app::settings::MainWindowCloseAction::RequestQuit => {
-                        api.prevent_close();
-                        let _ = window.emit(crate::app::tray::TRAY_REQUEST_QUIT_EVENT, ());
-                    }
-                }
-            }
-        })
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(
-            tauri_plugin_window_state::Builder::new()
-                .with_denylist(&["voice-typing", "caption"])
-                .with_state_flags(
-                    tauri_plugin_window_state::StateFlags::all()
-                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
-                )
-                .build(),
-        )
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let should_stay_silent = matches!(
-                crate::app::window::parse_launch_visibility_from_args(&args),
-                Some(crate::app::window::LaunchVisibility::Silent)
-            );
-            if !should_stay_silent && let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
-        .plugin(tauri_plugin_deep_link::init())
-        .manage(crate::app::server::ApiServerController::default())
-        .manage(app_settings)
-        .manage(crate::app::window_state::AuxWindowStateStore::default())
-        .manage(crate::platform::automation_runtime::AutomationRuntimeState::default())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--autostart"]),
-        ))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(prevent_default)
-        .invoke_handler(crate::commands::get_handlers())
-        .run(tauri::generate_context!())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        export_typescript_bindings_to, typescript_bindings_path, write_bindings_if_changed,
+    } else {
+        None
     };
-    use std::fs;
+    let _tokio_guard = _tokio_rt.as_ref().map(|rt| rt.enter());
 
-    #[test]
-    fn resolves_typescript_binding_path_through_the_ts_adapter() {
-        assert_eq!(
-            typescript_bindings_path(),
-            std::path::PathBuf::from("frontend").join("src/bindings.ts")
-        );
-    }
+    log::info!(
+        "Sona Desktop starting | version={} | channel={} | commit={} | dirty={} | build_time={}",
+        env!("SONA_DISPLAY_VERSION"),
+        env!("SONA_BUILD_CHANNEL"),
+        env!("SONA_COMMIT_SHA"),
+        env!("SONA_IS_DIRTY"),
+        env!("SONA_BUILD_TIMESTAMP")
+    );
 
-    #[test]
-    fn writes_bindings_only_when_generated_content_changes() {
-        let directory = tempfile::tempdir().unwrap();
-        let bindings_path = directory.path().join("bindings.ts");
-        fs::write(&bindings_path, b"existing bindings").unwrap();
+    // 3. Single-instance lock enforcement (Feature 6)
+    let _instance_guard = match platform::single_instance::SingleInstanceGuard::acquire()? {
+        Some(guard) => guard,
+        None => {
+            log::warn!("Another instance of Sona is already running. Restoring window and exiting cleanly.");
+            platform::single_instance::focus_existing_window("Sona");
+            return Ok(());
+        }
+    };
 
-        assert!(!write_bindings_if_changed(&bindings_path, b"existing bindings").unwrap());
-        assert_eq!(fs::read(&bindings_path).unwrap(), b"existing bindings");
+    // 4. Initialize active data directory, SQLite WAL pool & database migration
+    let data_roots = sona_runtime_fs::default_desktop_app_data_roots();
+    let default_data_dir = data_roots
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| std::path::PathBuf::from("data"));
 
-        assert!(write_bindings_if_changed(&bindings_path, b"updated bindings").unwrap());
-        assert_eq!(fs::read(&bindings_path).unwrap(), b"updated bindings");
-    }
+    let app_local_data_dir =
+        platform::storage::location::resolve_active_data_dir(&default_data_dir);
+    std::fs::create_dir_all(&app_local_data_dir)?;
 
-    #[test]
-    fn exports_registered_core_types_to_a_requested_path() {
-        let directory = tempfile::tempdir().unwrap();
-        let bindings_path = directory.path().join("bindings.ts");
+    let db = platform::storage::database::open_and_migrate_sqlite_for_path_with_prompt(
+        &app_local_data_dir,
+        platform::startup_dialog::prompt_legacy_database_migration,
+    )?;
 
-        assert!(export_typescript_bindings_to(&bindings_path).unwrap());
+    let sqlite_context = std::sync::Arc::new(sona_sqlite::SqliteApplicationContext::from_database(
+        app_local_data_dir.clone(),
+        db.clone(),
+    )?);
+    let sqlite_state = platform::database::DesktopSqliteState::new(sqlite_context);
+    let sync_config_path = app_local_data_dir.join(platform::sync::SYNC_CONFIG_FILE);
 
-        let bindings = fs::read_to_string(bindings_path).unwrap();
-        assert!(bindings.contains("export type DashboardSnapshotDomainModel"));
-    }
+    // 5. Initialize in-memory real-time event bus (Feature 5)
+    let event_bus = std::sync::Arc::new(AppEventBus::new(1024));
+
+    // 6. Assemble decoupled domain services container (DesktopServices)
+    let services = std::sync::Arc::new(
+        DesktopServices::builder()
+            .sqlite(sqlite_state)
+            .event_emitter(event_bus.clone())
+            .sync_config_path(sync_config_path)
+            .build()
+            .map_err(|e| format!("Failed to build DesktopServices: {e}"))?,
+    );
+
+    // 7. Launch GPUI Kit application event loop
+    let app_services = std::sync::Arc::clone(&services);
+    let app_event_bus = std::sync::Arc::clone(&event_bus);
+
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::Assets)
+        .run(move |cx| {
+            app::bootstrap(cx, app_services, app_event_bus);
+        });
+
+    log::info!("Sona Desktop shutting down cleanly.");
+    Ok(())
 }

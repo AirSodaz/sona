@@ -1,22 +1,22 @@
-﻿use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
+use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
 use super::recognizer_output_event;
 use crate::platform::event::EventEmitterPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use std::sync::Arc;
 
-pub(crate) struct TauriAsrRuntimeObserver {
+pub(crate) struct DesktopAsrRuntimeObserver {
     emitter: Arc<dyn EventEmitterPort>,
     metrics: AsrMetricsStore,
 }
 
-impl TauriAsrRuntimeObserver {
+impl DesktopAsrRuntimeObserver {
     pub(crate) fn new(emitter: Arc<dyn EventEmitterPort>, metrics: AsrMetricsStore) -> Self {
         Self { emitter, metrics }
     }
 }
 
-impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
+impl AsrRuntimeObserver for DesktopAsrRuntimeObserver {
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
         let payload = match serde_json::to_value(&event.update) {
             Ok(payload) => payload,
@@ -41,7 +41,7 @@ impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
 
 #[cfg(test)]
 mod tests {
-    use super::TauriAsrRuntimeObserver;
+    use super::DesktopAsrRuntimeObserver;
     use crate::integrations::asr::metrics::{new_metrics_store, snapshot_metrics};
     use crate::platform::event::MockEventEmitter;
     use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn emits_the_existing_instance_event_payload() {
         let emitter = Arc::new(MockEventEmitter::new());
-        let observer = TauriAsrRuntimeObserver::new(emitter.clone(), new_metrics_store());
+        let observer = DesktopAsrRuntimeObserver::new(emitter.clone(), new_metrics_store());
         let event = AsrTranscriptUpdateEvent {
             instance_id: "live-1".to_string(),
             stage: "partial".to_string(),
@@ -110,7 +110,7 @@ mod tests {
     fn records_model_and_live_metrics_in_existing_slots() {
         let metrics = new_metrics_store();
         let observer =
-            TauriAsrRuntimeObserver::new(Arc::new(MockEventEmitter::new()), metrics.clone());
+            DesktopAsrRuntimeObserver::new(Arc::new(MockEventEmitter::new()), metrics.clone());
         let model_load = model_load_metric();
         let live = live_metric();
 

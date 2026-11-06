@@ -1,23 +1,11 @@
-use tauri::Manager;
-
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
 };
 pub use sona_runtime_fs::resolve_runtime_path_status;
 
-pub async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e: tauri::Error| e.to_string())?;
-
-    sona_runtime_fs::ensure_directory_exists(&log_dir).map_err(|error| error.to_string())?;
-
-    app.opener()
-        .open_path(log_dir.to_string_lossy(), None::<&str>)
-        .map_err(|e: tauri_plugin_opener::Error| e.to_string())?;
-    Ok(())
+pub fn open_log_folder(log_dir: &std::path::Path) -> Result<(), String> {
+    sona_runtime_fs::ensure_directory_exists(log_dir).map_err(|error| error.to_string())?;
+    crate::platform::opener::open_path(log_dir).map_err(|e| e.to_string())
 }
 
 pub fn resolve_runtime_environment_status(
@@ -60,11 +48,10 @@ pub fn resolve_runtime_environment_status_for_log_dir(
     resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(log_dir, None)
 }
 
-pub async fn get_runtime_environment_status(
-    app: tauri::AppHandle,
+pub fn get_runtime_environment_status(
+    provider: &dyn crate::platform::paths::PathPort,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(&app);
-    resolve_runtime_environment_status(&provider)
+    resolve_runtime_environment_status(provider)
 }
 
 pub async fn get_path_statuses(paths: Vec<String>) -> Result<Vec<RuntimePathStatus>, String> {

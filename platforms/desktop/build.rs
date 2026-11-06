@@ -32,7 +32,6 @@ fn main() {
         println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-cpu.dll");
         println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
     }
-    tauri_build::build()
 }
 
 fn sherpa_lib_dir_has_directml(lib_dir: &Path) -> bool {

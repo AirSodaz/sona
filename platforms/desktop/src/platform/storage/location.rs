@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_opener::OpenerExt;
+use sona_core::ports::event::EventEmitterPort;
 
 pub use sona_runtime_fs::{
     STORAGE_BOOTSTRAP_FILE_NAME, StorageBootstrapConfig, load_bootstrap_config,
@@ -43,38 +42,32 @@ pub struct StorageDirectoriesInfo {
     pub is_custom_models_dir: bool,
 }
 
-pub fn default_app_local_data_dir_for_app<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|e| format!("Failed to resolve default AppLocalData: {e}"))
+pub fn default_app_local_data_dir() -> PathBuf {
+    sona_runtime_fs::default_desktop_app_data_roots()
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from("data"))
 }
 
-pub fn resolve_active_data_dir_for_app<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    let default_dir = default_app_local_data_dir_for_app(app)?;
-    Ok(resolve_active_data_dir(&default_dir))
+pub fn resolve_active_data_dir_for_path(default_dir: &Path) -> PathBuf {
+    resolve_active_data_dir(default_dir)
 }
 
-pub fn resolve_active_models_dir_for_app<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<PathBuf, String> {
-    let default_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_dir);
-    Ok(resolve_active_models_dir(&default_dir, &active_data_dir))
+pub fn resolve_active_models_dir_for_path(default_dir: &Path) -> PathBuf {
+    let active_data_dir = resolve_active_data_dir(default_dir);
+    resolve_active_models_dir(default_dir, &active_data_dir)
 }
 
-pub fn get_storage_directories_info<R: Runtime>(
-    app: &AppHandle<R>,
+pub fn get_storage_directories_info(
+    default_data_dir: &Path,
 ) -> Result<StorageDirectoriesInfo, String> {
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_data_dir);
-    let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
+    let active_data_dir = resolve_active_data_dir(default_data_dir);
+    let active_models_dir = resolve_active_models_dir(default_data_dir, &active_data_dir);
     let default_models_dir = default_data_dir.join("models");
 
-    let config = load_bootstrap_config(&default_data_dir);
+    let config = load_bootstrap_config(default_data_dir);
     let is_custom_data_dir = config.custom_data_dir.is_some()
-        && config.custom_data_dir.as_ref() != Some(&default_data_dir);
+        && config.custom_data_dir.as_ref() != Some(&default_data_dir.to_path_buf());
     let is_custom_models_dir = config.custom_models_dir.is_some()
         && config.custom_models_dir.as_ref() != Some(&default_models_dir);
 
@@ -164,96 +157,45 @@ pub fn is_migration_in_progress() -> bool {
     MIGRATION_IN_PROGRESS.load(Ordering::Acquire)
 }
 
-pub async fn check_active_tasks_idle(app: &AppHandle) -> Result<(), String> {
-    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
-        if services.audio.has_active_captures() {
-            return Err(
-                "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
-                    .to_string(),
-            );
-        }
-        if services.asr.is_busy().await {
-            return Err(
-                "Cannot migrate storage while speech recognition or batch transcription is in progress. Please wait or stop active tasks."
-                    .to_string(),
-            );
-        }
-        if services.downloads.has_active_downloads().await {
-            return Err(
-                "Cannot migrate storage while model downloads are in progress. Please wait for downloads to finish or cancel them."
-                    .to_string(),
-            );
-        }
-        if services.history.is_file_task_active() {
-            return Err(
-                "Cannot migrate storage while history operations or backup archives are being processed. Please wait for them to finish."
-                    .to_string(),
-            );
-        }
-        if services.sync.is_running().await || services.sync.has_active_tasks().await {
-            return Err(
-                "Cannot migrate storage while synchronization is running. Please wait for sync to finish."
-                    .to_string(),
-            );
-        }
-    }
-    if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>()
-        && server_controller.has_active_jobs().await
-    {
+pub async fn check_active_tasks_idle(services: &crate::services::DesktopServices) -> Result<(), String> {
+    if services.audio.has_active_captures() {
         return Err(
-            "Cannot migrate storage while API server has active or queued transcription jobs. Please wait for tasks to finish or stop the API server."
+            "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
+                .to_string(),
+        );
+    }
+    if services.asr.is_busy().await {
+        return Err(
+            "Cannot migrate storage while speech recognition or batch transcription is in progress. Please wait or stop active tasks."
+                .to_string(),
+        );
+    }
+    if services.downloads.has_active_downloads().await {
+        return Err(
+            "Cannot migrate storage while model downloads are in progress. Please wait for downloads to finish or cancel them."
+                .to_string(),
+        );
+    }
+    if services.history.is_file_task_active() {
+        return Err(
+            "Cannot migrate storage while history operations or backup archives are being processed. Please wait for them to finish."
+                .to_string(),
+        );
+    }
+    if services.sync.is_running().await || services.sync.has_active_tasks().await {
+        return Err(
+            "Cannot migrate storage while synchronization is running. Please wait for sync to finish."
                 .to_string(),
         );
     }
     Ok(())
 }
 
-pub async fn check_storage_can_migrate(app: &AppHandle) -> Result<(), String> {
+pub async fn check_storage_can_migrate(services: &crate::services::DesktopServices) -> Result<(), String> {
     if is_migration_in_progress() {
         return Err("Another storage migration is already in progress.".to_string());
     }
-    check_active_tasks_idle(app).await
-}
-
-async fn stop_api_server_for_migration(app: &AppHandle) -> Result<bool, String> {
-    if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>() {
-        server_controller.stop_for_storage_migration().await
-    } else {
-        Ok(false)
-    }
-}
-
-struct ServerRestartGuard<'a> {
-    app: &'a AppHandle,
-    was_running: bool,
-    committed: bool,
-}
-
-impl<'a> ServerRestartGuard<'a> {
-    fn new(app: &'a AppHandle, was_running: bool) -> Self {
-        Self {
-            app,
-            was_running,
-            committed: false,
-        }
-    }
-
-    fn commit_and_restart(mut self) {
-        if self.was_running {
-            self.committed = true;
-            crate::app::server::start_from_app_handle(self.app);
-        }
-    }
-}
-
-impl Drop for ServerRestartGuard<'_> {
-    fn drop(&mut self) {
-        if self.was_running && !self.committed {
-            log::warn!(
-                "[Storage] Migration was aborted or failed. API server will remain stopped to prevent data corruption."
-            );
-        }
-    }
+    check_active_tasks_idle(services).await
 }
 
 pub const STORAGE_MIGRATION_PROGRESS_EVENT: &str = "storage-migration-progress";
@@ -268,17 +210,17 @@ pub struct StorageMigrationProgress {
     pub percent: f64,
 }
 
-pub struct MigrationProgressEmitter<'a, R: Runtime> {
-    app: &'a AppHandle<R>,
+pub struct MigrationProgressEmitter {
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     total_bytes: u64,
     copied_bytes: u64,
     last_emit: std::time::Instant,
 }
 
-impl<'a, R: Runtime> MigrationProgressEmitter<'a, R> {
-    pub fn new(app: &'a AppHandle<R>, total_bytes: u64) -> Self {
+impl MigrationProgressEmitter {
+    pub fn new(emitter: Option<Arc<dyn EventEmitterPort>>, total_bytes: u64) -> Self {
         Self {
-            app,
+            emitter,
             total_bytes,
             copied_bytes: 0,
             last_emit: std::time::Instant::now(),
@@ -291,16 +233,18 @@ impl<'a, R: Runtime> MigrationProgressEmitter<'a, R> {
         } else {
             100.0
         };
-        let _ = self.app.emit(
-            STORAGE_MIGRATION_PROGRESS_EVENT,
-            StorageMigrationProgress {
-                phase: phase.to_string(),
-                current_file: current_file.to_string(),
-                copied_bytes: self.copied_bytes,
-                total_bytes: self.total_bytes,
-                percent,
-            },
-        );
+        if let Some(ref emitter) = self.emitter {
+            let _ = emitter.emit(
+                STORAGE_MIGRATION_PROGRESS_EVENT,
+                serde_json::to_value(StorageMigrationProgress {
+                    phase: phase.to_string(),
+                    current_file: current_file.to_string(),
+                    copied_bytes: self.copied_bytes,
+                    total_bytes: self.total_bytes,
+                    percent,
+                }).unwrap_or_default(),
+            );
+        }
         self.last_emit = std::time::Instant::now();
     }
 
@@ -375,10 +319,10 @@ pub fn calculate_directory_size(path: &Path, max_depth: usize) -> u64 {
     total
 }
 
-pub fn copy_directory_contents_with_progress<R: Runtime>(
+pub fn copy_directory_contents_with_progress(
     src: &Path,
     dst: &Path,
-    emitter: &mut MigrationProgressEmitter<'_, R>,
+    emitter: &mut MigrationProgressEmitter,
     max_depth: usize,
 ) -> Result<(), std::io::Error> {
     if max_depth == 0 || !src.exists() {
@@ -566,342 +510,14 @@ pub fn cleanup_pending_storage_locations(default_app_local_data_dir: &Path) {
     }
 }
 
-pub fn cleanup_pending_storage_locations_for_app<R: Runtime>(app: &AppHandle<R>) {
-    if let Ok(default_dir) = default_app_local_data_dir_for_app(app) {
-        cleanup_pending_storage_locations(&default_dir);
-    }
+pub fn cleanup_pending_storage_locations_for_default() {
+    let default_dir = default_app_local_data_dir();
+    cleanup_pending_storage_locations(&default_dir);
 }
 
-pub async fn migrate_data_directory(
-    app: &AppHandle,
-    target_dir_str: String,
-    copy_existing: bool,
-) -> Result<StorageDirectoriesInfo, String> {
-    let _guard = MigrationGuard::acquire()?;
-    check_active_tasks_idle(app).await?;
-    let target_path = PathBuf::from(target_dir_str.trim());
-    validate_target_directory(&target_path)?;
 
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_data_dir);
 
-    let active_canonical = active_data_dir
-        .canonicalize()
-        .unwrap_or_else(|_| active_data_dir.clone());
-    let target_canonical = target_path
-        .canonicalize()
-        .unwrap_or_else(|_| target_path.clone());
-    if active_canonical == target_canonical {
-        return get_storage_directories_info(app);
-    }
-    check_path_overlap(&active_data_dir, &target_path)?;
 
-    let server_was_running = stop_api_server_for_migration(app).await?;
-    let restart_guard = ServerRestartGuard::new(app, server_was_running);
-
-    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
-        let _ = current_db.with_write_connection(|conn| {
-            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
-            Ok(())
-        });
-        current_db.close();
-    }
-
-    let mut models_were_copied = false;
-    if copy_existing && active_data_dir.exists() {
-        std::fs::create_dir_all(&target_path).map_err(|e| e.to_string())?;
-
-        let bootstrap = load_bootstrap_config(&default_data_dir);
-        let should_copy_models = bootstrap.custom_models_dir.is_none();
-        if should_copy_models
-            && let Some(services) = app.try_state::<crate::services::DesktopServices>()
-        {
-            services.asr.clear_model_caches().await;
-        }
-
-        let mut total_bytes = 0u64;
-        for file_name in DATA_MIGRATION_COPY_FILE_NAMES {
-            let src_file = active_data_dir.join(file_name);
-            if let Ok(meta) = src_file.metadata() {
-                total_bytes += meta.len();
-            }
-        }
-        for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
-            let src_sub = active_data_dir.join(dir_name);
-            total_bytes += calculate_directory_size(&src_sub, 16);
-        }
-        if should_copy_models {
-            let src_models = active_data_dir.join("models");
-            total_bytes += calculate_directory_size(&src_models, 16);
-        }
-
-        let mut emitter = MigrationProgressEmitter::new(app, total_bytes);
-        emitter.emit("preparing", "");
-        for file_name in DATA_MIGRATION_COPY_FILE_NAMES {
-            let src_file = active_data_dir.join(file_name);
-            if src_file.exists() && src_file.is_file() {
-                let dst_file = target_path.join(file_name);
-                emitter
-                    .copy_file_streaming(&src_file, &dst_file)
-                    .map_err(|e| format!("Failed to copy {}: {}", src_file.display(), e))?;
-            }
-        }
-
-        for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
-            let src_sub = active_data_dir.join(dir_name);
-            if src_sub.exists() && src_sub.is_dir() {
-                let dst_sub = target_path.join(dir_name);
-                copy_directory_contents_with_progress(&src_sub, &dst_sub, &mut emitter, 16)
-                    .map_err(|e| {
-                        format!("Failed to copy directory {}: {}", src_sub.display(), e)
-                    })?;
-            }
-        }
-
-        if should_copy_models {
-            let src_models = active_data_dir.join("models");
-            if src_models.exists() && src_models.is_dir() {
-                let dst_models = target_path.join("models");
-                copy_directory_contents_with_progress(&src_models, &dst_models, &mut emitter, 16)
-                    .map_err(|e| format!("Failed to copy models directory: {}", e))?;
-                models_were_copied = true;
-            }
-        }
-    }
-
-    let new_db = crate::platform::database::open_and_migrate_sqlite_for_path_with_prompt(
-        &target_path,
-        crate::platform::startup_dialog::prompt_legacy_database_migration,
-    )
-    .map_err(|e| format!("Failed to open database at new location: {e}"))?;
-    let new_context = Arc::new(
-        sona_sqlite::SqliteApplicationContext::from_database(&target_path, new_db.clone())
-            .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
-    );
-
-    let target_history_dir = target_path.join("history");
-    if let Err(e) = app
-        .asset_protocol_scope()
-        .allow_directory(&target_history_dir, true)
-    {
-        log::warn!("Failed to allow target history directory in asset scope: {e}");
-    }
-    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
-
-    let new_dashboard_service =
-        crate::platform::dashboard::create_dashboard_service(target_path.clone(), new_db);
-    if let Some(dashboard_state) =
-        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
-    {
-        let _ = dashboard_state.reload(new_dashboard_service);
-    }
-
-    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
-        services.sync.reset().await;
-    }
-
-    let mut bootstrap = load_bootstrap_config(&default_data_dir);
-    if target_path == default_data_dir {
-        bootstrap.custom_data_dir = None;
-    } else {
-        bootstrap.custom_data_dir = Some(target_path);
-    }
-
-    if copy_existing && active_data_dir.exists() {
-        if !bootstrap.pending_cleanup_dirs.contains(&active_data_dir) {
-            bootstrap.pending_cleanup_dirs.push(active_data_dir.clone());
-        }
-        save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-
-        let unremoved = cleanup_data_directory_contents(
-            &active_data_dir,
-            &default_data_dir,
-            models_were_copied,
-        );
-
-        if unremoved.is_empty() {
-            bootstrap
-                .pending_cleanup_dirs
-                .retain(|p| p != &active_data_dir);
-            save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-        }
-    } else {
-        save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-    }
-    restart_guard.commit_and_restart();
-    let _ = app.emit(
-        STORAGE_MIGRATION_PROGRESS_EVENT,
-        StorageMigrationProgress {
-            phase: "done".to_string(),
-            current_file: String::new(),
-            copied_bytes: 1,
-            total_bytes: 1,
-            percent: 100.0,
-        },
-    );
-
-    get_storage_directories_info(app)
-}
-
-pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesInfo, String> {
-    let _guard = MigrationGuard::acquire()?;
-    check_active_tasks_idle(app).await?;
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_data_dir);
-
-    let active_canonical = active_data_dir
-        .canonicalize()
-        .unwrap_or_else(|_| active_data_dir.clone());
-    let default_canonical = default_data_dir
-        .canonicalize()
-        .unwrap_or_else(|_| default_data_dir.clone());
-    if active_canonical == default_canonical {
-        return get_storage_directories_info(app);
-    }
-
-    let server_was_running = stop_api_server_for_migration(app).await?;
-    let restart_guard = ServerRestartGuard::new(app, server_was_running);
-
-    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
-        let _ = current_db.with_write_connection(|conn| {
-            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
-            Ok(())
-        });
-    }
-
-    let new_db = crate::platform::database::open_and_migrate_sqlite_for_path_with_prompt(
-        &default_data_dir,
-        crate::platform::startup_dialog::prompt_legacy_database_migration,
-    )
-    .map_err(|e| format!("Failed to open database at default location: {e}"))?;
-    let new_context = Arc::new(
-        sona_sqlite::SqliteApplicationContext::from_database(&default_data_dir, new_db.clone())
-            .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
-    );
-
-    let default_history_dir = default_data_dir.join("history");
-    if let Err(e) = app
-        .asset_protocol_scope()
-        .allow_directory(&default_history_dir, true)
-    {
-        log::warn!("Failed to allow default history directory in asset scope: {e}");
-    }
-    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
-
-    let new_dashboard_service =
-        crate::platform::dashboard::create_dashboard_service(default_data_dir.clone(), new_db);
-    if let Some(dashboard_state) =
-        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
-    {
-        let _ = dashboard_state.reload(new_dashboard_service);
-    }
-
-    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
-        services.sync.reset().await;
-    }
-    let mut bootstrap = load_bootstrap_config(&default_data_dir);
-    bootstrap.custom_data_dir = None;
-    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-    restart_guard.commit_and_restart();
-
-    get_storage_directories_info(app)
-}
-pub async fn set_models_directory(
-    app: &AppHandle,
-    target_dir_str: String,
-    move_existing: bool,
-) -> Result<StorageDirectoriesInfo, String> {
-    let _guard = MigrationGuard::acquire()?;
-    check_active_tasks_idle(app).await?;
-    let target_path = PathBuf::from(target_dir_str.trim());
-    validate_target_directory(&target_path)?;
-
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_data_dir);
-    let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
-
-    let active_canonical = active_models_dir
-        .canonicalize()
-        .unwrap_or_else(|_| active_models_dir.clone());
-    let target_canonical = target_path
-        .canonicalize()
-        .unwrap_or_else(|_| target_path.clone());
-    if active_canonical == target_canonical {
-        return get_storage_directories_info(app);
-    }
-
-    check_path_overlap(&active_models_dir, &target_path)?;
-
-    // Evict all loaded models before moving files so file locks are released!
-    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
-        services.asr.clear_model_caches().await;
-    }
-    let server_was_running = stop_api_server_for_migration(app).await?;
-    let restart_guard = ServerRestartGuard::new(app, server_was_running);
-
-    if move_existing && active_models_dir.exists() {
-        let total_bytes = calculate_directory_size(&active_models_dir, 16);
-        let mut emitter = MigrationProgressEmitter::new(app, total_bytes);
-        emitter.emit("preparing", "");
-        copy_directory_contents_with_progress(&active_models_dir, &target_path, &mut emitter, 16)
-            .map_err(|e| format!("Failed to copy model files: {}", e))?;
-    }
-
-    let default_models_dir = default_data_dir.join("models");
-    let mut bootstrap = load_bootstrap_config(&default_data_dir);
-    if target_path == default_models_dir {
-        bootstrap.custom_models_dir = None;
-    } else {
-        bootstrap.custom_models_dir = Some(target_path);
-    }
-    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-
-    if move_existing
-        && active_models_dir.exists()
-        && let Err(e) = safe_remove_dir_all(&active_models_dir)
-    {
-        log::warn!(
-            "Failed to remove old models directory {}: {}",
-            active_models_dir.display(),
-            e
-        );
-    }
-    restart_guard.commit_and_restart();
-
-    let _ = app.emit(
-        STORAGE_MIGRATION_PROGRESS_EVENT,
-        StorageMigrationProgress {
-            phase: "done".to_string(),
-            current_file: String::new(),
-            copied_bytes: 1,
-            total_bytes: 1,
-            percent: 100.0,
-        },
-    );
-
-    get_storage_directories_info(app)
-}
-
-pub async fn reset_models_directory(app: &AppHandle) -> Result<StorageDirectoriesInfo, String> {
-    let _guard = MigrationGuard::acquire()?;
-    check_active_tasks_idle(app).await?;
-    // Evict all loaded models before resetting path
-    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
-        services.asr.clear_model_caches().await;
-    }
-    let server_was_running = stop_api_server_for_migration(app).await?;
-    let restart_guard = ServerRestartGuard::new(app, server_was_running);
-
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let mut bootstrap = load_bootstrap_config(&default_data_dir);
-    bootstrap.custom_models_dir = None;
-    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-    restart_guard.commit_and_restart();
-
-    get_storage_directories_info(app)
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoragePathOpenTarget {
@@ -931,7 +547,7 @@ pub fn resolve_storage_path_open_target(raw_path: &Path) -> StoragePathOpenTarge
     }
 }
 
-pub fn open_storage_path<R: Runtime>(app: &AppHandle<R>, path_str: String) -> Result<(), String> {
+pub fn open_storage_path(path_str: String) -> Result<(), String> {
     let trimmed = path_str.trim().trim_matches('"').trim_matches('\'');
     if trimmed.is_empty() {
         return Err("Path cannot be empty".to_string());
@@ -941,26 +557,18 @@ pub fn open_storage_path<R: Runtime>(app: &AppHandle<R>, path_str: String) -> Re
 
     match target {
         StoragePathOpenTarget::RevealItem(target_path) => {
-            if app.opener().reveal_item_in_dir(&target_path).is_ok() {
-                return Ok(());
-            }
             if let Some(parent) = target_path
                 .parent()
                 .filter(|p| !p.as_os_str().is_empty() && p.exists())
             {
-                app.opener()
-                    .open_path(parent.to_string_lossy(), None::<&str>)
-                    .map_err(|e| e.to_string())?;
-                return Ok(());
+                crate::platform::opener::open_path(parent).map_err(|e| e.to_string())
+            } else {
+                crate::platform::opener::open_path(&target_path).map_err(|e| e.to_string())
             }
-            app.opener()
-                .reveal_item_in_dir(&target_path)
-                .map_err(|e| e.to_string())
         }
-        StoragePathOpenTarget::OpenDirectory(target_path) => app
-            .opener()
-            .open_path(target_path.to_string_lossy(), None::<&str>)
-            .map_err(|e| e.to_string()),
+        StoragePathOpenTarget::OpenDirectory(target_path) => {
+            crate::platform::opener::open_path(&target_path).map_err(|e| e.to_string())
+        }
     }
 }
 

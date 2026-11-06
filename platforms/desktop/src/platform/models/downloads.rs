@@ -1,5 +1,7 @@
+use sona_core::ports::event::EventEmitterPort;
 use sona_model_downloads::DownloadClient;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -145,8 +147,9 @@ pub async fn download_file(
     }
 }
 
-pub async fn download_preset_model<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn download_preset_model(
+    models_dir: &Path,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     state: &DownloadState,
     model_id: String,
     download_id: String,
@@ -156,7 +159,6 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     use sona_model_downloads::{
         download_model_with_cancel_and_mirror, installed_model_is_valid, parse_download_mirror,
     };
-    use tauri::Emitter;
 
     let notify = state
         .notify_for_download(&download_id)
@@ -164,16 +166,15 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         .unwrap_or_else(|| Arc::new(Notify::new()));
     let _download_guard = state.register_download(download_id.clone(), notify.clone());
 
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     let resolved =
-        resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
+        resolve_model_download(&model_id, models_dir).map_err(|error| error.to_string())?;
     if installed_model_is_valid(&resolved)
         .await
         .map_err(|error| error.to_string())?
     {
         return Ok(resolved.install_path.to_string_lossy().into_owned());
     }
-    let app_clone = app.clone();
+    let emitter_clone = emitter.clone();
     let event_download_id = download_id.clone();
     let result = download_model_with_cancel_and_mirror(
         &resolved,
@@ -181,14 +182,16 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
         move |progress| {
             if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-                let _ = app_clone.emit(
-                    DOWNLOAD_PROGRESS_EVENT,
-                    (
-                        progress.downloaded_bytes,
-                        progress.total_bytes,
-                        &event_download_id,
-                    ),
-                );
+                if let Some(ref em) = emitter_clone {
+                    let _ = em.emit(
+                        DOWNLOAD_PROGRESS_EVENT,
+                        serde_json::json!([
+                            progress.downloaded_bytes,
+                            progress.total_bytes,
+                            &event_download_id,
+                        ]),
+                    );
+                }
             }
         },
     )
@@ -200,63 +203,49 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         .map_err(|error| error.to_string())
 }
 
-pub async fn delete_preset_model<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
+pub async fn delete_preset_model(
+    models_dir: &Path,
     model_id: &str,
 ) -> Result<(), String> {
     // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
     sona_llama_cpp::prune_idle_llm_models();
     sona_llama_cpp::prune_idle_llama_models();
 
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
-    sona_model_downloads::delete_installed_model(&models_dir, model_id)
+    sona_model_downloads::delete_installed_model(models_dir, model_id)
         .map_err(|error| error.to_string())?;
     Ok(())
 }
 
-pub fn get_cuda_addon_status<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
+pub fn get_cuda_addon_status(
+    base_dir: &Path,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
     use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, inspect_cuda_addon_directory};
-
-    let base_dir = TauriPathProvider::from_app(app)
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(|error| error.to_string())?;
     let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
     Ok(inspect_cuda_addon_directory(&cuda_dir))
 }
 
-pub fn try_auto_activate_cuda_addon<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+pub fn try_auto_activate_cuda_addon(base_dir: &Path) {
     use sona_core::runtime::cuda_addon::{
         CUDA_ADDON_SUBPATH, activate_cuda_addon_directory, inspect_cuda_addon_directory,
     };
-
-    if let Ok(base_dir) = TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData) {
-        let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
-        let inspection = inspect_cuda_addon_directory(&cuda_dir);
-        if inspection.is_installed {
-            let _ = activate_cuda_addon_directory(&cuda_dir);
-        }
+    let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
+    let inspection = inspect_cuda_addon_directory(&cuda_dir);
+    if inspection.is_installed {
+        let _ = activate_cuda_addon_directory(&cuda_dir);
     }
 }
 
-pub async fn activate_cuda_addon<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn activate_cuda_addon(
+    base_dir: &Path,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
     use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, activate_cuda_addon_directory};
-
-    let base_dir = TauriPathProvider::from_app(&app)
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(|error| error.to_string())?;
     let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
     activate_cuda_addon_directory(&cuda_dir).map_err(|error| error.to_string())
 }
 
-pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn download_and_install_cuda_addon(
+    base_dir: &Path,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     state: &DownloadState,
     download_id: String,
     mirror: Option<String>,
@@ -264,17 +253,12 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
     custom_url: Option<String>,
     expected_sha256: Option<String>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
     use sona_core::runtime::cuda_addon::CUDA_ADDON_SUBPATH;
     use sona_model_downloads::{
         default_cuda_addon_download_url, download_and_install_cuda_addon as download_addon,
         parse_download_mirror,
     };
-    use tauri::Emitter;
 
-    let base_dir = TauriPathProvider::from_app(&app)
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(|error| error.to_string())?;
     let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
 
     let download_url = match custom_url {
@@ -293,7 +277,7 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
         .await
         .unwrap_or_else(|| Arc::new(Notify::new()));
     let _download_guard = state.register_download(download_id.clone(), notify.clone());
-    let app_clone = app.clone();
+    let emitter_clone = emitter.clone();
     let event_download_id = download_id.clone();
 
     let result = download_addon(
@@ -305,14 +289,16 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
         notify,
         move |progress| {
             if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-                let _ = app_clone.emit(
-                    DOWNLOAD_PROGRESS_EVENT,
-                    (
-                        progress.downloaded_bytes,
-                        progress.total_bytes,
-                        &event_download_id,
-                    ),
-                );
+                if let Some(ref em) = emitter_clone {
+                    let _ = em.emit(
+                        DOWNLOAD_PROGRESS_EVENT,
+                        serde_json::json!([
+                            progress.downloaded_bytes,
+                            progress.total_bytes,
+                            &event_download_id,
+                        ]),
+                    );
+                }
             }
         },
     )

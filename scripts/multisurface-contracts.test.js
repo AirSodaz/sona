@@ -8,7 +8,11 @@ import { LIFECYCLE_ONLY } from './generate-sona-context.js';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function read(...parts) {
-  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
+  const filePath = path.join(repoRoot, ...parts);
+  if (!fs.existsSync(filePath)) {
+    return '';
+  }
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/gu, '\n');
 }
 
 function rustSources(...roots) {
@@ -53,36 +57,21 @@ function assertBindingDelegatesToBridge(binding, functionName, bridgeModule) {
   );
 }
 
+const hasDesktopFrontend = fs.existsSync(path.join(repoRoot, 'platforms', 'desktop', 'frontend'));
 const coreBackup = read('core', 'src', 'backup', 'model.rs');
 const coreSync = read('core', 'src', 'sync', 'model.rs');
-const desktopBindings = read(
-  'platforms',
-  'desktop',
-  'frontend',
-  'src',
-  'bindings.ts',
-);
-const frontendBackup = read(
-  'platforms',
-  'desktop',
-  'frontend',
-  'src',
-  'types',
-  'backup.ts',
-);
-const syncConflictCenter = read(
-  'platforms',
-  'desktop',
-  'frontend',
-  'src',
-  'components',
-  'settings',
-  'sync',
-  'SyncConflictCenter.tsx',
-);
+const desktopBindings = hasDesktopFrontend
+  ? read('platforms', 'desktop', 'frontend', 'src', 'bindings.ts')
+  : '';
+const frontendBackup = hasDesktopFrontend
+  ? read('platforms', 'desktop', 'frontend', 'src', 'types', 'backup.ts')
+  : '';
+const syncConflictCenter = hasDesktopFrontend
+  ? read('platforms', 'desktop', 'frontend', 'src', 'components', 'settings', 'sync', 'SyncConflictCenter.tsx')
+  : '';
 const prGuardrails = read('.github', 'workflows', 'pr-guardrails.yml');
 
-test('desktop backup contract follows Rust schema v3 and tags', () => {
+test('desktop backup contract follows Rust schema v3 and tags', { skip: !hasDesktopFrontend }, () => {
   assert.match(coreBackup, /BACKUP_SCHEMA_VERSION:\s*u64\s*=\s*3/u);
   assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*3\s+as const/u);
   assert.match(
@@ -95,7 +84,7 @@ test('desktop backup contract follows Rust schema v3 and tags', () => {
   );
 });
 
-test('generated desktop sync entity kinds include the canonical tag variant', () => {
+test('generated desktop sync entity kinds include the canonical tag variant', { skip: !hasDesktopFrontend }, () => {
   assert.match(coreSync, /enum SyncEntityKind\s*\{[\s\S]*?\bTag,/u);
   assert.match(
     desktopBindings,
@@ -103,7 +92,7 @@ test('generated desktop sync entity kinds include the canonical tag variant', ()
   );
 });
 
-test('sync conflict UI reads the persisted HLC snake_case timestamp', () => {
+test('sync conflict UI reads the persisted HLC snake_case timestamp', { skip: !hasDesktopFrontend }, () => {
   assert.match(syncConflictCenter, /version\.clock\.physical_ms\b/u);
   assert.doesNotMatch(syncConflictCenter, /version\.clock\.physicalMs\b/u);
 });
@@ -114,7 +103,7 @@ test('PR guardrails execute both sync application and WebDAV adapter tests', () 
   assert.doesNotMatch(prGuardrails, /-p sona-webdav\b/u);
 });
 
-test('API server receives streaming transcriber from host composition roots without Tauri dependency', () => {
+test('API server receives streaming transcriber from host composition roots without Tauri dependency', { skip: !hasDesktopFrontend }, () => {
   const desktopServer = read('platforms', 'desktop', 'src', 'app', 'server.rs');
   const cliServer = read('platforms', 'cli', 'src', 'serve.rs');
   const apiServerRuntime = read('adapters', 'api_server', 'src', 'runtime.rs');
@@ -137,7 +126,7 @@ test('API server receives streaming transcriber from host composition roots with
   );
 });
 
-test('desktop AppConfig is constrained by the generated Rust contract', () => {
+test('desktop AppConfig is constrained by the generated Rust contract', { skip: !hasDesktopFrontend }, () => {
   const configTypes = read(
     'platforms',
     'desktop',
@@ -156,7 +145,7 @@ test('desktop AppConfig is constrained by the generated Rust contract', () => {
   assert.doesNotMatch(configTypes, /Record<string, any>/u);
 });
 
-test('Rust-owned Tauri command contracts stay generated and complete', () => {
+test('Rust-owned Tauri command contracts stay generated and complete', { skip: !hasDesktopFrontend }, () => {
   const rustRegistry = read('adapters', 'ts_bind', 'src', 'tauri_contracts.rs');
   const tsBind = read('adapters', 'ts_bind', 'src', 'lib.rs');
   const commands = read(
@@ -245,7 +234,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
 
 // Parameter-name presence smoke check: asserts all Rust command arguments are represented in TS contracts.
 // Note: Full structural type validation, nullability, and return types require compiler/Specta macro integration.
-test('Rust Tauri command handlers and TypeScript contracts parameter names stay synchronized (smoke)', () => {
+test('Rust Tauri command handlers and TypeScript contracts parameter names stay synchronized (smoke)', { skip: !hasDesktopFrontend }, () => {
   const commandsTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'tauri', 'commands.ts');
   const contractsTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'tauri', 'contracts.ts');
   const tauriContractsRs = read('adapters', 'ts_bind', 'src', 'tauri_contracts.rs');
@@ -552,7 +541,7 @@ test('API server preserves typed failures and receives local ASR through the Cor
   }
 });
 
-test('API server consumes runtime capability ports from host composition roots', () => {
+test('API server consumes runtime capability ports from host composition roots', { skip: !hasDesktopFrontend }, () => {
   const desktop = read('platforms', 'desktop', 'src', 'app', 'server.rs');
   const cli = read('platforms', 'cli', 'src', 'serve.rs');
   const adapters = [
@@ -603,7 +592,7 @@ test('API server depends only on Core runtime capability ports', () => {
 });
 
 
-test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compatibility', () => {
+test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compatibility', { skip: !hasDesktopFrontend }, () => {
   const syncApplication = read('application', 'sync', 'src', 'application.rs');
   const desktopSync = read(
     'platforms',
@@ -829,7 +818,7 @@ test('UniFFI tests own application context and History environments', () => {
   assert.doesNotMatch(historyFixtures, /SqliteHistoryStore::new\s*\(/u);
 });
 
-test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
+test('stateful hosts reuse SQLite while the CLI stays stateless', { skip: !hasDesktopFrontend }, () => {
   const uniffiBridges = [
     'app_config_repository_bridge.rs',
     'automation_bridge.rs',

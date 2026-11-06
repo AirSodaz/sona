@@ -19,7 +19,7 @@ async fn create_test_facade_with_emitter()
         .build()
         .unwrap();
 
-    let facade = AgentControlFacade::new(services, None);
+    let facade = AgentControlFacade::new(services);
     (facade, emitter, temp)
 }
 
@@ -1513,6 +1513,130 @@ async fn test_read_transcript_returns_failed_status_when_history_item_purged() {
         read.error_message.as_deref(),
         Some("Stream connection failed")
     );
+    assert_eq!(read.segments.len(), 0);
+    assert_eq!(read.total_segments_in_history, 0);
+    assert_eq!(read.returned_segments, 0);
+    assert!(!read.has_more);
+}
+
+#[tokio::test]
+async fn test_cancel_batch_task_after_failed_task_returns_false() {
+    let (facade, _dir) = create_test_facade().await;
+    let task_id = "task-already-failed".to_string();
+
+    let record = sona_core::task_ledger::types::TaskLedgerRecord {
+        id: task_id.clone(),
+        kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+        status: sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+        title: "failed".to_string(),
+        progress: 0.0,
+        created_at: 1000,
+        updated_at: 1000,
+        retryable: false,
+        cancelable: false,
+        recoverable: false,
+        stage: Some("failed".to_string()),
+        history_id: None,
+        tag_ids: vec![],
+        file_path: None,
+        automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
+        source_fingerprint: None,
+        error_message: Some("Failed".to_string()),
+        template_id: None,
+        target_language: None,
+    };
+    facade.services.task_ledger.upsert_task(record).await.unwrap();
+
+    let cancelled = facade.cancel_batch_task(task_id.clone()).await.unwrap();
+    assert!(!cancelled, "Cancelling a failed task must return false");
+
+    let tasks = facade.services.task_ledger.list_tasks().await.unwrap();
+    let task = tasks.iter().find(|t| t.id == task_id).unwrap();
+    assert_eq!(task.status, sona_core::task_ledger::types::TaskLedgerStatus::Failed);
+}
+
+#[tokio::test]
+async fn test_cancel_batch_task_duplicate_is_idempotent() {
+    let (facade, _dir) = create_test_facade().await;
+    let task_id = "task-cancel-dup".to_string();
+
+    let record = sona_core::task_ledger::types::TaskLedgerRecord {
+        id: task_id.clone(),
+        kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+        status: sona_core::task_ledger::types::TaskLedgerStatus::Running,
+        title: "running".to_string(),
+        progress: 10.0,
+        created_at: 1000,
+        updated_at: 1000,
+        retryable: false,
+        cancelable: true,
+        recoverable: false,
+        stage: Some("transcribing".to_string()),
+        history_id: None,
+        tag_ids: vec![],
+        file_path: None,
+        automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
+        source_fingerprint: None,
+        error_message: None,
+        template_id: None,
+        target_language: None,
+    };
+    facade.services.task_ledger.upsert_task(record).await.unwrap();
+
+    let first_cancel = facade.cancel_batch_task(task_id.clone()).await.unwrap();
+    assert!(first_cancel, "First cancellation of running task must succeed");
+
+    let second_cancel = facade.cancel_batch_task(task_id.clone()).await.unwrap();
+    assert!(!second_cancel, "Second cancellation of already cancelled task must return false");
+}
+
+#[tokio::test]
+async fn test_read_transcript_returns_cancelled_status_when_task_cancelled() {
+    let (facade, _dir) = create_test_facade().await;
+    let history_id = "test-hist-cancelled-123".to_string();
+    let task_id = "task-cancelled-123".to_string();
+
+    let record = sona_core::task_ledger::types::TaskLedgerRecord {
+        id: task_id,
+        kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+        status: sona_core::task_ledger::types::TaskLedgerStatus::Cancelled,
+        title: "cancelled-stream-task".to_string(),
+        progress: 0.0,
+        created_at: 1000,
+        updated_at: 1000,
+        retryable: false,
+        cancelable: false,
+        recoverable: false,
+        stage: Some("cancelled".to_string()),
+        history_id: Some(history_id.clone()),
+        tag_ids: vec![],
+        file_path: Some("audio.mp3".to_string()),
+        automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
+        source_fingerprint: None,
+        error_message: None,
+        template_id: None,
+        target_language: None,
+    };
+    facade.services.task_ledger.upsert_task(record).await.unwrap();
+
+    let read = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(read.task_status, "cancelled");
     assert_eq!(read.segments.len(), 0);
     assert_eq!(read.total_segments_in_history, 0);
     assert_eq!(read.returned_segments, 0);

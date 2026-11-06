@@ -1,4 +1,3 @@
-use super::commands::{complete_llm_with_port, list_llm_models_command};
 use super::network::LlmApiUrl;
 use super::*;
 use async_trait::async_trait;
@@ -21,6 +20,29 @@ use std::{
     },
     time::Duration,
 };
+
+async fn complete_llm_with_port<P>(
+    request: LlmCompletionRequest,
+    port: P,
+) -> Result<LlmCompletionResponse, String>
+where
+    P: Clone + LlmCompletionPort + LlmModelMetadataPort,
+{
+    sona_application::llm::LlmRuntimeService::new(&port, port.clone())
+        .complete(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+async fn list_llm_models_command(
+    request: sona_core::llm::requests::LlmModelsRequest,
+) -> Result<Vec<sona_core::llm::provider_protocol::LlmModelSummary>, String> {
+    let adapter = DesktopLlmAdapter::default();
+    sona_application::llm::LlmRuntimeService::new(&adapter, adapter.clone())
+        .list_models(request)
+        .await
+        .map_err(|error| error.to_string())
+}
 
 fn sample_segments() -> Vec<LlmSegmentInput> {
     vec![

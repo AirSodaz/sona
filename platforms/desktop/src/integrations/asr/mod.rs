@@ -2,7 +2,6 @@ use sona_application::local_asr::LocalAsrRegistry;
 use sona_core::ports::asr::LOCAL_LLAMA_CPP_PROVIDER_ID;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use tauri::{AppHandle, Manager};
 
 mod adapter;
 mod factory;
@@ -22,7 +21,7 @@ pub(crate) fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::DesktopLocalProviderAdapter;
 pub use factory::{DesktopStreamingAsrFactory, create_desktop_streaming_asr_factory};
-pub(crate) use observer::TauriAsrRuntimeObserver;
+pub(crate) use observer::DesktopAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::ports::asr::AsrPortError;
 pub use sona_core::ports::asr::AsrStreamingSession;
@@ -131,15 +130,6 @@ pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrReg
 
 pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {
     local_asr_registry(RecognizerPool::default())
-}
-
-pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {
-    app.and_then(|app| {
-        app.try_state::<crate::services::DesktopServices>()
-            .map(|services| services.asr.recognizer_pool())
-            .or_else(|| app.try_state::<AsrState>().map(|s| s.recognizer_pool()))
-    })
-    .unwrap_or_else(RecognizerPool::new)
 }
 
 #[cfg(test)]

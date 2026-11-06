@@ -11,8 +11,8 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Emitter, Runtime};
+use tokio::task::JoinHandle;
+use sona_core::ports::event::EventEmitterPort;
 
 const AUTOMATION_RUNTIME_CANDIDATE_EVENT: &str = "automation-runtime-candidate";
 
@@ -55,16 +55,21 @@ pub trait AutomationRuntimeEventSink: Send + Sync {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String>;
 }
 
-struct TauriAutomationRuntimeEventSink<R: Runtime> {
-    app: AppHandle<R>,
+pub struct EventEmitterAutomationSink {
+    emitter: Arc<dyn EventEmitterPort>,
 }
 
-impl<R: Runtime> AutomationRuntimeEventSink for TauriAutomationRuntimeEventSink<R> {
+impl EventEmitterAutomationSink {
+    pub fn new(emitter: Arc<dyn EventEmitterPort>) -> Self {
+        Self { emitter }
+    }
+}
+
+impl AutomationRuntimeEventSink for EventEmitterAutomationSink {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String> {
-        sona_ts_bind::validate_typescript_safe_integers(&payload)
-            .map_err(|error| error.to_string())?;
-        self.app
-            .emit(AUTOMATION_RUNTIME_CANDIDATE_EVENT, payload)
+        let value = serde_json::to_value(payload).map_err(|error| error.to_string())?;
+        self.emitter
+            .emit(AUTOMATION_RUNTIME_CANDIDATE_EVENT, value)
             .map_err(|error| error.to_string())
     }
 }
@@ -109,8 +114,8 @@ impl AutomationRuntimeState {
     }
 }
 
-pub fn create_event_sink<R: Runtime>(app: AppHandle<R>) -> Arc<dyn AutomationRuntimeEventSink> {
-    Arc::new(TauriAutomationRuntimeEventSink { app })
+pub fn create_event_sink(emitter: Arc<dyn EventEmitterPort>) -> Arc<dyn AutomationRuntimeEventSink> {
+    Arc::new(EventEmitterAutomationSink::new(emitter))
 }
 
 fn build_pending_candidate_key(rule_id: &str, normalized_path: &str) -> String {
@@ -153,7 +158,7 @@ pub async fn collect_rule_path_results(
     rule: AutomationRuntimeRuleConfig,
     file_paths: Vec<String>,
 ) -> Result<Vec<AutomationRuntimePathCollectionResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         file_paths
             .into_iter()
             .map(|file_path| collect_rule_path_result(&rule, &file_path))
@@ -192,7 +197,7 @@ fn schedule_candidate(
     let rule_for_task = rule.clone();
     let pending_key_for_task = pending_key.clone();
     let file_path_for_task = file_path.clone();
-    let handle = tauri::async_runtime::spawn(async move {
+    let handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(rule_for_task.debounce_ms)).await;
 
         let mut previous_snapshot = match candidate_payload_for_rule(
@@ -293,7 +298,7 @@ pub async fn scan_rule_runtime(
 ) -> Result<(), String> {
     let rule_for_scan = rule.clone();
     let paths =
-        tauri::async_runtime::spawn_blocking(move || collect_candidate_paths(&rule_for_scan))
+        tokio::task::spawn_blocking(move || collect_candidate_paths(&rule_for_scan))
             .await
             .map_err(|error| error.to_string())??;
 
@@ -352,12 +357,11 @@ fn create_rule_watcher(
     Ok(watcher)
 }
 
-pub async fn start_rule_runtime<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn start_rule_runtime(
+    event_sink: Arc<dyn AutomationRuntimeEventSink>,
     state: AutomationRuntimeState,
     rule: AutomationRuntimeRuleConfig,
 ) -> Result<(), String> {
-    let event_sink = create_event_sink(app.clone());
     let watcher = create_rule_watcher(state.clone(), rule.clone(), event_sink.clone())?;
     state.insert_rule_runtime(rule.rule_id.clone(), watcher);
 

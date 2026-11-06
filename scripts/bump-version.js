@@ -71,19 +71,23 @@ export function bumpVersionFiles(targetVersionInput, options = {}) {
     `$1"${targetVersion}"`,
   );
 
-  // 3. Desktop frontend package.json
+  // 3. Desktop frontend package.json (if present)
   const frontendPackageJsonPath = path.join(root, 'platforms', 'desktop', 'frontend', 'package.json');
-  updateJsonFile(frontendPackageJsonPath, (json) => {
-    json.version = targetVersion;
-  });
+  if (fs.existsSync(frontendPackageJsonPath)) {
+    updateJsonFile(frontendPackageJsonPath, (json) => {
+      json.version = targetVersion;
+    });
+  }
 
-  // 4. Desktop tauri.conf.json
+  // 4. Desktop tauri.conf.json (if present)
   const tauriConfPath = path.join(root, 'platforms', 'desktop', 'tauri.conf.json');
-  replaceInFile(
-    tauriConfPath,
-    /(^\s*"version"\s*:\s*)"[^"]+"/mu,
-    `$1"${targetVersion}"`,
-  );
+  if (fs.existsSync(tauriConfPath)) {
+    replaceInFile(
+      tauriConfPath,
+      /(^\s*"version"\s*:\s*)"[^"]+"/mu,
+      `$1"${targetVersion}"`,
+    );
+  }
 
   // 5. Android app build.gradle.kts
   const androidAppGradlePath = path.join(root, 'platforms', 'android', 'client', 'app', 'build.gradle.kts');

@@ -1,4 +1,3 @@
-use tauri::{AppHandle, Manager, Runtime};
 
 use super::{
     HistoryItemRecord, HistoryItemStatus, SqliteHistoryStore, TranscriptSnapshotMetadata,
@@ -28,19 +27,7 @@ where
     .await
 }
 
-pub(crate) async fn run_llm_db_task_with_app<R, T, F, E>(
-    app: &AppHandle<R>,
-    task: F,
-) -> Result<T, String>
-where
-    R: Runtime,
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
-    E: ToString + Send + 'static,
-{
-    let sqlite = app.state::<crate::platform::database::DesktopSqliteState>();
-    run_llm_db_task(sqlite.inner(), task).await
-}
+
 
 pub(crate) fn create_llm_transcript_snapshot_record(
     repository: &impl HistoryQueryRepository,

@@ -84,13 +84,13 @@ pub async fn transcribe_file(
     let _ = services.task_ledger.upsert_task(initial_record).await;
 
     let (cancel_rx, cancel_guard) = services.asr.batch_cancel.register(&instance_id).await;
-    let _ = cancel_rx;
 
     let task_services = services.clone();
     let task_instance_id = instance_id.clone();
     let task_history_id = history_id.clone();
     tokio::spawn(async move {
         let _cancel_guard = cancel_guard;
+        let cancel_rx = cancel_rx;
         let _sleep_guard = crate::platform::system::power::SleepPreventionGuard::acquire(
             "Agent Audio Batch Transcription",
         );
@@ -105,8 +105,49 @@ pub async fn transcribe_file(
         )
         .await;
 
+        // Explicitly drop cancel guard immediately upon batch processing completion
+        drop(_cancel_guard);
+
         match result {
             Ok(segments) => {
+                let is_cancelled = *cancel_rx.borrow();
+                let already_cancelled = if !is_cancelled {
+                    task_services
+                        .task_ledger
+                        .list_tasks()
+                        .await
+                        .map(|tasks| {
+                            tasks.iter().any(|t| {
+                                t.id == task_instance_id
+                                    && matches!(
+                                        t.status,
+                                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                                            | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                                    )
+                            })
+                        })
+                        .unwrap_or(false)
+                } else {
+                    true
+                };
+
+                if is_cancelled || already_cancelled {
+                    // Task was cancelled while batch processing was finishing.
+                    // Purge transient history item and exit without writing Succeeded.
+                    let hid_to_purge = task_history_id.clone();
+                    let _ = task_services
+                        .history
+                        .mutation_file(move |s| {
+                            s.purge_items(
+                                sona_core::history::mutation_repository::HistoryDeleteItemsRequest {
+                                    ids: vec![hid_to_purge],
+                                },
+                            )
+                        })
+                        .await;
+                    return;
+                }
+
                 let duration_seconds = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
                 let hid = task_history_id.clone();
                 let segs_clone = segments.clone();
@@ -123,20 +164,37 @@ pub async fn transcribe_file(
                     .await;
                 if let Err(e) = update_res {
                     let err_str = e.to_string();
-                    let _ = task_services
+                    let ledger_cancelled = task_services
                         .task_ledger
-                        .patch_task(
-                            task_instance_id,
-                            sona_core::task_ledger::types::TaskLedgerPatch {
-                                status: Some(
-                                    sona_core::task_ledger::types::TaskLedgerStatus::Failed,
-                                ),
-                                error_message: Some(Some(err_str)),
-                                stage: Some(Some("failed".to_string())),
-                                ..Default::default()
-                            },
-                        )
-                        .await;
+                        .list_tasks()
+                        .await
+                        .map(|tasks| {
+                            tasks.iter().any(|t| {
+                                t.id == task_instance_id
+                                    && matches!(
+                                        t.status,
+                                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                                            | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                                    )
+                            })
+                        })
+                        .unwrap_or(false);
+                    if !*cancel_rx.borrow() && !ledger_cancelled {
+                        let _ = task_services
+                            .task_ledger
+                            .patch_task(
+                                task_instance_id,
+                                sona_core::task_ledger::types::TaskLedgerPatch {
+                                    status: Some(
+                                        sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+                                    ),
+                                    error_message: Some(Some(err_str)),
+                                    stage: Some(Some("failed".to_string())),
+                                    ..Default::default()
+                                },
+                            )
+                            .await;
+                    }
                     return;
                 }
 
@@ -158,63 +216,164 @@ pub async fn transcribe_file(
                     .await;
                 if let Err(e) = meta_res {
                     let err_str = e.to_string();
+                    let ledger_cancelled = task_services
+                        .task_ledger
+                        .list_tasks()
+                        .await
+                        .map(|tasks| {
+                            tasks.iter().any(|t| {
+                                t.id == task_instance_id
+                                    && matches!(
+                                        t.status,
+                                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                                            | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                                    )
+                            })
+                        })
+                        .unwrap_or(false);
+                    if !*cancel_rx.borrow() && !ledger_cancelled {
+                        let _ = task_services
+                            .task_ledger
+                            .patch_task(
+                                task_instance_id,
+                                sona_core::task_ledger::types::TaskLedgerPatch {
+                                    status: Some(
+                                        sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+                                    ),
+                                    error_message: Some(Some(err_str)),
+                                    stage: Some(Some("failed".to_string())),
+                                    ..Default::default()
+                                },
+                            )
+                            .await;
+                    }
+                    return;
+                }
+
+                let ledger_cancelled = task_services
+                    .task_ledger
+                    .list_tasks()
+                    .await
+                    .map(|tasks| {
+                        tasks.iter().any(|t| {
+                            t.id == task_instance_id
+                                && matches!(
+                                    t.status,
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                                        | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                                )
+                        })
+                    })
+                    .unwrap_or(false);
+
+                if !*cancel_rx.borrow() && !ledger_cancelled {
                     let _ = task_services
                         .task_ledger
                         .patch_task(
                             task_instance_id,
                             sona_core::task_ledger::types::TaskLedgerPatch {
                                 status: Some(
-                                    sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Succeeded,
                                 ),
-                                error_message: Some(Some(err_str)),
-                                stage: Some(Some("failed".to_string())),
+                                progress: Some(100.0),
+                                history_id: Some(Some(task_history_id.clone())),
+                                stage: Some(Some("completed".to_string())),
                                 ..Default::default()
                             },
                         )
                         .await;
-                    return;
+
+                    let _ = task_services.emitter.emit(
+                        "transcript-updated",
+                        serde_json::json!({ "historyId": &task_history_id }),
+                    );
+                } else {
+                    let hid_to_purge = task_history_id.clone();
+                    let _ = task_services
+                        .history
+                        .mutation_file(move |s| {
+                            s.purge_items(
+                                sona_core::history::mutation_repository::HistoryDeleteItemsRequest {
+                                    ids: vec![hid_to_purge],
+                                },
+                            )
+                        })
+                        .await;
                 }
-
-                let _ = task_services
-                    .task_ledger
-                    .patch_task(
-                        task_instance_id,
-                        sona_core::task_ledger::types::TaskLedgerPatch {
-                            status: Some(
-                                sona_core::task_ledger::types::TaskLedgerStatus::Succeeded,
-                            ),
-                            progress: Some(100.0),
-                            history_id: Some(Some(task_history_id.clone())),
-                            stage: Some(Some("completed".to_string())),
-                            ..Default::default()
-                        },
-                    )
-                    .await;
-
-                let _ = task_services.emitter.emit(
-                    "transcript-updated",
-                    serde_json::json!({ "historyId": &task_history_id }),
-                );
             }
             Err(e) => {
-                let is_cancelled =
-                    e.code() == "TASK_CANCELLED" || e.message.contains("Task cancelled");
-                let status = if is_cancelled {
-                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
-                } else {
-                    sona_core::task_ledger::types::TaskLedgerStatus::Failed
-                };
-                let stage = if is_cancelled {
-                    "cancelled".to_string()
-                } else {
-                    "failed".to_string()
-                };
-                let err_str = if is_cancelled {
-                    super::AgentControlError::TaskCancelled(e.message).to_string()
-                } else {
-                    e.to_string()
-                };
+                let is_cancelled = *cancel_rx.borrow()
+                    || e.code() == "TASK_CANCELLED"
+                    || e.message.contains("Task cancelled");
 
+                let ledger_cancelled = task_services
+                    .task_ledger
+                    .list_tasks()
+                    .await
+                    .map(|tasks| {
+                        tasks.iter().any(|t| {
+                            t.id == task_instance_id
+                                && matches!(
+                                    t.status,
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                                        | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                                )
+                        })
+                    })
+                    .unwrap_or(false);
+
+                if !ledger_cancelled {
+                    let status = if is_cancelled {
+                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                    } else {
+                        sona_core::task_ledger::types::TaskLedgerStatus::Failed
+                    };
+                    let stage = if is_cancelled {
+                        "cancelled".to_string()
+                    } else {
+                        "failed".to_string()
+                    };
+                    let err_str = if is_cancelled {
+                        super::AgentControlError::TaskCancelled(e.message).to_string()
+                    } else {
+                        e.to_string()
+                    };
+
+                    // 1. Patch task ledger status FIRST so all concurrent observers see terminal state
+                    let _ = task_services
+                        .task_ledger
+                        .patch_task(
+                            task_instance_id,
+                            sona_core::task_ledger::types::TaskLedgerPatch {
+                                status: Some(status),
+                                error_message: if is_cancelled {
+                                    None
+                                } else {
+                                    Some(Some(err_str.clone()))
+                                },
+                                stage: Some(Some(stage)),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                } else if is_cancelled {
+                    // Task was already Cancelled/CancelRequested in ledger.
+                    // Ensure status is terminal Cancelled and suppress error_message.
+                    let _ = task_services
+                        .task_ledger
+                        .patch_task(
+                            task_instance_id,
+                            sona_core::task_ledger::types::TaskLedgerPatch {
+                                status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Cancelled),
+                                error_message: None,
+                                stage: Some(Some("cancelled".to_string())),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                }
+
+                // 2. Purge transient history item SECOND
                 let hid_to_purge = task_history_id.clone();
                 let _ = task_services
                     .history
@@ -225,23 +384,6 @@ pub async fn transcribe_file(
                             },
                         )
                     })
-                    .await;
-
-                let _ = task_services
-                    .task_ledger
-                    .patch_task(
-                        task_instance_id,
-                        sona_core::task_ledger::types::TaskLedgerPatch {
-                            status: Some(status),
-                            error_message: if is_cancelled {
-                                None
-                            } else {
-                                Some(Some(err_str.clone()))
-                            },
-                            stage: Some(Some(stage)),
-                            ..Default::default()
-                        },
-                    )
                     .await;
             }
         }

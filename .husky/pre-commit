@@ -1,2 +1,2 @@
 git diff --check --cached
-pnpm exec lint-staged
+node scripts/check-staged.js

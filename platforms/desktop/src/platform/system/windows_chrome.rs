@@ -84,7 +84,6 @@ impl ResolvedTheme {
 #[cfg(target_os = "windows")]
 mod imp {
     use super::{ChromePalette, ResolvedTheme};
-    use tauri::{Runtime, WebviewWindow};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::Graphics::Dwm::{
         DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE,
@@ -92,16 +91,10 @@ mod imp {
     };
 
     /// Apply `palette` to the window's native frame.
-    ///
-    /// Returns `Ok(())` even when individual attributes are rejected, because
-    /// a partially themed frame is still strictly better than a hard failure
-    /// and pre-Windows-11 hosts reject most of these attributes by design.
-    pub fn apply<R: Runtime>(
-        window: &WebviewWindow<R>,
+    pub fn apply(
+        hwnd: HWND,
         theme: ResolvedTheme,
     ) -> Result<(), String> {
-        let raw = window.hwnd().map_err(|e| e.to_string())?;
-        let hwnd = HWND(raw.0 as *mut _);
         let palette: ChromePalette = theme.palette();
 
         unsafe {
@@ -110,8 +103,6 @@ mod imp {
                 (DWMWA_TEXT_COLOR, palette.text),
                 (DWMWA_BORDER_COLOR, palette.border),
             ] {
-                // A rejected write (Windows 10, or a frame DWM declines to
-                // recolor) is logged and skipped rather than propagated.
                 if let Err(error) = write_color(hwnd, attribute, value) {
                     log::debug!(
                         "[WindowsChrome] Skipped frame color attribute {attribute:?} theme={theme:?} error={error}"
@@ -159,23 +150,19 @@ mod imp {
 }
 
 /// Apply the native window chrome for `theme` on the given window.
-///
-/// On non-Windows targets this is a no-op: macOS and Linux keep their own
-/// frame conventions and are themed by the platform, not by DWM.
-pub fn apply_window_chrome<R: tauri::Runtime>(
-    window: &tauri::WebviewWindow<R>,
+#[cfg(target_os = "windows")]
+pub fn apply_window_chrome(
+    hwnd: windows::Win32::Foundation::HWND,
     theme: ResolvedTheme,
 ) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        imp::apply(window, theme)
-    }
+    imp::apply(hwnd, theme)
+}
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (window, theme);
-        Ok(())
-    }
+#[cfg(not(target_os = "windows"))]
+pub fn apply_window_chrome(
+    _theme: ResolvedTheme,
+) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(test)]

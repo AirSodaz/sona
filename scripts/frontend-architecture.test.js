@@ -24,6 +24,9 @@ function isProductionModule(filePath) {
 }
 
 function productionModules() {
+  if (!fs.existsSync(frontendRoot)) {
+    return [];
+  }
   const modules = [];
 
   function visit(directory) {

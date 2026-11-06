@@ -4,7 +4,7 @@ use sona_core::recovery::types::RecoveryItemInput;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri_appsona_lib::platform::recovery_repository::{
+use sona_desktop_lib::platform::recovery_repository::{
     load_snapshot, persist_queue_snapshot, save_snapshot,
 };
 use tempfile::tempdir;

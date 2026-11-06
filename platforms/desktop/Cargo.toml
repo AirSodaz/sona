@@ -10,18 +10,12 @@ default-run = "sona"
 [package.metadata.sona]
 role = "host"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "tauri_appsona_lib"
+name = "sona_desktop_lib"
 crate-type = ["rlib"]
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-
 
 [dependencies]
 sona-application = { workspace = true }
@@ -46,46 +40,40 @@ sona-sync-webdav = { workspace = true }
 sona-sync-s3 = { workspace = true }
 sona-translation-onnx = { workspace = true }
 sona-ts-bind = { workspace = true }
-tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
+
+# Pure Rust GUI Framework (GPUI Kit)
+gpui-kit = "0.9.0"
+
+# Pure Rust Desktop Integrations
+tray-icon = "0.26"
+muda = "0.21"
+global-hotkey = "0.9"
+auto-launch = "0.6"
+single-instance = "0.3"
+open = "5.4"
 rfd = { version = "0.17", default-features = false, features = ["common-controls-v6"] }
-tauri-plugin-opener = "2"
-serde = { workspace = true }
-serde_json = { workspace = true }
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-http = "2"
+
+# Async Runtime & Core Utilities
 async-trait = { workspace = true }
 base64 = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
-cpal = { workspace = true }
-reqwest = { workspace = true, features = ["stream", "rustls", "json", "query"] }
-futures-util = { workspace = true }
-tauri-plugin-process = "2"
-uuid = { workspace = true }
-tauri-plugin-log = "2"
-log = { workspace = true }
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-tauri-plugin-deep-link = "2"
-enigo = "0.6"
-tauri-plugin-global-shortcut = "2"
-tauri-plugin-prevent-default = "6.0.0"
 chrono = { workspace = true }
-notify = { workspace = true }
-thiserror = { workspace = true }
-parking_lot = { workspace = true }
+cpal = { workspace = true }
+enigo = "0.6"
+futures-util = { workspace = true }
 keyring = "4.1.5"
-tauri-plugin-autostart = "2"
-
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "2"
-tauri-plugin-window-state = "2"
-
+log = { workspace = true }
+notify = { workspace = true }
+parking_lot = { workspace = true }
+reqwest = { workspace = true, features = ["stream", "rustls", "json", "query"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
+uuid = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rfd = { version = "0.17", default-features = false, features = ["gtk3"] }
-# Pinned to 0.21.1: rust-ini >= 0.21.2 added fields to ParseOption breaking tauri-plugin-deep-link 2.6.2 on Linux
-rust-ini = "=0.21.1"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Win32_Foundation",

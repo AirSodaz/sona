@@ -1,9 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 use crate::platform::startup_dialog::LegacyDatabaseAction;
-use tauri::{AppHandle, Manager, Runtime};
 
 pub const DATABASE_FILE_NAMES: [&str; 6] = [
     "sona.db",
@@ -104,20 +102,7 @@ where
     }
 }
 
-pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<(Arc<sona_sqlite::Database>, PathBuf), Box<dyn std::error::Error>> {
-    let path_provider = TauriPathProvider::from_app(app);
-    let app_local_data_dir = path_provider
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(std::io::Error::other)?;
 
-    let db = open_and_migrate_sqlite_for_path_with_prompt(
-        &app_local_data_dir,
-        crate::platform::startup_dialog::prompt_legacy_database_migration,
-    )?;
-    Ok((db, app_local_data_dir))
-}
 
 #[derive(Clone)]
 pub struct DesktopSqliteState {
@@ -150,45 +135,7 @@ impl DesktopSqliteState {
     }
 }
 
-pub fn try_sqlite_application_context<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<Arc<sona_sqlite::SqliteApplicationContext>, String> {
-    let state = app
-        .try_state::<DesktopSqliteState>()
-        .ok_or_else(|| "Database application context has not been initialized".to_string())?;
-    state.current_context()
-}
 
-pub fn reload_sqlite_application_context<R: Runtime>(
-    app: &AppHandle<R>,
-    new_context: Arc<sona_sqlite::SqliteApplicationContext>,
-) -> Result<(), String> {
-    let state = app
-        .try_state::<DesktopSqliteState>()
-        .ok_or_else(|| "DesktopSqliteState has not been initialized".to_string())?;
-    state.reload(new_context)?;
-    Ok(())
-}
-
-pub fn try_sqlite_database<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<Arc<sona_sqlite::Database>, String> {
-    let state = app
-        .try_state::<DesktopSqliteState>()
-        .ok_or_else(|| "Database application context has not been initialized".to_string())?;
-    state.current_database()
-}
-
-pub fn sqlite_application_context<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Arc<sona_sqlite::SqliteApplicationContext> {
-    try_sqlite_application_context(app)
-        .expect("Database application context is requested before being managed")
-}
-
-pub fn sqlite_database<R: Runtime>(app: &AppHandle<R>) -> Arc<sona_sqlite::Database> {
-    try_sqlite_database(app).expect("Database is requested before being managed")
-}
 
 #[cfg(test)]
 mod tests {

@@ -13,7 +13,9 @@ import {
   writeRuntimeLibraries,
 } from './test-support/desktop-packaging-fixtures.js';
 
-test('tauri bundle verification inspects canonical native app locations', () => {
+const hasVerifier = fs.existsSync(path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'));
+
+test('tauri bundle verification inspects canonical native app locations', { skip: !hasVerifier }, () => {
   for (const target of [
     'x86_64-pc-windows-msvc',
     'aarch64-apple-darwin',
@@ -52,7 +54,7 @@ test('tauri bundle verification inspects canonical native app locations', () => 
   }
 });
 
-test('tauri bundle verification accepts an explicit native Windows bundle root', () => {
+test('tauri bundle verification accepts an explicit native Windows bundle root', { skip: !hasVerifier }, () => {
   const target = 'x86_64-pc-windows-msvc';
   const root = makeTempRepo();
   const releaseDir = path.join(root, 'target', 'release');
@@ -89,7 +91,7 @@ test('tauri bundle verification accepts an explicit native Windows bundle root',
   assert.match(result.stdout, /Verified canonical app bundle/u);
 });
 
-test('tauri bundle verification omits llama.cpp libraries for static Linux builds', () => {
+test('tauri bundle verification omits llama.cpp libraries for static Linux builds', { skip: !hasVerifier }, () => {
   const target = 'x86_64-unknown-linux-gnu';
   const root = makeTempRepo();
   const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
@@ -145,7 +147,7 @@ test('tauri bundle verification omits llama.cpp libraries for static Linux build
   assert.match(result.stdout, /Verified packaged artifacts/u);
 });
 
-test('tauri bundle verification does not mix native and target-qualified Windows outputs', () => {
+test('tauri bundle verification does not mix native and target-qualified Windows outputs', { skip: !hasVerifier }, () => {
   const target = 'aarch64-pc-windows-msvc';
   const root = makeTempRepo();
   const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
@@ -182,7 +184,7 @@ test('tauri bundle verification does not mix native and target-qualified Windows
   assert.match(result.stderr, /No installer artifact was found/u);
 });
 
-test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Windows builds', () => {
+test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Windows builds', { skip: !hasVerifier }, () => {
   const target = 'x86_64-pc-windows-msvc';
   const root = makeTempRepo();
   const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
@@ -224,7 +226,7 @@ test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Win
   assert.equal(vulkanResult.status, 0, vulkanResult.stderr || vulkanResult.stdout);
 });
 
-test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux builds', () => {
+test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux builds', { skip: !hasVerifier }, () => {
   const target = 'x86_64-unknown-linux-gnu';
   const root = makeTempRepo();
   const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
@@ -277,7 +279,7 @@ test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux bu
   const vulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
 });
 
-test('tauri bundle verification requires ggml-metal for Metal-enabled macOS builds', () => {
+test('tauri bundle verification requires ggml-metal for Metal-enabled macOS builds', { skip: !hasVerifier }, () => {
   const target = 'aarch64-apple-darwin';
   const root = makeTempRepo();
   const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);

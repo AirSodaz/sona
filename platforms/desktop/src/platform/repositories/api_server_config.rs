@@ -1,4 +1,4 @@
-use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort};
 use sona_core::config::ConfigError;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
@@ -83,36 +83,11 @@ pub fn load_online_asr_config(provider: &dyn PathPort) -> HashMap<String, serde_
         .unwrap_or_default()
 }
 
-pub fn load_online_asr_config_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> HashMap<String, serde_json::Value> {
-    let provider = TauriPathProvider::from_app(app);
-    load_app_config_for_server_with_database(
-        &provider,
-        crate::platform::database::try_sqlite_database(app).ok(),
-    )
-    .map(|config| online_asr_config_from_app_config(&config))
-    .unwrap_or_default()
-}
-
 pub fn load_api_server_startup_settings(provider: &dyn PathPort) -> ServeStartupSettings {
     if let Some(settings) = load_sqlite_serve_startup_settings(provider, None) {
         return settings;
     }
     load_app_config_for_server(provider)
-        .map(|config| serve_startup_settings_from_app_config(&config))
-        .unwrap_or_default()
-}
-
-pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> ServeStartupSettings {
-    let provider = TauriPathProvider::from_app(app);
-    let database = crate::platform::database::try_sqlite_database(app).ok();
-    if let Some(settings) = load_sqlite_serve_startup_settings(&provider, database.clone()) {
-        return settings;
-    }
-    load_app_config_for_server_with_database(&provider, database)
         .map(|config| serve_startup_settings_from_app_config(&config))
         .unwrap_or_default()
 }
@@ -139,37 +114,11 @@ pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
     })
 }
 
-pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
-    let provider = TauriPathProvider::from_app(app);
-    let database = crate::platform::database::try_sqlite_database(app).ok();
-    load_app_config_for_server_with_database(&provider, database).and_then(|config| {
-        let custom_path = config
-            .get("ffmpegPath")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from);
-        let enabled = config
-            .get("ffmpegEnabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| custom_path.is_some());
-        if !enabled {
-            return None;
-        }
-        if custom_path.is_some() {
-            return custom_path;
-        }
-        sona_core::ports::asr::find_available_ffmpeg(None).map(|p| p.to_string_lossy().into_owned())
-    })
-}
-
-pub fn load_feature_llm_config_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
+pub fn load_feature_llm_config(
+    provider: &dyn PathPort,
     feature: &str,
 ) -> Option<sona_core::llm::requests::LlmConfig> {
-    let provider = TauriPathProvider::from_app(app);
-    let database = crate::platform::database::try_sqlite_database(app).ok();
-    load_app_config_for_server_with_database(&provider, database)
+    load_app_config_for_server(provider)
         .and_then(|config| resolve_feature_llm_config_from_app_config(&config, feature))
 }
 

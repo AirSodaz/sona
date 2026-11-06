@@ -1,55 +1,27 @@
-﻿use tauri::{AppHandle, Manager, Runtime};
-
-use crate::platform::blocking::{map_err_string, spawn_blocking_map, with_sqlite_context};
-use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+use std::path::PathBuf;
+use std::sync::Arc;
 pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClearResult};
+use sona_sqlite::SqliteApplicationContext;
 
-pub async fn get_usage_snapshot<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn get_usage_snapshot(
+    context: &Arc<SqliteApplicationContext>,
+    models_dir: Option<PathBuf>,
 ) -> Result<StorageUsageSnapshot, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
-    let snapshot = with_sqlite_context(app, move |context| {
+    let ctx = context.clone();
+    tokio::task::spawn_blocking(move || {
         sona_sqlite::load_storage_usage_snapshot_with_database_and_models_dir(
-            context.app_data_dir().to_path_buf(),
-            context.database(),
-            Some(models_dir),
+            ctx.app_data_dir().to_path_buf(),
+            ctx.database(),
+            models_dir,
             sona_runtime_fs::storage_usage_generated_at_now(),
         )
     })
-    .await?;
-    sona_ts_bind::validate_storage_usage_snapshot_for_typescript(&snapshot)
-        .map_err(map_err_string)?;
-    Ok(snapshot)
-}
-
-pub async fn clear_webview_browsing_data<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<WebviewBrowsingDataClearResult, String> {
-    let app_local_data_dir = TauriPathProvider::from_app(app)
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(map_err_string)?;
-    let before_bytes = observable_webview_cache_bytes(app_local_data_dir.clone()).await?;
-    let Some(main_window) = app.get_webview_window("main") else {
-        return Err("Main WebView window is not available.".to_string());
-    };
-
-    main_window
-        .clear_all_browsing_data()
-        .map_err(map_err_string)?;
-
-    let after_bytes = observable_webview_cache_bytes(app_local_data_dir).await?;
-    let result =
-        sona_application::storage_usage::build_webview_clear_result(before_bytes, after_bytes);
-    sona_ts_bind::validate_webview_browsing_data_clear_result_for_typescript(&result)
-        .map_err(map_err_string)?;
-    Ok(result)
-}
-
-async fn observable_webview_cache_bytes(
-    app_local_data_dir: std::path::PathBuf,
-) -> Result<Option<u64>, String> {
-    spawn_blocking_map(move || {
-        sona_sqlite::storage_usage::observable_webview_cache_bytes(&app_local_data_dir)
-    })
     .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+}
+
+pub async fn clear_webview_browsing_data() -> Result<WebviewBrowsingDataClearResult, String> {
+    // Pure Rust GPUI architecture contains no WebView browsing data.
+    Ok(sona_application::storage_usage::build_webview_clear_result(None, None))
 }

@@ -14,7 +14,7 @@ pub use sona_core::runtime::ipc::{
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::Emitter;
+use sona_core::ports::event::EventEmitterPort;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, watch};
 
@@ -95,7 +95,7 @@ impl AgentControlServerController {
         self.is_running.load(Ordering::SeqCst)
     }
 
-    pub fn start(&self, app_handle: Option<tauri::AppHandle>, facade: AgentControlFacade) {
+    pub fn start(&self, emitter: Option<Arc<dyn EventEmitterPort>>, facade: AgentControlFacade) {
         if self.is_running.load(Ordering::SeqCst) {
             log::info!("[AgentControlIPC] Server is already running");
             return;
@@ -113,12 +113,12 @@ impl AgentControlServerController {
         self.is_running.store(true, Ordering::SeqCst);
 
         let tracker = self.tracker.clone();
-        let app_handle_clone = app_handle.clone();
+        let emitter_clone = emitter.clone();
         let controller_clone = self.clone();
         let is_running_flag = self.is_running.clone();
         let gen_checker = self.generation.clone();
 
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             log::info!("[AgentControlIPC] Starting IPC server worker generation {generation_id}");
             while is_running_flag.load(Ordering::SeqCst)
                 && gen_checker.load(Ordering::SeqCst) == generation_id
@@ -126,7 +126,7 @@ impl AgentControlServerController {
                 if let Err(e) = run_ipc_server(
                     facade.clone(),
                     tracker.clone(),
-                    app_handle_clone.clone(),
+                    emitter_clone.clone(),
                     shutdown_rx.clone(),
                     Some(controller_clone.clone()),
                 )
@@ -154,19 +154,19 @@ impl AgentControlServerController {
             }
             if gen_checker.load(Ordering::SeqCst) == generation_id {
                 is_running_flag.store(false, Ordering::SeqCst);
-                if let Some(app) = &app_handle_clone {
-                    let _ = app.emit("mcp-status-changed", ());
+                if let Some(ref em) = emitter_clone {
+                    let _ = em.emit("mcp-status-changed", serde_json::Value::Null);
                 }
             }
             log::info!("[AgentControlIPC] IPC server worker generation {generation_id} exited");
         });
 
-        if let Some(app) = &app_handle {
-            let _ = app.emit("mcp-status-changed", ());
+        if let Some(ref em) = emitter {
+            let _ = em.emit("mcp-status-changed", serde_json::Value::Null);
         }
     }
 
-    pub fn stop(&self, app_handle: Option<&tauri::AppHandle>) {
+    pub fn stop(&self, emitter: Option<&Arc<dyn EventEmitterPort>>) {
         self.generation.fetch_add(1, Ordering::SeqCst);
         if !self.is_running.swap(false, Ordering::SeqCst) {
             return;
@@ -181,21 +181,21 @@ impl AgentControlServerController {
                 let _ = tx.send(true);
             }
         }
-        self.tracker.disconnect_all(app_handle);
-        if let Some(app) = app_handle {
-            let _ = app.emit("mcp-status-changed", ());
+        self.tracker.disconnect_all();
+        if let Some(em) = emitter {
+            let _ = em.emit("mcp-status-changed", serde_json::Value::Null);
         }
         log::info!("[AgentControlIPC] IPC server stopped");
     }
 
-    pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
-        self.tracker.disconnect_all(app_handle);
+    pub fn disconnect_all(&self) {
+        self.tracker.disconnect_all();
     }
 
     pub async fn record_activity(
         &self,
         entry: McpActivityLogEntry,
-        app_handle: Option<&tauri::AppHandle>,
+        emitter: Option<&Arc<dyn EventEmitterPort>>,
         notify_on_mutation: bool,
     ) {
         {
@@ -206,15 +206,15 @@ impl AgentControlServerController {
             logs.push_back(entry.clone());
         }
 
-        if let Some(app) = app_handle {
-            let _ = app.emit("mcp-activity", &entry);
+        if let Some(em) = emitter {
+            let _ = em.emit("mcp-activity", serde_json::to_value(&entry).unwrap_or_default());
             if notify_on_mutation && entry.status == "success" {
                 let is_mutation = matches!(
                     entry.category.as_str(),
                     "recording" | "transcript_edit" | "destructive" | "settings_update"
                 );
                 if is_mutation {
-                    let _ = app.emit(
+                    let _ = em.emit(
                         "mcp-mutation-notice",
                         serde_json::json!({
                             "id": entry.id,
@@ -261,25 +261,23 @@ pub async fn handle_connection_tracked<S>(
     stream: S,
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
-    app_handle: Option<tauri::AppHandle>,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
-    tracker.on_connected(app_handle.as_ref());
+    tracker.on_connected();
     struct ConnectionGuard {
         tracker: ActiveConnectionTracker,
-        app_handle: Option<tauri::AppHandle>,
     }
     impl Drop for ConnectionGuard {
         fn drop(&mut self) {
-            self.tracker.on_disconnected(self.app_handle.as_ref());
+            self.tracker.on_disconnected();
         }
     }
     let _guard = ConnectionGuard {
         tracker: tracker.clone(),
-        app_handle: app_handle.clone(),
     };
 
     let (reader, mut writer) = tokio::io::split(stream);
@@ -305,7 +303,7 @@ where
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<JsonRpcRequest>(32);
     let worker_facade = facade.clone();
     let worker_controller = controller.clone();
-    let worker_app_handle = app_handle.clone();
+    let worker_emitter = emitter.clone();
     let worker_resp_tx = resp_tx.clone();
 
     let worker_task = tokio::spawn(async move {
@@ -389,7 +387,7 @@ where
                 };
                 ctrl.record_activity(
                     entry,
-                    worker_app_handle.as_ref(),
+                    worker_emitter.as_ref(),
                     config.mcp_notify_on_mutation.unwrap_or(true),
                 )
                 .await;
@@ -505,7 +503,7 @@ where
 pub async fn run_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
-    app_handle: Option<tauri::AppHandle>,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     mut shutdown_rx: watch::Receiver<bool>,
     controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -535,14 +533,14 @@ pub async fn run_ipc_server(
                 let connected_client = server;
                 let facade_clone = facade.clone();
                 let tracker_clone = tracker.clone();
-                let app_handle_clone = app_handle.clone();
+                let emitter_clone = emitter.clone();
                 let controller_clone = controller.clone();
-                tauri::async_runtime::spawn(async move {
+                tokio::spawn(async move {
                     if let Err(e) = handle_connection_tracked(
                         connected_client,
                         facade_clone,
                         tracker_clone,
-                        app_handle_clone,
+                        emitter_clone,
                         controller_clone,
                     )
                     .await
@@ -589,7 +587,7 @@ pub async fn run_ipc_server(
 pub async fn run_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
-    app_handle: Option<tauri::AppHandle>,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     mut shutdown_rx: watch::Receiver<bool>,
     controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -628,14 +626,14 @@ pub async fn run_ipc_server(
                 };
                 let facade_clone = facade.clone();
                 let tracker_clone = tracker.clone();
-                let app_handle_clone = app_handle.clone();
+                let emitter_clone = emitter.clone();
                 let controller_clone = controller.clone();
-                tauri::async_runtime::spawn(async move {
+                tokio::spawn(async move {
                     if let Err(e) = handle_connection_tracked(
                         stream,
                         facade_clone,
                         tracker_clone,
-                        app_handle_clone,
+                        emitter_clone,
                         controller_clone,
                     )
                     .await
@@ -658,7 +656,7 @@ pub async fn run_ipc_server(
 pub async fn run_ipc_server(
     _facade: AgentControlFacade,
     _tracker: ActiveConnectionTracker,
-    _app_handle: Option<tauri::AppHandle>,
+    _emitter: Option<Arc<dyn EventEmitterPort>>,
     mut shutdown_rx: watch::Receiver<bool>,
     _controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -670,10 +668,10 @@ pub async fn run_ipc_server(
 pub fn start_agent_control_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
-    app_handle: Option<tauri::AppHandle>,
+    emitter: Option<Arc<dyn EventEmitterPort>>,
 ) -> AgentControlServerController {
     let controller = AgentControlServerController::new(tracker);
-    controller.start(app_handle, facade);
+    controller.start(emitter, facade);
     controller
 }
 #[cfg(test)]
@@ -697,7 +695,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let facade = AgentControlFacade::new(services, None);
+        let facade = AgentControlFacade::new(services);
         (facade, temp)
     }
 
@@ -1074,23 +1072,23 @@ mod tests {
         let tracker = ActiveConnectionTracker::new();
         assert_eq!(tracker.active_count(), 0);
 
-        tracker.on_connected(None);
+        tracker.on_connected();
         assert_eq!(tracker.active_count(), 1);
 
-        tracker.on_connected(None);
+        tracker.on_connected();
         assert_eq!(tracker.active_count(), 2);
 
-        tracker.on_disconnected(None);
+        tracker.on_disconnected();
         assert_eq!(tracker.active_count(), 1);
 
-        tracker.on_disconnected(None);
+        tracker.on_disconnected();
         assert_eq!(tracker.active_count(), 0);
 
         // Defensive check: redundant disconnects do not underflow
-        tracker.on_disconnected(None);
+        tracker.on_disconnected();
         assert_eq!(tracker.active_count(), 0);
 
-        tracker.disconnect_all(None);
+        tracker.disconnect_all();
         assert_eq!(tracker.active_count(), 0);
     }
 

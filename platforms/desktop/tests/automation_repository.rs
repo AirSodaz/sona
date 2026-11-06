@@ -4,7 +4,7 @@ use sona_core::automation::{
     normalize_automation_path,
 };
 use std::fs;
-use tauri_appsona_lib::platform::automation_repository::validate_rule_activation_inner;
+use sona_desktop_lib::platform::automation_repository::validate_rule_activation_inner;
 use tempfile::tempdir;
 
 fn sample_rule(

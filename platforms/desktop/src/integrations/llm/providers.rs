@@ -1,7 +1,3 @@
-use super::*;
-use log::warn;
-use tauri::{AppHandle, Emitter};
-
 use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
@@ -292,28 +288,5 @@ impl LlmTranslationPort for DesktopLlmAdapter {
         } else {
             self.online.translate_batch(request).await
         }
-    }
-}
-
-pub(crate) fn emit_llm_usage_event(
-    app: &AppHandle,
-    config: &LlmConfig,
-    category: LlmUsageCategory,
-    occurred_at: String,
-    usage: Option<TokenUsage>,
-) {
-    let payload = LlmUsageEventPayload {
-        occurred_at,
-        provider: config.provider.clone(),
-        model: config.model.clone(),
-        category,
-        usage,
-    };
-
-    if let Err(error) = app.emit(LLM_USAGE_RECORDED_EVENT, payload) {
-        warn!(
-            "[LLM] failed to emit usage event: provider={:?} category={:?} error={}",
-            config.provider, category, error
-        );
     }
 }

@@ -1,9 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tauri::{Emitter, Manager};
 use tokio::sync::watch;
-
-use crate::platform::agent_control::facade::AgentControlFacade;
 
 #[derive(Clone)]
 pub struct ActiveConnectionTracker {
@@ -28,18 +25,15 @@ impl ActiveConnectionTracker {
         Self::default()
     }
 
-    pub fn on_connected(&self, app_handle: Option<&tauri::AppHandle>) {
+    pub fn on_connected(&self) {
         self.count.fetch_add(1, Ordering::SeqCst);
-        if let Some(app) = app_handle {
-            crate::app::tray::set_agent_connected(app, true);
-        }
     }
 
-    pub fn on_disconnected(&self, app_handle: Option<&tauri::AppHandle>) {
+    pub fn on_disconnected(&self) {
         let mut current = self.count.load(Ordering::SeqCst);
-        let prev = loop {
+        loop {
             if current == 0 {
-                break 0;
+                break;
             }
             match self.count.compare_exchange_weak(
                 current,
@@ -47,14 +41,9 @@ impl ActiveConnectionTracker {
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             ) {
-                Ok(prev) => break prev,
+                Ok(_) => break,
                 Err(actual) => current = actual,
             }
-        };
-        if prev == 1
-            && let Some(app) = app_handle
-        {
-            crate::app::tray::set_agent_connected(app, false);
         }
     }
 
@@ -62,60 +51,28 @@ impl ActiveConnectionTracker {
         self.count.load(Ordering::SeqCst)
     }
 
-    pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
+    pub fn disconnect_all(&self) {
         self.disconnect_tx.send_modify(|v| *v += 1);
-        if let Some(app) = app_handle {
-            crate::app::tray::set_agent_connected(app, false);
-        }
     }
 }
 
-pub fn disconnect_all_agents(app_handle: &tauri::AppHandle) {
-    if let Some(tracker) = app_handle.try_state::<ActiveConnectionTracker>() {
-        tracker.disconnect_all(Some(app_handle));
-    }
-    if let Some(facade) = app_handle.try_state::<AgentControlFacade>() {
-        let facade_clone = facade.inner().clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = facade_clone
-                .stop_recording(
-                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
-                )
-                .await;
-        });
-    }
-    crate::app::tray::set_agent_connected(app_handle, false);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
-    let facade = app_handle
-        .try_state::<AgentControlFacade>()
-        .map(|f| f.inner().clone());
-    let services = app_handle
-        .try_state::<crate::services::DesktopServices>()
-        .map(|s| s.inner().clone());
-    let app_handle_clone = app_handle.clone();
-    tauri::async_runtime::spawn(async move {
-        let is_ui = if let Some(services) = services.as_ref() {
-            services
-                .recording_session
-                .lock()
-                .await
-                .as_ref()
-                .map(|s| s.is_ui_session)
-                .unwrap_or(false)
-        } else {
-            false
-        };
+    #[test]
+    fn tracker_increments_and_decrements_cleanly() {
+        let tracker = ActiveConnectionTracker::new();
+        assert_eq!(tracker.active_count(), 0);
 
-        if !is_ui && let Some(facade) = facade {
-            let _ = facade
-                .stop_recording(
-                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
-                )
-                .await;
-        }
-        let _ = app_handle_clone.emit("tray-stop-recording", ());
-        crate::app::tray::set_recording_active(&app_handle_clone, false);
-    });
+        tracker.on_connected();
+        tracker.on_connected();
+        assert_eq!(tracker.active_count(), 2);
+
+        tracker.on_disconnected();
+        assert_eq!(tracker.active_count(), 1);
+
+        tracker.disconnect_all();
+        assert_eq!(*tracker.disconnect_rx.borrow(), 1);
+    }
 }

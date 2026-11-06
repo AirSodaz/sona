@@ -15,7 +15,7 @@ pub async fn read_transcript(
     services: &DesktopServices,
     req: ReadTranscriptRequest,
 ) -> Result<ReadTranscriptResult, String> {
-    let (task_status, error_message) = match services.task_ledger.list_tasks().await {
+    let (mut task_status, mut error_message) = match services.task_ledger.list_tasks().await {
         Ok(tasks) => {
             let matching_tasks = tasks
                 .iter()
@@ -69,6 +69,35 @@ pub async fn read_transcript(
     {
         Ok(segments) => segments.unwrap_or_default(),
         Err(_err) if task_status == "failed" || task_status == "cancelled" => Vec::new(),
+        Err(_err)
+            if task_status == "running"
+                || task_status == "pending"
+                || task_status == "cancelling" =>
+        {
+            // Active task reconciliation: if SQLite record is not found or was purged concurrently upon failure,
+            // re-check the task ledger to reconcile terminal status and capture any error message.
+            if let Ok(tasks) = services.task_ledger.list_tasks().await {
+                if let Some(task) = tasks
+                    .iter()
+                    .filter(|t| t.history_id.as_deref() == Some(&req.history_id))
+                    .max_by_key(|t| t.updated_at)
+                {
+                    task_status = match task.status {
+                        sona_core::task_ledger::types::TaskLedgerStatus::Running => "running".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::Pending => "pending".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested => "cancelling".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled => "cancelled".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::Failed => "failed".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::Succeeded => "completed".to_string(),
+                        _ => "failed".to_string(),
+                    };
+                    if task.error_message.is_some() {
+                        error_message = task.error_message.clone();
+                    }
+                }
+            }
+            Vec::new()
+        }
         Err(err) => return Err(err.to_string()),
     };
     let total_segments_in_history = all_segments.len();

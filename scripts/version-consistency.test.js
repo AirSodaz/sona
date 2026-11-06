@@ -15,14 +15,6 @@ test('release version metadata stays aligned with the root package version', () 
   const versionPattern = projectVersion.replaceAll('.', '\\.');
 
   assert.match(projectVersion, /^\d+\.\d+\.\d+$/u);
-  assert.equal(
-    JSON.parse(read('platforms', 'desktop', 'frontend', 'package.json')).version,
-    projectVersion,
-  );
-  assert.equal(
-    JSON.parse(read('platforms', 'desktop', 'tauri.conf.json')).version,
-    projectVersion,
-  );
   assert.match(
     read('Cargo.toml'),
     new RegExp(`\\[workspace\\.package\\]\\s+version = "${versionPattern}"`, 'u'),

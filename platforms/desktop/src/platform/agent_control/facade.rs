@@ -36,18 +36,16 @@ use sona_core::sync::SyncConflictSummary;
 #[derive(Clone)]
 pub struct AgentControlFacade {
     pub(crate) services: DesktopServices,
-    pub(crate) app_handle: Option<tauri::AppHandle>,
     pub(crate) active_session: Arc<Mutex<Option<ActiveRecordingSession>>>,
     pub(crate) recording_op_lock: Arc<Mutex<()>>,
 }
 
 impl AgentControlFacade {
-    pub fn new(services: DesktopServices, app_handle: Option<tauri::AppHandle>) -> Self {
+    pub fn new(services: DesktopServices) -> Self {
         let active_session = services.recording_session.handle();
         let recording_op_lock = services.recording_session.operation_lock_handle();
         Self {
             services,
-            app_handle,
             active_session,
             recording_op_lock,
         }
@@ -185,16 +183,7 @@ impl AgentControlFacade {
     }
 
     pub fn focus_window(&self) -> Result<bool, String> {
-        if let Some(app) = &self.app_handle {
-            use tauri::Manager;
-            if let Some(window) = app.get_webview_window(crate::app::window::MAIN_WINDOW_LABEL) {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        crate::platform::host::focus_main_window()
     }
 
     pub async fn start_recording(
@@ -203,7 +192,6 @@ impl AgentControlFacade {
     ) -> Result<StartRecordingResult, String> {
         session::start_recording(
             &self.services,
-            self.app_handle.as_ref(),
             &self.active_session,
             &self.recording_op_lock,
             req,
@@ -217,7 +205,6 @@ impl AgentControlFacade {
     ) -> Result<StopRecordingResult, String> {
         session::stop_recording(
             &self.services,
-            self.app_handle.as_ref(),
             &self.active_session,
             &self.recording_op_lock,
             req,
@@ -394,14 +381,14 @@ impl AgentControlFacade {
     }
 
     pub async fn get_model_catalog(&self) -> Result<serde_json::Value, String> {
-        models::get_model_catalog(&self.services, self.app_handle.as_ref()).await
+        models::get_model_catalog(&self.services).await
     }
 
     pub async fn download_preset_model(
         &self,
         req: DownloadPresetModelRequest,
     ) -> Result<String, String> {
-        models::download_preset_model(&self.services, self.app_handle.as_ref(), req).await
+        models::download_preset_model(&self.services, req).await
     }
 
     pub async fn cancel_download(&self, download_id: String) -> Result<bool, String> {
@@ -409,7 +396,7 @@ impl AgentControlFacade {
     }
 
     pub async fn delete_preset_model(&self, model_id: String) -> Result<bool, String> {
-        models::delete_preset_model(self.app_handle.as_ref(), model_id).await
+        models::delete_preset_model(&self.services, model_id).await
     }
 
     pub async fn get_sync_status(&self) -> Result<serde_json::Value, String> {

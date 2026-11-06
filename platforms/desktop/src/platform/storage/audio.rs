@@ -1,4 +1,4 @@
-use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort};
 
 pub fn create_history_recording_path_from_dir(
     app_data_dir: &std::path::Path,
@@ -16,11 +16,4 @@ pub fn create_history_recording_path(provider: &dyn PathPort) -> Result<String, 
         .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;
     create_history_recording_path_from_dir(&app_data_dir)
-}
-
-pub fn create_history_recording_path_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Result<String, String> {
-    let provider = TauriPathProvider::from_app(app);
-    create_history_recording_path(&provider)
 }

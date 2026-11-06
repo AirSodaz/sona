@@ -1,4 +1,4 @@
-﻿use serde_json::json;
+use serde_json::json;
 use sona_application::task_ledger::TaskLedgerService;
 use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::task_ledger::TaskLedgerError;
@@ -482,4 +482,55 @@ fn assert_repository_error(error: TaskLedgerError) {
         error,
         TaskLedgerError::Repository(reason) if reason == "store failure"
     ));
+}
+
+#[test]
+fn patch_task_ignores_invalid_status_regressions_from_terminal_states() {
+    let store = MemoryStore::with_records([
+        record("task-cancelled", TaskLedgerStatus::Cancelled),
+        record("task-succeeded", TaskLedgerStatus::Succeeded),
+    ]);
+    let service = service(&store);
+
+    // Attempt to clobber Cancelled with Failed:
+    let _snapshot = service
+        .patch_task_at(
+            "task-cancelled",
+            TaskLedgerPatch {
+                status: Some(TaskLedgerStatus::Failed),
+                error_message: Some(Some("late error".into())),
+                stage: Some(Some("failed".into())),
+                ..Default::default()
+            },
+            7_000,
+        )
+        .unwrap();
+
+    let task = store
+        .records()
+        .into_iter()
+        .find(|t| t.id == "task-cancelled")
+        .unwrap();
+    assert_eq!(task.status, TaskLedgerStatus::Cancelled);
+    assert_eq!(task.error_message, None); // Late error discarded
+    assert_eq!(task.stage, None);
+
+    // Attempt to clobber Succeeded with Cancelled:
+    service
+        .patch_task_at(
+            "task-succeeded",
+            TaskLedgerPatch {
+                status: Some(TaskLedgerStatus::Cancelled),
+                ..Default::default()
+            },
+            7_000,
+        )
+        .unwrap();
+
+    let task = store
+        .records()
+        .into_iter()
+        .find(|t| t.id == "task-succeeded")
+        .unwrap();
+    assert_eq!(task.status, TaskLedgerStatus::Succeeded);
 }

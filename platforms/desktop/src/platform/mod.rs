@@ -1,10 +1,23 @@
 pub mod agent_control;
+pub mod auto_launch;
+pub mod hotkey;
 pub mod models;
+pub mod opener;
 pub mod repositories;
+pub mod single_instance;
 pub mod storage;
 pub mod system;
+pub mod tray;
+pub mod window_decorations;
 
 // Re-exports for backwards compatibility and clean public API
+pub use auto_launch::{
+    AutoLaunchStatus, disable_auto_launch, enable_auto_launch, get_auto_launch_status,
+    is_auto_launch_enabled,
+};
+pub use opener::{open_path, open_path_async, open_url, open_url_async};
+pub use single_instance::SingleInstanceGuard;
+
 pub use models::downloads as model_downloads;
 pub use models::hardware;
 pub use models::media_detector;
@@ -24,6 +37,7 @@ pub use system::console as startup_console;
 pub use system::dialog as startup_dialog;
 pub use system::env as startup_env;
 pub use system::event;
+pub use system::host;
 pub use system::paths;
 pub use system::status as runtime_status;
 pub use system::time;

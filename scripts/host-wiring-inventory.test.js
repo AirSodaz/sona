@@ -62,7 +62,7 @@ test('host wiring inventory stays aligned with reviewed composition roots', () =
     [
       'sona',
       [
-        'platforms/desktop/src/app/setup.rs',
+        'platforms/desktop/src/app.rs',
         'platforms/desktop/src/platform/',
       ],
     ],

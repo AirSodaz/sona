@@ -72,7 +72,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
 
         let output = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
-                result = transcribe_fut => result,
+                biased;
                 _ = async {
                     loop {
                         if *rx.borrow() {
@@ -86,6 +86,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                         }
                     }
                 } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
+                result = transcribe_fut => result,
             };
             drop(guard);
             result?

@@ -1,17 +1,20 @@
-use tauri::Emitter;
+use std::sync::Arc;
+use sona_core::ports::event::EventEmitterPort;
 
 use crate::platform::blocking::{map_err_string, spawn_blocking_map};
 
-const EXTRACT_PROGRESS_EVENT: &str = "extract-progress";
+pub const EXTRACT_PROGRESS_EVENT: &str = "extract-progress";
 
-pub async fn extract_tar_bz2<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn extract_tar_bz2(
+    emitter: Option<Arc<dyn EventEmitterPort>>,
     archive_path: String,
     target_dir: String,
 ) -> Result<(), String> {
     spawn_blocking_map(move || {
         sona_archive::extract_tar_bz2(&archive_path, &target_dir, |path_str| {
-            let _ = app.emit(EXTRACT_PROGRESS_EVENT, path_str);
+            if let Some(emitter) = &emitter {
+                let _ = emitter.emit(EXTRACT_PROGRESS_EVENT, serde_json::json!(path_str));
+            }
         })
         .map_err(map_err_string)
     })

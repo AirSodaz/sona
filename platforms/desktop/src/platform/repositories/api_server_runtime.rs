@@ -1,4 +1,4 @@
-﻿use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,19 +25,6 @@ pub fn resolve_api_server_runtime_dirs(
         temp_dir: app_local_data_dir.join("api_temp"),
         models_dir,
     })
-}
-
-pub fn resolve_api_server_runtime_dirs_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Result<ApiServerRuntimeDirs, String> {
-    let provider = TauriPathProvider::from_app(app);
-    let mut dirs = resolve_api_server_runtime_dirs(&provider)?;
-    if let Ok(active_models_dir) =
-        crate::platform::storage_location::resolve_active_models_dir_for_app(app)
-    {
-        dirs.models_dir = active_models_dir;
-    }
-    Ok(dirs)
 }
 
 #[cfg(test)]

@@ -76,7 +76,6 @@ impl BatchCancelRegistry {
         if let Ok(mut senders) = self.senders.lock() {
             if let Some(existing_tx) = senders.get(instance_id)
                 && Arc::strong_count(existing_tx) > 1
-                && !*existing_tx.borrow()
             {
                 let rx = existing_tx.subscribe();
                 let guard = BatchCancelGuard {
@@ -358,6 +357,26 @@ mod tests {
         assert!(registry.has_active_tasks().await);
         assert!(registry.cancel("shared-id").await);
         drop(new_guard);
+        assert!(!registry.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn batch_cancel_registry_reuses_already_cancelled_sender() {
+        let registry = BatchCancelRegistry::new();
+        let (rx1, guard1) = registry.register("task-pre-cancel").await;
+        assert!(!*rx1.borrow());
+
+        // Cancel while guard1 is held
+        assert!(registry.cancel("task-pre-cancel").await);
+        assert!(*rx1.borrow());
+
+        // Second register must reuse the cancelled sender and observe true immediately
+        let (rx2, guard2) = registry.register("task-pre-cancel").await;
+        assert!(*rx2.borrow(), "Re-registered receiver must observe true if cancelled");
+
+        drop(guard1);
+        assert!(registry.has_active_tasks().await);
+        drop(guard2);
         assert!(!registry.has_active_tasks().await);
     }
 }

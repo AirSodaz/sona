@@ -5,7 +5,6 @@ pub use sona_runtime_fs::{
 };
 
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime};
 
 #[cfg(test)]
 use std::collections::HashMap;
@@ -14,50 +13,39 @@ pub fn models_dir_status(path: &Path) -> sona_core::models::paths::ModelsDirStat
     sona_runtime_fs::models_dir_status(path)
 }
 
-/// Tauri adapter for the pure `sona-core` path provider port.
-///
-/// `PathPort` lives in `sona-core`, so the desktop host cannot implement it
-/// directly for `tauri::AppHandle<R>` because both the trait and type are
-/// external to this crate. This local newtype keeps the dependency direction
-/// explicit: platform code adapts Tauri into the core port.
-#[derive(Clone)]
-pub struct TauriPathProvider<R: Runtime> {
-    app: AppHandle<R>,
+/// Pure Rust Desktop implementation of the `PathPort` trait.
+#[derive(Clone, Debug)]
+pub struct DesktopPathProvider {
+    app_local_data_dir: PathBuf,
 }
 
-impl<R: Runtime> TauriPathProvider<R> {
-    pub fn new(app: AppHandle<R>) -> Self {
-        Self { app }
+impl DesktopPathProvider {
+    pub fn new(app_local_data_dir: PathBuf) -> Self {
+        Self { app_local_data_dir }
     }
 
-    pub fn from_app(app: &AppHandle<R>) -> Self {
-        Self::new(app.clone())
+    pub fn from_default() -> Self {
+        let roots = default_desktop_app_data_roots();
+        let default_dir = roots
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| PathBuf::from("data"));
+        Self::new(default_dir)
     }
 }
 
-impl<R: Runtime> PathPort for TauriPathProvider<R> {
+impl PathPort for DesktopPathProvider {
     fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         match kind {
-            PathKind::AppData => self
-                .app
-                .path()
-                .app_data_dir()
-                .map_err(|error| PathPortError::new(kind, error.to_string())),
-            PathKind::AppLocalData => {
-                let default_dir = self
-                    .app
-                    .path()
-                    .app_local_data_dir()
-                    .map_err(|error| PathPortError::new(kind, error.to_string()))?;
+            PathKind::AppData | PathKind::AppLocalData => {
                 Ok(crate::platform::storage_location::resolve_active_data_dir(
-                    &default_dir,
+                    &self.app_local_data_dir,
                 ))
             }
-            PathKind::AppLogData => self
-                .app
-                .path()
-                .app_log_dir()
-                .map_err(|error| PathPortError::new(kind, error.to_string())),
+            PathKind::AppLogData => {
+                let log_dir = self.app_local_data_dir.join("logs");
+                Ok(log_dir)
+            }
         }
     }
 }

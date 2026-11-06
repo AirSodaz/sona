@@ -32,14 +32,14 @@ impl AsrProviderAdapter for DesktopLocalProviderAdapter {
 
 pub struct LocalAsrBatchProcessor;
 
-struct TauriBatchTranscriptionObserver {
+struct DesktopBatchTranscriptionObserver {
     emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
     progress_path: String,
     instance_id: Option<String>,
     cancel_rx: Option<tokio::sync::watch::Receiver<bool>>,
 }
 
-impl BatchTranscriptionObserver for TauriBatchTranscriptionObserver {
+impl BatchTranscriptionObserver for DesktopBatchTranscriptionObserver {
     fn on_progress(&self, progress: f32) {
         let _ = self.emitter.emit(
             super::BATCH_PROGRESS_EVENT,
@@ -98,7 +98,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         };
 
         let progress_path = request.file_path.to_string_lossy().into_owned();
-        let observer = Arc::new(TauriBatchTranscriptionObserver {
+        let observer = Arc::new(DesktopBatchTranscriptionObserver {
             emitter,
             progress_path,
             instance_id: request.instance_id.clone(),
@@ -139,7 +139,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
 
         let segments = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
-                result = transcribe_fut => result,
+                biased;
                 _ = async {
                     // Wait until the channel value changes to `true` (cancelled).
                     loop {
@@ -155,6 +155,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
                         }
                     }
                 } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
+                result = transcribe_fut => result,
             };
             drop(guard);
             result?
@@ -246,7 +247,7 @@ mod tests {
     #[test]
     fn batch_observer_correlates_progress_and_transcript_events() {
         let emitter = Arc::new(MockEventEmitter::new());
-        let observer = TauriBatchTranscriptionObserver {
+        let observer = DesktopBatchTranscriptionObserver {
             emitter: emitter.clone(),
             progress_path: "C:/audio/demo.wav".to_string(),
             instance_id: Some("batch-1".to_string()),

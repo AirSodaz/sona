@@ -14,7 +14,6 @@ fn emit_task_ledger_snapshot(
     emitter: &dyn EventEmitterPort,
     snapshot: &TaskLedgerSnapshot,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_task_ledger_snapshot_for_typescript(snapshot).map_err(map_err_string)?;
     emitter
         .emit(
             TASK_LEDGER_UPDATED_EVENT,
@@ -60,23 +59,16 @@ impl TaskLedgerService {
     }
 
     pub async fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
-        let snapshot = self.run_adapter(|adapter| adapter.load_snapshot()).await?;
-        sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-            .map_err(map_err_string)?;
-        Ok(snapshot)
+        self.run_adapter(|adapter| adapter.load_snapshot()).await
     }
 
     pub async fn upsert_task(
         &self,
         record: TaskLedgerRecord,
     ) -> Result<TaskLedgerSnapshot, String> {
-        sona_ts_bind::validate_task_ledger_record_for_typescript(&record)
-            .map_err(map_err_string)?;
         let snapshot = self
             .run_adapter(move |adapter| adapter.upsert_task(record))
             .await?;
-        sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-            .map_err(map_err_string)?;
         let _ = emit_task_ledger_snapshot(self.emitter.as_ref(), &snapshot);
         Ok(snapshot)
     }
@@ -86,12 +78,9 @@ impl TaskLedgerService {
         id: String,
         patch: TaskLedgerPatch,
     ) -> Result<TaskLedgerSnapshot, String> {
-        sona_ts_bind::validate_task_ledger_patch_for_typescript(&patch).map_err(map_err_string)?;
         let snapshot = self
             .run_adapter(move |adapter| adapter.patch_task(&id, patch))
             .await?;
-        sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-            .map_err(map_err_string)?;
         let _ = emit_task_ledger_snapshot(self.emitter.as_ref(), &snapshot);
         Ok(snapshot)
     }
@@ -100,16 +89,12 @@ impl TaskLedgerService {
         let snapshot = self
             .run_adapter(move |adapter| adapter.remove_task(&id))
             .await?;
-        sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-            .map_err(map_err_string)?;
         let _ = emit_task_ledger_snapshot(self.emitter.as_ref(), &snapshot);
         Ok(snapshot)
     }
 
     pub async fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, String> {
         let snapshot = self.run_adapter(|adapter| adapter.clear_resolved()).await?;
-        sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-            .map_err(map_err_string)?;
         let _ = emit_task_ledger_snapshot(self.emitter.as_ref(), &snapshot);
         Ok(snapshot)
     }
@@ -236,20 +221,5 @@ mod tests {
         assert_eq!(emitted[0].1["updatedAt"], 2_000);
         assert_eq!(emitted[0].1["tasks"][0]["createdAt"], 1_000);
         assert_eq!(emitted[0].1["tasks"][0]["kind"], "llmPolish");
-    }
-
-    #[test]
-    fn rejects_invalid_task_ledger_snapshot_before_emitting() {
-        let emitter = MockEventEmitter::new();
-        let snapshot = TaskLedgerSnapshot {
-            version: 1,
-            updated_at: Some(sona_ts_bind::TYPESCRIPT_MAX_SAFE_INTEGER + 1),
-            tasks: Vec::new(),
-        };
-
-        let error = emit_task_ledger_snapshot(&emitter, &snapshot).unwrap_err();
-
-        assert!(error.contains("$.updatedAt"), "{error}");
-        assert!(emitter.emitted.lock().unwrap().is_empty());
     }
 }

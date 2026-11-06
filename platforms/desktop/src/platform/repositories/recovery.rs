@@ -1,4 +1,4 @@
-﻿use crate::platform::blocking::{map_err_string, spawn_blocking_map, validate_transport};
+use crate::platform::blocking::{map_err_string, spawn_blocking_map, validate_transport};
 use crate::platform::paths::{PathKind, PathPort};
 use sona_core::recovery::RecoveryError;
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
@@ -24,13 +24,6 @@ pub async fn load_snapshot(provider: &dyn PathPort) -> Result<RecoverySnapshot, 
     validate_transport(snapshot)
 }
 
-pub async fn load_snapshot_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Result<RecoverySnapshot, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    load_snapshot(&provider).await
-}
-
 pub async fn save_snapshot(
     provider: &dyn PathPort,
     items: Vec<RecoveryItemInput>,
@@ -39,14 +32,6 @@ pub async fn save_snapshot(
     let snapshot =
         run_recovery_adapter_task(provider, move |adapter| adapter.save_snapshot(items)).await?;
     validate_transport(snapshot)
-}
-
-pub async fn save_snapshot_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    items: Vec<RecoveryItemInput>,
-) -> Result<RecoverySnapshot, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    save_snapshot(&provider, items).await
 }
 
 pub async fn persist_queue_snapshot(
@@ -60,13 +45,4 @@ pub async fn persist_queue_snapshot(
     })
     .await?;
     validate_transport(snapshot).map(|_| ())
-}
-
-pub async fn persist_queue_snapshot_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    queue_items: Vec<RecoveryItemInput>,
-    resolved_ids: Option<Vec<String>>,
-) -> Result<(), String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    persist_queue_snapshot(&provider, queue_items, resolved_ids).await
 }

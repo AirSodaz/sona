@@ -10,7 +10,9 @@ import {
   writeTauriWrapperStubs,
 } from './test-support/desktop-packaging-fixtures.js';
 
-test('tauri wrapper passes generated config to build and bundle while dev preserves its base config', (t) => {
+const hasTauriWrapper = fs.existsSync(path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'tauri.js'));
+
+test('tauri wrapper passes generated config to build and bundle while dev preserves its base config', { skip: !hasTauriWrapper }, (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-tauri-wrapper-'));
   const target = 'test-wrapper-target';
   const customDevConfig = path.join(root, 'dev-tauri.conf.json');

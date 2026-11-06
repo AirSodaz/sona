@@ -1,5 +1,4 @@
-packages:
-  - platforms/desktop/frontend
+packages: []
 minimumReleaseAgeExclude:
   - fast-uri@3.1.2
   - '@testing-library/react@16.3.3'

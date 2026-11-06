@@ -32,6 +32,63 @@ pub enum TaskLedgerStatus {
     Succeeded,
 }
 
+impl TaskLedgerStatus {
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self,
+            Self::Pending | Self::Running | Self::CancelRequested
+        )
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::Cancelled | Self::Succeeded | Self::Failed | Self::Interrupted
+        )
+    }
+
+    pub fn can_transition_to(&self, target: &Self) -> bool {
+        if self == target {
+            return true;
+        }
+
+        match self {
+            Self::Cancelled | Self::Succeeded => false,
+            Self::Failed | Self::Interrupted => {
+                matches!(target, Self::Recoverable)
+            }
+            Self::Recoverable => {
+                matches!(target, Self::Failed | Self::Running)
+            }
+            Self::Pending => {
+                matches!(
+                    target,
+                    Self::Running
+                        | Self::CancelRequested
+                        | Self::Cancelled
+                        | Self::Failed
+                        | Self::Interrupted
+                )
+            }
+            Self::Running => {
+                matches!(
+                    target,
+                    Self::CancelRequested
+                        | Self::Succeeded
+                        | Self::Cancelled
+                        | Self::Failed
+                        | Self::Recoverable
+                        | Self::Interrupted
+                )
+            }
+            Self::CancelRequested => {
+                matches!(target, Self::Cancelled | Self::Failed)
+            }
+        }
+    }
+}
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -201,4 +258,61 @@ pub struct TaskLedgerSnapshot {
     )]
     pub updated_at: Option<u64>,
     pub tasks: Vec<TaskLedgerRecord>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_states_are_immutable_sinks() {
+        let terminal = [TaskLedgerStatus::Cancelled, TaskLedgerStatus::Succeeded];
+        let all = [
+            TaskLedgerStatus::Pending,
+            TaskLedgerStatus::Running,
+            TaskLedgerStatus::CancelRequested,
+            TaskLedgerStatus::Failed,
+            TaskLedgerStatus::Recoverable,
+            TaskLedgerStatus::Interrupted,
+            TaskLedgerStatus::Cancelled,
+            TaskLedgerStatus::Succeeded,
+        ];
+
+        for t in &terminal {
+            assert!(t.is_terminal());
+            assert!(!t.is_active());
+            for target in &all {
+                if target == t {
+                    assert!(t.can_transition_to(target), "terminal state must be idempotent");
+                } else {
+                    assert!(!t.can_transition_to(target), "terminal state cannot transition to {:?}", target);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cancel_requested_transitions() {
+        let cr = TaskLedgerStatus::CancelRequested;
+        assert!(cr.can_transition_to(&TaskLedgerStatus::CancelRequested));
+        assert!(cr.can_transition_to(&TaskLedgerStatus::Cancelled));
+        assert!(cr.can_transition_to(&TaskLedgerStatus::Failed));
+        assert!(!cr.can_transition_to(&TaskLedgerStatus::Running));
+        assert!(!cr.can_transition_to(&TaskLedgerStatus::Pending));
+        assert!(!cr.can_transition_to(&TaskLedgerStatus::Succeeded));
+    }
+
+    #[test]
+    fn running_and_pending_transitions() {
+        let p = TaskLedgerStatus::Pending;
+        assert!(p.can_transition_to(&TaskLedgerStatus::Running));
+        assert!(p.can_transition_to(&TaskLedgerStatus::Cancelled));
+        assert!(p.can_transition_to(&TaskLedgerStatus::Failed));
+
+        let r = TaskLedgerStatus::Running;
+        assert!(r.can_transition_to(&TaskLedgerStatus::Succeeded));
+        assert!(r.can_transition_to(&TaskLedgerStatus::Cancelled));
+        assert!(r.can_transition_to(&TaskLedgerStatus::Failed));
+        assert!(!r.can_transition_to(&TaskLedgerStatus::Pending));
+    }
 }

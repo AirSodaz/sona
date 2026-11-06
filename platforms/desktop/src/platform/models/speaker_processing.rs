@@ -55,16 +55,6 @@ pub async fn import_speaker_profile_sample(
     .map_err(|error| error.to_string())
 }
 
-pub async fn import_speaker_profile_sample_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    profile_id: String,
-    source_path: String,
-    source_name: Option<String>,
-) -> Result<SpeakerProfileSample, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    import_speaker_profile_sample(&provider, profile_id, source_path, source_name).await
-}
-
 pub async fn enroll_speaker_profile_sample_from_audio(
     provider: &dyn PathPort,
     profile_id: String,
@@ -86,24 +76,4 @@ pub async fn enroll_speaker_profile_sample_from_audio(
     )
     .await
     .map_err(|error| error.to_string())
-}
-
-pub async fn enroll_speaker_profile_sample_for_app<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    profile_id: String,
-    source_audio_path: String,
-    start_seconds: f64,
-    end_seconds: f64,
-    sample_name: Option<String>,
-) -> Result<SpeakerProfileSample, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    enroll_speaker_profile_sample_from_audio(
-        &provider,
-        profile_id,
-        source_audio_path,
-        start_seconds,
-        end_seconds,
-        sample_name,
-    )
-    .await
 }

@@ -1,22 +1,9 @@
-﻿/// Re-export the core trait so platform consumers can use either path.
+//! System event emitter bridge and utilities.
+//!
+//! Re-exports core traits and the pure-Rust AppEventBus.
+
 pub use sona_core::ports::event::{EventEmitterPort, EventError};
-
-use tauri::{AppHandle, Emitter, Runtime};
-
-/// Tauri adapter: wraps AppHandle into the core EventEmitterPort port.
-///
-/// Using a newtype avoids Rust's orphan rule — the trait lives in `sona-core`
-/// and the foreign type `AppHandle` comes from `tauri`, so a direct impl is
-/// not allowed in this crate. The newtype keeps the dependency direction
-/// explicit: platform code adapts Tauri into the core port.
-pub struct TauriEventEmitter<R: Runtime>(pub AppHandle<R>);
-
-impl<R: Runtime> EventEmitterPort for TauriEventEmitter<R> {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
-        Emitter::emit(&self.0, event, &payload)
-            .map_err(|error| EventError::new(event, error.to_string()))
-    }
-}
+pub use crate::event_bus::{AppEvent, AppEventBus};
 
 #[cfg(test)]
 pub struct MockEventEmitter {

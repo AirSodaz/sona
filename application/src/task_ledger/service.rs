@@ -1,4 +1,4 @@
-﻿use serde_json::Value;
+use serde_json::Value;
 
 use sona_core::ports::time::ClockPort;
 
@@ -149,9 +149,22 @@ fn apply_typed_patch_at(
     if let Some(value) = &patch.kind {
         record.kind = value.clone();
     }
-    if let Some(value) = &patch.status {
-        record.status = value.clone();
+
+    let mut status_transition_accepted = true;
+    if let Some(target_status) = &patch.status {
+        if record.status.can_transition_to(target_status) {
+            record.status = target_status.clone();
+        } else {
+            status_transition_accepted = false;
+            log::warn!(
+                "Ignored invalid TaskLedger transition for task '{}': {:?} -> {:?}",
+                id,
+                record.status,
+                target_status
+            );
+        }
     }
+
     if let Some(value) = &patch.title {
         record.title.clone_from(value);
     }
@@ -170,7 +183,9 @@ fn apply_typed_patch_at(
     if let Some(value) = patch.recoverable {
         record.recoverable = value;
     }
-    if let Some(value) = &patch.stage {
+    if status_transition_accepted
+        && let Some(value) = &patch.stage
+    {
         record.stage.clone_from(value);
     }
     if let Some(value) = &patch.history_id {
@@ -197,7 +212,9 @@ fn apply_typed_patch_at(
     if let Some(value) = &patch.source_fingerprint {
         record.source_fingerprint.clone_from(value);
     }
-    if let Some(value) = &patch.error_message {
+    if status_transition_accepted
+        && let Some(value) = &patch.error_message
+    {
         record.error_message.clone_from(value);
     }
     if let Some(value) = &patch.template_id {
@@ -225,7 +242,24 @@ fn merge_json_patch_at(
                 current_object.insert(key.clone(), value.clone());
             }
         }
-        record = serde_json::from_value(current)?;
+        let updated: TaskLedgerRecord = serde_json::from_value(current)?;
+        if record.status.can_transition_to(&updated.status) {
+            record = updated;
+        } else {
+            log::warn!(
+                "Ignored invalid TaskLedger JSON transition for task '{}': {:?} -> {:?}",
+                id,
+                record.status,
+                updated.status
+            );
+            let preserved_status = record.status.clone();
+            let preserved_stage = record.stage.clone();
+            let preserved_error = record.error_message.clone();
+            record = updated;
+            record.status = preserved_status;
+            record.stage = preserved_stage;
+            record.error_message = preserved_error;
+        }
     }
 
     record.id = id.to_string();
