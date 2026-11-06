@@ -34,10 +34,7 @@ pub enum TaskLedgerStatus {
 
 impl TaskLedgerStatus {
     pub fn is_active(&self) -> bool {
-        matches!(
-            self,
-            Self::Pending | Self::Running | Self::CancelRequested
-        )
+        matches!(self, Self::Pending | Self::Running | Self::CancelRequested)
     }
 
     pub fn is_terminal(&self) -> bool {
@@ -87,7 +84,6 @@ impl TaskLedgerStatus {
         }
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -283,9 +279,16 @@ mod tests {
             assert!(!t.is_active());
             for target in &all {
                 if target == t {
-                    assert!(t.can_transition_to(target), "terminal state must be idempotent");
+                    assert!(
+                        t.can_transition_to(target),
+                        "terminal state must be idempotent"
+                    );
                 } else {
-                    assert!(!t.can_transition_to(target), "terminal state cannot transition to {:?}", target);
+                    assert!(
+                        !t.can_transition_to(target),
+                        "terminal state cannot transition to {:?}",
+                        target
+                    );
                 }
             }
         }

@@ -183,9 +183,7 @@ fn apply_typed_patch_at(
     if let Some(value) = patch.recoverable {
         record.recoverable = value;
     }
-    if status_transition_accepted
-        && let Some(value) = &patch.stage
-    {
+    if status_transition_accepted && let Some(value) = &patch.stage {
         record.stage.clone_from(value);
     }
     if let Some(value) = &patch.history_id {
@@ -212,9 +210,7 @@ fn apply_typed_patch_at(
     if let Some(value) = &patch.source_fingerprint {
         record.source_fingerprint.clone_from(value);
     }
-    if status_transition_accepted
-        && let Some(value) = &patch.error_message
-    {
+    if status_transition_accepted && let Some(value) = &patch.error_message {
         record.error_message.clone_from(value);
     }
     if let Some(value) = &patch.template_id {
