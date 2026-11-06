@@ -1,7 +1,7 @@
 //! System Tray Integration using `tray-icon` and `muda`.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct TrayManager {
     _tray_icon: Option<tray_icon::TrayIcon>,

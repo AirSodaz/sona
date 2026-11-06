@@ -24,7 +24,12 @@ impl CaptionOverlayWindow {
         }
     }
 
-    pub fn set_text(&mut self, primary: impl Into<String>, secondary: Option<String>, cx: &mut Context<Self>) {
+    pub fn set_text(
+        &mut self,
+        primary: impl Into<String>,
+        secondary: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.text_primary = primary.into();
         self.text_secondary = secondary.unwrap_or_default();
         cx.notify();

@@ -372,7 +372,10 @@ mod tests {
 
         // Second register must reuse the cancelled sender and observe true immediately
         let (rx2, guard2) = registry.register("task-pre-cancel").await;
-        assert!(*rx2.borrow(), "Re-registered receiver must observe true if cancelled");
+        assert!(
+            *rx2.borrow(),
+            "Re-registered receiver must observe true if cancelled"
+        );
 
         drop(guard1);
         assert!(registry.has_active_tasks().await);

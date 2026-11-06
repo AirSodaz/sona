@@ -1,8 +1,8 @@
 //! Tool: HTTP API Server controller panel.
 
-use gpui_kit::component::button::Button;
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::Button;
 use gpui_kit::*;
 
 pub struct ApiServerToolPanel {

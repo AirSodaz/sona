@@ -9,18 +9,21 @@
 
 mod harness;
 
-use std::sync::Arc;
 use serde_json::json;
+use std::sync::Arc;
 
 use harness::TestHarness;
 use sona_core::ports::event::EventEmitterPort;
 use sona_core::project::{ProjectCreateInput, ProjectUpdateInput};
 use sona_desktop_lib::event_bus::AppEventBus;
 use sona_desktop_lib::platform::auto_launch::{
-    self, AutoLaunchBuilder, AutoLaunchStatus, APP_NAME, AUTO_START_ARG,
+    self, APP_NAME, AUTO_START_ARG, AutoLaunchBuilder, AutoLaunchManager, AutoLaunchStatus,
+    MockAutoLaunch,
 };
 use sona_desktop_lib::platform::database::DesktopSqliteState;
-use sona_desktop_lib::platform::single_instance::{SingleInstanceGuard, SONA_SINGLE_INSTANCE_LOCK_NAME};
+use sona_desktop_lib::platform::single_instance::{
+    SONA_SINGLE_INSTANCE_LOCK_NAME, SingleInstanceGuard,
+};
 use sona_desktop_lib::services::DesktopServices;
 
 // ============================================================================
@@ -33,13 +36,24 @@ async fn test_desktop_services_composition_without_tauri() {
     let services = &harness.services;
 
     // Verify all domain services are instantiated and functional in pure Rust
-    let projects = services.projects.list().await.expect("projects.list() should succeed");
+    let projects = services
+        .projects
+        .list()
+        .await
+        .expect("projects.list() should succeed");
     assert_eq!(projects.len(), 0, "Initial project list should be empty");
 
-    let config = services.config.load().expect("config.load() should succeed");
+    let config = services
+        .config
+        .load()
+        .expect("config.load() should succeed");
     assert_eq!(config, None, "Initial app config should be empty");
 
-    let sync_status = services.sync.get_status().await.expect("sync.get_status() should succeed");
+    let sync_status = services
+        .sync
+        .get_status()
+        .await
+        .expect("sync.get_status() should succeed");
     assert_eq!(
         sync_status.state,
         sona_core::sync::SyncLifecycleState::Disabled,
@@ -51,14 +65,22 @@ async fn test_desktop_services_composition_without_tauri() {
         .load_snapshot()
         .await
         .expect("task_ledger.load_snapshot() should succeed");
-    assert_eq!(ledger_snapshot.tasks.len(), 0, "Initial task ledger should be empty");
+    assert_eq!(
+        ledger_snapshot.tasks.len(),
+        0,
+        "Initial task ledger should be empty"
+    );
 
     let history_items = services
         .history
         .query_db(|s| s.list_items(Default::default()))
         .await
         .expect("history.query_db() should succeed");
-    assert_eq!(history_items.len(), 0, "Initial history items should be empty");
+    assert_eq!(
+        history_items.len(),
+        0,
+        "Initial history items should be empty"
+    );
 
     // Verify recording session tracker
     assert!(
@@ -103,9 +125,7 @@ async fn test_desktop_services_builder_validation_errors() {
     let event_bus = Arc::new(AppEventBus::new(16));
 
     // Missing event_emitter should fail
-    let res_missing_emitter = DesktopServices::builder()
-        .sqlite(sqlite.clone())
-        .build();
+    let res_missing_emitter = DesktopServices::builder().sqlite(sqlite.clone()).build();
     match res_missing_emitter {
         Err(err) => {
             assert!(
@@ -117,9 +137,7 @@ async fn test_desktop_services_builder_validation_errors() {
     }
 
     // Missing sqlite should fail
-    let res_missing_sqlite = DesktopServices::builder()
-        .event_emitter(event_bus)
-        .build();
+    let res_missing_sqlite = DesktopServices::builder().event_emitter(event_bus).build();
     match res_missing_sqlite {
         Err(err) => {
             assert!(
@@ -331,7 +349,10 @@ async fn test_app_event_bus_emit_without_active_receivers_does_not_fail() {
 
     // Emitting when there are zero subscribers must not error
     let res = bus.emit("orphan-event", json!({"info": "nobody listening"}));
-    assert!(res.is_ok(), "Emitting without receivers should return Ok(())");
+    assert!(
+        res.is_ok(),
+        "Emitting without receivers should return Ok(())"
+    );
 }
 
 // ============================================================================
@@ -383,10 +404,10 @@ fn test_single_instance_lock_distinct_identifiers_do_not_conflict() {
     let id_a = format!("sona_test_a_{}", uuid::Uuid::new_v4());
     let id_b = format!("sona_test_b_{}", uuid::Uuid::new_v4());
 
-    let lock_a = SingleInstanceGuard::acquire_named(&id_a)
-        .expect("Lock A acquisition should succeed");
-    let lock_b = SingleInstanceGuard::acquire_named(&id_b)
-        .expect("Lock B acquisition should succeed");
+    let lock_a =
+        SingleInstanceGuard::acquire_named(&id_a).expect("Lock A acquisition should succeed");
+    let lock_b =
+        SingleInstanceGuard::acquire_named(&id_b).expect("Lock B acquisition should succeed");
 
     assert!(lock_a.is_some(), "Lock A should be acquired");
     assert!(lock_b.is_some(), "Lock B should be acquired");
@@ -424,23 +445,30 @@ fn test_auto_launch_production_constants_and_builder() {
     let manager = manager_res.unwrap();
     assert_eq!(manager.get_app_name(), APP_NAME);
     let current_exe = std::env::current_exe().expect("Failed to get current executable path");
-    assert_eq!(std::path::PathBuf::from(manager.get_app_path()), current_exe);
+    assert_eq!(
+        std::path::PathBuf::from(manager.get_app_path()),
+        current_exe
+    );
 }
 
 #[test]
 fn test_auto_launch_system_status_queries() {
+    let mock = Arc::new(MockAutoLaunch::new(APP_NAME, "sona.exe", &[AUTO_START_ARG]));
+    auto_launch::set_mock_manager(Some(mock.clone()));
+
     let status_res = auto_launch::is_auto_start_enabled();
     assert!(
         status_res.is_ok(),
-        "is_auto_start_enabled() should query system without error: {:?}",
+        "is_auto_start_enabled() should query cleanly without error: {:?}",
         status_res.err()
     );
     let status = status_res.unwrap();
+    assert!(!status);
 
     let alias_res = auto_launch::is_auto_launch_enabled();
     assert!(
         alias_res.is_ok(),
-        "is_auto_launch_enabled() alias should query system without error: {:?}",
+        "is_auto_launch_enabled() alias should query without error: {:?}",
         alias_res.err()
     );
     assert_eq!(status, alias_res.unwrap());
@@ -453,12 +481,14 @@ fn test_auto_launch_system_status_queries() {
     );
     let payload = payload_res.unwrap();
     assert_eq!(payload.enabled, status);
+
+    auto_launch::clear_mock_manager();
 }
 
 #[test]
 fn test_auto_launch_status_struct_serialization_fidelity() {
     let enabled_status = AutoLaunchStatus { enabled: true };
-    let json_val = serde_json::to_value(&enabled_status).expect("Serialization failed");
+    let json_val = serde_json::to_value(enabled_status).expect("Serialization failed");
     assert_eq!(json_val, json!({ "enabled": true }));
 
     let roundtrip: AutoLaunchStatus =
@@ -466,7 +496,7 @@ fn test_auto_launch_status_struct_serialization_fidelity() {
     assert_eq!(roundtrip, enabled_status);
 
     let disabled_status = AutoLaunchStatus { enabled: false };
-    let json_disabled = serde_json::to_value(&disabled_status).expect("Serialization failed");
+    let json_disabled = serde_json::to_value(disabled_status).expect("Serialization failed");
     assert_eq!(json_disabled, json!({ "enabled": false }));
     let roundtrip_disabled: AutoLaunchStatus =
         serde_json::from_value(json_disabled).expect("Deserialization failed");
@@ -517,16 +547,13 @@ fn test_auto_launch_isolated_enable_disable_lifecycle() {
         .to_str()
         .expect("Executable path must be valid UTF-8");
 
-    let manager = AutoLaunchBuilder::new()
-        .set_app_name(&test_app_name)
-        .set_app_path(app_path)
-        .set_args(&[AUTO_START_ARG])
-        .build()
-        .expect("Failed to build test auto-launch manager");
+    let manager = MockAutoLaunch::new(&test_app_name, app_path, &[AUTO_START_ARG]);
 
     // 1. Initially must not be enabled
     assert!(
-        !manager.is_enabled().expect("Failed to query initial status"),
+        !manager
+            .is_enabled()
+            .expect("Failed to query initial status"),
         "Fresh test key should not be enabled"
     );
 
@@ -534,11 +561,13 @@ fn test_auto_launch_isolated_enable_disable_lifecycle() {
     let enable_res = manager.enable();
     assert!(
         enable_res.is_ok(),
-        "Registry enable should succeed: {:?}",
+        "Mock enable should succeed: {:?}",
         enable_res.err()
     );
     assert!(
-        manager.is_enabled().expect("Failed to query status after enable"),
+        manager
+            .is_enabled()
+            .expect("Failed to query status after enable"),
         "Key must report enabled=true after enable"
     );
 
@@ -546,11 +575,13 @@ fn test_auto_launch_isolated_enable_disable_lifecycle() {
     let disable_res = manager.disable();
     assert!(
         disable_res.is_ok(),
-        "Registry disable should succeed: {:?}",
+        "Mock disable should succeed: {:?}",
         disable_res.err()
     );
     assert!(
-        !manager.is_enabled().expect("Failed to query status after disable"),
+        !manager
+            .is_enabled()
+            .expect("Failed to query status after disable"),
         "Key must report enabled=false after disable"
     );
 }
@@ -722,5 +753,8 @@ async fn test_project_service_update_nonexistent_returns_none() {
         .await
         .expect("Call should complete without fatal error");
 
-    assert!(result.is_none(), "Updating non-existent project should return None");
+    assert!(
+        result.is_none(),
+        "Updating non-existent project should return None"
+    );
 }

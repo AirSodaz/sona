@@ -32,7 +32,9 @@ impl SingleInstanceGuard {
     ) -> Result<Option<Self>, single_instance::error::SingleInstanceError> {
         let instance = SingleInstance::new(name)?;
         if instance.is_single() {
-            Ok(Some(Self { _instance: instance }))
+            Ok(Some(Self {
+                _instance: instance,
+            }))
         } else {
             Ok(None)
         }
@@ -48,10 +50,10 @@ impl SingleInstanceGuard {
 /// and restores and activates it.
 #[cfg(target_os = "windows")]
 pub fn focus_existing_window(window_title: &str) -> bool {
-    use windows::core::HSTRING;
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE,
+        FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
     };
+    use windows::core::HSTRING;
 
     unsafe {
         let title = HSTRING::from(window_title);
@@ -80,12 +82,18 @@ mod tests {
         let lock_name = format!("sona-test-lock-{}", std::process::id());
         let guard = SingleInstanceGuard::acquire_named(&lock_name)
             .expect("failed to attempt lock acquisition");
-        assert!(guard.is_some(), "first instance should successfully acquire lock");
+        assert!(
+            guard.is_some(),
+            "first instance should successfully acquire lock"
+        );
 
         // Second acquisition of the same lock name must return None
         let second_guard = SingleInstanceGuard::acquire_named(&lock_name)
             .expect("failed to attempt second lock acquisition");
-        assert!(second_guard.is_none(), "second instance must detect conflict");
+        assert!(
+            second_guard.is_none(),
+            "second instance must detect conflict"
+        );
 
         // Release first guard
         drop(guard);
@@ -93,6 +101,9 @@ mod tests {
         // After dropping, acquisition should succeed again
         let third_guard = SingleInstanceGuard::acquire_named(&lock_name)
             .expect("failed to attempt third lock acquisition");
-        assert!(third_guard.is_some(), "re-acquisition after release should succeed");
+        assert!(
+            third_guard.is_some(),
+            "re-acquisition after release should succeed"
+        );
     }
 }

@@ -2,8 +2,8 @@
 //!
 //! Re-exports core traits and the pure-Rust AppEventBus.
 
-pub use sona_core::ports::event::{EventEmitterPort, EventError};
 pub use crate::event_bus::{AppEvent, AppEventBus};
+pub use sona_core::ports::event::{EventEmitterPort, EventError};
 
 #[cfg(test)]
 pub struct MockEventEmitter {

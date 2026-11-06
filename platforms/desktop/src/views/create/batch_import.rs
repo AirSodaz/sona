@@ -1,9 +1,9 @@
 //! Batch audio file import, drag-and-drop dropzone, and queue list.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use std::path::PathBuf;
 
@@ -30,7 +30,10 @@ impl BatchImportPanel {
 
     pub fn pick_files(&mut self) {
         let files = rfd::FileDialog::new()
-            .add_filter("Audio Files", &["wav", "mp3", "m4a", "flac", "ogg", "aac", "mp4", "mkv"])
+            .add_filter(
+                "Audio Files",
+                &["wav", "mp3", "m4a", "flac", "ogg", "aac", "mp4", "mkv"],
+            )
             .pick_files();
 
         if let Some(paths) = files {
@@ -41,7 +44,8 @@ impl BatchImportPanel {
     }
 
     pub fn add_file(&mut self, path: PathBuf) {
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "audio_file".to_string());
         let id = format!("{}_{}", name, self.queue.len());
@@ -91,11 +95,7 @@ impl BatchImportPanel {
                             .text_color(cx.theme().muted)
                             .child("Supports MP3, WAV, M4A, FLAC, MP4, MKV"),
                     )
-                    .child(
-                        Button::new("btn-browse")
-                            .outline()
-                            .label("Browse Files...")
-                    ),
+                    .child(Button::new("btn-browse").outline().label("Browse Files...")),
             )
             .when(!self.queue.is_empty(), |this| {
                 this.child(
@@ -119,7 +119,7 @@ impl BatchImportPanel {
                                     Button::new("btn-clear-queue")
                                         .ghost()
                                         .small()
-                                        .label("Clear All")
+                                        .label("Clear All"),
                                 ),
                         )
                         .child(

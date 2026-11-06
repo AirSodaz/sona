@@ -5,8 +5,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::ExitCode;
 use sona_desktop_lib::platform::startup_dialog::show_error_dialog;
+use std::process::ExitCode;
 
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(move |info| {

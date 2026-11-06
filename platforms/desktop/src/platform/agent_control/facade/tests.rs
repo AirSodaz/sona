@@ -1548,14 +1548,22 @@ async fn test_cancel_batch_task_after_failed_task_returns_false() {
         template_id: None,
         target_language: None,
     };
-    facade.services.task_ledger.upsert_task(record).await.unwrap();
+    facade
+        .services
+        .task_ledger
+        .upsert_task(record)
+        .await
+        .unwrap();
 
     let cancelled = facade.cancel_batch_task(task_id.clone()).await.unwrap();
     assert!(!cancelled, "Cancelling a failed task must return false");
 
     let tasks = facade.services.task_ledger.list_tasks().await.unwrap();
     let task = tasks.iter().find(|t| t.id == task_id).unwrap();
-    assert_eq!(task.status, sona_core::task_ledger::types::TaskLedgerStatus::Failed);
+    assert_eq!(
+        task.status,
+        sona_core::task_ledger::types::TaskLedgerStatus::Failed
+    );
 }
 
 #[tokio::test]
@@ -1587,13 +1595,24 @@ async fn test_cancel_batch_task_duplicate_is_idempotent() {
         template_id: None,
         target_language: None,
     };
-    facade.services.task_ledger.upsert_task(record).await.unwrap();
+    facade
+        .services
+        .task_ledger
+        .upsert_task(record)
+        .await
+        .unwrap();
 
     let first_cancel = facade.cancel_batch_task(task_id.clone()).await.unwrap();
-    assert!(first_cancel, "First cancellation of running task must succeed");
+    assert!(
+        first_cancel,
+        "First cancellation of running task must succeed"
+    );
 
     let second_cancel = facade.cancel_batch_task(task_id.clone()).await.unwrap();
-    assert!(!second_cancel, "Second cancellation of already cancelled task must return false");
+    assert!(
+        !second_cancel,
+        "Second cancellation of already cancelled task must return false"
+    );
 }
 
 #[tokio::test]
@@ -1626,7 +1645,12 @@ async fn test_read_transcript_returns_cancelled_status_when_task_cancelled() {
         template_id: None,
         target_language: None,
     };
-    facade.services.task_ledger.upsert_task(record).await.unwrap();
+    facade
+        .services
+        .task_ledger
+        .upsert_task(record)
+        .await
+        .unwrap();
 
     let read = facade
         .read_transcript(ReadTranscriptRequest {

@@ -1,11 +1,11 @@
 //! Settings Modal with 9 major configuration slices.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::prelude::FluentBuilder as _;
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::*;
 use crate::theme::tokens::*;
+use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SettingsTab {

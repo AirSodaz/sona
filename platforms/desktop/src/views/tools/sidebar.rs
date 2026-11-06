@@ -1,8 +1,8 @@
 //! Tools suite navigation sidebar.
 
+use crate::theme::tokens::*;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::*;
-use crate::theme::tokens::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ToolKind {

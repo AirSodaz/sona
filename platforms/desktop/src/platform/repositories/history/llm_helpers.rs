@@ -1,4 +1,3 @@
-
 use super::{
     HistoryItemRecord, HistoryItemStatus, SqliteHistoryStore, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, history_store,
@@ -26,8 +25,6 @@ where
     })
     .await
 }
-
-
 
 pub(crate) fn create_llm_transcript_snapshot_record(
     repository: &impl HistoryQueryRepository,

@@ -1,9 +1,7 @@
-use crate::services::DesktopServices;
 use super::types::DownloadPresetModelRequest;
+use crate::services::DesktopServices;
 
-pub async fn get_model_catalog(
-    services: &DesktopServices,
-) -> Result<serde_json::Value, String> {
+pub async fn get_model_catalog(services: &DesktopServices) -> Result<serde_json::Value, String> {
     let models_dir = services
         .sqlite
         .current_context()

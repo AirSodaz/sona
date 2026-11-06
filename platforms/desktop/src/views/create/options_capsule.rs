@@ -1,8 +1,8 @@
 //! Persistent bottom options capsule and parameter popover for transcription.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -55,24 +55,14 @@ impl OptionsCapsule {
                     .small()
                     .label(format!("Model: {}", self.state.model)),
             )
-            .child(
-                div()
-                    .w(px(1.0))
-                    .h(px(14.0))
-                    .bg(cx.theme().border),
-            )
+            .child(div().w(px(1.0)).h(px(14.0)).bg(cx.theme().border))
             .child(
                 Button::new("opt-lang")
                     .ghost()
                     .small()
                     .label(format!("Lang: {}", self.state.language)),
             )
-            .child(
-                div()
-                    .w(px(1.0))
-                    .h(px(14.0))
-                    .bg(cx.theme().border),
-            )
+            .child(div().w(px(1.0)).h(px(14.0)).bg(cx.theme().border))
             .child(
                 Button::new("opt-diarize")
                     .ghost()

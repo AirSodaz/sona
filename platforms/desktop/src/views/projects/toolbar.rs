@@ -1,8 +1,8 @@
 //! Projects Toolbar with search, filters, and view mode switcher.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -72,30 +72,16 @@ impl ProjectsToolbar {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
-                        Button::new("btn-view-cards")
-                            .ghost()
-                            .small()
-                            .label("Cards"),
-                    )
-                    .child(
-                        Button::new("btn-view-list")
-                            .ghost()
-                            .small()
-                            .label("List"),
-                    )
-                    .child(
-                        div()
-                            .w(px(1.0))
-                            .h(px(16.0))
-                            .bg(cx.theme().border),
-                    )
-                    .child(
-                        Button::new("btn-select-mode")
-                            .outline()
-                            .small()
-                            .label(if self.is_selection_active { "Cancel Select" } else { "Select" }),
-                    ),
+                    .child(Button::new("btn-view-cards").ghost().small().label("Cards"))
+                    .child(Button::new("btn-view-list").ghost().small().label("List"))
+                    .child(div().w(px(1.0)).h(px(16.0)).bg(cx.theme().border))
+                    .child(Button::new("btn-select-mode").outline().small().label(
+                        if self.is_selection_active {
+                            "Cancel Select"
+                        } else {
+                            "Select"
+                        },
+                    )),
             )
     }
 }

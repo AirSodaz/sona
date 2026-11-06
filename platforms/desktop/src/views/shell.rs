@@ -1,17 +1,16 @@
 //! Complete Main Application Shell for Sona Desktop.
 //! Provides full 1:1 parity with the React frontend, powered by pure Rust and GPUI Kit.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::app::GlobalDesktopServices;
 use super::create::{BatchImportPanel, LiveRecordPanel, OptionsCapsule};
 use super::dialogs::{
-    DiagnosticsModal, ErrorDialog, ExportModal, GlobalDialog, NotificationCenter,
-    OnboardingWizard, ProjectDialogs, RecoveryModal,
+    DiagnosticsModal, ErrorDialog, ExportModal, GlobalDialog, NotificationCenter, OnboardingWizard,
+    ProjectDialogs, RecoveryModal,
 };
 use super::projects::{ProjectsRail, ProjectsResults, ProjectsToolbar, SelectionBar};
 use super::settings::SettingsModal;
@@ -20,6 +19,7 @@ use super::tools::{
     ToolsSidebar, VoiceTypingToolPanel,
 };
 use super::transcript::TranscriptWorkbench;
+use crate::app::GlobalDesktopServices;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AppMode {
@@ -77,7 +77,8 @@ impl MainShell {
             this.update(cx, |view, cx| {
                 view.project_count = count;
                 view.loading = false;
-                view.status_text = format!("Decoupled core connected: SQLite WAL active, {count} projects loaded");
+                view.status_text =
+                    format!("Decoupled core connected: SQLite WAL active, {count} projects loaded");
                 cx.notify();
             })
             .ok();
@@ -172,8 +173,16 @@ impl Render for MainShell {
                                     .rounded_full()
                                     .bg(cx.theme().secondary)
                                     .text_size(px(11.0))
-                                    .text_color(if self.loading { cx.theme().muted } else { cx.theme().primary })
-                                    .child(if self.loading { "Connecting Core..." } else { "Pure Rust Core" }),
+                                    .text_color(if self.loading {
+                                        cx.theme().muted
+                                    } else {
+                                        cx.theme().primary
+                                    })
+                                    .child(if self.loading {
+                                        "Connecting Core..."
+                                    } else {
+                                        "Pure Rust Core"
+                                    }),
                             ),
                     )
                     .child(
@@ -192,10 +201,22 @@ impl Render for MainShell {
                                     .px_3()
                                     .py_1()
                                     .rounded_md()
-                                    .bg(if is_active { cx.theme().background } else { gpui_kit::transparent_black() })
+                                    .bg(if is_active {
+                                        cx.theme().background
+                                    } else {
+                                        gpui_kit::transparent_black()
+                                    })
                                     .text_size(px(13.0))
-                                    .font_weight(if is_active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
-                                    .text_color(if is_active { cx.theme().foreground } else { cx.theme().muted })
+                                    .font_weight(if is_active {
+                                        FontWeight::SEMIBOLD
+                                    } else {
+                                        FontWeight::MEDIUM
+                                    })
+                                    .text_color(if is_active {
+                                        cx.theme().foreground
+                                    } else {
+                                        cx.theme().muted
+                                    })
                                     .cursor_pointer()
                                     .child(label)
                                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -249,77 +270,81 @@ impl Render for MainShell {
                     .size_full()
                     .overflow_hidden()
                     .child(match self.mode {
-                        AppMode::Create => {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .size_full()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_1()
-                                        .w_full()
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_1()
-                                                .h_full()
-                                                .border_r_1()
-                                                .border_color(cx.theme().border)
-                                                .child(self.live_record.render(cx)),
-                                        )
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_1()
-                                                .h_full()
-                                                .child(self.batch_import.render(cx)),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .p_3()
-                                        .border_t_1()
-                                        .border_color(cx.theme().border)
-                                        .bg(cx.theme().background)
-                                        .child(self.options_capsule.render(cx)),
-                                )
-                                .into_any_element()
-                        }
-                        AppMode::Projects => {
-                            div()
-                                .flex()
-                                .size_full()
-                                .child(self.projects_rail.render(cx))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .flex_1()
-                                        .h_full()
-                                        .child(self.projects_toolbar.render(cx))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .overflow_hidden()
-                                                .child(self.projects_results.render(cx)),
-                                        )
-                                        .when(self.projects_toolbar.is_selection_active, |this| {
-                                            this.child(self.selection_bar.render(cx))
-                                        }),
-                                )
-                                .into_any_element()
-                        }
+                        AppMode::Create => div()
+                            .flex()
+                            .flex_col()
+                            .size_full()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .w_full()
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_1()
+                                            .h_full()
+                                            .border_r_1()
+                                            .border_color(cx.theme().border)
+                                            .child(self.live_record.render(cx)),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_1()
+                                            .h_full()
+                                            .child(self.batch_import.render(cx)),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .p_3()
+                                    .border_t_1()
+                                    .border_color(cx.theme().border)
+                                    .bg(cx.theme().background)
+                                    .child(self.options_capsule.render(cx)),
+                            )
+                            .into_any_element(),
+                        AppMode::Projects => div()
+                            .flex()
+                            .size_full()
+                            .child(self.projects_rail.render(cx))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .h_full()
+                                    .child(self.projects_toolbar.render(cx))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .overflow_hidden()
+                                            .child(self.projects_results.render(cx)),
+                                    )
+                                    .when(self.projects_toolbar.is_selection_active, |this| {
+                                        this.child(self.selection_bar.render(cx))
+                                    }),
+                            )
+                            .into_any_element(),
                         AppMode::Tools => {
                             let tool_panel: AnyElement = match self.tools_sidebar.active_tool {
-                                ToolKind::Subtitles => self.subtitles_tool.render(cx).into_any_element(),
-                                ToolKind::VoiceTyping => self.voice_typing_tool.render(cx).into_any_element(),
-                                ToolKind::ApiServer => self.api_server_tool.render(cx).into_any_element(),
+                                ToolKind::Subtitles => {
+                                    self.subtitles_tool.render(cx).into_any_element()
+                                }
+                                ToolKind::VoiceTyping => {
+                                    self.voice_typing_tool.render(cx).into_any_element()
+                                }
+                                ToolKind::ApiServer => {
+                                    self.api_server_tool.render(cx).into_any_element()
+                                }
                                 ToolKind::Mcp => self.mcp_tool.render(cx).into_any_element(),
-                                ToolKind::MediaServer => self.media_server_tool.render(cx).into_any_element(),
+                                ToolKind::MediaServer => {
+                                    self.media_server_tool.render(cx).into_any_element()
+                                }
                             };
 
                             div()
@@ -329,38 +354,20 @@ impl Render for MainShell {
                                 .child(div().flex_1().h_full().child(tool_panel))
                                 .into_any_element()
                         }
-                        AppMode::Workbench => {
-                            self.workbench.render(cx).into_any_element()
-                        }
+                        AppMode::Workbench => self.workbench.render(cx).into_any_element(),
                     }),
             )
             .child(
                 // Modals
                 self.settings_modal.render(cx),
             )
-            .child(
-                self.diagnostics_modal.render(cx),
-            )
-            .child(
-                self.recovery_modal.render(cx),
-            )
-            .child(
-                self.notification_center.render(cx),
-            )
-            .child(
-                self.global_dialog.render(cx),
-            )
-            .child(
-                self.export_modal.render(cx),
-            )
-            .child(
-                self.onboarding.render(cx),
-            )
-            .child(
-                self.project_dialogs.render(cx),
-            )
-            .child(
-                self.error_dialog.render(cx),
-            )
+            .child(self.diagnostics_modal.render(cx))
+            .child(self.recovery_modal.render(cx))
+            .child(self.notification_center.render(cx))
+            .child(self.global_dialog.render(cx))
+            .child(self.export_modal.render(cx))
+            .child(self.onboarding.render(cx))
+            .child(self.project_dialogs.render(cx))
+            .child(self.error_dialog.render(cx))
     }
 }

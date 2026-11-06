@@ -1,10 +1,10 @@
 //! Projects left sidebar rail.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::*;
 use crate::theme::tokens::*;
+use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectItem {
@@ -78,12 +78,7 @@ impl ProjectsRail {
                             .text_color(cx.theme().muted)
                             .child("WORKSPACES"),
                     )
-                    .child(
-                        Button::new("btn-new-project")
-                            .ghost()
-                            .small()
-                            .label("+")
-                    ),
+                    .child(Button::new("btn-new-project").ghost().small().label("+")),
             )
             .child(
                 // "All Items" button
@@ -121,10 +116,7 @@ impl ProjectsRail {
             )
             .child(
                 // Divider
-                div()
-                    .my_2()
-                    .h(px(1.0))
-                    .bg(cx.theme().border),
+                div().my_2().h(px(1.0)).bg(cx.theme().border),
             )
             .child(
                 // Projects list
@@ -155,13 +147,7 @@ impl ProjectsRail {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .child(
-                                        div()
-                                            .w(px(8.0))
-                                            .h(px(8.0))
-                                            .rounded_full()
-                                            .bg(color),
-                                    )
+                                    .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(color))
                                     .child(
                                         div()
                                             .text_size(px(13.0))

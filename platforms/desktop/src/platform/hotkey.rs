@@ -1,8 +1,8 @@
 //! Global shortcuts controller using `global-hotkey`.
 
 use global_hotkey::{
-    hotkey::{Code, HotKey, Modifiers},
     GlobalHotKeyManager,
+    hotkey::{Code, HotKey, Modifiers},
 };
 use std::sync::Arc;
 

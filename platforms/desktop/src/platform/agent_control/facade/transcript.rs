@@ -83,12 +83,24 @@ pub async fn read_transcript(
                     .max_by_key(|t| t.updated_at)
                 {
                     task_status = match task.status {
-                        sona_core::task_ledger::types::TaskLedgerStatus::Running => "running".to_string(),
-                        sona_core::task_ledger::types::TaskLedgerStatus::Pending => "pending".to_string(),
-                        sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested => "cancelling".to_string(),
-                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled => "cancelled".to_string(),
-                        sona_core::task_ledger::types::TaskLedgerStatus::Failed => "failed".to_string(),
-                        sona_core::task_ledger::types::TaskLedgerStatus::Succeeded => "completed".to_string(),
+                        sona_core::task_ledger::types::TaskLedgerStatus::Running => {
+                            "running".to_string()
+                        }
+                        sona_core::task_ledger::types::TaskLedgerStatus::Pending => {
+                            "pending".to_string()
+                        }
+                        sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested => {
+                            "cancelling".to_string()
+                        }
+                        sona_core::task_ledger::types::TaskLedgerStatus::Cancelled => {
+                            "cancelled".to_string()
+                        }
+                        sona_core::task_ledger::types::TaskLedgerStatus::Failed => {
+                            "failed".to_string()
+                        }
+                        sona_core::task_ledger::types::TaskLedgerStatus::Succeeded => {
+                            "completed".to_string()
+                        }
                         _ => "failed".to_string(),
                     };
                     if task.error_message.is_some() {

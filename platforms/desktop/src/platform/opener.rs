@@ -25,7 +25,9 @@ pub fn open_url(url: impl AsRef<str>) -> Result<(), std::io::Error> {
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            format!("Invalid or unsupported URL scheme in '{trimmed}'. Must start with http://, https://, or mailto:"),
+            format!(
+                "Invalid or unsupported URL scheme in '{trimmed}'. Must start with http://, https://, or mailto:"
+            ),
         ));
     }
 
@@ -106,7 +108,9 @@ mod tests {
 
     #[test]
     fn test_open_url_validates_scheme_prefix() {
-        for valid_prefix in ["http://", "https://", "mailto:", "HTTP://", "HTTPS://", "MAILTO:"] {
+        for valid_prefix in [
+            "http://", "https://", "mailto:", "HTTP://", "HTTPS://", "MAILTO:",
+        ] {
             let lower = valid_prefix.to_ascii_lowercase();
             assert!(
                 lower.starts_with("http://")

@@ -7,18 +7,17 @@
 //! 4. Single-instance lock identity consistency and secondary instance behavior.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use sona_desktop_lib::platform::auto_launch::{
-    disable_auto_start, is_auto_start_enabled,
+    AutoLaunchManager, MockAutoLaunch, clear_mock_manager, disable_auto_start,
+    is_auto_start_enabled, set_mock_manager,
 };
-use sona_desktop_lib::platform::opener::{
-    open_path, open_path_async, open_url,
-};
+use sona_desktop_lib::platform::opener::{open_path, open_path_async, open_url};
 use sona_desktop_lib::platform::single_instance::{
-    focus_existing_window, SONA_SINGLE_INSTANCE_LOCK_NAME,
+    SONA_SINGLE_INSTANCE_LOCK_NAME, focus_existing_window,
 };
 
 // ============================================================================
@@ -109,25 +108,28 @@ fn test_opener_null_byte_inputs() {
 
 #[test]
 fn test_auto_launch_query_status_on_system() {
-    // Directly query the Windows registry via auto-launch manager
+    let mock = Arc::new(MockAutoLaunch::new("Sona", "sona.exe", &["--autostart"]));
+    set_mock_manager(Some(mock));
     let is_enabled = is_auto_start_enabled();
-    println!("is_auto_start_enabled() returned: {:?}", is_enabled);
     assert!(
         is_enabled.is_ok(),
         "is_auto_start_enabled() should query cleanly without panicking: {:?}",
         is_enabled.err()
     );
+    assert!(!is_enabled.unwrap());
+    clear_mock_manager();
 }
 
 #[test]
 fn test_auto_launch_disable_idempotence() {
-    // If auto-start is not enabled, what does disable do?
-    // It should either succeed idempotently or return an explainable error, never panic.
+    let mock = Arc::new(MockAutoLaunch::new("Sona", "sona.exe", &["--autostart"]));
+    set_mock_manager(Some(mock));
     let current_status = is_auto_start_enabled().unwrap();
     if !current_status {
         let disable_res = disable_auto_start();
-        println!("disable_auto_start() when disabled returned: {:?}", disable_res);
+        assert!(disable_res.is_ok());
     }
+    clear_mock_manager();
 }
 
 #[test]
@@ -141,7 +143,10 @@ fn test_auto_launch_builder_with_simulated_paths() {
         .set_app_path(path_with_spaces)
         .set_args(&["--autostart"])
         .build();
-    assert!(builder_spaces.is_ok(), "AutoLaunchBuilder must support paths with spaces");
+    assert!(
+        builder_spaces.is_ok(),
+        "AutoLaunchBuilder must support paths with spaces"
+    );
     let manager = builder_spaces.unwrap();
     assert_eq!(manager.get_app_name(), "SonaTestSpaces");
 
@@ -152,7 +157,10 @@ fn test_auto_launch_builder_with_simulated_paths() {
         .set_app_path(path_unicode)
         .set_args(&["--autostart"])
         .build();
-    assert!(builder_unicode.is_ok(), "AutoLaunchBuilder must support unicode paths");
+    assert!(
+        builder_unicode.is_ok(),
+        "AutoLaunchBuilder must support unicode paths"
+    );
 
     // Test C: Path with quotes (testing potential registry command injection)
     let path_quoted = r#"C:\Tools\"Sona" Desktop\sona.exe"#;
@@ -168,50 +176,72 @@ fn test_auto_launch_builder_with_simulated_paths() {
         .set_app_name("")
         .set_app_path(r"C:\test\app.exe")
         .build();
-    println!("Builder empty name result: {:?}", builder_empty_name.is_ok());
+    println!(
+        "Builder empty name result: {:?}",
+        builder_empty_name.is_ok()
+    );
 
     let builder_empty_path = AutoLaunchBuilder::new()
         .set_app_name("SonaTestEmptyPath")
         .set_app_path("")
         .build();
-    println!("Builder empty path result: {:?}", builder_empty_path.is_ok());
+    println!(
+        "Builder empty path result: {:?}",
+        builder_empty_path.is_ok()
+    );
 }
 
 #[test]
-fn test_auto_launch_live_registry_enable_disable_lifecycle() {
-    use auto_launch::AutoLaunchBuilder;
-
+fn test_auto_launch_mock_enable_disable_lifecycle() {
     let test_app_name = format!("Sona_Adversarial_Test_{}", uuid::Uuid::new_v4());
     let current_exe = std::env::current_exe().unwrap();
     let app_path = current_exe.to_str().unwrap();
 
-    let manager = AutoLaunchBuilder::new()
-        .set_app_name(&test_app_name)
-        .set_app_path(app_path)
-        .set_args(&["--autostart", "--test"])
-        .build()
-        .expect("Failed to build test auto-launch manager");
+    let manager = MockAutoLaunch::new(&test_app_name, app_path, &["--autostart", "--test"]);
 
     // 1. Initially must not be enabled
-    assert!(!manager.is_enabled().unwrap(), "Fresh test key should not be enabled");
+    assert!(
+        !manager.is_enabled().unwrap(),
+        "Fresh test key should not be enabled"
+    );
 
     // 2. Enable it
     let enable_res = manager.enable();
-    assert!(enable_res.is_ok(), "Registry enable should succeed: {:?}", enable_res.err());
-    assert!(manager.is_enabled().unwrap(), "Key must now report enabled=true");
+    assert!(
+        enable_res.is_ok(),
+        "Mock enable should succeed: {:?}",
+        enable_res.err()
+    );
+    assert!(
+        manager.is_enabled().unwrap(),
+        "Key must now report enabled=true"
+    );
 
     // 3. Enable again (idempotency check)
     let enable_again = manager.enable();
-    assert!(enable_again.is_ok(), "Enabling already enabled key should succeed idempotently");
+    assert!(
+        enable_again.is_ok(),
+        "Enabling already enabled key should succeed idempotently"
+    );
 
     // 4. Disable it
     let disable_res = manager.disable();
-    assert!(disable_res.is_ok(), "Registry disable should succeed: {:?}", disable_res.err());
-    assert!(!manager.is_enabled().unwrap(), "Key must now report enabled=false");
+    assert!(
+        disable_res.is_ok(),
+        "Mock disable should succeed: {:?}",
+        disable_res.err()
+    );
+    assert!(
+        !manager.is_enabled().unwrap(),
+        "Key must now report enabled=false"
+    );
 
     // 5. Disable again (idempotency check when already disabled)
     let disable_again = manager.disable();
-    println!("Disabling already disabled key result: {:?}", disable_again);
+    assert!(
+        disable_again.is_ok(),
+        "Disabling already disabled key should succeed"
+    );
 }
 
 // ============================================================================
@@ -239,7 +269,10 @@ fn test_tokio_runtime_bridge_lifecycle() {
 
     // Give task time to execute
     std::thread::sleep(Duration::from_millis(50));
-    assert!(executed.load(Ordering::SeqCst), "Spawned task must have executed");
+    assert!(
+        executed.load(Ordering::SeqCst),
+        "Spawned task must have executed"
+    );
 
     // Dropping rt shuts down the runtime cleanly
     drop(rt);
@@ -370,10 +403,7 @@ fn test_single_instance_lock_identity_consistency() {
     let lock_b = single_instance::SingleInstance::new(lib_rs_hardcoded_name).unwrap();
 
     // Since they use different names, BOTH will claim to be single!
-    assert!(
-        lock_a.is_single(),
-        "Lock A must be single for its own name"
-    );
+    assert!(lock_a.is_single(), "Lock A must be single for its own name");
     assert!(
         lock_b.is_single(),
         "Lock B must be single for its own name because the names differ!"

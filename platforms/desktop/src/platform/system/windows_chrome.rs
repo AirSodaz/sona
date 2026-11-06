@@ -91,10 +91,7 @@ mod imp {
     };
 
     /// Apply `palette` to the window's native frame.
-    pub fn apply(
-        hwnd: HWND,
-        theme: ResolvedTheme,
-    ) -> Result<(), String> {
+    pub fn apply(hwnd: HWND, theme: ResolvedTheme) -> Result<(), String> {
         let palette: ChromePalette = theme.palette();
 
         unsafe {
@@ -159,9 +156,7 @@ pub fn apply_window_chrome(
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn apply_window_chrome(
-    _theme: ResolvedTheme,
-) -> Result<(), String> {
+pub fn apply_window_chrome(_theme: ResolvedTheme) -> Result<(), String> {
     Ok(())
 }
 

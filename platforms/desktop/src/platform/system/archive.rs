@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use sona_core::ports::event::EventEmitterPort;
+use std::sync::Arc;
 
 use crate::platform::blocking::{map_err_string, spawn_blocking_map};
 

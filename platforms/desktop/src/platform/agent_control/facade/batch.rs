@@ -364,7 +364,9 @@ pub async fn transcribe_file(
                         .patch_task(
                             task_instance_id,
                             sona_core::task_ledger::types::TaskLedgerPatch {
-                                status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Cancelled),
+                                status: Some(
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled,
+                                ),
                                 error_message: None,
                                 stage: Some(Some("cancelled".to_string())),
                                 ..Default::default()

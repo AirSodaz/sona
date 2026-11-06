@@ -1,8 +1,8 @@
 //! Projects batch selection action bar.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 pub struct SelectionBar {
@@ -38,9 +38,24 @@ impl SelectionBar {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(Button::new("btn-sel-move").outline().small().label("Move to Project"))
-                    .child(Button::new("btn-sel-export").outline().small().label("Export"))
-                    .child(Button::new("btn-sel-delete").danger().small().label("Delete")),
+                    .child(
+                        Button::new("btn-sel-move")
+                            .outline()
+                            .small()
+                            .label("Move to Project"),
+                    )
+                    .child(
+                        Button::new("btn-sel-export")
+                            .outline()
+                            .small()
+                            .label("Export"),
+                    )
+                    .child(
+                        Button::new("btn-sel-delete")
+                            .danger()
+                            .small()
+                            .label("Delete"),
+                    ),
             )
     }
 }

@@ -48,8 +48,10 @@ impl TranscriptEditor {
             .overflow_hidden()
             .p_4()
             .gap_2()
-            .children(self.segments.iter().map(|seg| {
-                SegmentRow::render(seg, false, cx)
-            }))
+            .children(
+                self.segments
+                    .iter()
+                    .map(|seg| SegmentRow::render(seg, false, cx)),
+            )
     }
 }

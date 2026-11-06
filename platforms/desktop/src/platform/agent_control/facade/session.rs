@@ -527,7 +527,6 @@ pub async fn stop_recording(
             serde_json::json!({ "active": false, "isPaused": false }),
         );
 
-
         let segment_count = if req.discard {
             0
         } else {

@@ -3,8 +3,8 @@ use sona_core::automation::{
     AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
     normalize_automation_path,
 };
-use std::fs;
 use sona_desktop_lib::platform::automation_repository::validate_rule_activation_inner;
+use std::fs;
 use tempfile::tempdir;
 
 fn sample_rule(

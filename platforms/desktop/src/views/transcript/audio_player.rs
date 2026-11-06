@@ -1,8 +1,8 @@
 //! Integrated sticky bottom audio player bar.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 pub struct AudioPlayerBar {
@@ -104,16 +104,12 @@ impl AudioPlayerBar {
             )
             .child(
                 // Speed & Volume
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        Button::new("btn-player-speed")
-                            .ghost()
-                            .small()
-                            .label(format!("{:.2}x", self.speed)),
-                    ),
+                div().flex().items_center().gap_2().child(
+                    Button::new("btn-player-speed")
+                        .ghost()
+                        .small()
+                        .label(format!("{:.2}x", self.speed)),
+                ),
             )
     }
 }

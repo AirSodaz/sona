@@ -17,8 +17,8 @@
 
 mod harness;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use harness::TestHarness;
@@ -28,7 +28,7 @@ use sona_core::ports::event::EventEmitterPort;
 use sona_desktop_lib::app::{GlobalDesktopServices, GlobalEventBus};
 use sona_desktop_lib::event_bus::AppEventBus;
 use sona_desktop_lib::platform::single_instance::{
-    SingleInstanceGuard, SONA_SINGLE_INSTANCE_LOCK_NAME,
+    SONA_SINGLE_INSTANCE_LOCK_NAME, SingleInstanceGuard,
 };
 use tokio::sync::broadcast::error::RecvError;
 
@@ -141,7 +141,8 @@ async fn test_app_event_bus_high_subscriber_fanout_500() {
     // Small yield to let tasks enter recv()
     tokio::task::yield_now().await;
 
-    bus.emit("fanout:broadcast", json!({ "round": 42 })).unwrap();
+    bus.emit("fanout:broadcast", json!({ "round": 42 }))
+        .unwrap();
 
     let timeout = Duration::from_secs(5);
     let _ = tokio::time::timeout(timeout, async {
@@ -184,7 +185,10 @@ async fn test_app_event_bus_lagged_subscriber_handling_and_recovery() {
 
     // Next receive resumes delivery from the oldest unexpired message (index 48)
     let second_recv = slow_rx.recv().await;
-    assert!(second_recv.is_ok(), "Subscriber should recover after handling Lagged");
+    assert!(
+        second_recv.is_ok(),
+        "Subscriber should recover after handling Lagged"
+    );
     let event = second_recv.unwrap();
     assert_eq!(event.payload["index"], 48);
 
@@ -200,7 +204,10 @@ async fn test_app_event_bus_lagged_subscriber_handling_and_recovery() {
             break;
         }
     }
-    assert!(found_fresh, "Subscriber must eventually receive fresh:event after draining backlog");
+    assert!(
+        found_fresh,
+        "Subscriber must eventually receive fresh:event after draining backlog"
+    );
 }
 
 #[tokio::test]
@@ -400,8 +407,8 @@ fn test_single_instance_lock_name_synchronization_and_focus_handling() {
     drop(primary_guard);
 
     // 5. Subsequent instance can now acquire lock
-    let third_attempt = SingleInstanceGuard::acquire()
-        .expect("Subsequent acquisition query should succeed");
+    let third_attempt =
+        SingleInstanceGuard::acquire().expect("Subsequent acquisition query should succeed");
     assert!(
         third_attempt.is_some(),
         "Subsequent instance must successfully acquire lock after primary dropped"
@@ -508,7 +515,8 @@ async fn test_decoupled_core_concurrent_multithreaded_services() {
     for e_idx in 0..5 {
         let bus = event_bus.clone();
         handles.push(tokio::spawn(async move {
-            bus.emit("stress:core_ping", json!({ "seq": e_idx })).unwrap();
+            bus.emit("stress:core_ping", json!({ "seq": e_idx }))
+                .unwrap();
         }));
     }
 

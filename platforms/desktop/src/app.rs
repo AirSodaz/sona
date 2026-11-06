@@ -2,8 +2,8 @@
 //!
 //! Milestone 1: Decoupled Core Direct Linking (Feature 4)
 
-use std::sync::Arc;
 use gpui_kit::*;
+use std::sync::Arc;
 
 use crate::event_bus::AppEventBus;
 use crate::services::DesktopServices;
@@ -48,11 +48,7 @@ pub const MAIN_WINDOW_MIN_HEIGHT: f32 = 600.0;
 /// 1. Initializes GPUI Kit framework subsystems (theming, overlays, assets).
 /// 2. Registers global accessors for backend domain services and event streaming.
 /// 3. Opens the primary application window hosting `MainShell`.
-pub fn bootstrap(
-    cx: &mut App,
-    services: Arc<DesktopServices>,
-    event_bus: Arc<AppEventBus>,
-) {
+pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<AppEventBus>) {
     // 1. Initialize GPUI Kit (theming, overlay managers, assets, default bindings)
     gpui_kit::init(cx);
 

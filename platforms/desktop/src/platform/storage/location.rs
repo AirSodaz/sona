@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
+use sona_core::ports::event::EventEmitterPort;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sona_core::ports::event::EventEmitterPort;
 
 pub use sona_runtime_fs::{
     STORAGE_BOOTSTRAP_FILE_NAME, StorageBootstrapConfig, load_bootstrap_config,
@@ -157,7 +157,9 @@ pub fn is_migration_in_progress() -> bool {
     MIGRATION_IN_PROGRESS.load(Ordering::Acquire)
 }
 
-pub async fn check_active_tasks_idle(services: &crate::services::DesktopServices) -> Result<(), String> {
+pub async fn check_active_tasks_idle(
+    services: &crate::services::DesktopServices,
+) -> Result<(), String> {
     if services.audio.has_active_captures() {
         return Err(
             "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
@@ -191,7 +193,9 @@ pub async fn check_active_tasks_idle(services: &crate::services::DesktopServices
     Ok(())
 }
 
-pub async fn check_storage_can_migrate(services: &crate::services::DesktopServices) -> Result<(), String> {
+pub async fn check_storage_can_migrate(
+    services: &crate::services::DesktopServices,
+) -> Result<(), String> {
     if is_migration_in_progress() {
         return Err("Another storage migration is already in progress.".to_string());
     }
@@ -242,7 +246,8 @@ impl MigrationProgressEmitter {
                     copied_bytes: self.copied_bytes,
                     total_bytes: self.total_bytes,
                     percent,
-                }).unwrap_or_default(),
+                })
+                .unwrap_or_default(),
             );
         }
         self.last_emit = std::time::Instant::now();
@@ -514,10 +519,6 @@ pub fn cleanup_pending_storage_locations_for_default() {
     let default_dir = default_app_local_data_dir();
     cleanup_pending_storage_locations(&default_dir);
 }
-
-
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoragePathOpenTarget {

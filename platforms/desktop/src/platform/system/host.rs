@@ -938,7 +938,9 @@ pub fn force_exit() {
 pub fn focus_window(label: &str) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        Ok(crate::platform::single_instance::focus_existing_window(label))
+        Ok(crate::platform::single_instance::focus_existing_window(
+            label,
+        ))
     }
     #[cfg(not(target_os = "windows"))]
     {

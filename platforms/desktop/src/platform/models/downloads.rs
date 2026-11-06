@@ -203,10 +203,7 @@ pub async fn download_preset_model(
         .map_err(|error| error.to_string())
 }
 
-pub async fn delete_preset_model(
-    models_dir: &Path,
-    model_id: &str,
-) -> Result<(), String> {
+pub async fn delete_preset_model(models_dir: &Path, model_id: &str) -> Result<(), String> {
     // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
     sona_llama_cpp::prune_idle_llm_models();
     sona_llama_cpp::prune_idle_llama_models();

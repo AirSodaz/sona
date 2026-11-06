@@ -12,8 +12,8 @@ pub mod window_decorations;
 
 // Re-exports for backwards compatibility and clean public API
 pub use auto_launch::{
-    AutoLaunchStatus, disable_auto_launch, enable_auto_launch, get_auto_launch_status,
-    is_auto_launch_enabled,
+    AutoLaunchManager, AutoLaunchStatus, MockAutoLaunch, clear_mock_manager, disable_auto_launch,
+    enable_auto_launch, get_auto_launch_status, is_auto_launch_enabled, set_mock_manager,
 };
 pub use opener::{open_path, open_path_async, open_url, open_url_async};
 pub use single_instance::SingleInstanceGuard;

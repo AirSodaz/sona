@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::sync::Arc;
 pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClearResult};
 use sona_sqlite::SqliteApplicationContext;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 pub async fn get_usage_snapshot(
     context: &Arc<SqliteApplicationContext>,
@@ -23,5 +23,7 @@ pub async fn get_usage_snapshot(
 
 pub async fn clear_webview_browsing_data() -> Result<WebviewBrowsingDataClearResult, String> {
     // Pure Rust GPUI architecture contains no WebView browsing data.
-    Ok(sona_application::storage_usage::build_webview_clear_result(None, None))
+    Ok(sona_application::storage_usage::build_webview_clear_result(
+        None, None,
+    ))
 }

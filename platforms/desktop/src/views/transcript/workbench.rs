@@ -1,8 +1,8 @@
 //! Transcript Workbench view combining Editor, Player, Toolbar, and Sheets.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 use super::audio_player::AudioPlayerBar;
@@ -103,13 +103,7 @@ impl TranscriptWorkbench {
                     .flex()
                     .flex_1()
                     .w_full()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_1()
-                            .h_full()
-                            .child(self.editor.render(cx)),
-                    )
+                    .child(div().flex().flex_1().h_full().child(self.editor.render(cx)))
                     .child(self.summary_sheet.render(cx))
                     .child(self.speaker_sheet.render(cx))
                     .child(self.version_sheet.render(cx)),

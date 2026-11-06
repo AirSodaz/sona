@@ -8,13 +8,13 @@ pub use tracker::*;
 
 use super::facade::AgentControlFacade;
 use serde::{Deserialize, Serialize};
+use sona_core::ports::event::EventEmitterPort;
 pub use sona_core::runtime::ipc::{
     WINDOWS_PIPE_NAME, get_ipc_endpoint, get_unix_socket_path, resolve_ipc_endpoint,
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sona_core::ports::event::EventEmitterPort;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, watch};
 
@@ -207,7 +207,10 @@ impl AgentControlServerController {
         }
 
         if let Some(em) = emitter {
-            let _ = em.emit("mcp-activity", serde_json::to_value(&entry).unwrap_or_default());
+            let _ = em.emit(
+                "mcp-activity",
+                serde_json::to_value(&entry).unwrap_or_default(),
+            );
             if notify_on_mutation && entry.status == "success" {
                 let is_mutation = matches!(
                     entry.category.as_str(),

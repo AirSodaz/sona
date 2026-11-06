@@ -1,9 +1,9 @@
 //! Notifications center flyout popover panel.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 pub struct NotificationCenter {
@@ -28,56 +28,46 @@ impl NotificationCenter {
     }
 
     pub fn render(&mut self, cx: &App) -> impl IntoElement {
-        div()
-            .when(self.is_open, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .w(px(320.0))
-                        .p_3()
-                        .rounded_lg()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .shadow_xl()
-                        .gap_2()
-                        .child(
+        div().when(self.is_open, |this| {
+            this.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .w(px(320.0))
+                    .p_3()
+                    .rounded_lg()
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .shadow_xl()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_1()
+                            .child(
+                                div()
+                                    .text_size(px(14.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("Notifications"),
+                            )
+                            .child(Button::new("btn-notif-close").ghost().small().label("✕")),
+                    )
+                    .child(div().flex().flex_col().gap_1p5().children(
+                        self.notifications.iter().enumerate().map(|(i, notif)| {
                             div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .px_1()
-                                .child(
-                                    div()
-                                        .text_size(px(14.0))
-                                        .font_weight(FontWeight::BOLD)
-                                        .child("Notifications"),
-                                )
-                                .child(
-                                    Button::new("btn-notif-close")
-                                        .ghost()
-                                        .small()
-                                        .label("✕")
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1p5()
-                                .children(self.notifications.iter().enumerate().map(|(i, notif)| {
-                                    div()
-                                        .id(ElementId::from(format!("notif-item-{}", i)))
-                                        .p_2()
-                                        .rounded_md()
-                                        .bg(cx.theme().input)
-                                        .text_size(px(12.0))
-                                        .line_height(relative(1.3))
-                                        .child(notif.clone())
-                                })),
-                        ),
-                )
-            })
+                                .id(ElementId::from(format!("notif-item-{}", i)))
+                                .p_2()
+                                .rounded_md()
+                                .bg(cx.theme().input)
+                                .text_size(px(12.0))
+                                .line_height(relative(1.3))
+                                .child(notif.clone())
+                        }),
+                    )),
+            )
+        })
     }
 }

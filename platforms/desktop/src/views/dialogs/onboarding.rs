@@ -1,8 +1,8 @@
 //! Onboarding wizard modal for first-run setup and model downloads.
 
+use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder as _;
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::*;
 
 pub struct OnboardingWizard {

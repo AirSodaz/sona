@@ -102,8 +102,6 @@ where
     }
 }
 
-
-
 #[derive(Clone)]
 pub struct DesktopSqliteState {
     context: Arc<std::sync::RwLock<Arc<sona_sqlite::SqliteApplicationContext>>>,
@@ -134,8 +132,6 @@ impl DesktopSqliteState {
         Ok(())
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

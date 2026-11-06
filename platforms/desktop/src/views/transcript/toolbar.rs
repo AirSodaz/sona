@@ -1,8 +1,8 @@
 //! Transcript editor formatting toolbar.
 
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 pub struct EditorToolbar {
@@ -36,7 +36,12 @@ impl EditorToolbar {
                     .child(Button::new("btn-bold").ghost().xsmall().label("B"))
                     .child(Button::new("btn-italic").ghost().xsmall().label("I"))
                     .child(div().w(px(1.0)).h(px(14.0)).bg(cx.theme().border))
-                    .child(Button::new("btn-split").outline().xsmall().label("Split Segment")),
+                    .child(
+                        Button::new("btn-split")
+                            .outline()
+                            .xsmall()
+                            .label("Split Segment"),
+                    ),
             )
             .child(
                 div()

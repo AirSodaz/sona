@@ -6,13 +6,13 @@ pub use sona_core::automation::{
     AutomationRuntimeRuleConfig, collect_runtime_rule_path_result, normalize_automation_path,
     should_consider_runtime_candidate_path,
 };
+use sona_core::ports::event::EventEmitterPort;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use sona_core::ports::event::EventEmitterPort;
 
 const AUTOMATION_RUNTIME_CANDIDATE_EVENT: &str = "automation-runtime-candidate";
 
@@ -114,7 +114,9 @@ impl AutomationRuntimeState {
     }
 }
 
-pub fn create_event_sink(emitter: Arc<dyn EventEmitterPort>) -> Arc<dyn AutomationRuntimeEventSink> {
+pub fn create_event_sink(
+    emitter: Arc<dyn EventEmitterPort>,
+) -> Arc<dyn AutomationRuntimeEventSink> {
     Arc::new(EventEmitterAutomationSink::new(emitter))
 }
 
@@ -297,10 +299,9 @@ pub async fn scan_rule_runtime(
     rule: AutomationRuntimeRuleConfig,
 ) -> Result<(), String> {
     let rule_for_scan = rule.clone();
-    let paths =
-        tokio::task::spawn_blocking(move || collect_candidate_paths(&rule_for_scan))
-            .await
-            .map_err(|error| error.to_string())??;
+    let paths = tokio::task::spawn_blocking(move || collect_candidate_paths(&rule_for_scan))
+        .await
+        .map_err(|error| error.to_string())??;
 
     for file_path in paths {
         schedule_candidate(
