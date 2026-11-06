@@ -80,7 +80,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | Owns `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
 | `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
-| `platforms/desktop/` | `sona` | host | Desktop Tauri host |
+| `platforms/desktop/` | `sona` | host | Desktop GPUI host |
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) server host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
@@ -91,16 +91,26 @@ Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`,
 <a id="composition-roots"></a>
 ## Composition roots
 
-- Desktop: `platforms/desktop/src/app/setup.rs` plus `platforms/desktop/src/platform/` compose the desktop runtime.
+- Desktop: `platforms/desktop/src/app.rs`, `platforms/desktop/src/services/mod.rs`, and `platforms/desktop/src/platform/` compose the pure Rust GPUI desktop runtime.
 - CLI: `platforms/cli/src/lib.rs` and individual command modules compose CLI commands.
 - UniFFI/mobile: `platforms/uniffi/src/application_context.rs` composes the mobile-facing runtime, and `platforms/uniffi/src/lib.rs` publishes the exported surface.
 
 <a id="desktop-frontend-dependencies"></a>
-### Desktop frontend dependency direction
+### Desktop GPUI architecture and view layout
 
-Desktop frontend imports point from views and hooks toward feature services and stores, then toward stable domain DTOs and `services/tauri` platform gateways. `src/types/` and `src/constants/` must not import services, stores, hooks, or components. Feature services may coordinate stores but must not import hooks or components; stores must not import UI modules. The complete production import graph must remain acyclic.
+The desktop frontend is written entirely in pure Rust using `gpui` and `gpui-kit` (`gpui-component`), completely excising the legacy Tauri WebView, React/TypeScript codebase, and web IPC layer.
 
-All static and dynamic `@tauri-apps/*` imports live under `src/services/tauri/platform/`, except the centralized `@tauri-apps/api/core` invocation adapter at `src/services/tauri/invoke.ts`. Tauri command contracts depend only on generated bindings, command names, and DTOs owned by `src/types/`; they never depend on a business service. `scripts/frontend-architecture.test.js` enforces these rules in `test:scripts` and PR CI.
+UI views are located under `platforms/desktop/src/views/` and organized into dedicated functional modules:
+- `shell.rs`: The root `MainShell` hosting the header bar, workspace switcher, dialog manager, and status bar.
+- `create/`: Unified creation workspace combining live microphone/desktop recording (`live_record.rs`), batch import dropzone (`batch_import.rs`), and the persistent model/language options capsule (`options_capsule.rs`).
+- `projects/`: Multi-project workspace management, navigation rail (`rail.rs`), search/filter toolbar (`toolbar.rs`), transcript cards (`results.rs`), and batch selection operations (`selection_bar.rs`).
+- `tools/`: Unified Tools workbench with sidebar navigation (`sidebar.rs`) coordinating sub-controllers for Live Subtitles (`subtitles.rs`), Voice Typing (`voice_typing.rs`), Axum HTTP API Server (`api_server.rs`), MCP Agent Server (`mcp.rs`), and Media Server Sync (`media_server.rs`).
+- `transcript/`: Complete Transcript Workbench (`workbench.rs`) hosting the virtualized segment editor (`editor.rs`, `segment_row.rs`), audio playback bar (`audio_player.rs`), floating search/replace overlay (`search_overlay.rs`), formatting toolbar (`toolbar.rs`), and slide-over inspector sheets (AI summary, speaker review, version history).
+- `settings/`: Multi-tab modal managing 9 configuration slices (General, Audio, ASR Engines, LLM, Storage, Hotkeys, Appearance, Sync, Advanced).
+- `overlays/`: Floating auxiliary windows including transparent bilingual subtitles (`caption_window.rs`) and dictation dynamic island (`voice_typing_island.rs`).
+- `dialogs/`: Native modals for onboarding, file export (`rfd`), crash recovery, diagnostics, and notifications.
+
+Views bind directly to `DesktopServices` in GPUI global context and receive real-time streaming updates via the in-process Tokio broadcast `AppEventBus` (`platforms/desktop/src/event_bus.rs`).
 
 
 The desktop frontend organizes application interaction into three primary modes:
@@ -137,7 +147,7 @@ Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard
 
 The other standalone Application-role package is `sona-sync` (`application/sync/`), isolated because Sync needs a provider-neutral vault and lifecycle. Do not create additional Application crates per domain; consolidate new use-case services into `sona-application` unless a clear isolation boundary warrants a separate crate.
 
-Live transcription is coordinated by `sona-application` through `LiveTranscriptionCoordinator`. Core owns the ASR contract, typed audio-frame cursor, inference-spec equality, and per-consumer output policy; it does not own capture devices or UI lifecycles. `StreamingAsrFactoryPort` is implemented by the Desktop composition root, which selects the local or online adapter and reuses its model/connection resources. Desktop owns CPAL capture leases, recording writers, Tauri commands, and event delivery. CLI and UniFFI/Android use the same Core frame port while retaining independent sessions, so their future adoption of the coordinator does not require a second streaming API. Only one pipeline feeds a source frame for an identical source epoch, input transform, and inference spec; consumers keep independent mailboxes and output post-processing.
+Live transcription is coordinated by `sona-application` through `LiveTranscriptionCoordinator`. Core owns the ASR contract, typed audio-frame cursor, inference-spec equality, and per-consumer output policy; it does not own capture devices or UI lifecycles. `StreamingAsrFactoryPort` is implemented by the Desktop composition root, which selects the local or online adapter and reuses its model/connection resources. Desktop owns CPAL capture leases, recording writers, direct service invocations, and event bus delivery. CLI and UniFFI/Android use the same Core frame port while retaining independent sessions, so their future adoption of the coordinator does not require a second streaming API. Only one pipeline feeds a source frame for an identical source epoch, input transform, and inference spec; consumers keep independent mailboxes and output post-processing.
 
 ### Core module map (orientation)
 
@@ -196,12 +206,12 @@ CLI is a stateless transcription host: application persistence, History/Tag, Onl
 <a id="error-boundaries"></a>
 ## Error boundaries
 
-Domain and application errors remain typed across Core, Application, and adapter code. Tauri, UniFFI, CLI, and HTTP route handlers perform the final compatibility mapping for their callers. They are the only public string-conversion boundaries: internal layers must not replace typed failures with public strings.
+Domain and application errors remain typed across Core, Application, and adapter code. UniFFI, CLI, and HTTP route handlers perform the final compatibility mapping for their callers. They are the only public string-conversion boundaries: internal layers must not replace typed failures with public strings.
 
 <a id="compatibility-policy"></a>
 ## Compatibility policy
 
-Public caller contracts may require strings, status-and-string tuples, or language-specific error values. Keep that conversion at the final Tauri, UniFFI, CLI, or HTTP boundary, where it can preserve the established contract. New domain and application APIs must expose typed errors; adapters and hosts must not move compatibility strings inward. When an external contract changes, add an explicit boundary mapping and a focused contract test rather than weakening the inner typed API.
+Public caller contracts may require strings, status-and-string tuples, or language-specific error values. Keep that conversion at the final UniFFI, CLI, or HTTP boundary, where it can preserve the established contract. New domain and application APIs must expose typed errors; adapters and hosts must not move compatibility strings inward. When an external contract changes, add an explicit boundary mapping and a focused contract test rather than weakening the inner typed API.
 
 ### Storage baseline
 
@@ -221,29 +231,24 @@ There are currently no registered outbound-adapter-to-outbound-adapter exception
 The desktop host keeps the operating system window frame rather than drawing its
 own. The frame is recolored instead, so it reads as part of the application:
 
-- `platforms/desktop/src/platform/system/windows_chrome.rs` owns the color
-  policy. It maps a resolved theme to the `--color-bg-secondary`,
-  `--color-text-primary` and `--color-bg-tertiary` values from
-  `frontend/src/styles/base.css` and applies them through
+- `platforms/desktop/src/platform/window_decorations.rs` owns the color
+  policy. It maps the resolved GPUI theme to the `--color-bg-secondary`,
+  `--color-text-primary` and `--color-bg-tertiary` values defined in
+  `platforms/desktop/src/theme/tokens.rs` and applies them through
   `DwmSetWindowAttribute` (`DWMWA_CAPTION_COLOR`, `DWMWA_TEXT_COLOR`,
   `DWMWA_BORDER_COLOR`, `DWMWA_WINDOW_CORNER_PREFERENCE`).
 - The application theme is authoritative: the caption does **not** follow the
   Windows system theme, so an in-app light/dark switch moves the frame too.
-- `ResolvedTheme` accepts only `light` and `dark`. `auto` is resolved by the
-  frontend against `prefers-color-scheme` before crossing the IPC boundary, so
-  the host never has to guess what the webview is showing.
-- `useThemeEffect` pushes the resolved theme to `set_window_theme` on every
-  change, including OS-driven `auto` transitions. The call is fire-and-forget:
+- `ResolvedTheme` accepts only `light` and `dark`. `auto` is resolved by GPUI
+  against system theme preferences in-process.
+- `apply_caption_color` is invoked during window initialization and on theme change. The call is fire-and-forget:
   a failure leaves the frame on its previous color and must never break theme
   application itself.
-- `create_main_window` applies the light theme before the first paint to avoid a
-  wrong-color flash on startup, then the frontend corrects it if the persisted
-  preference differs.
 - `DWMWA_CAPTION_COLOR` requires Windows 11 (build 22000). Every attribute write
   is best-effort and logged at debug level; Windows 10 keeps the default frame
   and loses only the color match, not the window behaviors.
 
-macOS and Linux are no-ops here. They theme their frames at the platform level,
+macOS and Linux theme their frames at the platform level,
 and the auxiliary `caption` / `voice-typing` overlays are intentionally
 frameless (`decorations: false`), so they are excluded from this path.
 
@@ -257,9 +262,9 @@ removed pre-v0.8.0 storage migrations.
 ### Project and Legacy Tag Cleanup
 
 - **Canonical model:** Project (`ProjectService` / Project pipelines and indexed `project_id`).
-- **Legacy Tag command deprecation:** The legacy Tag command surface (`tag_*`, `history_*_tag_assignments`) and tags-to-projects auto-migration have been removed. Desktop commands directly update project assignments.
+- **Legacy Tag command deprecation:** The legacy Tag command surface (`tag_*`, `history_*_tag_assignments`) and tags-to-projects auto-migration have been removed. Desktop services directly update project assignments.
 - **SQLite baseline:** Minimum supported schema version is 8. Legacy schemas (< 8) from the multi-tag era are deprecated and trigger a backup-and-reset flow.
-- **Host surface:** Desktop Tauri commands operate on projects (`project_*`, `history_update_project_assignments`, `history_reassign_project`).
+- **Host surface:** Desktop services operate on projects (`ProjectService` in `platforms/desktop/src/platform/repositories/project.rs`, `history_update_project_assignments`, `history_reassign_project`).
 
 ### Local ASR wire tag alias
 
@@ -289,7 +294,7 @@ UniFFI renders a `Record` as a Kotlin `data class`, and its generated `toString(
 
 Each client platform owns an update mechanism tailored to its operating environment and security boundary:
 
-- **Desktop (Tauri):** Employs `tauri-plugin-updater` with Minisign public key verification against `updater.json`. Handles channel switching (Stable and Nightly) and directs manual fallback downloads to channel-specific release pages.
+- **Desktop:** Native auto-launch and update verifier checking verified release manifests against channel identity (Stable and Nightly), directing manual fallback downloads to channel-specific release pages.
 - **CLI (`sona-cli update`):** Checks and downloads verified Sona Desktop installer packages (`.exe`, `.AppImage`, `.tar.gz`) from `updater.json`. CLI self-update is intentionally out of scope because CI release workflows only package desktop installers; CLI binaries are updated via `cargo install --path platforms/cli` or system package managers.
 - **Android:** Pure Kotlin implementation (`AndroidAppUpdateAdapter.kt`) checking `android-update.json` against integer `versionCode` and routing users to the GitHub release page via browser intent. Android update avoids UniFFI bridging, preserving zero-permission installation security and store compliance.
 

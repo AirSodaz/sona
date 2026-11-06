@@ -11,13 +11,13 @@
 - Rust stable 工具链
 - 用于构建 llama.cpp 本地 ASR 适配器的 CMake 与 C/C++ 编译器（推荐 Clang 工具链，如 Linux 下 `clang`/`clang++`、Windows 下 `clang-cl` + Ninja）。桌面端与 CLI 构建会动态链接生成的 ggml 与 llama 共享库，发布安装包会将这些库暂存到宿主运行时目录。
 - 可选（GPU 加速构建）：Windows / Linux Vulkan 构建需要 LunarG Vulkan SDK（提供 `glslc` 与 `SPIRV-Headers`）；macOS 自动使用 Xcode Command Line Tools 内置的 Metal 工具链。本地开发构建默认采用纯 CPU 模式；发布的桌面安装包中，Windows x64 和 Linux 启用 `llama-vulkan` 特性（由环境变量 `LLAMA_ENABLE_VULKAN=1` 驱动打包），macOS 启用 `llama-metal` 特性（由环境变量 `LLAMA_ENABLE_METAL=1` 驱动打包）。
-- Tauri 在当前平台所需的系统依赖
+- GPUI 依赖的系统图形与字体库（根据系统不同为 Vulkan、Direct3D 11/12 或 Metal）
 
 在 Ubuntu 或 Debian 上，可通过以下命令安装桌面端系统依赖：
 
 ```bash
 sudo apt-get update
-sudo apt-get install libwebkit2gtk-4.1-dev \
+sudo apt-get install \
     build-essential \
     clang \
     llvm-dev \
@@ -27,10 +27,11 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     wget \
     file \
     libssl-dev \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libasound2-dev
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libasound2-dev \
+    libxkbcommon-x11-dev \
+    libvulkan-dev
 ```
 
 ## 安装
@@ -44,15 +45,11 @@ pnpm install
 
 ## 开发
 
-通过仓库的 Tauri 包装器运行桌面应用：
+运行纯 Rust GPUI 桌面应用：
 
 ```bash
-pnpm run tauri dev
-```
-
-不需要原生宿主时，可以只运行前端开发服务器：
-
-```bash
+cargo run -p sona
+# 或使用 pnpm 脚本别名
 pnpm run dev
 ```
 
@@ -63,8 +60,6 @@ pnpm run dev
 ```bash
 pnpm test
 pnpm run test:scripts
-pnpm run lint:ci
-pnpm run build:ci
 pnpm run verify:android-client
 pnpm run verify:android-uniffi
 ```
@@ -75,10 +70,12 @@ Rust 包应使用聚焦的 Cargo package 或 test selector 进行测试。贡献
 ## 构建桌面应用
 
 ```bash
-pnpm run tauri build
+cargo build -p sona --release
+# 或使用 pnpm 脚本别名
+pnpm run build
 ```
 
-桌面安装包会根据构建目标生成在 `target/release/bundle` 或 `target/<triple>/release/bundle` 目录中。
+Release 二进制文件会输出在 `target/release/sona`（Windows 下为 `target/release/sona.exe`）。
 
 ## 构建 CLI
 

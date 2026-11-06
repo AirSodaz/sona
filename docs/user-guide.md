@@ -409,7 +409,7 @@ Sona provides 14 structured settings areas, and features a client-side search ba
 - `Settings > Automation`
   watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
 - `Settings > Storage Management`
-  storage paths, custom FFmpeg binary path, disk analysis, audio retention cleanup policies, and WebView cache cleanup
+  storage paths, custom FFmpeg binary path, disk analysis, audio retention cleanup policies, and cache cleanup
 - `Settings > Cloud Sync`
   End-to-End Encrypted (E2EE) cross-device vault supporting WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.), Vault ID pairing, master password, emergency recovery keys, sync scopes, and conflict center
 - `Settings > API Server`
@@ -455,7 +455,7 @@ Manage disk consumption and external binaries in `Settings > Storage Management`
 - **Directory Overview**: View and inspect paths for application data, offline models, and temporary caches with quick links to system file explorers.
 - **Custom FFmpeg Path**: If your system lacks a global FFmpeg or requires a specific decoder version for proprietary video/audio containers, specify the binary path directly here.
 - **Audio Retention Policy**: Configure automatic retention periods for recorded audio files (`Keep Forever`, `Delete Immediately`, `7 days`, `30 days`, `90 days`, `180 days`, `365 days`). When expired, raw audio is purged while text transcripts and summaries are preserved.
-- **WebView Cache Cleanup**: Clear internal WebView cache and storage with a single click.
+- **Cache & Temporary Data Cleanup**: Clear temporary audio segments, inference caches, and workspace staging files with a single click.
 
 ### Message Center And Cancellation
 

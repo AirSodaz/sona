@@ -80,7 +80,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | 拥有 `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
 | `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
-| `platforms/desktop/` | `sona` | host | 桌面 Tauri Host |
+| `platforms/desktop/` | `sona` | host | 桌面 GPUI Host |
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) 服务端 Host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
@@ -91,16 +91,26 @@ Core <- Outbound Adapter <------------- Host
 <a id="composition-roots"></a>
 ## 组合根
 
-- 桌面端：`platforms/desktop/src/app/setup.rs` 与 `platforms/desktop/src/platform/` 组合桌面运行时。
+- 桌面端：`platforms/desktop/src/app.rs`、`platforms/desktop/src/services/mod.rs` 与 `platforms/desktop/src/platform/` 组合纯 Rust GPUI 桌面运行时。
 - CLI：`platforms/cli/src/lib.rs` 与各个命令模块组合 CLI 命令。
 - UniFFI/移动端：`platforms/uniffi/src/application_context.rs` 组合面向移动端的运行时，`platforms/uniffi/src/lib.rs` 发布对外导出面。
 
 <a id="desktop-frontend-dependencies"></a>
-### Desktop 前端依赖方向
+### Desktop GPUI 架构与视图布局
 
-Desktop 前端的导入方向是：view 与 hook 指向 feature service 和 store，再指向稳定的领域 DTO 与 `services/tauri` 平台网关。`src/types/`、`src/constants/` 不得导入 service、store、hook 或 component；feature service 可以编排 store，但不得导入 hook 或 component；store 不得导入 UI 模块。完整的生产模块依赖图必须保持无环。
+桌面前端完全采用纯 Rust 基于 `gpui` 与 `gpui-kit`（`gpui-component`）重构构建，彻底移除了旧版 Tauri WebView、React/TypeScript 代码库与 Web IPC 通信层。
 
-所有静态或动态 `@tauri-apps/*` 导入必须位于 `src/services/tauri/platform/`，唯一例外是集中调用命令的 `src/services/tauri/invoke.ts` 可以导入 `@tauri-apps/api/core`。Tauri command contract 只能依赖生成 bindings、command name 和由 `src/types/` 拥有的 DTO，不得反向依赖业务 service。`scripts/frontend-architecture.test.js` 在 `test:scripts` 与 PR CI 中强制执行这些规则。
+所有 UI 视图统一放置于 `platforms/desktop/src/views/`，按业务模块解耦组织：
+- `shell.rs`：根 `MainShell`，承载顶栏、工作区切换、全局对话框调度与状态栏。
+- `create/`：创作工作区，整合实时麦克风/桌面音频录制（`live_record.rs`）、批量导入拖拽区（`batch_import.rs`）与持久化模型/语言胶囊栏（`options_capsule.rs`）。
+- `projects/`：多项目工作区管理，包含项目导航轨（`rail.rs`）、搜索筛选工具栏（`toolbar.rs`）、转录卡片列表（`results.rs`）与批量操作栏（`selection_bar.rs`）。
+- `tools/`：工具工作台，通过侧边导航（`sidebar.rs`）协调桌面实时字幕（`subtitles.rs`）、语音输入法（`voice_typing.rs`）、Axum HTTP API 服务（`api_server.rs`）、MCP 服务（`mcp.rs`）与媒体库同步（`media_server.rs`）。
+- `transcript/`：转录工作台（`workbench.rs`），包含虚拟化切片编辑器（`editor.rs`、`segment_row.rs`）、底部集成音频播放器（`audio_player.rs`）、浮动搜索替换栏（`search_overlay.rs`）、格式化工具栏（`toolbar.rs`）以及 AI 总结、说话人校验、版本对比抽屉。
+- `settings/`：多标签设置模态框，划分 9 大配置切片（常规、音频、ASR 引擎、大模型、存储、快捷键、外观、同步、高级）。
+- `overlays/`：系统级浮动窗口，包含无边框透明双语实时字幕窗口（`caption_window.rs`）与灵动岛样式语音输入法（`voice_typing_island.rs`）。
+- `dialogs/`：原生弹窗系统，覆盖新手引导、文件导出（`rfd`）、异常崩溃恢复、诊断报告与通知中心。
+
+所有视图直接在进程内绑定 GPUI 全局上下文的 `DesktopServices`，并通过基于 Tokio 广播频道的 `AppEventBus`（`platforms/desktop/src/event_bus.rs`）获取流式实时事件。
 
 桌面前端将应用交互划分为三大核心工作区模式：
 - `create`（创作工作区）：整合实时麦克风/桌面音频录制与批量音视频/网络流导入，支持双层手风琴联动与焦点双向同步。
@@ -137,7 +147,7 @@ pnpm run generate:sona-context
 
 另一个独立的 Application 角色包是 `sona-sync`（路径 `application/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
 
-实时转录由 `sona-application` 的 `LiveTranscriptionCoordinator` 统一协调。Core 只拥有 ASR 契约、带类型的音频帧游标、推理规范等值比较，以及每个消费者独立的输出策略；不拥有采集设备或 UI 生命周期。`StreamingAsrFactoryPort` 由 Desktop 组合根实现，负责选择 local/online adapter 并复用模型或连接资源。Desktop 仍拥有 CPAL 采集 lease、录音 writer、Tauri 命令和事件投递。CLI 与 UniFFI/Android 使用同一个 Core 音频帧端口，但保留独立 session，未来接入协调器时不需要再造一套 streaming API。对于相同 source epoch、输入变换和推理规范，每个 source frame 只向唯一 pipeline feed 一次；消费者仍有独立邮箱和后处理。
+实时转录由 `sona-application` 的 `LiveTranscriptionCoordinator` 统一协调。Core 只拥有 ASR 契约、带类型的音频帧游标、推理规范等值比较，以及每个消费者独立的输出策略；不拥有采集设备或 UI 生命周期。`StreamingAsrFactoryPort` 由 Desktop 组合根实现，负责选择 local/online adapter 并复用模型或连接资源。Desktop 拥有 CPAL 采集 lease、录音 writer、直接服务调用与事件总线投递。CLI 与 UniFFI/Android 使用同一个 Core 音频帧端口，但保留独立 session，未来接入协调器时不需要再造一套 streaming API。对于相同 source epoch、输入变换和推理规范，每个 source frame 只向唯一 pipeline feed 一次；消费者仍有独立邮箱和后处理。
 
 ### Core 模块导航
 
@@ -195,12 +205,12 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
 <a id="error-boundaries"></a>
 ## 错误边界
 
-领域错误和应用错误在 Core、Application 与适配器代码中保持类型化。Tauri、UniFFI、CLI 和 HTTP 路由处理函数在最后为调用方执行兼容性映射。它们是唯一公开的字符串转换边界：内部层不得把类型化失败替换为公开字符串。
+领域错误和应用错误在 Core、Application 与适配器代码中保持类型化。UniFFI、CLI 和 HTTP 路由处理函数在最后为调用方执行兼容性映射。它们是唯一公开的字符串转换边界：内部层不得把类型化失败替换为公开字符串。
 
 <a id="compatibility-policy"></a>
 ## 兼容性策略
 
-公开调用方契约可能需要字符串、状态码与字符串元组或特定语言的错误值。将这类转换保留在最终的 Tauri、UniFFI、CLI 或 HTTP 边界，才能保持既有契约。新的领域和应用 API 必须公开类型化错误；适配器和 Host 不得把兼容性字符串移入内部。外部契约需要变更时，应增加明确的边界映射与聚焦的契约测试，而不是削弱内部类型化 API。
+公开调用方契约可能需要字符串、状态码与字符串元组或特定语言的错误值。将这类转换保留在最终的 UniFFI、CLI 或 HTTP 边界，才能保持既有契约。新的领域和应用 API 必须公开类型化错误；适配器和 Host 不得把兼容性字符串移入内部。外部契约需要变更时，应增加明确的边界映射与聚焦的契约测试，而不是削弱内部类型化 API。
 
 ### 存储基线
 
@@ -218,16 +228,13 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 
 桌面宿主保留操作系统窗口边框，而不自行绘制。改为给边框重新着色，使其看起来属于应用本身：
 
-- `platforms/desktop/src/platform/system/windows_chrome.rs` 负责颜色策略。它把已解析主题映射到
-  `frontend/src/styles/base.css` 中的 `--color-bg-secondary`、`--color-text-primary` 和
+- `platforms/desktop/src/platform/window_decorations.rs` 负责颜色策略。它把已解析主题映射到
+  `platforms/desktop/src/theme/tokens.rs` 中的 `--color-bg-secondary`、`--color-text-primary` 和
   `--color-bg-tertiary`，并通过 `DwmSetWindowAttribute`（`DWMWA_CAPTION_COLOR`、`DWMWA_TEXT_COLOR`、
   `DWMWA_BORDER_COLOR`、`DWMWA_WINDOW_CORNER_PREFERENCE`）应用。
 - 以应用主题为准：标题栏**不**跟随 Windows 系统主题，因此在应用内切换浅色/深色时边框同步变化。
-- `ResolvedTheme` 只接受 `light` 与 `dark`。`auto` 在跨越 IPC 边界之前已由前端根据
-  `prefers-color-scheme` 解析完毕，宿主无需猜测 webview 当前显示的内容。
-- `useThemeEffect` 在每次主题变化时把已解析主题推送给 `set_window_theme`，包括由操作系统驱动的
-  `auto` 切换。该调用是 fire-and-forget 的：失败只会让边框停留在上一个颜色，绝不能影响主题应用本身。
-- `create_main_window` 在首帧绘制前先应用浅色主题，避免启动时闪出错色；随后前端会按已保存的偏好纠正。
+- `ResolvedTheme` 只接受 `light` 与 `dark`。`auto` 由 GPUI 在进程内结合系统偏好解析。
+- `apply_caption_color` 在窗口初始化与主题变化时被调用。该调用是 fire-and-forget 的：失败只会让边框停留在上一个颜色，绝不能影响主题应用本身。
 - `DWMWA_CAPTION_COLOR` 需要 Windows 11（build 22000）。所有属性写入都是尽力而为并记录 debug 日志；
   Windows 10 保留默认边框，只损失颜色一致性，不损失窗口行为。
 
@@ -243,9 +250,9 @@ v0.8.0 之前存储迁移无关。
 ### Project 与遗留 Tag 清理
 
 - **规范模型：** Project（`ProjectService` / Project 流水线与索引化 `project_id`）。
-- **遗留 Tag 命令废弃：** 遗留 Tag 命令接口（`tag_*`、`history_*_tag_assignments`）及从 tags 到 projects 的自动迁移已被清理废弃。桌面命令直接操作项目分配。
+- **遗留 Tag 命令废弃：** 遗留 Tag 命令接口（`tag_*`、`history_*_tag_assignments`）及从 tags 到 projects 的自动迁移已被清理废弃。桌面服务直接操作项目分配。
 - **SQLite 基线：** 最小支持架构版本已提升为 8。多标签时期的遗留架构（< 8）已废弃，并触发备份与重置流程。
-- **Host 接口：** Desktop Tauri 命令直接操作 Project（`project_*`、`history_update_project_assignments`、`history_reassign_project`）。
+- **Host 接口：** Desktop 服务直接操作 Project（`platforms/desktop/src/platform/repositories/project.rs` 中的 `ProjectService`、`history_update_project_assignments`、`history_reassign_project`）。
 
 ### 本地 ASR wire tag 别名
 
@@ -275,7 +282,7 @@ UniFFI 把 `Record` 生成为 Kotlin `data class`，其自动派生的 `toString
 
 各客户端根据其运行环境与安全边界分别管理更新机制：
 
-- **桌面端（Tauri）：** 使用 `tauri-plugin-updater` 配合 Minisign 公钥签名对 `updater.json` 进行校验。支持稳定版（Stable）与每日构建（Nightly）通道切换，并在手动下载 fallback 时跳转对应通道的发布页面。
+- **桌面端：** 原生自启动与更新校验器，基于校验过的发布元数据与渠道标识（Stable 与 Nightly）进行更新，并在手动下载 fallback 时跳转对应通道的发布页面。
 - **CLI（`sona-cli update`）：** 仅负责检查并下载校验过的 Sona Desktop 安装包（`.exe`、`.AppImage`、`.tar.gz`）。CLI 自身的在线自更新有意保持 out of scope，因为 CI 发布流水线在 `updater.json` 中仅打包桌面端安装包；CLI 工具自身通过 `cargo install --path platforms/cli` 或系统包管理器进行升级。
 - **Android：** 纯 Kotlin 实现（`AndroidAppUpdateAdapter.kt`），基于整数 `versionCode` 检查 `android-update.json` 并通过系统浏览器 Intent 引导用户下载。Android 更新机制不经过 UniFFI 桥接，保持零权限与应用商店合规性。
 

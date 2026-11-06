@@ -11,13 +11,13 @@ This guide covers local setup, development, testing, and source builds. See the 
 - The stable Rust toolchain
 - CMake and a C/C++ compiler for the llama.cpp local ASR adapter (the Clang toolchain is recommended, e.g. `clang`/`clang++` on Linux and `clang-cl` + Ninja on Windows). Desktop and CLI builds dynamically link its generated ggml and llama libraries; release bundles stage those libraries beside the host runtime.
 - Optional (GPU builds): for Windows/Linux Vulkan builds, the LunarG Vulkan SDK (providing `glslc` and `SPIRV-Headers`); for macOS, the built-in Metal framework from Xcode Command Line Tools is used automatically. Local development builds stay CPU-only by default; bundled release builds enable `llama-vulkan` on Windows x64 and Linux (env `LLAMA_ENABLE_VULKAN=1`) and `llama-metal` on macOS (env `LLAMA_ENABLE_METAL=1`).
-- The platform dependencies required by Tauri
+- System graphics and font libraries for GPUI (Vulkan, Direct3D 11/12, or Metal depending on OS)
 
 On Ubuntu or Debian, install the desktop system dependencies with:
 
 ```bash
 sudo apt-get update
-sudo apt-get install libwebkit2gtk-4.1-dev \
+sudo apt-get install \
     build-essential \
     clang \
     llvm-dev \
@@ -27,10 +27,11 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     wget \
     file \
     libssl-dev \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libasound2-dev
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libasound2-dev \
+    libxkbcommon-x11-dev \
+    libvulkan-dev
 ```
 
 ## Install
@@ -44,15 +45,11 @@ pnpm install
 
 ## Develop
 
-Run the desktop application through the repository's Tauri wrapper:
+Run the pure Rust GPUI desktop application:
 
 ```bash
-pnpm run tauri dev
-```
-
-Run only the frontend development server when native host behavior is not needed:
-
-```bash
+cargo run -p sona
+# or using pnpm script alias
 pnpm run dev
 ```
 
@@ -63,8 +60,6 @@ Pick the narrowest commands that cover your changes:
 ```bash
 pnpm test
 pnpm run test:scripts
-pnpm run lint:ci
-pnpm run build:ci
 pnpm run verify:android-client
 pnpm run verify:android-uniffi
 ```
@@ -75,10 +70,12 @@ Rust crates should be tested with focused Cargo package or test selectors. See [
 ## Build The Desktop Application
 
 ```bash
-pnpm run tauri build
+cargo build -p sona --release
+# or using pnpm script alias
+pnpm run build
 ```
 
-Desktop bundles are written under `target/release/bundle` or `target/<triple>/release/bundle`, depending on the build target.
+The release binary is written to `target/release/sona` (or `target/release/sona.exe` on Windows).
 
 ## Build The CLI
 

@@ -1,6 +1,6 @@
 # Nightly 预发布构建工作流 (Nightly Release Workflow)
 
-Nightly Release 工作流用于每天自动构建、签名、打包并发布 Sona 的每日预发布版本（pre-release）。同时，它还会生成并更新适用于 Tauri 自动更新器的升级元数据（`updater.json`）。
+Nightly Release 工作流用于每天自动构建、签名、打包并发布 Sona 的每日预发布版本（pre-release）。同时，它还会生成并更新适用于桌面端自动更新器的升级元数据（`updater.json`）。
 
 工作流配置文件: [.github/workflows/nightly.yml](../.github/workflows/nightly.yml)
 
@@ -35,7 +35,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **运行环境**: `ubuntu-latest`
 * **目的**: 计算 nightly 版本的标识符。
 * **流程**:
-  1. 从 `platforms/desktop/frontend/package.json` 中读取基础版本号（Base Version）。
+  1. 从 `package.json` 中读取基础版本号（Base Version）。
   2. 生成 nightly 版本号字符串：`${base_version}-nightly.${github.run_number}`。
   3. 计算 UTC 时间下的构建日期，格式为 `YYYY-MM-DD`。
 
@@ -48,11 +48,11 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
   - **Windows**: `windows-latest`（构建 x64 与 `aarch64-pc-windows-msvc` NSIS 安装包；预发布版本自动排除 `.msi`）。
   - **Android**: 构建 `app-arm64-v8a` 与 `app-x86_64` 的 debug 与 unsigned release APK。
 * **关键步骤**:
-  1. **系统依赖**: 安装目标平台所需的系统级依赖（例如 Linux 下的 GTK/Webkit2gtk）。
+  1. **系统依赖**: 安装目标平台所需的系统级依赖（例如 Linux 下的图形与字体库）。
   2. **Rust & Node 环境配置**: 配置 Rust 工具链、启用 `corepack`，并通过 `pnpm` 安装依赖。
-  3. **渠道与版本修改**: 调用 `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` 来更新 Tauri 配置文件中的渠道和版本号。
+  3. **渠道与版本修改**: 调用 `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` 来更新桌面端配置文件中的渠道和版本号。
   4. **下载 Sherpa-Onnx 库**: 针对每个目标平台/架构，下载并解压匹配的 `sherpa-onnx` 动态链接库。
-  5. **Tauri 构建**: 运行 `node platforms/desktop/scripts/tauri.js build` 构建应用。使用配置的签名密钥对安装包进行签名。
+  5. **桌面端构建**: 构建 Sona 原生安装包。使用配置的签名密钥对安装包进行签名。
   6. **重命名构建产物**: 重命名 macOS 的构建产物，在文件名中附加架构标识（`aarch64` 或 `x64`），以防在发布上传时发生冲突。
   7. **上传构建产物**: 将生成的安装包和升级签名文件（`.sig` 文件）作为工作流构件（Artifacts）上传。
 
@@ -63,7 +63,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
   1. **下载构件**: 下载 `build-tauri` 任务中上传的所有构建产物。
   2. **生成变更日志 (Changelog)**: 生成自上一个 nightly 标签 SHA 到当前提交之间的 Git 提交日志。
   3. **移动 Tag**: 通过 GitHub API 将 `nightly` Git 标签指向当前的提交。
-  4. **构建 `updater.json`**: 读取下载的签名文件（`.sig` 文件），构建 Tauri 格式的 `updater.json`，其中包含所有新上传的 nightly 构件下载地址及其对应的签名信息。
+  4. **构建 `updater.json`**: 读取下载的签名文件（`.sig` 文件），构建发布 `updater.json`，其中包含所有新上传的 nightly 构件下载地址及其对应的签名信息。
   5. **创建或更新 Release**: 使用 `ncipollo/release-action` 更新 GitHub 上现有的 `nightly` 预发布（pre-release）版本，上传所有新编译的安装包和生成的 `updater.json`。
 
 ---
@@ -72,6 +72,6 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 
 要使此工作流顺利运行，必须在 GitHub 仓库的 Secrets 中配置以下凭据：
 
-1. **`TAURI_SIGNING_PRIVATE_KEY`**: 由 Tauri CLI 生成的私钥，用于对应用程序安装包进行签名。
-2. **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**: 用于保护 Tauri 签名私钥的密码短语。
+1. **`TAURI_SIGNING_PRIVATE_KEY`**: 签名私钥，用于对应用程序安装包进行签名。
+2. **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**: 用于保护签名私钥的密码短语。
 3. **`github.token` / `GH_TOKEN`**: GitHub Actions 自动提供的内置 Token，用于执行 API 请求（如移动标签、读取文件）和上传发布资源。
