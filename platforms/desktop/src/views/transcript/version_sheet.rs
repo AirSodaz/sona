@@ -1,5 +1,6 @@
 //! Version history and diff drawer.
 
+use super::super::shell::MainShell;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -15,14 +16,7 @@ impl VersionSheet {
     pub fn new() -> Self {
         Self {
             is_open: false,
-            versions: vec![
-                ("v3 (Auto-Saved)".to_string(), "2 mins ago".to_string()),
-                ("v2 (AI Polished)".to_string(), "15 mins ago".to_string()),
-                (
-                    "v1 (Initial Transcribe)".to_string(),
-                    "1 hour ago".to_string(),
-                ),
-            ],
+            versions: Vec::new(),
         }
     }
 
@@ -30,7 +24,7 @@ impl VersionSheet {
         self.is_open = !self.is_open;
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -54,9 +48,24 @@ impl VersionSheet {
                                     .font_weight(FontWeight::BOLD)
                                     .child("Version History"),
                             )
-                            .child(Button::new("btn-close-versions").ghost().small().label("✕")),
+                            .child(
+                                Button::new("btn-close-versions")
+                                    .ghost()
+                                    .small()
+                                    .label("✕")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.workbench.version_sheet.is_open = false;
+                                        cx.notify();
+                                    })),
+                            ),
                     )
-                    .child(
+                    .child(if self.versions.is_empty() {
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(cx.theme().muted)
+                            .child("No saved versions")
+                            .into_any_element()
+                    } else {
                         div()
                             .flex()
                             .flex_col()
@@ -91,10 +100,22 @@ impl VersionSheet {
                                         Button::new(format!("btn-restore-{}", v))
                                             .outline()
                                             .xsmall()
-                                            .label("Restore"),
+                                            .label("Restore")
+                                            .on_click(cx.listener({
+                                                let snapshot_id = v
+                                                    .split_whitespace()
+                                                    .next()
+                                                    .unwrap_or(v)
+                                                    .to_string();
+                                                move |this, _, _, cx| {
+                                                    this.workbench
+                                                        .restore_version(&snapshot_id, cx);
+                                                }
+                                            })),
                                     )
-                            })),
-                    ),
+                            }))
+                            .into_any_element()
+                    }),
             )
         })
     }

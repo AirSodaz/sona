@@ -6,7 +6,9 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-#[derive(Clone, Debug)]
+use super::super::shell::MainShell;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DialogKind {
     Alert,
     Confirm,
@@ -41,7 +43,8 @@ impl GlobalDialog {
         self.is_open = false;
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+        let kind = self.kind;
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -75,9 +78,49 @@ impl GlobalDialog {
                                     .child(self.message.clone()),
                             )
                             .child(
-                                div().flex().items_center().justify_end().gap_2().child(
-                                    Button::new("btn-dialog-ok").primary().small().label("OK"),
-                                ),
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_end()
+                                    .gap_2()
+                                    .when(
+                                        kind == DialogKind::Confirm || kind == DialogKind::Prompt,
+                                        |actions| {
+                                            actions.child(
+                                                Button::new("btn-dialog-cancel")
+                                                    .ghost()
+                                                    .small()
+                                                    .label("Cancel")
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.global_dialog.close();
+                                                        cx.notify();
+                                                    })),
+                                            )
+                                        },
+                                    )
+                                    .child(
+                                        Button::new("btn-dialog-ok")
+                                            .primary()
+                                            .small()
+                                            .label(if kind == DialogKind::Confirm {
+                                                "Download"
+                                            } else {
+                                                "OK"
+                                            })
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                let confirm_cuda = this.global_dialog.kind
+                                                    == DialogKind::Confirm
+                                                    && this.global_dialog.title
+                                                        == "Download CUDA Add-on";
+                                                this.global_dialog.close();
+                                                if confirm_cuda {
+                                                    this.settings_modal
+                                                        .begin_cuda_addon_download(cx);
+                                                } else {
+                                                    cx.notify();
+                                                }
+                                            })),
+                                    ),
                             ),
                     ),
             )

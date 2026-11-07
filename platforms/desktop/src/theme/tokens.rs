@@ -6,8 +6,8 @@ pub const SIDEBAR_WIDTH: Pixels = px(260.0);
 pub const TOOLS_SIDEBAR_WIDTH: Pixels = px(220.0);
 pub const HEADER_HEIGHT: Pixels = px(56.0);
 pub const BOTTOM_BAR_HEIGHT: Pixels = px(64.0);
-pub const SETTINGS_MODAL_WIDTH: Pixels = px(820.0);
-pub const SETTINGS_MODAL_HEIGHT: Pixels = px(640.0);
+pub const SETTINGS_MODAL_WIDTH: Pixels = px(1120.0);
+pub const SETTINGS_MODAL_HEIGHT: Pixels = px(780.0);
 
 pub const PANEL_LEFT_WIDTH: Pixels = px(350.0);
 pub const PANEL_RIGHT_MIN_WIDTH: Pixels = px(500.0);

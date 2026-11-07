@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const DEFAULT_SHORTCUT_VOICE_TYPING: &str = "Alt+V";
+pub const DEFAULT_SHORTCUT_VOICE_TYPING_TRANSLATE: &str = "Alt+Shift+V";
 pub const DEFAULT_SHORTCUT_SUBTITLES: &str = "Ctrl+Shift+L";
 pub const DEFAULT_SHORTCUT_QUICK_RECALL: &str = "Alt+Shift+H";
 pub const DEFAULT_SHORTCUT_CAPTION_LOCK: &str = "Alt+C";
@@ -25,6 +26,7 @@ const SHORTCUT_MODIFIER_POLL_INTERVAL_MS: u64 = 10;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HotkeyAction {
     VoiceTyping,
+    VoiceTypingTranslate,
     LiveSubtitles,
     QuickRecall,
     CaptionLock,
@@ -50,6 +52,7 @@ pub struct ModifierWaitResult {
 pub struct HotkeyController {
     manager: Option<Arc<GlobalHotKeyManager>>,
     voice_typing_hotkey: Option<HotKey>,
+    voice_typing_translate_hotkey: Option<HotKey>,
     subtitles_hotkey: Option<HotKey>,
     quick_recall_hotkey: Option<HotKey>,
     caption_lock_hotkey: Option<HotKey>,
@@ -63,6 +66,7 @@ impl HotkeyController {
         let mut controller = Self {
             manager,
             voice_typing_hotkey: None,
+            voice_typing_translate_hotkey: None,
             subtitles_hotkey: None,
             quick_recall_hotkey: None,
             caption_lock_hotkey: None,
@@ -87,6 +91,12 @@ impl HotkeyController {
             if mgr.register(vt).is_ok() {
                 map.insert(vt.id(), HotkeyAction::VoiceTyping);
                 self.voice_typing_hotkey = Some(vt);
+            }
+
+            let translate = HotKey::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::KeyV);
+            if mgr.register(translate).is_ok() {
+                map.insert(translate.id(), HotkeyAction::VoiceTypingTranslate);
+                self.voice_typing_translate_hotkey = Some(translate);
             }
 
             // 2. Live Subtitles Overlay: Ctrl+Shift+L
@@ -128,40 +138,74 @@ impl HotkeyController {
 
         match action {
             HotkeyAction::VoiceTyping => {
-                if let Some(old) = self.voice_typing_hotkey.take() {
+                if self
+                    .voice_typing_hotkey
+                    .is_some_and(|old| old.id() == hotkey.id())
+                {
+                    return Ok(());
+                }
+                mgr.register(hotkey).map_err(|e| e.to_string())?;
+                if let Some(old) = self.voice_typing_hotkey.replace(hotkey) {
                     let _ = mgr.unregister(old);
                     map.remove(&old.id());
                 }
-                mgr.register(hotkey).map_err(|e| e.to_string())?;
                 map.insert(hotkey.id(), action);
-                self.voice_typing_hotkey = Some(hotkey);
+            }
+            HotkeyAction::VoiceTypingTranslate => {
+                if self
+                    .voice_typing_translate_hotkey
+                    .is_some_and(|old| old.id() == hotkey.id())
+                {
+                    return Ok(());
+                }
+                mgr.register(hotkey).map_err(|e| e.to_string())?;
+                if let Some(old) = self.voice_typing_translate_hotkey.replace(hotkey) {
+                    let _ = mgr.unregister(old);
+                    map.remove(&old.id());
+                }
+                map.insert(hotkey.id(), action);
             }
             HotkeyAction::LiveSubtitles => {
-                if let Some(old) = self.subtitles_hotkey.take() {
+                if self
+                    .subtitles_hotkey
+                    .is_some_and(|old| old.id() == hotkey.id())
+                {
+                    return Ok(());
+                }
+                mgr.register(hotkey).map_err(|e| e.to_string())?;
+                if let Some(old) = self.subtitles_hotkey.replace(hotkey) {
                     let _ = mgr.unregister(old);
                     map.remove(&old.id());
                 }
-                mgr.register(hotkey).map_err(|e| e.to_string())?;
                 map.insert(hotkey.id(), action);
-                self.subtitles_hotkey = Some(hotkey);
             }
             HotkeyAction::QuickRecall => {
-                if let Some(old) = self.quick_recall_hotkey.take() {
+                if self
+                    .quick_recall_hotkey
+                    .is_some_and(|old| old.id() == hotkey.id())
+                {
+                    return Ok(());
+                }
+                mgr.register(hotkey).map_err(|e| e.to_string())?;
+                if let Some(old) = self.quick_recall_hotkey.replace(hotkey) {
                     let _ = mgr.unregister(old);
                     map.remove(&old.id());
                 }
-                mgr.register(hotkey).map_err(|e| e.to_string())?;
                 map.insert(hotkey.id(), action);
-                self.quick_recall_hotkey = Some(hotkey);
             }
             HotkeyAction::CaptionLock => {
-                if let Some(old) = self.caption_lock_hotkey.take() {
+                if self
+                    .caption_lock_hotkey
+                    .is_some_and(|old| old.id() == hotkey.id())
+                {
+                    return Ok(());
+                }
+                mgr.register(hotkey).map_err(|e| e.to_string())?;
+                if let Some(old) = self.caption_lock_hotkey.replace(hotkey) {
                     let _ = mgr.unregister(old);
                     map.remove(&old.id());
                 }
-                mgr.register(hotkey).map_err(|e| e.to_string())?;
                 map.insert(hotkey.id(), action);
-                self.caption_lock_hotkey = Some(hotkey);
             }
         }
         Ok(())
@@ -178,6 +222,10 @@ impl HotkeyController {
         if let Some(ref mgr) = self.manager {
             let mut map = self.action_map.write();
             if let Some(h) = self.voice_typing_hotkey.take() {
+                let _ = mgr.unregister(h);
+                map.remove(&h.id());
+            }
+            if let Some(h) = self.voice_typing_translate_hotkey.take() {
                 let _ = mgr.unregister(h);
                 map.remove(&h.id());
             }
@@ -318,6 +366,12 @@ where
                         HotkeyAction::VoiceTyping => {
                             emit_fn(
                                 "hotkey:voice_typing",
+                                serde_json::json!({ "pressed": is_pressed }),
+                            );
+                        }
+                        HotkeyAction::VoiceTypingTranslate => {
+                            emit_fn(
+                                "hotkey:voice_typing_translate",
                                 serde_json::json!({ "pressed": is_pressed }),
                             );
                         }

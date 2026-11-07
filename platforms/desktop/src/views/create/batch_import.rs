@@ -3,6 +3,7 @@
 //! `QueueItem.tsx`, and `QueueGroup.tsx` (Gaps G10, G11, G12).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::base::{Disableable as _, FocusableExt as _};
@@ -13,10 +14,15 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use sona_core::recovery::types::{
+    RecoveredQueueItem, RecoveryItemInput, RecoveryItemStage, RecoverySource,
+};
 
 use super::options_capsule::TranscriptionOptionsModel;
 use crate::app::{GlobalDesktopServices, GlobalEventBus};
 use crate::theme::tokens::{COLOR_PROJECT_BLUE, RADIUS_FULL, RADIUS_LG, RADIUS_MD, RADIUS_SM};
+
+static RECOVERY_SNAPSHOT_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -322,6 +328,7 @@ impl BatchImportPanel {
                                     progress_opt,
                                     instance_id_opt.as_deref(),
                                 ) {
+                                    view.persist_recovery_snapshot(cx, Vec::new());
                                     cx.notify();
                                 }
                             })
@@ -357,6 +364,7 @@ impl BatchImportPanel {
                     for path in paths {
                         view.add_file_path(path);
                     }
+                    view.persist_recovery_snapshot(cx, Vec::new());
                     view.start_next_pending(cx);
                     cx.notify();
                 })
@@ -402,6 +410,44 @@ impl BatchImportPanel {
             history_id: None,
             is_media_server: false,
         });
+    }
+
+    pub fn enqueue_recovered_items(
+        &mut self,
+        items: impl IntoIterator<Item = RecoveredQueueItem>,
+        cx: &mut Context<Self>,
+    ) {
+        for item in items {
+            if item.source != sona_core::recovery::types::RecoverySource::BatchImport
+                || !item.can_resume
+                || self.queue.iter().any(|queued| queued.id == item.id)
+            {
+                continue;
+            }
+
+            self.queue.push(BatchQueueItem {
+                id: item.id,
+                instance_id: None,
+                filename: item.filename,
+                file_path: item.file_path,
+                source_type: BatchSourceType::File,
+                status: BatchItemStatus::Pending,
+                progress: 0.0,
+                file_size_bytes: None,
+                duration_seconds: None,
+                project_id: item.tag_ids.first().cloned(),
+                project_name: None,
+                project_color_index: None,
+                error_message: None,
+                history_id: item.history_id,
+                is_media_server: false,
+            });
+        }
+
+        self.pending_expanded = true;
+        self.persist_recovery_snapshot(cx, Vec::new());
+        self.start_next_pending(cx);
+        cx.notify();
     }
 
     pub fn add_stream_url(&mut self, url: String, alias: Option<String>, retain_audio: bool) {
@@ -464,13 +510,16 @@ impl BatchImportPanel {
                 Some(options.batch_language.clone())
             };
             let project_id = item.project_id.clone();
+            let history_id = item.history_id.clone();
             let services = cx.global::<GlobalDesktopServices>().0.clone();
+            self.persist_recovery_snapshot(cx, Vec::new());
 
             cx.spawn(async move |this, cx: &mut AsyncApp| {
                 let req = crate::platform::agent_control::facade::types::TranscribeFileRequest {
                     file_path,
                     language,
                     project_id,
+                    history_id,
                     instance_id: Some(instance_id),
                     save_to_path: None,
                 };
@@ -504,6 +553,7 @@ impl BatchImportPanel {
                         view.completed_expanded = true;
                     }
                     view.start_next_pending(cx);
+                    view.persist_recovery_snapshot(cx, Vec::new());
                     cx.notify();
                 })
                 .ok();
@@ -529,6 +579,7 @@ impl BatchImportPanel {
             cx.notify();
         }
         self.start_next_pending(cx);
+        self.persist_recovery_snapshot(cx, Vec::new());
     }
 
     /// Retries a failed or cancelled item.
@@ -540,6 +591,7 @@ impl BatchImportPanel {
             item.instance_id = None;
         }
         self.start_next_pending(cx);
+        self.persist_recovery_snapshot(cx, Vec::new());
         cx.notify();
     }
 
@@ -557,18 +609,27 @@ impl BatchImportPanel {
             }
         }
         self.start_next_pending(cx);
+        self.persist_recovery_snapshot(cx, Vec::new());
         cx.notify();
     }
 
     /// Clears completed items from the queue.
     pub fn clear_completed(&mut self, cx: &mut Context<Self>) {
+        let resolved_ids = self
+            .queue
+            .iter()
+            .filter(|item| item.status == BatchItemStatus::Complete)
+            .map(|item| item.id.clone())
+            .collect();
         self.queue.retain(|i| i.status != BatchItemStatus::Complete);
+        self.persist_recovery_snapshot(cx, resolved_ids);
         cx.notify();
     }
 
     /// Clears all items from the queue.
     pub fn clear_all(&mut self, cx: &mut Context<Self>) {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
+        let resolved_ids = self.queue.iter().map(|item| item.id.clone()).collect();
         for item in &self.queue {
             if item.status == BatchItemStatus::Processing {
                 if let Some(inst_id) = item.instance_id.clone() {
@@ -584,6 +645,7 @@ impl BatchImportPanel {
             }
         }
         self.queue.clear();
+        self.persist_recovery_snapshot(cx, resolved_ids);
         self.is_clear_menu_open = false;
         self.is_clear_confirm_open = false;
         cx.notify();
@@ -594,7 +656,83 @@ impl BatchImportPanel {
         if !self.is_paused {
             self.start_next_pending(cx);
         }
+        self.persist_recovery_snapshot(cx, Vec::new());
         cx.notify();
+    }
+
+    fn persist_recovery_snapshot(&self, cx: &mut Context<Self>, resolved_ids: Vec<String>) {
+        let items = self
+            .queue
+            .iter()
+            .map(recovery_input_for_queue_item)
+            .collect::<Vec<_>>();
+        let provider = crate::platform::system::paths::DesktopPathProvider::from_default();
+        let generation = RECOVERY_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+        let immediate = !resolved_ids.is_empty();
+        cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+            if !immediate {
+                tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+                if RECOVERY_SNAPSHOT_GENERATION.load(Ordering::Relaxed) != generation {
+                    return;
+                }
+            }
+            if let Err(error) = crate::platform::recovery_repository::persist_queue_snapshot(
+                &provider,
+                items,
+                Some(resolved_ids),
+            )
+            .await
+            {
+                log::warn!("Failed to persist batch recovery snapshot: {error}");
+            }
+        })
+        .detach();
+    }
+}
+
+fn recovery_input_for_queue_item(item: &BatchQueueItem) -> RecoveryItemInput {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
+        .unwrap_or_default();
+    let source_available = match &item.source_type {
+        BatchSourceType::File => Path::new(&item.file_path).is_file(),
+        BatchSourceType::UrlStream { url, .. } => is_valid_stream_url(url),
+    };
+    let stage = if item.status == BatchItemStatus::Processing {
+        RecoveryItemStage::Transcribing
+    } else {
+        RecoveryItemStage::Queued
+    };
+    let stage = serde_json::to_value(stage)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned));
+    let status = match item.status {
+        BatchItemStatus::Pending => "pending",
+        BatchItemStatus::Processing => "processing",
+        BatchItemStatus::Complete => "complete",
+        BatchItemStatus::Error => "error",
+        BatchItemStatus::Cancelled => "cancelled",
+    };
+    RecoveryItemInput {
+        id: Some(item.id.clone()),
+        recovery_id: Some(item.id.clone()),
+        filename: Some(item.filename.clone()),
+        file_path: Some(item.file_path.clone()),
+        source: Some(RecoverySource::BatchImport.to_string()),
+        origin: Some("manual".to_string()),
+        resolution: Some("pending".to_string()),
+        status: Some(status.to_string()),
+        progress: Some(item.progress as f64),
+        tag_ids: item.project_id.iter().cloned().collect(),
+        project_id: item.project_id.clone(),
+        history_id: item.history_id.clone(),
+        history_title: None,
+        last_known_stage: stage,
+        updated_at: Some(now_ms),
+        has_source_file: Some(source_available),
+        can_resume: Some(source_available),
+        ..RecoveryItemInput::default()
     }
 }
 

@@ -3,6 +3,7 @@
 //! Milestone 1: Desktop Foundation, Core Linking & Tauri Excision
 
 pub mod app;
+mod assets;
 pub mod event_bus;
 pub mod integrations;
 pub mod platform;
@@ -97,7 +98,7 @@ pub fn run_app() -> Result<(), Box<dyn std::error::Error>> {
     let app_event_bus = std::sync::Arc::clone(&event_bus);
 
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        .with_assets(assets::AppAssets)
         .run(move |cx| {
             app::bootstrap(cx, app_services, app_event_bus);
         });

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::event_bus::AppEventBus;
 use crate::platform::event::EventEmitterPort;
-use crate::platform::hotkey::HotkeyController;
+use crate::platform::hotkey::{HotkeyAction, HotkeyController};
 use crate::platform::tray::TrayManager;
 use crate::services::DesktopServices;
 use crate::views::shell::MainShell;
@@ -73,6 +73,19 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
     cx.set_global((*services).clone());
     cx.set_global(GlobalDesktopServices(Arc::clone(&services)));
     cx.set_global(GlobalEventBus(Arc::clone(&event_bus)));
+    crate::services::voice_typing_runtime::spawn_voice_typing_event_loop(
+        Arc::clone(&services),
+        Arc::clone(&event_bus),
+    );
+
+    let mcp_enabled =
+        crate::platform::agent_control::facade::AgentControlFacade::new((*services).clone())
+            .load_app_config()
+            .mcp_enabled
+            .unwrap_or(true);
+    if mcp_enabled {
+        services.start_mcp();
+    }
 
     // 3. Register System Tray Manager and start background event poller
     if let Ok(tray) = TrayManager::new() {
@@ -89,6 +102,48 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
 
     // 4. Register Global Hotkeys Controller and start background listener
     let hotkey_controller = Arc::new(parking_lot::RwLock::new(HotkeyController::new()));
+    if let Some(shortcut) = services
+        .config
+        .get_setting("voiceTypingShortcut")
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+    {
+        if let Err(error) = hotkey_controller
+            .write()
+            .rebind_shortcut(HotkeyAction::VoiceTyping, &shortcut)
+        {
+            log::warn!("Failed to register configured voice typing shortcut: {error}");
+        }
+    }
+    if let Some(shortcut) = services
+        .config
+        .get_setting("voiceTypingTranslateShortcut")
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+    {
+        if let Err(error) = hotkey_controller
+            .write()
+            .rebind_shortcut(HotkeyAction::VoiceTypingTranslate, &shortcut)
+        {
+            log::warn!("Failed to register configured voice typing translate shortcut: {error}");
+        }
+    }
+    if let Some(shortcut) = services
+        .config
+        .get_setting("voiceTypingQuickRecallShortcut")
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+    {
+        if let Err(error) = hotkey_controller
+            .write()
+            .rebind_shortcut(HotkeyAction::QuickRecall, &shortcut)
+        {
+            log::warn!("Failed to register configured voice typing quick recall shortcut: {error}");
+        }
+    }
     let bus_clone2 = event_bus.clone();
     let action_map = hotkey_controller.read().action_map();
     crate::platform::hotkey::spawn_hotkey_event_loop(action_map, move |event, payload| {
@@ -141,12 +196,50 @@ pub fn open_caption_window(cx: &mut App) {
 }
 
 /// Opens the floating transparent voice typing dynamic island widget (Feature 15 / Gap G15).
-pub fn open_voice_typing_island(cx: &mut App) {
+pub fn open_voice_typing_island(cx: &mut App, initial_recall: bool) {
+    let window_size = size(px(400.0), px(80.0));
+    let placement = cx
+        .global::<GlobalDesktopServices>()
+        .0
+        .config
+        .get_setting("voiceTypingPlacement")
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| "caret".to_string());
+    let display = cx.primary_display();
+    let visible_bounds = display.as_ref().map(|display| display.visible_bounds());
+    let origin = if placement == "bottom_center" {
+        visible_bounds.map_or_else(
+            || point(px(500.0), px(800.0)),
+            |bounds| {
+                point(
+                    bounds.origin.x + (bounds.size.width - window_size.width) / 2.0,
+                    bounds.origin.y + bounds.size.height - px(88.0),
+                )
+            },
+        )
+    } else {
+        let cursor = crate::platform::system::host::get_text_cursor_position()
+            .ok()
+            .flatten()
+            .or_else(|| crate::platform::system::host::get_mouse_position().ok());
+        let (x, y) = cursor.unwrap_or((500, 800));
+        let mut origin = point(px((x - 4) as f32), px((y + 8) as f32));
+        if let Some(bounds) = visible_bounds {
+            origin.x = origin.x.clamp(
+                bounds.origin.x,
+                (bounds.origin.x + bounds.size.width - window_size.width).max(bounds.origin.x),
+            );
+            origin.y = origin.y.clamp(
+                bounds.origin.y,
+                (bounds.origin.y + bounds.size.height - window_size.height).max(bounds.origin.y),
+            );
+        }
+        origin
+    };
     let window_options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::new(
-            Default::default(),
-            size(px(400.0), px(80.0)),
-        ))),
+        window_bounds: Some(WindowBounds::Windowed(Bounds::new(origin, window_size))),
         window_min_size: Some(size(px(240.0), px(48.0))),
         window_background: WindowBackgroundAppearance::Transparent,
         titlebar: None,
@@ -154,6 +247,6 @@ pub fn open_voice_typing_island(cx: &mut App) {
         ..Default::default()
     };
     let _ = gpui_kit::open_window(window_options, cx, |window, cx| {
-        cx.new(|cx| crate::views::overlays::VoiceTypingIsland::new(window, cx))
+        cx.new(|cx| crate::views::overlays::VoiceTypingIsland::new(window, cx, initial_recall))
     });
 }

@@ -107,6 +107,8 @@ pub struct PresetModel {
     #[serde(default)]
     pub artifacts: Vec<PresetModelArtifact>,
     pub is_recommended: Option<bool>,
+    #[serde(default)]
+    pub labels: Vec<String>,
     pub is_archive: Option<bool>,
     pub filename: Option<String>,
     pub engine: Option<String>,

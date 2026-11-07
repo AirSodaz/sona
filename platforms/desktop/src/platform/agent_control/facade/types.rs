@@ -289,6 +289,8 @@ pub struct TranscribeFileRequest {
     pub file_path: String,
     #[serde(default, alias = "projectId", alias = "project_id")]
     pub project_id: Option<String>,
+    #[serde(default, alias = "historyId", alias = "history_id")]
+    pub history_id: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default, alias = "saveToPath", alias = "save_to_path")]

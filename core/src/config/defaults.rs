@@ -92,6 +92,8 @@ pub fn default_config() -> Value {
         ("autoPolishFrequency", json!(5)),
         ("voiceTypingEnabled", json!(false)),
         ("voiceTypingShortcut", json!("Alt+V")),
+        ("voiceTypingTranslateShortcut", json!("Alt+Shift+V")),
+        ("voiceTypingTargetLanguage", json!("en")),
         ("voiceTypingMode", json!("hold")),
         ("voiceTypingProcessingMode", json!("raw")),
         ("voiceTypingSoundEnabled", json!(true)),

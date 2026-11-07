@@ -27,7 +27,10 @@ pub async fn transcribe_file(
     let instance_id = req
         .instance_id
         .unwrap_or_else(|| format!("mcp-transcribe-{}", uuid::Uuid::new_v4()));
-    let history_id = uuid::Uuid::new_v4().to_string();
+    let history_id = req
+        .history_id
+        .clone()
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -51,11 +54,13 @@ pub async fn transcribe_file(
         project_id: req.project_id.clone(),
         converted_source_path: None,
     };
-    let _ = services
-        .history
-        .mutation_file(move |s| s.save_imported_file(save_req))
-        .await
-        .map_err(|e| format!("Failed to create history record: {e}"))?;
+    if req.history_id.is_none() {
+        let _ = services
+            .history
+            .mutation_file(move |s| s.save_imported_file(save_req))
+            .await
+            .map_err(|e| format!("Failed to create history record: {e}"))?;
+    }
 
     let initial_record = sona_core::task_ledger::types::TaskLedgerRecord {
         id: instance_id.clone(),

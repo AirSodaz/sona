@@ -2,7 +2,7 @@ use super::*;
 use crate::platform::database::DesktopSqliteState;
 use crate::platform::event::MockEventEmitter;
 use sona_core::history::TranscriptSnapshotReason;
-use sona_core::ports::asr::AsrMode;
+use sona_core::ports::asr::{AsrEngineConfig, AsrMode};
 use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 async fn create_test_facade_with_emitter()
@@ -91,6 +91,93 @@ async fn test_resolve_live_asr_config() {
 
     let empty_cfg = serde_json::json!({});
     assert!(resolve_live_asr_request_from_config(&empty_cfg).is_err());
+}
+
+#[test]
+fn online_asr_selection_model_is_merged_into_batch_and_live_provider_config() {
+    let config = serde_json::json!({
+        "asr": {
+            "providers": {
+                "online": {
+                    "volcengine-doubao": {
+                        "apiKey": "secret",
+                        "batchEndpoint": "https://batch.example",
+                        "streamingEndpoint": "wss://stream.example"
+                    }
+                }
+            },
+            "selections": {
+                "batch": {
+                    "engine": "online",
+                    "providerId": "volcengine-doubao",
+                    "profileId": "doubao-batch",
+                    "modelId": "volcengine-flash"
+                },
+                "live": {
+                    "engine": "online",
+                    "providerId": "volcengine-doubao",
+                    "profileId": "doubao-live",
+                    "model_id": "volcengine-streaming"
+                }
+            }
+        }
+    });
+
+    let batch = resolve_batch_asr_request_from_config(&config, None).unwrap();
+    let AsrEngineConfig::Online { provider } = batch.engine_config else {
+        panic!("batch selection should use the online provider");
+    };
+    assert_eq!(provider.profile_id, "doubao-batch");
+    assert_eq!(provider.config["model"], "volcengine-flash");
+    assert_eq!(provider.config["apiKey"], "secret");
+    assert_eq!(provider.config["batchEndpoint"], "https://batch.example");
+
+    let live = resolve_live_asr_request_from_config(&config).unwrap();
+    let AsrEngineConfig::Online { provider } = live.engine_config else {
+        panic!("live selection should use the online provider");
+    };
+    assert_eq!(provider.profile_id, "doubao-live");
+    assert_eq!(provider.config["model"], "volcengine-streaming");
+    assert_eq!(provider.config["apiKey"], "secret");
+    assert_eq!(provider.config["streamingEndpoint"], "wss://stream.example");
+}
+
+#[test]
+fn voice_typing_asr_selection_is_independent_from_live_selection() {
+    let config = serde_json::json!({
+        "streamingModelPath": "C:/models/legacy-live.onnx",
+        "asr": {
+            "selections": {
+                "live": {
+                    "engine": "local",
+                    "modelPath": "C:/models/live.onnx"
+                },
+                "voiceTyping": {
+                    "engine": "local",
+                    "modelPath": "C:/models/voice-typing.onnx"
+                }
+            }
+        }
+    });
+
+    let live = resolve_live_asr_request_from_config(&config).unwrap();
+    let voice_typing = resolve_voice_typing_asr_request_from_config(&config).unwrap();
+    let (
+        AsrEngineConfig::Local {
+            model_path: live_path,
+            ..
+        },
+        AsrEngineConfig::Local {
+            model_path: voice_typing_path,
+            ..
+        },
+    ) = (live.engine_config, voice_typing.engine_config)
+    else {
+        panic!("both selections should use local ASR");
+    };
+
+    assert_eq!(live_path, "C:/models/live.onnx");
+    assert_eq!(voice_typing_path, "C:/models/voice-typing.onnx");
 }
 
 #[tokio::test]
@@ -1246,6 +1333,7 @@ async fn test_transcribe_file_async_task_creation_and_stream_url() {
     let req = TranscribeFileRequest {
         file_path: "https://example.com/audio.mp3".to_string(),
         project_id: None,
+        history_id: None,
         language: None,
         save_to_path: None,
         instance_id: Some("task-stream-123".to_string()),
@@ -1439,6 +1527,7 @@ async fn test_cancel_batch_task_immediate_after_transcribe_file() {
     let req = TranscribeFileRequest {
         file_path: "https://example.com/audio.mp3".to_string(),
         project_id: None,
+        history_id: None,
         language: None,
         save_to_path: None,
         instance_id: Some("task-cancel-immediate".to_string()),

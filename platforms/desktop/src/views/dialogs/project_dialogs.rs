@@ -1,29 +1,45 @@
 //! Project creation, editing, and deletion modals.
 
+use gpui_kit::base::Disableable as _;
+use gpui_kit::base::FocusableExt as _;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+
+use crate::app::GlobalDesktopServices;
+use sona_core::project::ProjectCreateInput;
 
 pub struct ProjectDialogs {
     pub is_create_open: bool,
     pub is_delete_open: bool,
-    pub project_name: String,
+    pub project_name_state: Entity<InputState>,
+    pub is_submitting: bool,
 }
 
 impl ProjectDialogs {
-    pub fn new() -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<super::super::shell::MainShell>) -> Self {
         Self {
             is_create_open: false,
             is_delete_open: false,
-            project_name: String::new(),
+            project_name_state: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Project name")),
+            is_submitting: false,
         }
     }
 
-    pub fn open_create(&mut self) {
+    pub fn open_create(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<super::super::shell::MainShell>,
+    ) {
         self.is_create_open = true;
-        self.project_name.clear();
+        self.project_name_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+            state.focus(window, cx);
+        });
     }
 
     pub fn close(&mut self) {
@@ -31,7 +47,7 @@ impl ProjectDialogs {
         self.is_delete_open = false;
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
         div().when(self.is_create_open, |this| {
             this.child(
                 div()
@@ -57,16 +73,7 @@ impl ProjectDialogs {
                                     .font_weight(FontWeight::BOLD)
                                     .child("Create New Workspace"),
                             )
-                            .child(
-                                div()
-                                    .p_2p5()
-                                    .rounded_md()
-                                    .bg(cx.theme().input)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .text_size(px(13.0))
-                                    .child("Project name..."),
-                            )
+                            .child(Input::new(&self.project_name_state).focus_ring(true))
                             .child(
                                 div()
                                     .flex()
@@ -77,13 +84,62 @@ impl ProjectDialogs {
                                         Button::new("btn-cancel-proj")
                                             .ghost()
                                             .small()
-                                            .label("Cancel"),
+                                            .label("Cancel")
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.project_dialogs.close();
+                                                cx.notify();
+                                            })),
                                     )
                                     .child(
                                         Button::new("btn-submit-proj")
                                             .primary()
                                             .small()
-                                            .label("Create"),
+                                            .label(if self.is_submitting {
+                                                "Creating…"
+                                            } else {
+                                                "Create"
+                                            })
+                                            .disabled(self.is_submitting)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                let name = this
+                                                    .project_dialogs
+                                                    .project_name_state
+                                                    .read(cx)
+                                                    .value()
+                                                    .trim()
+                                                    .to_string();
+                                                if !name.is_empty() {
+                                                    let projects = cx
+                                                        .global::<GlobalDesktopServices>()
+                                                        .0
+                                                        .projects
+                                                        .clone();
+                                                    this.project_dialogs.is_submitting = true;
+                                                    cx.spawn(async move |shell, cx| {
+                                                        let result = projects
+                                                            .create(ProjectCreateInput {
+                                                                name,
+                                                                ..Default::default()
+                                                            })
+                                                            .await;
+                                                        shell
+                                                            .update(cx, |shell, cx| {
+                                                                shell
+                                                                    .project_dialogs
+                                                                    .is_submitting = false;
+                                                                if result.is_ok() {
+                                                                    shell.project_dialogs.close();
+                                                                    shell
+                                                                        .project_selector
+                                                                        .load_data(cx);
+                                                                }
+                                                                cx.notify();
+                                                            })
+                                                            .ok();
+                                                    })
+                                                    .detach();
+                                                }
+                                            })),
                                     ),
                             ),
                     ),

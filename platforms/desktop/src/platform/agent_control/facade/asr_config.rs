@@ -2,6 +2,32 @@ use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrTranscriptionRequest, OnlineAsrProviderRequest,
 };
 
+fn selected_online_provider_config(
+    config: &serde_json::Value,
+    selection: &serde_json::Value,
+    provider_id: &str,
+) -> serde_json::Value {
+    let mut provider_config = config
+        .pointer(&format!("/asr/providers/online/{provider_id}"))
+        .or_else(|| config.pointer(&format!("/asr/providers/{provider_id}")))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    if let Some(model_id) = selection
+        .get("modelId")
+        .or_else(|| selection.get("model_id"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|model_id| !model_id.is_empty())
+    {
+        if !provider_config.is_object() {
+            provider_config = serde_json::json!({});
+        }
+        provider_config["model"] = serde_json::Value::String(model_id.to_string());
+    }
+
+    provider_config
+}
+
 pub fn resolve_batch_asr_request_from_config(
     config: &serde_json::Value,
     language_override: Option<&str>,
@@ -28,11 +54,7 @@ pub fn resolve_batch_asr_request_from_config(
                 .and_then(|p| p.as_str())
                 .unwrap_or("default");
 
-            let provider_config = config
-                .pointer(&format!("/asr/providers/online/{provider_id}"))
-                .or_else(|| config.pointer(&format!("/asr/providers/{provider_id}")))
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}));
+            let provider_config = selected_online_provider_config(config, batch, provider_id);
 
             let language = language_override
                 .map(ToString::to_string)
@@ -237,11 +259,7 @@ pub fn resolve_live_asr_request_from_config(
                 .and_then(|p| p.as_str())
                 .unwrap_or("default");
 
-            let provider_config = config
-                .pointer(&format!("/asr/providers/online/{provider_id}"))
-                .or_else(|| config.pointer(&format!("/asr/providers/{provider_id}")))
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}));
+            let provider_config = selected_online_provider_config(config, live, provider_id);
 
             let language = live
                 .get("language")
@@ -385,4 +403,35 @@ pub fn resolve_live_asr_request_from_config(
     }
 
     Err("No live ASR model or provider is configured in Sona client settings".to_string())
+}
+
+/// Resolves Voice Typing's independently configured streaming ASR selection.
+/// Older configurations did not persist a dedicated selection, so those keep
+/// using the live slot until the user chooses a Voice Typing model.
+pub fn resolve_voice_typing_asr_request_from_config(
+    config: &serde_json::Value,
+) -> Result<AsrTranscriptionRequest, String> {
+    let selection = config
+        .pointer("/asr/selections/voiceTyping")
+        .or_else(|| config.pointer("/asr/voiceTyping"));
+    let Some(selection) = selection else {
+        return resolve_live_asr_request_from_config(config);
+    };
+
+    let mut voice_typing_config = config.clone();
+    if let Some(asr) = voice_typing_config.get_mut("asr")
+        && let Some(asr) = asr.as_object_mut()
+    {
+        asr.insert("live".to_string(), selection.clone());
+        if let Some(selections) = asr
+            .get_mut("selections")
+            .and_then(|value| value.as_object_mut())
+        {
+            selections.insert("live".to_string(), selection.clone());
+        }
+    } else {
+        voice_typing_config["asr"] = serde_json::json!({"live": selection});
+    }
+
+    resolve_live_asr_request_from_config(&voice_typing_config)
 }

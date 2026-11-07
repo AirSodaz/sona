@@ -1,5 +1,6 @@
 //! Integrated sticky bottom audio player bar.
 
+use super::super::shell::MainShell;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -11,16 +12,20 @@ pub struct AudioPlayerBar {
     pub total_duration: f64,
     pub speed: f32,
     pub volume: f32,
+    pub is_muted: bool,
+    previous_volume: f32,
 }
 
 impl AudioPlayerBar {
     pub fn new() -> Self {
         Self {
             is_playing: false,
-            current_time: 124.5,
-            total_duration: 380.0,
+            current_time: 0.0,
+            total_duration: 0.0,
             speed: 1.0,
             volume: 1.0,
+            is_muted: false,
+            previous_volume: 1.0,
         }
     }
 
@@ -38,13 +43,36 @@ impl AudioPlayerBar {
         };
     }
 
+    pub fn seek_by(&mut self, delta: f64) {
+        self.current_time = (self.current_time + delta).clamp(0.0, self.total_duration.max(0.0));
+    }
+
+    pub fn toggle_mute(&mut self) {
+        if self.is_muted {
+            self.is_muted = false;
+            self.volume = self.previous_volume.max(0.01);
+        } else {
+            self.previous_volume = self.volume.max(0.01);
+            self.is_muted = true;
+            self.volume = 0.0;
+        }
+    }
+
+    pub fn adjust_volume(&mut self, delta: f32) {
+        self.volume = (self.volume + delta).clamp(0.0, 1.0);
+        if self.volume > 0.0 {
+            self.is_muted = false;
+            self.previous_volume = self.volume;
+        }
+    }
+
     fn format_time(seconds: f64) -> String {
         let mins = (seconds / 60.0).floor() as u64;
         let secs = (seconds % 60.0).floor() as u64;
         format!("{:02}:{:02}", mins, secs)
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
         let progress = if self.total_duration > 0.0 {
             (self.current_time / self.total_duration).clamp(0.0, 1.0) as f32
         } else {
@@ -71,7 +99,31 @@ impl AudioPlayerBar {
                         Button::new("btn-player-toggle")
                             .primary()
                             .small()
-                            .label(if self.is_playing { "Pause" } else { "Play" }),
+                            .label(if self.is_playing { "Pause" } else { "Play" })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.toggle_play();
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("btn-player-back")
+                            .ghost()
+                            .small()
+                            .label("-5s")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.seek_by(-5.0);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("btn-player-forward")
+                            .ghost()
+                            .small()
+                            .label("+5s")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.seek_by(5.0);
+                                cx.notify();
+                            })),
                     )
                     .child(
                         div()
@@ -104,12 +156,77 @@ impl AudioPlayerBar {
             )
             .child(
                 // Speed & Volume
-                div().flex().items_center().gap_2().child(
-                    Button::new("btn-player-speed")
-                        .ghost()
-                        .small()
-                        .label(format!("{:.2}x", self.speed)),
-                ),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Button::new("btn-player-speed")
+                            .ghost()
+                            .small()
+                            .label(format!("{:.2}x", self.speed))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.cycle_speed();
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("btn-player-mute")
+                            .ghost()
+                            .small()
+                            .label(if self.is_muted { "Unmute" } else { "Mute" })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.toggle_mute();
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("btn-player-volume-down")
+                            .ghost()
+                            .small()
+                            .label("Vol-")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.adjust_volume(-0.1);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("btn-player-volume-up")
+                            .ghost()
+                            .small()
+                            .label(format!("{}%", (self.volume * 100.0).round() as u32))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.workbench.player.adjust_volume(0.1);
+                                cx.notify();
+                            })),
+                    ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AudioPlayerBar;
+
+    #[test]
+    fn seek_is_clamped_to_duration() {
+        let mut player = AudioPlayerBar::new();
+        player.total_duration = 10.0;
+        player.seek_by(20.0);
+        assert_eq!(player.current_time, 10.0);
+        player.seek_by(-20.0);
+        assert_eq!(player.current_time, 0.0);
+    }
+
+    #[test]
+    fn mute_round_trip_restores_previous_volume() {
+        let mut player = AudioPlayerBar::new();
+        player.volume = 0.65;
+        player.toggle_mute();
+        assert!(player.is_muted);
+        assert_eq!(player.volume, 0.0);
+        player.toggle_mute();
+        assert!(!player.is_muted);
+        assert!((player.volume - 0.65).abs() < f32::EPSILON);
     }
 }

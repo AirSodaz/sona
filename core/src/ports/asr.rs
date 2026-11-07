@@ -925,6 +925,8 @@ pub struct OnlineAsrSupportedModel {
     #[serde(default)]
     pub description_key: Option<String>,
     #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
     pub is_default: Option<bool>,
 }
 
@@ -933,6 +935,38 @@ pub struct OnlineAsrSupportedModel {
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProviderSpec {
     pub model_name: String,
+    #[serde(default)]
+    pub description_key: Option<String>,
+    #[serde(default)]
+    pub strengths_key: Option<String>,
+    #[serde(default)]
+    pub best_for_key: Option<String>,
+    #[serde(default)]
+    pub limits_key: Option<String>,
+    #[serde(default)]
+    pub console_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAsrProviderUi {
+    #[serde(default)]
+    pub option_label_key: Option<String>,
+    pub title_key: String,
+    pub online_upload_hint_key: String,
+    #[serde(default)]
+    pub fields: Vec<OnlineAsrProviderUiField>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAsrProviderUiField {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub label_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -947,6 +981,7 @@ pub struct OnlineAsrProvider {
     pub profile_id: String,
     #[serde(default)]
     pub api_key_env: Option<String>,
+    pub ui: OnlineAsrProviderUi,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub defaults: Value,
     pub streaming: OnlineAsrCapability,

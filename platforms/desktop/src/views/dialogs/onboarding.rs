@@ -26,7 +26,12 @@ impl OnboardingWizard {
         }
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
+        let next_label = if self.step < 2 {
+            "Continue"
+        } else {
+            "Get Started"
+        };
         div()
             .when(self.is_open, |this| {
                 this.child(
@@ -74,7 +79,11 @@ impl OnboardingWizard {
                                         .child(
                                             Button::new("btn-onboarding-next")
                                                 .primary()
-                                                .label(if self.step < 2 { "Continue" } else { "Get Started" }),
+                                                .label(next_label)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.onboarding.next_step();
+                                                    cx.notify();
+                                                })),
                                         ),
                                 ),
                         ),

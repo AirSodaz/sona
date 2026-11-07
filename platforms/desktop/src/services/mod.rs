@@ -20,6 +20,7 @@ use crate::platform::sync::DesktopSyncManager;
 use crate::platform::task_ledger_repository::TaskLedgerService;
 
 pub mod db_runner;
+pub mod voice_typing_runtime;
 
 pub use db_runner::*;
 
@@ -108,6 +109,7 @@ pub struct DesktopServices {
     pub emitter: Arc<dyn EventEmitterPort>,
     pub recording_session: DesktopRecordingSessionTracker,
     pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
+    pub agent_control: crate::platform::agent_control::server::AgentControlServerController,
 }
 
 #[derive(Default)]
@@ -209,6 +211,10 @@ impl DesktopServicesBuilder {
         let translation_pool = self.translation_pool.unwrap_or_else(|| {
             Arc::new(crate::integrations::translation::TranslationModelPool::new())
         });
+        let agent_control =
+            crate::platform::agent_control::server::AgentControlServerController::new(
+                crate::platform::agent_control::server::ActiveConnectionTracker::new(),
+            );
 
         Ok(DesktopServices {
             sqlite,
@@ -223,6 +229,7 @@ impl DesktopServicesBuilder {
             emitter,
             recording_session,
             translation_pool,
+            agent_control,
         })
     }
 }
@@ -230,6 +237,17 @@ impl DesktopServicesBuilder {
 impl DesktopServices {
     pub fn builder() -> DesktopServicesBuilder {
         DesktopServicesBuilder::new()
+    }
+
+    pub fn start_mcp(&self) {
+        self.agent_control.start(
+            Some(self.emitter.clone()),
+            crate::platform::agent_control::facade::AgentControlFacade::new(self.clone()),
+        );
+    }
+
+    pub fn stop_mcp(&self) {
+        self.agent_control.stop(Some(&self.emitter));
     }
 }
 
@@ -251,6 +269,8 @@ mod tests {
             .sync_config_path(temp.path().join("sync.json"))
             .build()
             .unwrap();
+
+        assert!(!services.agent_control.is_running());
 
         // Verify individual service calls through DesktopServices facade
         let projects = services.projects.list().await.unwrap();
@@ -274,6 +294,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(history_items.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn mcp_runtime_can_be_started_and_stopped_through_desktop_services() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
+        let services = DesktopServices::builder()
+            .sqlite(DesktopSqliteState::new(ctx))
+            .event_emitter(Arc::new(MockEventEmitter::new()))
+            .sync_config_path(temp.path().join("sync.json"))
+            .build()
+            .unwrap();
+
+        services.start_mcp();
+        assert!(services.agent_control.is_running());
+
+        services.stop_mcp();
+        assert!(!services.agent_control.is_running());
     }
 
     #[tokio::test]

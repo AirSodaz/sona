@@ -1,5 +1,6 @@
 //! Speaker review and voice sample enrollment sheet drawer.
 
+use super::super::shell::MainShell;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -15,14 +16,7 @@ impl SpeakerReviewSheet {
     pub fn new() -> Self {
         Self {
             is_open: false,
-            speakers: vec![
-                ("spk-0".to_string(), "Alice (Engineering Lead)".to_string()),
-                ("spk-1".to_string(), "Bob (Core Developer)".to_string()),
-                (
-                    "spk-2".to_string(),
-                    "Charlie (Product Architect)".to_string(),
-                ),
-            ],
+            speakers: Vec::new(),
         }
     }
 
@@ -30,7 +24,7 @@ impl SpeakerReviewSheet {
         self.is_open = !self.is_open;
     }
 
-    pub fn render(&mut self, cx: &App) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -54,9 +48,24 @@ impl SpeakerReviewSheet {
                                     .font_weight(FontWeight::BOLD)
                                     .child("Speaker Diarization"),
                             )
-                            .child(Button::new("btn-close-speakers").ghost().small().label("✕")),
+                            .child(
+                                Button::new("btn-close-speakers")
+                                    .ghost()
+                                    .small()
+                                    .label("✕")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.workbench.speaker_sheet.is_open = false;
+                                        cx.notify();
+                                    })),
+                            ),
                     )
-                    .child(
+                    .child(if self.speakers.is_empty() {
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(cx.theme().muted)
+                            .child("No speakers to review")
+                            .into_any_element()
+                    } else {
                         div()
                             .flex()
                             .flex_col()
@@ -82,8 +91,9 @@ impl SpeakerReviewSheet {
                                             .xsmall()
                                             .label("Rename"),
                                     )
-                            })),
-                    ),
+                            }))
+                            .into_any_element()
+                    }),
             )
         })
     }

@@ -12,10 +12,15 @@
 use std::collections::HashMap;
 
 use gpui_kit::assets::IconName as LucideIcon;
+use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{StatefulInteractiveElement as _, *};
+use sona_core::history::HistoryWorkspaceScope;
+use sona_core::history_store::HistoryStore;
 use sona_core::project::ProjectRecord;
 use sona_core::sync::{SyncLifecycleState, SyncStatusSnapshot};
 
@@ -25,13 +30,13 @@ use super::dialogs::{
     ProjectDialogs, RecoveryModal,
 };
 use super::projects::{ProjectsRail, ProjectsResults, ProjectsToolbar, SelectionBar};
-use super::settings::{SettingsModal, SettingsTab};
+use super::settings::{SettingsModal, SettingsTab, ShortcutTarget};
 use super::tools::{
     ApiServerToolPanel, McpToolPanel, MediaServerToolPanel, SubtitlesToolPanel, ToolKind,
     ToolsSidebar, VoiceTypingToolPanel,
 };
 use super::transcript::TranscriptWorkbench;
-use crate::app::GlobalDesktopServices;
+use crate::app::{GlobalDesktopServices, GlobalEventBus, GlobalHotkeyController};
 use crate::theme::tokens::{
     COLOR_PROJECT_AMBER, HEADER_HEIGHT, PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_MD,
     RADIUS_SM, project_color_from_index,
@@ -40,6 +45,75 @@ use crate::theme::tokens::{
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
     Icon::default().path(name.path())
+}
+
+fn shortcut_matches(shortcut: &str, key: &str, modifiers: Modifiers) -> bool {
+    let parts = shortcut
+        .split('+')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    let Some(main_key) = parts.last() else {
+        return false;
+    };
+
+    let needs_ctrl = parts.iter().any(|part| part.eq_ignore_ascii_case("ctrl"));
+    let needs_alt = parts.iter().any(|part| part.eq_ignore_ascii_case("alt"));
+    let needs_shift = parts.iter().any(|part| part.eq_ignore_ascii_case("shift"));
+    let needs_meta = parts.iter().any(|part| part.eq_ignore_ascii_case("meta"));
+    let key_matches = if main_key.eq_ignore_ascii_case("space") {
+        key == " " || key.eq_ignore_ascii_case("space")
+    } else {
+        key.eq_ignore_ascii_case(main_key)
+    };
+
+    key_matches
+        && modifiers.control == needs_ctrl
+        && modifiers.alt == needs_alt
+        && modifiers.shift == needs_shift
+        && modifiers.platform == needs_meta
+        && !modifiers.function
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::shortcut_matches;
+    use gpui_kit::Modifiers;
+
+    #[test]
+    fn matches_configured_shortcut_with_exact_modifiers() {
+        let ctrl = Modifiers {
+            control: true,
+            ..Default::default()
+        };
+        assert!(shortcut_matches("Ctrl + Space", "space", ctrl));
+        assert!(!shortcut_matches(
+            "Ctrl + Space",
+            "space",
+            Modifiers::default()
+        ));
+        assert!(!shortcut_matches(
+            "Ctrl + Space",
+            "space",
+            Modifiers {
+                control: true,
+                shift: true,
+                ..Default::default()
+            }
+        ));
+    }
+
+    #[test]
+    fn maps_meta_to_the_platform_modifier() {
+        assert!(shortcut_matches(
+            "Meta + K",
+            "k",
+            Modifiers {
+                platform: true,
+                ..Default::default()
+            }
+        ));
+    }
 }
 
 /// 3 Core Application Modes matching React desktop shell.
@@ -102,6 +176,11 @@ impl ProjectSelectorDropdown {
                 view.project_selector.projects = projects;
                 view.project_selector.count_inbox = inbox_count;
                 view.project_selector.project_counts = counts;
+                view.projects_rail.sync_projects(
+                    &view.project_selector.projects,
+                    &view.project_selector.project_counts,
+                    inbox_count,
+                );
                 cx.notify();
             })
             .ok();
@@ -226,6 +305,7 @@ impl SyncHeaderPill {
 
 /// Root Application Shell view.
 pub struct MainShell {
+    _voice_typing_event_task: Option<Task<()>>,
     pub mode: AppMode,
     pub status_text: String,
     pub project_count: usize,
@@ -246,6 +326,19 @@ pub struct MainShell {
     pub projects_toolbar: ProjectsToolbar,
     pub projects_results: ProjectsResults,
     pub selection_bar: SelectionBar,
+    pub project_search_state: Entity<InputState>,
+    _project_search_subscription: Subscription,
+    pub history_rename_state: Entity<InputState>,
+    pub model_search_state: Entity<InputState>,
+    _model_search_subscription: Subscription,
+    pub model_engine_select: Entity<SelectState<Vec<&'static str>>>,
+    pub model_status_select: Entity<SelectState<Vec<&'static str>>>,
+    pub model_label_select: Entity<SelectState<Vec<&'static str>>>,
+    _model_filter_subscriptions: [Subscription; 3],
+    pub online_provider_field_states: HashMap<String, Entity<InputState>>,
+    _online_provider_field_subscriptions: Vec<Subscription>,
+    pub shortcut_edit_state: Entity<InputState>,
+    _shortcut_edit_subscription: Subscription,
 
     pub tools_sidebar: ToolsSidebar,
     pub subtitles_tool: SubtitlesToolPanel,
@@ -268,15 +361,192 @@ pub struct MainShell {
 }
 
 impl MainShell {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let notification_center = cx.new(|_| NotificationCenter::new());
 
         let options_model = cx.new(|_| TranscriptionOptionsModel::new());
         let options_capsule = OptionsCapsule::new(options_model.clone());
         let create_workspace = cx.new(|cx| CreateWorkspacePanel::new(options_model.clone(), cx));
+        let projects_toolbar = ProjectsToolbar::new(window, cx);
+        let project_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search transcripts"));
+        let history_rename_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Transcript title"));
+        let project_search_subscription = cx.subscribe(
+            &project_search_state,
+            |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.projects_results
+                        .set_search_query(state.read(cx).value().to_string(), cx);
+                }
+            },
+        );
+        let shortcut_edit_state = cx.new(|cx| InputState::new(window, cx));
+        let shortcut_edit_subscription = cx.subscribe(
+            &shortcut_edit_state,
+            |shell, state, event: &InputEvent, cx| {
+                if !shell.settings_modal.is_editing_shortcut {
+                    return;
+                }
+
+                match event {
+                    InputEvent::Change => {
+                        shell.settings_modal.shortcut_draft = state.read(cx).value().to_string();
+                    }
+                    InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                        let value = state.read(cx).value().to_string();
+                        shell.settings_modal.commit_shortcut_edit(value, cx);
+                    }
+                    InputEvent::Focus => {}
+                }
+            },
+        );
+        let model_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search models..."));
+        let model_search_subscription = cx.subscribe(
+            &model_search_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.model_search_query = state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            },
+        );
+        let model_engine_select = cx.new(|cx| {
+            SelectState::new(
+                vec!["All Engines", "ONNX", "GGUF"],
+                Some(IndexPath::new(0)),
+                window,
+                cx,
+            )
+        });
+        let model_status_select = cx.new(|cx| {
+            SelectState::new(
+                vec!["All Statuses", "Installed", "Not Installed", "Downloading"],
+                Some(IndexPath::new(0)),
+                window,
+                cx,
+            )
+        });
+        let model_label_select = cx.new(|cx| {
+            SelectState::new(
+                vec!["All Tags", "Accurate", "Lite"],
+                Some(IndexPath::new(0)),
+                window,
+                cx,
+            )
+        });
+        let initial_config = services
+            .config
+            .load()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let mut online_provider_field_states = HashMap::new();
+        let mut online_provider_field_subscriptions = Vec::new();
+        for provider in sona_core::ports::asr::online_asr_providers() {
+            let provider_id = provider.id.clone();
+            let mut fields = vec![("apiKey".to_string(), "password".to_string())];
+            fields.extend(
+                provider
+                    .ui
+                    .fields
+                    .iter()
+                    .filter(|field| field.name != "apiKey" && field.name != "model")
+                    .map(|field| (field.name.clone(), field.field_type.clone())),
+            );
+            for (field_name, field_type) in fields {
+                let state_key = format!("{provider_id}::{field_name}");
+                let value = initial_config
+                    .pointer(&format!("/asr/providers/online/{provider_id}/{field_name}"))
+                    .and_then(serde_json::Value::as_str)
+                    .or_else(|| {
+                        provider
+                            .defaults
+                            .get(&field_name)
+                            .and_then(serde_json::Value::as_str)
+                    })
+                    .unwrap_or_default()
+                    .to_string();
+                let placeholder = match (provider_id.as_str(), field_name.as_str()) {
+                    ("volcengine-doubao", "apiKey") => "X-Api-Key".to_string(),
+                    ("groq-whisper", "apiKey") => "gsk_...".to_string(),
+                    (_, "apiKey") => "API Key".to_string(),
+                    _ => field_name.clone(),
+                };
+                let state = cx.new(|cx| {
+                    let mut state = InputState::new(window, cx).placeholder(placeholder);
+                    if field_type == "password" {
+                        state = state.masked(true);
+                    }
+                    state.set_value(value, window, cx);
+                    state
+                });
+                let subscription_provider_id = provider_id.clone();
+                let subscription_field_name = field_name.clone();
+                online_provider_field_subscriptions.push(cx.subscribe(
+                    &state,
+                    move |shell, state, event: &InputEvent, cx| {
+                        if matches!(event, InputEvent::Change) {
+                            shell.settings_modal.set_online_provider_config_field(
+                                &subscription_provider_id,
+                                &subscription_field_name,
+                                state.read(cx).value().to_string(),
+                                cx,
+                            );
+                        }
+                    },
+                ));
+                online_provider_field_states.insert(state_key, state);
+            }
+        }
+        let engine_subscription = cx.subscribe(
+            &model_engine_select,
+            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    shell.settings_modal.model_engine_filter = match *value {
+                        "ONNX" => "sherpa-onnx",
+                        "GGUF" => "llama-cpp",
+                        _ => "all",
+                    }
+                    .to_string();
+                    cx.notify();
+                }
+            },
+        );
+        let status_subscription = cx.subscribe(
+            &model_status_select,
+            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    shell.settings_modal.model_status_filter = match *value {
+                        "Installed" => "installed",
+                        "Not Installed" => "not-installed",
+                        "Downloading" => "downloading",
+                        _ => "all",
+                    }
+                    .to_string();
+                    cx.notify();
+                }
+            },
+        );
+        let label_subscription = cx.subscribe(
+            &model_label_select,
+            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event {
+                    shell.settings_modal.model_label_filter = match *value {
+                        "Accurate" => "accurate",
+                        "Lite" => "lite",
+                        _ => "all",
+                    }
+                    .to_string();
+                    cx.notify();
+                }
+            },
+        );
 
         let mut shell = Self {
+            _voice_typing_event_task: None,
             mode: AppMode::Create,
             status_text: "Connecting to decoupled backend core...".to_string(),
             project_count: 0,
@@ -292,9 +562,26 @@ impl MainShell {
             create_workspace,
 
             projects_rail: ProjectsRail::new(),
-            projects_toolbar: ProjectsToolbar::new(),
+            projects_toolbar,
             projects_results: ProjectsResults::new(),
             selection_bar: SelectionBar::new(),
+            project_search_state,
+            _project_search_subscription: project_search_subscription,
+            history_rename_state,
+            model_search_state,
+            _model_search_subscription: model_search_subscription,
+            model_engine_select,
+            model_status_select,
+            model_label_select,
+            _model_filter_subscriptions: [
+                engine_subscription,
+                status_subscription,
+                label_subscription,
+            ],
+            online_provider_field_states,
+            _online_provider_field_subscriptions: online_provider_field_subscriptions,
+            shortcut_edit_state,
+            _shortcut_edit_subscription: shortcut_edit_subscription,
 
             tools_sidebar: ToolsSidebar::new(),
             subtitles_tool: SubtitlesToolPanel::new(),
@@ -303,7 +590,7 @@ impl MainShell {
             mcp_tool: McpToolPanel::new(),
             media_server_tool: MediaServerToolPanel::new(),
 
-            workbench: TranscriptWorkbench::new(),
+            workbench: TranscriptWorkbench::new(window, cx),
 
             settings_modal: SettingsModal::new(),
             diagnostics_modal: DiagnosticsModal::new(),
@@ -311,15 +598,29 @@ impl MainShell {
             global_dialog: GlobalDialog::new(),
             export_modal: ExportModal::new(),
             onboarding: OnboardingWizard::new(),
-            project_dialogs: ProjectDialogs::new(),
+            project_dialogs: ProjectDialogs::new(window, cx),
             error_dialog: ErrorDialog::new(),
         };
 
+        shell.settings_modal.model_config = initial_config;
+        let mut voice_typing_events = cx.global::<GlobalEventBus>().0.subscribe();
+        shell._voice_typing_event_task = Some(cx.spawn(async move |this, cx: &mut AsyncApp| {
+            while let Ok(event) = voice_typing_events.recv().await {
+                if event.is("voice-typing:show") {
+                    let initial_recall = event.payload["recall"].as_bool().unwrap_or(false);
+                    let _ = this.update(cx, |_, cx| {
+                        crate::app::open_voice_typing_island(cx, initial_recall);
+                    });
+                }
+            }
+        }));
         shell.project_selector.load_data(cx);
+        shell.projects_results.load_data(cx);
         shell.sync_pill.refresh_status(cx);
         shell
             .notification_center
             .update(cx, |nc, cx| nc.load_tasks(cx));
+        shell.settings_modal.load_preferences(cx);
 
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let projects = services.projects.list().await.unwrap_or_default();
@@ -348,6 +649,79 @@ impl MainShell {
         cx.notify();
     }
 
+    pub fn open_history_item(&mut self, id: String, cx: &mut Context<Self>) {
+        let Some(record) = self
+            .projects_results
+            .items
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| item.record.clone())
+        else {
+            return;
+        };
+        if record.deleted_at.is_some() {
+            return;
+        }
+
+        self.projects_results.selected_id = Some(id.clone());
+        self.has_active_transcript = true;
+        self.workbench.begin_loading(id.clone(), record.title);
+        cx.notify();
+
+        let duration = record.duration;
+        let selected_id = id.clone();
+        let services = cx.global::<GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let query_id = id;
+            let snapshots_id = selected_id.clone();
+            let result = services
+                .history
+                .query_db(move |query| query.load_transcript(&query_id))
+                .await;
+            let snapshots = services
+                .history
+                .query_db(move |query| query.list_transcript_snapshots(&snapshots_id))
+                .await
+                .unwrap_or_default();
+            let summary_id = selected_id.clone();
+            let summary = services
+                .history
+                .db_task(move |query| query.load_summary(&summary_id))
+                .await
+                .ok()
+                .flatten();
+            this.update(cx, |shell, cx| {
+                if shell.projects_results.selected_id.as_deref() != Some(&selected_id) {
+                    return;
+                }
+                match result {
+                    Ok(Some(segments)) => {
+                        shell.workbench.set_transcript(segments, duration);
+                        shell.workbench.set_versions(snapshots);
+                        shell.workbench.set_summary(summary);
+                    }
+                    _ => shell.workbench.set_load_error(),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn set_project_scope(
+        &mut self,
+        scope: HistoryWorkspaceScope,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.projects_results.set_scope(scope, cx);
+        self.projects_toolbar.sync_filter_selects(window, cx);
+        self.project_search_state
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
+    }
+
     pub fn cycle_mode(&mut self, reverse: bool, cx: &mut Context<Self>) {
         let modes = [AppMode::Create, AppMode::Projects, AppMode::Tools];
         let current_idx = match self.mode {
@@ -371,7 +745,11 @@ impl MainShell {
         }
     }
 
-    fn render_project_selector(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_project_selector(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let active_proj = self.project_selector.active_project().cloned();
         let display_title = active_proj
             .as_ref()
@@ -616,9 +994,9 @@ impl MainShell {
                                         .ghost()
                                         .xsmall()
                                         .label("+ New Project")
-                                        .on_click(cx.listener(|this, _, _, cx| {
+                                        .on_click(cx.listener(|this, _, window, cx| {
                                             this.project_selector.is_open = false;
-                                            this.project_dialogs.open_create();
+                                            this.project_dialogs.open_create(window, cx);
                                             cx.notify();
                                         })),
                                 )
@@ -916,8 +1294,9 @@ impl MainShell {
                                         .label("⚙")
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.sync_pill.is_open = false;
-                                            this.settings_modal.set_tab(SettingsTab::Sync);
-                                            this.settings_modal.open();
+                                            this.settings_modal.set_tab(SettingsTab::Sync, cx);
+                                            this.settings_modal.open(cx);
+                                            this.settings_modal.load_preferences(cx);
                                             cx.notify();
                                         })),
                                 ),
@@ -928,9 +1307,13 @@ impl MainShell {
 }
 
 impl Render for MainShell {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let current_mode = self.mode;
         let show_transcript_host = self.should_show_transcript_host();
+        let project_inbox_count = self.project_selector.count_inbox;
+        let project_all_count =
+            project_inbox_count + self.project_selector.project_counts.values().sum::<usize>();
+        let project_trash_count = self.projects_results.trash_count;
 
         div()
             .flex()
@@ -938,6 +1321,301 @@ impl Render for MainShell {
             .size_full()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.is_held {
+                    return;
+                }
+
+                if event.keystroke.key.eq_ignore_ascii_case("escape")
+                    && this.workbench.search.is_visible
+                {
+                    this.workbench.search.is_visible = false;
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if event.keystroke.key.eq_ignore_ascii_case("f")
+                    && (event.keystroke.modifiers.control || event.keystroke.modifiers.platform)
+                    && this.should_show_transcript_host()
+                {
+                    this.workbench.search.open(window, cx);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.settings_modal.is_editing_shortcut {
+                    if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                        let current = this.settings_modal.live_record_shortcut.clone();
+                        this.settings_modal.shortcut_draft = current.clone();
+                        this.settings_modal.is_editing_shortcut = false;
+                        this.shortcut_edit_state.update(cx, |state, cx| {
+                            state.set_value(current, window, cx);
+                        });
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                    return;
+                }
+
+                if this.settings_modal.is_recording_shortcut {
+                    let key = event.keystroke.key.as_str();
+                    if key.eq_ignore_ascii_case("escape") {
+                        this.settings_modal.is_recording_shortcut = false;
+                        this.settings_modal.shortcut_recording_target = None;
+                    } else if !["control", "ctrl", "alt", "shift", "meta", "super"]
+                        .iter()
+                        .any(|modifier| key.eq_ignore_ascii_case(modifier))
+                    {
+                        let modifiers = event.keystroke.modifiers;
+                        let mut parts = Vec::new();
+                        if modifiers.control {
+                            parts.push("Ctrl");
+                        }
+                        if modifiers.alt {
+                            parts.push("Alt");
+                        }
+                        if modifiers.shift {
+                            parts.push("Shift");
+                        }
+                        if modifiers.platform {
+                            parts.push("Meta");
+                        }
+                        let main_key = if key == " " || key.eq_ignore_ascii_case("space") {
+                            "Space".to_string()
+                        } else if key.len() == 1 {
+                            key.to_uppercase()
+                        } else {
+                            key.to_string()
+                        };
+                        parts.push(&main_key);
+                        let shortcut = parts.join(" + ");
+                        let target = this
+                            .settings_modal
+                            .shortcut_recording_target
+                            .take()
+                            .unwrap_or(ShortcutTarget::LiveRecord);
+                        this.settings_modal.is_recording_shortcut = false;
+                        match target {
+                            ShortcutTarget::LiveRecord => {
+                                this.settings_modal.live_record_shortcut = shortcut.clone();
+                                this.settings_modal.persist_shortcut(shortcut, cx);
+                            }
+                            ShortcutTarget::VoiceTyping => {
+                                let controller = cx.global::<GlobalHotkeyController>().0.clone();
+                                let result = controller
+                                    .write()
+                                    .rebind_shortcut(
+                                        crate::platform::hotkey::HotkeyAction::VoiceTyping,
+                                        &shortcut,
+                                    );
+                                match result {
+                                    Ok(()) => {
+                                        let services = &cx.global::<GlobalDesktopServices>().0;
+                                        if let Err(error) = crate::platform::agent_control::facade::settings::update_setting(
+                                            services,
+                                            "voiceTypingShortcut".to_string(),
+                                            serde_json::Value::String(shortcut),
+                                        ) {
+                                            this.global_dialog.show(
+                                                "Shortcut Save Failed",
+                                                error,
+                                                crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => this.global_dialog.show(
+                                        "Shortcut Registration Failed",
+                                        error,
+                                        crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                    ),
+                                }
+                            }
+                            ShortcutTarget::VoiceTypingTranslate => {
+                                let controller = cx.global::<GlobalHotkeyController>().0.clone();
+                                let result = controller.write().rebind_shortcut(
+                                    crate::platform::hotkey::HotkeyAction::VoiceTypingTranslate,
+                                    &shortcut,
+                                );
+                                match result {
+                                    Ok(()) => {
+                                        let services = &cx.global::<GlobalDesktopServices>().0;
+                                        if let Err(error) = crate::platform::agent_control::facade::settings::update_setting(
+                                            services,
+                                            "voiceTypingTranslateShortcut".to_string(),
+                                            serde_json::Value::String(shortcut),
+                                        ) {
+                                            this.global_dialog.show(
+                                                "Shortcut Save Failed",
+                                                error,
+                                                crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => this.global_dialog.show(
+                                        "Shortcut Registration Failed",
+                                        error,
+                                        crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                    ),
+                                }
+                            }
+                            ShortcutTarget::VoiceTypingQuickRecall => {
+                                let controller = cx.global::<GlobalHotkeyController>().0.clone();
+                                let result = controller
+                                    .write()
+                                    .rebind_shortcut(
+                                        crate::platform::hotkey::HotkeyAction::QuickRecall,
+                                        &shortcut,
+                                    );
+                                match result {
+                                    Ok(()) => {
+                                        let services = &cx.global::<GlobalDesktopServices>().0;
+                                        if let Err(error) = crate::platform::agent_control::facade::settings::update_setting(
+                                            services,
+                                            "voiceTypingQuickRecallShortcut".to_string(),
+                                            serde_json::Value::String(shortcut),
+                                        ) {
+                                            this.global_dialog.show(
+                                                "Shortcut Save Failed",
+                                                error,
+                                                crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => this.global_dialog.show(
+                                        "Shortcut Registration Failed",
+                                        error,
+                                        crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                    ),
+                                }
+                            }
+                        }
+                    }
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.recovery_modal.is_open && event.keystroke.key.eq_ignore_ascii_case("escape")
+                {
+                    this.recovery_modal.close();
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.diagnostics_modal.is_open
+                    && event.keystroke.key.eq_ignore_ascii_case("escape")
+                {
+                    this.diagnostics_modal.close();
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.global_dialog.is_open && event.keystroke.key.eq_ignore_ascii_case("escape")
+                {
+                    this.global_dialog.close();
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.settings_modal.is_open {
+                    if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                        this.settings_modal.close(cx);
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
+                    if event.keystroke.key.eq_ignore_ascii_case("tab")
+                        && event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.platform
+                    {
+                        this.settings_modal
+                            .cycle_tab(event.keystroke.modifiers.shift, cx);
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
+                }
+
+                let batch_import = this.create_workspace.read(cx).batch_import.clone();
+                let batch_import = batch_import.read(cx);
+                let text_input_focused = this
+                    .project_search_state
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+                    || this
+                        .model_search_state
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window)
+                    || this
+                        .shortcut_edit_state
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window)
+                    || batch_import
+                        .stream_url_state
+                        .as_ref()
+                        .is_some_and(|state| state.read(cx).focus_handle(cx).is_focused(window))
+                    || batch_import
+                        .stream_alias_state
+                        .as_ref()
+                        .is_some_and(|state| state.read(cx).focus_handle(cx).is_focused(window));
+                if text_input_focused {
+                    return;
+                }
+
+                let live_record = this.create_workspace.read(cx).live_record.clone();
+                let (is_recording, is_initializing) = {
+                    let panel = live_record.read(cx);
+                    (panel.is_recording, panel.is_initializing)
+                };
+                let is_start_stop = shortcut_matches(
+                    &this.settings_modal.live_record_shortcut,
+                    &event.keystroke.key,
+                    event.keystroke.modifiers,
+                );
+                let is_plain_space = (event.keystroke.key == " "
+                    || event.keystroke.key.eq_ignore_ascii_case("space"))
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.function;
+
+                if is_start_stop {
+                    if !is_initializing {
+                        live_record.update(cx, |panel, cx| {
+                            if is_recording {
+                                panel.stop_recording(cx);
+                            } else {
+                                panel.start_recording(cx);
+                            }
+                        });
+                    }
+                    window.prevent_default();
+                    cx.stop_propagation();
+                } else if is_plain_space && is_recording {
+                    live_record.update(cx, |panel, cx| panel.toggle_pause(cx));
+                    window.prevent_default();
+                    cx.stop_propagation();
+                }
+            }))
             .child(
                 // ==========================================
                 // Top Application Header Bar (56px 3-column 1fr auto 1fr grid)
@@ -969,7 +1647,7 @@ impl Render for MainShell {
                                     .justify_center()
                                     .child(icon(LucideIcon::SquarePen).size(px(20.0))),
                             )
-                            .child(self.render_project_selector(cx)),
+                            .child(self.render_project_selector(window, cx)),
                     )
                     // Column 2: Center 3-Mode TabNavigation (auto)
                     .child(
@@ -989,6 +1667,15 @@ impl Render for MainShell {
                             .justify_end()
                             .gap(px(8.0))
                             .child(self.render_sync_pill(cx))
+                            .child(
+                                Button::new("btn-open-recovery")
+                                    .ghost()
+                                    .small()
+                                    .label("Recovery")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.recovery_modal.open(cx);
+                                    })),
+                            )
                             .child(self.notification_center.clone())
                             .child(
                                 // Icon-only Settings button (36x36px)
@@ -1002,7 +1689,8 @@ impl Render for MainShell {
                                     .cursor_pointer()
                                     .child(icon(LucideIcon::Settings).size(px(18.0)))
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.settings_modal.open();
+                                        this.settings_modal.open(cx);
+                                        this.settings_modal.load_preferences(cx);
                                         cx.notify();
                                     })),
                             ),
@@ -1090,7 +1778,7 @@ impl Render for MainShell {
                                             .border_color(cx.theme().border)
                                             .rounded_tl(RADIUS_MD)
                                             .overflow_hidden()
-                                            .child(self.workbench.render(cx)),
+                                            .child(self.workbench.render(window, cx)),
                                     ),
                             )
                             .into_any_element(),
@@ -1098,23 +1786,53 @@ impl Render for MainShell {
                             .id("projects-mode-shell")
                             .flex()
                             .size_full()
-                            .child(self.projects_rail.render(cx))
+                            .child(self.projects_rail.render(
+                                &self.projects_results.scope,
+                                project_inbox_count,
+                                project_all_count,
+                                project_trash_count,
+                                cx,
+                            ))
                             .child(
                                 div()
                                     .flex()
                                     .flex_col()
                                     .flex_1()
                                     .h_full()
-                                    .child(self.projects_toolbar.render(cx))
+                                    .child(
+                                        self.projects_toolbar
+                                            .render(&self.project_search_state, cx),
+                                    )
                                     .child(
                                         div()
+                                            .relative()
                                             .flex_1()
+                                            .min_h_0()
                                             .overflow_hidden()
-                                            .child(self.projects_results.render(cx)),
-                                    )
-                                    .when(self.projects_toolbar.is_selection_active, |this| {
-                                        this.child(self.selection_bar.render(cx))
-                                    }),
+                                            .child(self.projects_results.render(cx))
+                                            .when(
+                                                self.projects_toolbar.is_selection_active,
+                                                |this| {
+                                                    let is_trash_scope = matches!(
+                                                        self.projects_results.scope,
+                                                        HistoryWorkspaceScope::Trash
+                                                    );
+                                                    let selected_count =
+                                                        self.projects_results.selected_ids.len();
+                                                    let visible_count =
+                                                        self.projects_results.items.len();
+                                                    let projects =
+                                                        self.project_selector.projects.clone();
+                                                    this.child(self.selection_bar.render(
+                                                        is_trash_scope,
+                                                        selected_count,
+                                                        visible_count,
+                                                        &projects,
+                                                        cx,
+                                                    ))
+                                                },
+                                            ),
+                                    ),
                             )
                             .into_any_element(),
                         AppMode::Tools => {
@@ -1161,13 +1879,22 @@ impl Render for MainShell {
                                     .rounded_tl(RADIUS_MD)
                                     .bg(cx.theme().background)
                                     .overflow_hidden()
-                                    .child(self.workbench.render(cx)),
+                                    .child(self.workbench.render(window, cx)),
                             )
                         },
                     ),
             )
             // Modals & Dialogs
-            .child(self.settings_modal.render(cx))
+            .child(self.settings_modal.render(
+                &self.shortcut_edit_state,
+                &self.model_search_state,
+                &self.model_engine_select,
+                &self.model_status_select,
+                &self.model_label_select,
+                &self.online_provider_field_states,
+                window,
+                cx,
+            ))
             .child(self.diagnostics_modal.render(cx))
             .child(self.recovery_modal.render(cx))
             .child(self.global_dialog.render(cx))

@@ -114,6 +114,7 @@ impl LocalLlmPreset {
                 None => vec![],
             },
             is_recommended: Some(self.is_recommended),
+            labels: Vec::new(),
             is_archive: Some(false),
             filename: Some(self.filename.clone()),
             engine: Some(self.backend.clone()),

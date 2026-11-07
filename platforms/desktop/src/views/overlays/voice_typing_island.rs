@@ -10,7 +10,7 @@ use gpui_kit::*;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use crate::app::GlobalEventBus;
+use crate::app::{GlobalDesktopServices, GlobalEventBus};
 use crate::event_bus::AppEvent;
 use crate::integrations::audio::MICROPHONE_PEAK_EVENT;
 use crate::platform::event::EventEmitterPort;
@@ -20,6 +20,7 @@ use crate::platform::system::host::get_foreground_window_info;
 const WAVEFORM_WEIGHTS: [f32; 5] = [0.45, 0.75, 1.0, 0.75, 0.45];
 const MIN_BAR_HEIGHT: f32 = 4.0;
 const MAX_BAR_HEIGHT: f32 = 18.0;
+const MAX_HISTORY_ITEMS: usize = 100;
 
 /// State machine phases for Voice Typing dictation workflow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -71,6 +72,7 @@ pub struct VoiceTypingIsland {
     pub target_language: String,
     pub audio_peak_volume: f32, // 0.0 to 1.0
     pub context_preset: Option<ContextPreset>,
+    pub has_selection: bool,
     pub error_message: Option<String>,
     pub history: Vec<VoiceTypingHistorySnippet>,
     pub is_drawer_open: bool,
@@ -79,17 +81,30 @@ pub struct VoiceTypingIsland {
 }
 
 impl VoiceTypingIsland {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(_window: &mut Window, cx: &mut Context<Self>, initial_recall: bool) -> Self {
+        let history = cx
+            .global::<GlobalDesktopServices>()
+            .config
+            .get_setting("voiceTypingHistory")
+            .ok()
+            .flatten()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
         let mut island = Self {
-            phase: VoiceTypingPhase::Listening,
+            phase: if initial_recall {
+                VoiceTypingPhase::Recall
+            } else {
+                VoiceTypingPhase::Listening
+            },
             interim_text: "Listening...".to_string(),
             translation_text: None,
             target_language: "EN".to_string(),
             audio_peak_volume: 0.0,
             context_preset: None,
+            has_selection: false,
             error_message: None,
-            history: Vec::new(),
-            is_drawer_open: false,
+            history,
+            is_drawer_open: initial_recall,
             fade_task: None,
             _event_subscription_task: None,
         };
@@ -134,6 +149,37 @@ impl VoiceTypingIsland {
                 }
                 if let Some(trans) = payload["translation"].as_str() {
                     self.translation_text = Some(trans.to_string());
+                }
+                if let Some(has_selection) = payload["hasSelection"].as_bool() {
+                    self.has_selection = has_selection;
+                    if has_selection {
+                        self.context_preset = Some(ContextPreset::SelectionRewrite);
+                    }
+                }
+                if let Some(context_name) = payload["contextName"].as_str() {
+                    self.context_preset = Some(ContextPreset::General(context_name.to_string()));
+                } else if let Some(context_mode) = payload["contextMode"].as_str() {
+                    self.context_preset = Some(match context_mode {
+                        "developer" => ContextPreset::Developer(
+                            payload["contextIcon"]
+                                .as_str()
+                                .unwrap_or("Code")
+                                .to_string(),
+                        ),
+                        "chat" => ContextPreset::Chat(
+                            payload["contextIcon"]
+                                .as_str()
+                                .unwrap_or("Chat")
+                                .to_string(),
+                        ),
+                        "formal" => ContextPreset::Formal(
+                            payload["contextIcon"]
+                                .as_str()
+                                .unwrap_or("Formal")
+                                .to_string(),
+                        ),
+                        _ => ContextPreset::General(context_mode.to_string()),
+                    });
                 }
 
                 // Ingest history array if provided in overlay payload
@@ -182,6 +228,7 @@ impl VoiceTypingIsland {
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| self.interim_text.clone());
                     self.push_history_snippet(&final_text);
+                    self.persist_history(cx);
                 }
 
                 cx.notify();
@@ -191,6 +238,8 @@ impl VoiceTypingIsland {
         else if event.is("voice-typing:history") {
             if let Ok(snippets) = event.decode::<Vec<VoiceTypingHistorySnippet>>() {
                 self.history = snippets;
+                self.history.truncate(MAX_HISTORY_ITEMS);
+                self.persist_history(cx);
                 cx.notify();
             }
         }
@@ -206,13 +255,6 @@ impl VoiceTypingIsland {
         if trimmed.is_empty() || trimmed == "Listening..." {
             return;
         }
-        if self
-            .history
-            .first()
-            .map_or(false, |h| h.injected_text == trimmed)
-        {
-            return;
-        }
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -220,13 +262,27 @@ impl VoiceTypingIsland {
         self.history.insert(
             0,
             VoiceTypingHistorySnippet {
-                id: format!("vt-{}", now_ms),
+                id: format!("vt-{}", uuid::Uuid::new_v4()),
                 injected_text: trimmed.to_string(),
                 timestamp_ms: now_ms,
             },
         );
-        if self.history.len() > 20 {
-            self.history.truncate(20);
+        if self.history.len() > MAX_HISTORY_ITEMS {
+            self.history.truncate(MAX_HISTORY_ITEMS);
+        }
+    }
+
+    fn persist_history(&self, cx: &Context<Self>) {
+        let history = match serde_json::to_value(&self.history) {
+            Ok(history) => history,
+            Err(error) => {
+                log::warn!("Failed to serialize voice typing history: {error}");
+                return;
+            }
+        };
+        let config = cx.global::<GlobalDesktopServices>().config.clone();
+        if let Err(error) = config.set_setting("voiceTypingHistory", &history) {
+            log::warn!("Failed to persist voice typing history: {error}");
         }
     }
 
@@ -377,6 +433,13 @@ impl VoiceTypingIsland {
     fn render_context_badge(&self) -> Option<impl IntoElement> {
         let preset = self.context_preset.as_ref()?;
 
+        // The React overlay intentionally hides the default general mode. It
+        // still carries the mode internally for prompt context, but only
+        // explicit developer/chat/formal or selection states get a badge.
+        if matches!(preset, ContextPreset::General(_)) {
+            return None;
+        }
+
         let (label, bg_hsla, text_hsla) = match preset {
             ContextPreset::SelectionRewrite => (
                 "Selection Rewrite".to_string(),
@@ -398,11 +461,7 @@ impl VoiceTypingIsland {
                 hsla(38.0 / 360.0, 0.92, 0.50, 0.15),
                 hsla(38.0 / 360.0, 0.92, 0.55, 1.0),
             ),
-            ContextPreset::General(app) => (
-                app.clone(),
-                hsla(0.0, 0.0, 0.5, 0.15),
-                hsla(0.0, 0.0, 0.85, 1.0),
-            ),
+            ContextPreset::General(_) => unreachable!("general context is hidden above"),
         };
 
         Some(
@@ -568,6 +627,19 @@ impl Render for VoiceTypingIsland {
             .shadow_lg()
             // 5 Animated Waveform Bars
             .child(self.render_waveform())
+            .when(self.has_selection, |this| {
+                this.child(
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(px(3.0))
+                        .bg(hsla(271.0 / 360.0, 0.81, 0.56, 0.2))
+                        .text_size(px(10.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(hsla(271.0 / 360.0, 0.81, 0.70, 1.0))
+                        .child("Selection Rewrite"),
+                )
+            })
             // Context badge (if active)
             .when_some(self.render_context_badge(), |this, badge| this.child(badge))
             // Phase-specific indicators
@@ -584,12 +656,10 @@ impl Render for VoiceTypingIsland {
                     div()
                         .px_1p5()
                         .py_0p5()
-                        .rounded(px(3.0))
-                        .bg(hsla(217.0 / 360.0, 0.91, 0.60, 0.2))
                         .text_size(px(10.0))
                         .font_weight(FontWeight::BOLD)
                         .text_color(hsla(217.0 / 360.0, 0.91, 0.60, 1.0))
-                        .child(format!("ZH ➔ {}", self.target_language)),
+                        .child("Translating…"),
                 )
             })
             .when(self.phase == VoiceTypingPhase::Done, |this| {
@@ -622,30 +692,18 @@ impl Render for VoiceTypingIsland {
                         )
                     }),
             )
-            // Actions: Quick Recall & Cancel
+            // Actions: cancel only. Quick recall is opened by its global
+            // shortcut and has its own focused drawer state in React.
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        Button::new("btn-open-recall")
-                            .ghost()
-                            .xsmall()
-                            .label("⏱")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.toggle_drawer(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("btn-cancel-voice-typing")
-                            .ghost()
-                            .xsmall()
-                            .label("✕")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.cancel_session(cx);
-                            })),
-                    ),
+                div().flex().items_center().gap_1().child(
+                    Button::new("btn-cancel-voice-typing")
+                        .ghost()
+                        .xsmall()
+                        .label("✕")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.cancel_session(cx);
+                        })),
+                ),
             )
             .into_any_element()
     }
@@ -696,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_history_snippet_dedup_and_cap() {
+    fn test_push_history_snippet_preserves_repeats_and_caps_at_react_limit() {
         let mut island = VoiceTypingIsland {
             phase: VoiceTypingPhase::Listening,
             interim_text: "Listening...".to_string(),
@@ -704,6 +762,7 @@ mod tests {
             target_language: "EN".to_string(),
             audio_peak_volume: 0.0,
             context_preset: None,
+            has_selection: false,
             error_message: None,
             history: Vec::new(),
             is_drawer_open: false,
@@ -725,22 +784,22 @@ mod tests {
         assert_eq!(island.history.len(), 1);
         assert_eq!(island.history[0].injected_text, "First transcript");
 
-        // Duplicate consecutive snippet ignored
+        // Repeated dictations remain distinct history entries, like the React store.
         island.push_history_snippet("First transcript");
-        assert_eq!(island.history.len(), 1);
+        assert_eq!(island.history.len(), 2);
 
         // Push second valid snippet (prepended)
         island.push_history_snippet("Second transcript");
-        assert_eq!(island.history.len(), 2);
+        assert_eq!(island.history.len(), 3);
         assert_eq!(island.history[0].injected_text, "Second transcript");
         assert_eq!(island.history[1].injected_text, "First transcript");
 
-        // Verify cap at 20
-        for i in 3..=25 {
+        // Verify the React store's 100-entry cap.
+        for i in 3..=110 {
             island.push_history_snippet(&format!("Transcript {}", i));
         }
-        assert_eq!(island.history.len(), 20);
-        assert_eq!(island.history[0].injected_text, "Transcript 25");
+        assert_eq!(island.history.len(), 100);
+        assert_eq!(island.history[0].injected_text, "Transcript 110");
     }
 
     #[test]
@@ -752,6 +811,7 @@ mod tests {
             target_language: "EN".to_string(),
             audio_peak_volume: 0.0,
             context_preset: None,
+            has_selection: false,
             error_message: None,
             history: Vec::new(),
             is_drawer_open: false,

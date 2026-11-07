@@ -8859,6 +8859,7 @@ dependencies = [
  "reqwest 0.13.5",
  "rfd",
  "rusqlite",
+ "rust-embed",
  "serde",
  "serde_json",
  "single-instance",
