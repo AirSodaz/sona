@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 pub use sona_core::config::{MediaServerProfile, MediaServerType};
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaServerSubtitleMode {
+    #[default]
+    Bilingual,
+    PureTranslation,
+    SeparateTracks,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaServerLoginPayload {

@@ -1,4 +1,10 @@
-//! Settings Modal with 9 major configuration slices.
+//! Settings modal and its retained data views.
+
+mod about;
+pub(crate) mod api_server;
+mod dashboard;
+mod llm_service;
+mod mcp;
 
 use crate::theme::tokens::*;
 use gpui_kit::assets::IconName as LucideIcon;
@@ -12,21 +18,267 @@ use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{InteractiveElement as _, StatefulInteractiveElement as _, *};
 use serde_json::{Value, json};
+use sona_core::dashboard::models::DashboardSnapshotDomainModel;
+use sona_core::runtime::app_update::{AppUpdateCheckResult, UpdateChannel};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Arc;
+use tokio::sync::{Notify, watch};
 
 use super::shell::MainShell;
+use about::about_panel;
+use api_server::api_server_settings_panel;
+use dashboard::{dashboard_panel, dashboard_snapshot_time};
+use llm_service::llm_service_panel;
+use mcp::mcp_settings_panel;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SettingsTab {
     General,
+    Dashboard,
     Shortcuts,
-    Audio,
+    Microphone,
     Models,
+    Subtitle,
     Vocabulary,
-    Intelligence,
+    LlmService,
     Automation,
     Storage,
     Sync,
+    About,
+    ApiServer,
+    Mcp,
+}
+
+fn safe_update_version(version: &str) -> String {
+    let sanitized = version
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
+        })
+        .collect::<String>();
+    if sanitized.is_empty() {
+        "latest".to_string()
+    } else {
+        sanitized
+    }
+}
+
+pub(super) fn llm_slug(value: &str) -> String {
+    value
+        .to_ascii_lowercase()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn llm_provider_default_host(provider: &str) -> String {
+    match provider {
+        "google_translate_free" => "https://translate.googleapis.com/translate_a/single".into(),
+        "google_translate" => "https://translation.googleapis.com/language/translate/v2".into(),
+        _ => sona_core::llm::providers::find_llm_provider_by_id_or_alias(provider)
+            .map(|provider| provider.defaults.api_host.clone())
+            .unwrap_or_default(),
+    }
+}
+
+fn llm_provider_test_model(provider: &str) -> &'static str {
+    match provider {
+        "azure_openai" => "gpt-4o-deployment",
+        "anthropic" => "claude-sonnet-4-20250514",
+        "gemini" => "gemini-2.5-flash",
+        "ollama" => "qwen3:8b",
+        "deep_seek" => "deepseek-chat",
+        "moonshot_cn" | "moonshot_ai" | "kimi" => "moonshot-v1-8k",
+        "chatglm" => "glm-4-flash",
+        "qwen" | "qwen_portal" => "qwen-max",
+        "groq" => "llama-3.3-70b-versatile",
+        "x_ai" => "grok-3-mini",
+        "mistral_ai" => "mistral-large-latest",
+        "perplexity" => "sonar",
+        "cohere" => "command-r-plus",
+        "together" => "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "venice" => "llama-3.3-70b",
+        "hyperbolic" => "meta-llama/Llama-3.3-70B-Instruct",
+        "llamafile" => "default",
+        "local" => "Qwen/Qwen3.5-4B",
+        "google_translate" | "google_translate_free" => "default",
+        _ => "gpt-4o-mini",
+    }
+}
+
+fn llm_custom_provider_default_host(strategy: &str) -> String {
+    match strategy {
+        "openai_responses" => String::new(),
+        "anthropic" | "gemini" | "openai_compatible" => String::new(),
+        _ => String::new(),
+    }
+}
+
+fn remove_custom_provider_settings(settings: &mut Value, provider_id: &str) -> bool {
+    let Some(custom_providers) = settings
+        .get_mut("customProviders")
+        .and_then(Value::as_object_mut)
+    else {
+        return false;
+    };
+    if custom_providers.remove(provider_id).is_none() {
+        return false;
+    }
+
+    if let Some(providers) = settings.get_mut("providers").and_then(Value::as_object_mut) {
+        providers.remove(provider_id);
+    }
+    let removed_ids = settings
+        .get("models")
+        .and_then(Value::as_object)
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|(id, model)| {
+                    (model.get("provider").and_then(Value::as_str) == Some(provider_id))
+                        .then(|| id.clone())
+                })
+                .collect::<std::collections::HashSet<_>>()
+        })
+        .unwrap_or_default();
+    if let Some(models) = settings.get_mut("models").and_then(Value::as_object_mut) {
+        for id in &removed_ids {
+            models.remove(id);
+        }
+    }
+    if let Some(order) = settings.get_mut("modelOrder").and_then(Value::as_array_mut) {
+        order.retain(|id| id.as_str().is_none_or(|id| !removed_ids.contains(id)));
+    }
+    if let Some(selections) = settings
+        .get_mut("selections")
+        .and_then(Value::as_object_mut)
+    {
+        selections.retain(|_, id| id.as_str().is_none_or(|id| !removed_ids.contains(id)));
+    }
+    if settings.get("activeProvider").and_then(Value::as_str) == Some(provider_id) {
+        settings["activeProvider"] = Value::String("google_translate_free".into());
+    }
+    true
+}
+
+fn remove_llm_model_settings(settings: &mut Value, model_id: &str) -> bool {
+    if settings
+        .get_mut("models")
+        .and_then(Value::as_object_mut)
+        .and_then(|models| models.remove(model_id))
+        .is_none()
+    {
+        return false;
+    }
+    if let Some(order) = settings.get_mut("modelOrder").and_then(Value::as_array_mut) {
+        order.retain(|id| id.as_str() != Some(model_id));
+    }
+    if let Some(selections) = settings
+        .get_mut("selections")
+        .and_then(Value::as_object_mut)
+    {
+        for feature in ["polish", "translation", "summary"] {
+            let key = format!("{feature}ModelId");
+            if selections.get(&key).and_then(Value::as_str) == Some(model_id) {
+                selections.remove(&key);
+            }
+        }
+    }
+    true
+}
+
+fn apply_llm_model_metadata_inputs(
+    metadata: &Value,
+    fields: &HashMap<String, String>,
+) -> Result<Value, String> {
+    let mut updated = metadata
+        .as_object()
+        .cloned()
+        .map(Value::Object)
+        .unwrap_or_else(|| json!({}));
+    for key in [
+        "displayName",
+        "knowledgeCutoff",
+        "releaseDate",
+        "lastUpdated",
+    ] {
+        if let Some(value) = fields.get(key) {
+            let value = value.trim();
+            if value.is_empty() {
+                updated.as_object_mut().unwrap().remove(key);
+            } else {
+                updated[key] = Value::String(value.to_string());
+            }
+        }
+    }
+    for key in [
+        "contextWindow",
+        "maxOutputTokens",
+        "inputPrice",
+        "outputPrice",
+        "cacheReadPrice",
+        "cacheWritePrice",
+    ] {
+        let Some(value) = fields.get(key) else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            updated.as_object_mut().unwrap().remove(key);
+            continue;
+        }
+        let number = value
+            .parse::<f64>()
+            .ok()
+            .filter(|number| number.is_finite() && *number >= 0.0)
+            .and_then(serde_json::Number::from_f64)
+            .ok_or_else(|| format!("{key} must be a nonnegative number."))?;
+        updated[key] = Value::Number(number);
+    }
+    Ok(updated)
+}
+
+#[cfg(target_os = "windows")]
+fn update_package_extension() -> &'static str {
+    ".exe"
+}
+
+#[cfg(target_os = "macos")]
+fn update_package_extension() -> &'static str {
+    ".tar.gz"
+}
+
+#[cfg(target_os = "linux")]
+fn update_package_extension() -> &'static str {
+    ".AppImage"
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+fn update_package_extension() -> &'static str {
+    ".package"
+}
+
+fn spawn_updated_app(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(path).spawn();
+    #[cfg(not(target_os = "macos"))]
+    let result = Command::new(path).spawn();
+
+    result
+        .map(|_| ())
+        .map_err(|error| format!("Failed to relaunch the updated application: {error}"))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,6 +294,18 @@ pub enum OnlineProviderTestState {
     Loading,
     Success { latency_ms: u64 },
     Error { message: String },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum AboutUpdateStatus {
+    Idle,
+    Checking,
+    UpToDate,
+    Available,
+    Downloading,
+    Installing,
+    Downloaded,
+    Error(String),
 }
 
 pub struct SettingsModal {
@@ -96,6 +360,41 @@ pub struct SettingsModal {
     pub cuda_addon_downloading: bool,
     pub cuda_addon_progress: f32,
     pub cuda_addon_error: Option<String>,
+    dashboard_snapshot: Option<DashboardSnapshotDomainModel>,
+    dashboard_loading: bool,
+    dashboard_deep_loading: bool,
+    dashboard_error: Option<String>,
+    dashboard_load_attempted: bool,
+    dashboard_request_generation: u64,
+    about_update_status: AboutUpdateStatus,
+    about_update_result: Option<AppUpdateCheckResult>,
+    about_update_progress: f32,
+    about_installed_app: Option<PathBuf>,
+    llm_active_feature: String,
+    llm_model_draft: String,
+    llm_custom_provider_name: String,
+    llm_custom_provider_strategy: String,
+    llm_edit_provider_strategy: String,
+    llm_show_custom_provider_form: bool,
+    llm_editing_provider: Option<String>,
+    pub(crate) llm_pending_delete_provider: Option<String>,
+    pub(crate) api_server_pending_key: Option<String>,
+    llm_discovery_provider: Option<String>,
+    llm_discovery_loading: bool,
+    llm_discovery_error: Option<String>,
+    llm_discovered_models: Vec<sona_core::llm::provider_protocol::LlmModelSummary>,
+    llm_discovery_generation: u64,
+    llm_provider_test_states: HashMap<String, OnlineProviderTestState>,
+    llm_editing_model: Option<String>,
+    llm_model_metadata_draft: Value,
+    llm_model_metadata_error: Option<String>,
+    mcp_logs: Vec<crate::platform::agent_control::server::McpActivityLogEntry>,
+    mcp_logs_loading: bool,
+    mcp_logs_loaded: bool,
+    mcp_log_filter_status: String,
+    pub(crate) mcp_log_query: String,
+    mcp_selected_guide: String,
+    subtitle_voice_typing_tab: bool,
 }
 
 impl SettingsModal {
@@ -152,12 +451,47 @@ impl SettingsModal {
             cuda_addon_downloading: false,
             cuda_addon_progress: 0.0,
             cuda_addon_error: None,
+            dashboard_snapshot: None,
+            dashboard_loading: false,
+            dashboard_deep_loading: false,
+            dashboard_error: None,
+            dashboard_load_attempted: false,
+            dashboard_request_generation: 0,
+            about_update_status: AboutUpdateStatus::Idle,
+            about_update_result: None,
+            about_update_progress: 0.0,
+            about_installed_app: None,
+            llm_active_feature: "polish".to_string(),
+            llm_model_draft: String::new(),
+            llm_custom_provider_name: String::new(),
+            llm_custom_provider_strategy: "openai_compatible".to_string(),
+            llm_edit_provider_strategy: "openai_compatible".to_string(),
+            llm_show_custom_provider_form: false,
+            llm_editing_provider: None,
+            llm_pending_delete_provider: None,
+            api_server_pending_key: None,
+            llm_discovery_provider: None,
+            llm_discovery_loading: false,
+            llm_discovery_error: None,
+            llm_discovered_models: Vec::new(),
+            llm_discovery_generation: 0,
+            llm_provider_test_states: HashMap::new(),
+            llm_editing_model: None,
+            llm_model_metadata_draft: json!({}),
+            llm_model_metadata_error: None,
+            mcp_logs: Vec::new(),
+            mcp_logs_loading: false,
+            mcp_logs_loaded: false,
+            mcp_log_filter_status: "all".to_string(),
+            mcp_log_query: String::new(),
+            mcp_selected_guide: "claude-desktop".to_string(),
+            subtitle_voice_typing_tab: true,
         }
     }
 
     pub fn open(&mut self, cx: &mut Context<MainShell>) {
         self.is_open = true;
-        if self.current_tab == SettingsTab::Audio {
+        if self.current_tab == SettingsTab::Microphone {
             self.start_audio_preview(cx);
         }
     }
@@ -168,8 +502,14 @@ impl SettingsModal {
     }
 
     pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<MainShell>) {
+        if self.current_tab == SettingsTab::About
+            && tab != SettingsTab::About
+            && self.about_update_status == AboutUpdateStatus::UpToDate
+        {
+            self.about_update_status = AboutUpdateStatus::Idle;
+        }
         self.current_tab = tab;
-        if tab == SettingsTab::Audio {
+        if tab == SettingsTab::Microphone {
             self.load_audio_devices(cx);
             self.start_audio_preview(cx);
         } else {
@@ -179,6 +519,327 @@ impl SettingsModal {
             self.load_model_config(cx);
             self.load_model_catalog(cx);
             self.load_cuda_addon_status(cx);
+        }
+        if tab == SettingsTab::LlmService {
+            self.load_model_config(cx);
+        }
+        if tab == SettingsTab::Dashboard && !self.dashboard_load_attempted {
+            self.load_dashboard(cx);
+        }
+        if tab == SettingsTab::Mcp && !self.mcp_logs_loaded {
+            self.load_mcp_logs(cx);
+        }
+    }
+
+    fn load_mcp_logs(&mut self, cx: &mut Context<MainShell>) {
+        self.mcp_logs_loading = true;
+        self.mcp_logs_loaded = true;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let logs = services.agent_control.get_activity_logs().await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.mcp_logs = logs;
+                shell.settings_modal.mcp_logs_loading = false;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn retry_dashboard(&mut self, cx: &mut Context<MainShell>) {
+        self.dashboard_load_attempted = false;
+        self.dashboard_snapshot = None;
+        self.dashboard_error = None;
+        self.load_dashboard(cx);
+    }
+
+    fn load_dashboard(&mut self, cx: &mut Context<MainShell>) {
+        let context = match cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sqlite
+            .current_context()
+        {
+            Ok(context) => context,
+            Err(error) => {
+                self.dashboard_error = Some(error);
+                self.dashboard_load_attempted = true;
+                return;
+            }
+        };
+        let app_local_data_dir = context.app_data_dir().to_path_buf();
+        self.dashboard_request_generation += 1;
+        let generation = self.dashboard_request_generation;
+        self.dashboard_loading = true;
+        self.dashboard_deep_loading = false;
+        self.dashboard_error = None;
+        self.dashboard_load_attempted = true;
+
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let fast_snapshot = sona_sqlite::load_dashboard_snapshot(
+                app_local_data_dir.clone(),
+                false,
+                dashboard_snapshot_time(),
+            )
+            .await
+            .map_err(|error| error.to_string());
+            let has_items = fast_snapshot
+                .as_ref()
+                .is_ok_and(|snapshot| snapshot.content.overview.item_count > 0);
+            let fast_ok = fast_snapshot.is_ok();
+            this.update(cx, |shell, cx| {
+                if shell.settings_modal.dashboard_request_generation != generation {
+                    return;
+                }
+                shell.settings_modal.dashboard_loading = false;
+                match fast_snapshot {
+                    Ok(snapshot) => shell.settings_modal.dashboard_snapshot = Some(snapshot),
+                    Err(error) => shell.settings_modal.dashboard_error = Some(error),
+                }
+                shell.settings_modal.dashboard_deep_loading = fast_ok && has_items;
+                cx.notify();
+            })
+            .ok();
+
+            if !has_items {
+                return;
+            }
+
+            let deep_snapshot = sona_sqlite::load_dashboard_snapshot(
+                app_local_data_dir,
+                true,
+                dashboard_snapshot_time(),
+            )
+            .await
+            .map_err(|error| error.to_string());
+            this.update(cx, |shell, cx| {
+                if shell.settings_modal.dashboard_request_generation != generation {
+                    return;
+                }
+                shell.settings_modal.dashboard_deep_loading = false;
+                match deep_snapshot {
+                    Ok(snapshot) => shell.settings_modal.dashboard_snapshot = Some(snapshot),
+                    Err(error) => shell.settings_modal.dashboard_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn check_about_updates(&mut self, cx: &mut Context<MainShell>) {
+        if matches!(
+            self.about_update_status,
+            AboutUpdateStatus::Checking
+                | AboutUpdateStatus::Downloading
+                | AboutUpdateStatus::Installing
+        ) {
+            return;
+        }
+        let channel = match env!("SONA_BUILD_CHANNEL") {
+            "stable" => UpdateChannel::Stable,
+            "nightly" => UpdateChannel::Nightly,
+            _ => return,
+        };
+        self.about_update_status = AboutUpdateStatus::Checking;
+        self.about_update_result = None;
+        self.about_update_progress = 0.0;
+        self.about_installed_app = None;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let config = services
+                .config
+                .load()
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| json!({}));
+            let mirror = sona_model_downloads::parse_download_mirror(
+                config
+                    .get("modelDownloadMirror")
+                    .and_then(Value::as_str)
+                    .unwrap_or("auto"),
+            );
+            let result = sona_model_downloads::check_app_update(
+                services.downloads.client(),
+                None,
+                channel,
+                mirror,
+            )
+            .await
+            .map_err(|error| error.to_string());
+            this.update(cx, |shell, cx| {
+                match result {
+                    Ok(result) => {
+                        shell.settings_modal.about_update_status = if result.update_available {
+                            AboutUpdateStatus::Available
+                        } else {
+                            AboutUpdateStatus::UpToDate
+                        };
+                        shell.settings_modal.about_update_result = Some(result);
+                    }
+                    Err(error) => {
+                        shell.settings_modal.about_update_status = AboutUpdateStatus::Error(error);
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn install_about_update(&mut self, cx: &mut Context<MainShell>) {
+        if self.about_update_status != AboutUpdateStatus::Available {
+            return;
+        }
+        let Some(update) = self.about_update_result.clone() else {
+            self.about_update_status = AboutUpdateStatus::Error(
+                "The update information is no longer available. Check again.".into(),
+            );
+            cx.notify();
+            return;
+        };
+        let context = match cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sqlite
+            .current_context()
+        {
+            Ok(context) => context,
+            Err(error) => {
+                self.about_update_status = AboutUpdateStatus::Error(error);
+                cx.notify();
+                return;
+            }
+        };
+        let config = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .config
+            .clone();
+        let client = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .downloads
+            .client()
+            .clone();
+        let update_dir = context.app_data_dir().join("updates");
+        let version = safe_update_version(&update.latest_version);
+        let package_path = update_dir.join(format!("sona-{version}{}", update_package_extension()));
+        let running_exe = std::env::current_exe().unwrap_or_default();
+        let update = update.clone();
+        self.about_update_status = AboutUpdateStatus::Downloading;
+        self.about_update_progress = 0.0;
+        cx.notify();
+
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let config = config.load().ok().flatten().unwrap_or_else(|| json!({}));
+            let mirror = sona_model_downloads::parse_download_mirror(
+                config
+                    .get("modelDownloadMirror")
+                    .and_then(Value::as_str)
+                    .unwrap_or("auto"),
+            );
+            let cancel = Arc::new(Notify::new());
+            let (progress_tx, mut progress_rx) = watch::channel((0_u64, 0_u64));
+            let progress_callback: Box<dyn FnMut(u64, u64) + Send> = Box::new(move |current, total| {
+                progress_tx.send_replace((current, total));
+            });
+            let download = sona_model_downloads::download_update_package(
+                &client,
+                &update.asset_url,
+                &package_path,
+                &update.signature,
+                None,
+                mirror,
+                cancel,
+                Some(progress_callback),
+            );
+            tokio::pin!(download);
+            let download_result = loop {
+                tokio::select! {
+                    result = &mut download => break result.map_err(|error| error.to_string()),
+                    changed = progress_rx.changed() => {
+                        if changed.is_ok() {
+                            let (current, total) = *progress_rx.borrow_and_update();
+                            let progress = if total == 0 {
+                                0.0
+                            } else {
+                                (current as f64 / total as f64 * 100.0) as f32
+                            };
+                            this.update(cx, |shell, cx| {
+                                shell.settings_modal.about_update_progress = progress.clamp(0.0, 100.0);
+                                cx.notify();
+                            }).ok();
+                        }
+                    }
+                }
+            };
+
+            if let Err(error) = download_result {
+                this.update(cx, |shell, cx| {
+                    shell.settings_modal.about_update_status = AboutUpdateStatus::Error(error);
+                    shell.settings_modal.about_update_progress = 0.0;
+                    cx.notify();
+                }).ok();
+                return;
+            }
+
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.about_update_status = AboutUpdateStatus::Installing;
+                shell.settings_modal.about_update_progress = 100.0;
+                cx.notify();
+            }).ok();
+
+            let install_package_path = package_path.clone();
+            let install = tokio::task::spawn_blocking(move || {
+                sona_model_downloads::install_update_package(
+                    &install_package_path,
+                    &running_exe,
+                    false,
+                )
+                    .map_err(|error| error.to_string())
+            })
+            .await
+            .map_err(|error| error.to_string())
+            .and_then(|result| result);
+            this.update(cx, |shell, cx| {
+                match install {
+                    Ok(installed_app) => {
+                        shell.settings_modal.about_installed_app = Some(installed_app);
+                        shell.settings_modal.about_update_status = AboutUpdateStatus::Downloaded;
+                        shell.settings_modal.about_update_progress = 100.0;
+                    }
+                    Err(error) => {
+                        shell.settings_modal.about_update_status = AboutUpdateStatus::Error(error);
+                        shell.settings_modal.about_update_progress = 0.0;
+                    }
+                }
+                cx.notify();
+            }).ok();
+        })
+        .detach();
+    }
+
+    fn relaunch_about_update(&mut self, cx: &mut Context<MainShell>) {
+        if self.about_update_status != AboutUpdateStatus::Downloaded {
+            return;
+        }
+        let Some(installed_app) = self.about_installed_app.clone() else {
+            self.about_update_status = AboutUpdateStatus::Error(
+                "The installed application could not be located. Open the release page to continue.".into(),
+            );
+            cx.notify();
+            return;
+        };
+        match spawn_updated_app(&installed_app) {
+            Ok(()) => cx.quit(),
+            Err(error) => {
+                self.about_update_status = AboutUpdateStatus::Error(error);
+                cx.notify();
+            }
         }
     }
 
@@ -339,6 +1000,722 @@ impl SettingsModal {
         })
         .detach();
         cx.notify();
+    }
+
+    fn ensure_llm_settings(&mut self) {
+        if !self.model_config.is_object() {
+            self.model_config = json!({});
+        }
+        if !self
+            .model_config
+            .get("llmSettings")
+            .is_some_and(Value::is_object)
+        {
+            self.model_config["llmSettings"] = json!({
+                "activeProvider": "google_translate_free",
+                "customProviders": {},
+                "providers": {
+                    "google_translate_free": {
+                        "apiHost": "https://translate.googleapis.com/translate_a/single",
+                        "apiKey": ""
+                    }
+                },
+                "models": {},
+                "modelOrder": [],
+                "selections": {}
+            });
+        }
+    }
+
+    fn persist_llm_settings(&mut self, cx: &mut Context<MainShell>) {
+        let value = self
+            .model_config
+            .get("llmSettings")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        self.persist_model_setting("llmSettings".to_string(), value, cx);
+    }
+
+    pub(super) fn set_llm_provider_field(
+        &mut self,
+        field: &'static str,
+        value: String,
+        cx: &mut Context<MainShell>,
+    ) {
+        self.ensure_llm_settings();
+        let provider = self
+            .model_config
+            .pointer("/llmSettings/activeProvider")
+            .and_then(Value::as_str)
+            .unwrap_or("google_translate_free")
+            .to_string();
+        if !self.model_config["llmSettings"]["providers"].is_object() {
+            self.model_config["llmSettings"]["providers"] = json!({});
+        }
+        if !self.model_config["llmSettings"]["providers"][&provider].is_object() {
+            self.model_config["llmSettings"]["providers"][&provider] = json!({});
+        }
+        self.model_config["llmSettings"]["providers"][&provider][field] =
+            Value::String(value.clone());
+
+        let config = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .config
+            .clone();
+        cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+            let mut stored = config.load().ok().flatten().unwrap_or_else(|| json!({}));
+            if !stored.get("llmSettings").is_some_and(Value::is_object) {
+                stored["llmSettings"] = json!({});
+            }
+            if !stored["llmSettings"]["providers"].is_object() {
+                stored["llmSettings"]["providers"] = json!({});
+            }
+            if !stored["llmSettings"]["providers"][&provider].is_object() {
+                stored["llmSettings"]["providers"][&provider] = json!({});
+            }
+            stored["llmSettings"]["providers"][&provider][field] = Value::String(value);
+            let _ = config.save(&stored);
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn set_llm_active_provider(&mut self, provider: String, cx: &mut Context<MainShell>) {
+        self.ensure_llm_settings();
+        if !self.model_config["llmSettings"]["providers"].is_object() {
+            self.model_config["llmSettings"]["providers"] = json!({});
+        }
+        if !self.model_config["llmSettings"]["providers"][&provider].is_object() {
+            self.model_config["llmSettings"]["providers"][&provider] = json!({
+                "apiHost": llm_provider_default_host(&provider),
+                "apiKey": ""
+            });
+        }
+        self.model_config["llmSettings"]["activeProvider"] = Value::String(provider);
+        self.persist_llm_settings(cx);
+    }
+
+    fn active_llm_provider_values(&self) -> (String, String) {
+        let provider = self
+            .model_config
+            .pointer("/llmSettings/activeProvider")
+            .and_then(Value::as_str)
+            .unwrap_or("google_translate_free");
+        let setting = self
+            .model_config
+            .pointer(&format!("/llmSettings/providers/{provider}"));
+        let host = setting
+            .and_then(|value| value.get("apiHost"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| llm_provider_default_host(provider).to_string());
+        let key = setting
+            .and_then(|value| value.get("apiKey"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        (host, key)
+    }
+
+    fn set_llm_active_feature(&mut self, feature: &str) {
+        if matches!(feature, "polish" | "translation" | "summary") {
+            self.llm_active_feature = feature.to_string();
+        }
+    }
+
+    pub(super) fn set_llm_model_draft(&mut self, value: String) {
+        self.llm_model_draft = value;
+    }
+
+    pub(super) fn set_llm_custom_provider_name(&mut self, value: String) {
+        self.llm_custom_provider_name = value;
+    }
+
+    fn set_llm_custom_provider_strategy(&mut self, value: &str) {
+        if matches!(
+            value,
+            "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
+        ) {
+            self.llm_custom_provider_strategy = value.to_string();
+        }
+    }
+
+    fn set_llm_edit_provider_strategy(&mut self, value: &str) {
+        if matches!(
+            value,
+            "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
+        ) {
+            self.llm_edit_provider_strategy = value.to_string();
+        }
+    }
+
+    fn add_llm_custom_provider(&mut self, cx: &mut Context<MainShell>) {
+        let name = self.llm_custom_provider_name.trim().to_string();
+        if name.is_empty() {
+            return;
+        }
+        self.ensure_llm_settings();
+        let base = llm_slug(&name);
+        let base = if base.is_empty() {
+            "provider"
+        } else {
+            base.as_str()
+        };
+        let mut provider_id = format!("custom-{base}");
+        let mut suffix = 2;
+        while self
+            .model_config
+            .pointer("/llmSettings/customProviders")
+            .and_then(|providers| providers.get(&provider_id))
+            .is_some()
+        {
+            provider_id = format!("custom-{base}-{suffix}");
+            suffix += 1;
+        }
+        if !self.model_config["llmSettings"]["customProviders"].is_object() {
+            self.model_config["llmSettings"]["customProviders"] = json!({});
+        }
+        self.model_config["llmSettings"]["customProviders"][&provider_id] = json!({
+            "id": provider_id,
+            "name": name,
+            "strategy": self.llm_custom_provider_strategy,
+            "createdAt": chrono::Utc::now().to_rfc3339()
+        });
+        self.model_config["llmSettings"]["providers"][&provider_id] = json!({
+            "apiHost": llm_custom_provider_default_host(&self.llm_custom_provider_strategy),
+            "apiKey": ""
+        });
+        self.model_config["llmSettings"]["activeProvider"] = Value::String(provider_id);
+        self.llm_custom_provider_name.clear();
+        self.llm_show_custom_provider_form = false;
+        self.persist_llm_settings(cx);
+    }
+
+    fn save_llm_custom_provider_edit(&mut self, cx: &mut Context<MainShell>) {
+        let Some(provider_id) = self.llm_editing_provider.take() else {
+            return;
+        };
+        let name = self.llm_custom_provider_name.trim().to_string();
+        if name.is_empty() {
+            self.llm_editing_provider = Some(provider_id);
+            return;
+        }
+        let Some(provider) = self
+            .model_config
+            .pointer_mut(&format!("/llmSettings/customProviders/{provider_id}"))
+        else {
+            return;
+        };
+        let old_strategy = provider
+            .get("strategy")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        provider["name"] = Value::String(name);
+        provider["strategy"] = Value::String(self.llm_edit_provider_strategy.clone());
+        if old_strategy != self.llm_edit_provider_strategy {
+            if let Some(setting) = self
+                .model_config
+                .pointer_mut(&format!("/llmSettings/providers/{provider_id}"))
+                .and_then(Value::as_object_mut)
+            {
+                setting.remove("apiPath");
+                setting.remove("apiVersion");
+            }
+        }
+        self.llm_custom_provider_name.clear();
+        self.persist_llm_settings(cx);
+    }
+
+    pub(crate) fn confirm_delete_llm_custom_provider(&mut self, cx: &mut Context<MainShell>) {
+        let Some(provider_id) = self.llm_pending_delete_provider.take() else {
+            return;
+        };
+        if !remove_custom_provider_settings(&mut self.model_config["llmSettings"], &provider_id) {
+            return;
+        }
+        self.llm_provider_test_states.remove(&provider_id);
+        if self.llm_discovery_provider.as_deref() == Some(provider_id.as_str()) {
+            self.llm_discovery_generation += 1;
+            self.llm_discovery_provider = None;
+            self.llm_discovery_loading = false;
+            self.llm_discovery_error = None;
+            self.llm_discovered_models.clear();
+        }
+        self.persist_llm_settings(cx);
+    }
+
+    fn add_llm_model(&mut self, cx: &mut Context<MainShell>) {
+        let model = self.llm_model_draft.trim().to_string();
+        if model.is_empty() {
+            return;
+        }
+        self.ensure_llm_settings();
+        let provider = self
+            .model_config
+            .pointer("/llmSettings/activeProvider")
+            .and_then(Value::as_str)
+            .unwrap_or("google_translate_free")
+            .to_string();
+        let base = llm_slug(&model);
+        let base = if base.is_empty() {
+            "model"
+        } else {
+            base.as_str()
+        };
+        let mut id = format!("{provider}-{base}");
+        let mut suffix = 2;
+        while self
+            .model_config
+            .pointer(&format!("/llmSettings/models/{id}"))
+            .is_some()
+        {
+            id = format!("{provider}-{base}-{suffix}");
+            suffix += 1;
+        }
+        if !self.model_config["llmSettings"]["models"].is_object() {
+            self.model_config["llmSettings"]["models"] = json!({});
+        }
+        self.model_config["llmSettings"]["models"][&id] = json!({
+            "id": id,
+            "provider": provider,
+            "model": model,
+            "source": "manual"
+        });
+        if !self.model_config["llmSettings"]["modelOrder"].is_array() {
+            self.model_config["llmSettings"]["modelOrder"] = json!([]);
+        }
+        self.model_config["llmSettings"]["modelOrder"]
+            .as_array_mut()
+            .expect("model order initialized")
+            .push(Value::String(id.clone()));
+        let selection_key = format!("{}ModelId", self.llm_active_feature);
+        self.model_config["llmSettings"]["selections"][selection_key] = Value::String(id);
+        self.llm_model_draft.clear();
+        self.persist_llm_settings(cx);
+    }
+
+    fn add_discovered_llm_model(
+        &mut self,
+        provider: &str,
+        summary: sona_core::llm::provider_protocol::LlmModelSummary,
+        cx: &mut Context<MainShell>,
+    ) {
+        let model = summary.model.trim().to_string();
+        if model.is_empty() {
+            return;
+        }
+        self.ensure_llm_settings();
+        let existing_id = self
+            .model_config
+            .pointer("/llmSettings/models")
+            .and_then(Value::as_object)
+            .and_then(|models| {
+                models.iter().find_map(|(id, entry)| {
+                    (entry.get("provider").and_then(Value::as_str) == Some(provider)
+                        && entry.get("model").and_then(Value::as_str) == Some(model.as_str()))
+                    .then(|| id.clone())
+                })
+            });
+        let model_id = if let Some(id) = existing_id {
+            id
+        } else {
+            let base = llm_slug(&model);
+            let base = if base.is_empty() {
+                "model"
+            } else {
+                base.as_str()
+            };
+            let mut id = format!("{provider}-{base}");
+            let mut suffix = 2;
+            while self
+                .model_config
+                .pointer(&format!("/llmSettings/models/{id}"))
+                .is_some()
+            {
+                id = format!("{provider}-{base}-{suffix}");
+                suffix += 1;
+            }
+            let mut metadata = serde_json::to_value(summary).unwrap_or_else(|_| json!({}));
+            if let Some(object) = metadata.as_object_mut() {
+                object.remove("model");
+            }
+            self.model_config["llmSettings"]["models"][&id] = json!({
+                "id": id,
+                "provider": provider,
+                "model": model,
+                "source": "discovered",
+                "metadata": metadata
+            });
+            if !self.model_config["llmSettings"]["modelOrder"].is_array() {
+                self.model_config["llmSettings"]["modelOrder"] = json!([]);
+            }
+            self.model_config["llmSettings"]["modelOrder"]
+                .as_array_mut()
+                .expect("model order initialized")
+                .push(Value::String(id.clone()));
+            id
+        };
+        let selection_key = format!("{}ModelId", self.llm_active_feature);
+        self.model_config["llmSettings"]["selections"][selection_key] = Value::String(model_id);
+        self.persist_llm_settings(cx);
+    }
+
+    fn discover_llm_models(&mut self, provider_id: String, cx: &mut Context<MainShell>) {
+        let provider_setting = self
+            .model_config
+            .pointer(&format!("/llmSettings/providers/{provider_id}"));
+        let api_host = provider_setting
+            .and_then(|setting| setting.get("apiHost"))
+            .and_then(Value::as_str)
+            .filter(|host| !host.trim().is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| llm_provider_default_host(&provider_id));
+        let api_key = provider_setting
+            .and_then(|setting| setting.get("apiKey"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let custom = self
+            .model_config
+            .pointer(&format!(
+                "/llmSettings/customProviders/{provider_id}/strategy"
+            ))
+            .and_then(Value::as_str);
+        let strategy = custom
+            .and_then(|strategy| match strategy {
+                "openai_compatible" => Some(sona_core::llm::tasks::LlmProviderStrategy::OpenAi),
+                "openai_responses" => {
+                    Some(sona_core::llm::tasks::LlmProviderStrategy::OpenAiResponses)
+                }
+                "anthropic" => Some(sona_core::llm::tasks::LlmProviderStrategy::Anthropic),
+                "gemini" => Some(sona_core::llm::tasks::LlmProviderStrategy::Gemini),
+                _ => None,
+            })
+            .or_else(|| {
+                let provider = serde_json::from_value::<sona_core::domain::LlmProvider>(
+                    Value::String(provider_id.clone()),
+                )
+                .ok()?;
+                Some(sona_core::llm::tasks::LlmProviderStrategy::from_provider(
+                    &provider,
+                ))
+            });
+        let Some(strategy) = strategy else {
+            self.llm_discovery_error =
+                Some("This provider does not support model discovery.".into());
+            self.llm_discovered_models.clear();
+            return;
+        };
+        let provider = serde_json::from_value::<sona_core::domain::LlmProvider>(Value::String(
+            provider_id.clone(),
+        ))
+        .unwrap_or_else(|_| sona_core::domain::LlmProvider::Custom(provider_id.clone()));
+        self.llm_discovery_generation += 1;
+        let generation = self.llm_discovery_generation;
+        self.llm_discovery_provider = Some(provider_id);
+        self.llm_discovery_loading = true;
+        self.llm_discovery_error = None;
+        self.llm_discovered_models.clear();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let adapter = crate::integrations::llm::DesktopLlmAdapter::default();
+            let result = sona_application::llm::LlmRuntimeService::new(&adapter, adapter.clone())
+                .list_models(sona_core::llm::requests::LlmModelsRequest {
+                    provider,
+                    strategy: Some(strategy),
+                    base_url: api_host,
+                    api_key,
+                })
+                .await
+                .map_err(|error| error.to_string());
+            this.update(cx, |shell, cx| {
+                let settings = &mut shell.settings_modal;
+                if settings.llm_discovery_generation != generation {
+                    return;
+                }
+                settings.llm_discovery_loading = false;
+                match result {
+                    Ok(models) => settings.llm_discovered_models = models,
+                    Err(error) => settings.llm_discovery_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn test_llm_provider(&mut self, provider_id: String, cx: &mut Context<MainShell>) {
+        self.test_llm_model(provider_id, None, cx);
+    }
+
+    fn test_llm_model(
+        &mut self,
+        provider_id: String,
+        model_override: Option<String>,
+        cx: &mut Context<MainShell>,
+    ) {
+        let state_key = model_override
+            .as_ref()
+            .map(|model| format!("{provider_id}::{model}"))
+            .unwrap_or_else(|| provider_id.clone());
+        let provider_setting = self
+            .model_config
+            .pointer(&format!("/llmSettings/providers/{provider_id}"));
+        let api_host = provider_setting
+            .and_then(|setting| setting.get("apiHost"))
+            .and_then(Value::as_str)
+            .filter(|host| !host.trim().is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| llm_provider_default_host(&provider_id));
+        let api_key = provider_setting
+            .and_then(|setting| setting.get("apiKey"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let api_path = provider_setting
+            .and_then(|setting| setting.get("apiPath"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let api_version = provider_setting
+            .and_then(|setting| setting.get("apiVersion"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let custom_strategy = self
+            .model_config
+            .pointer(&format!(
+                "/llmSettings/customProviders/{provider_id}/strategy"
+            ))
+            .and_then(Value::as_str);
+        let strategy = custom_strategy
+            .and_then(|strategy| match strategy {
+                "openai_compatible" => Some(sona_core::llm::tasks::LlmProviderStrategy::OpenAi),
+                "openai_responses" => {
+                    Some(sona_core::llm::tasks::LlmProviderStrategy::OpenAiResponses)
+                }
+                "anthropic" => Some(sona_core::llm::tasks::LlmProviderStrategy::Anthropic),
+                "gemini" => Some(sona_core::llm::tasks::LlmProviderStrategy::Gemini),
+                _ => None,
+            })
+            .or_else(|| {
+                let provider = serde_json::from_value::<sona_core::domain::LlmProvider>(
+                    Value::String(provider_id.clone()),
+                )
+                .ok()?;
+                Some(sona_core::llm::tasks::LlmProviderStrategy::from_provider(
+                    &provider,
+                ))
+            });
+        let Some(strategy) = strategy else {
+            self.llm_provider_test_states.insert(
+                state_key,
+                OnlineProviderTestState::Error {
+                    message: "This provider does not support connection testing.".into(),
+                },
+            );
+            cx.notify();
+            return;
+        };
+        let provider = serde_json::from_value::<sona_core::domain::LlmProvider>(Value::String(
+            provider_id.clone(),
+        ))
+        .unwrap_or_else(|_| sona_core::domain::LlmProvider::Custom(provider_id.clone()));
+        let model = model_override.unwrap_or_else(|| {
+            self.model_config
+                .pointer("/llmSettings/models")
+                .and_then(Value::as_object)
+                .and_then(|models| {
+                    models.values().find_map(|entry| {
+                        (entry.get("provider").and_then(Value::as_str)
+                            == Some(provider_id.as_str()))
+                        .then(|| entry.get("model").and_then(Value::as_str))
+                        .flatten()
+                        .map(str::to_string)
+                    })
+                })
+                .unwrap_or_else(|| llm_provider_test_model(&provider_id).to_string())
+        });
+        let timeout_seconds = self
+            .model_config
+            .get("llmRequestTimeoutSeconds")
+            .and_then(Value::as_u64)
+            .unwrap_or(180);
+        self.llm_provider_test_states
+            .insert(state_key.clone(), OnlineProviderTestState::Loading);
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let started = std::time::Instant::now();
+            let adapter = crate::integrations::llm::DesktopLlmAdapter::default();
+            let result = sona_application::llm::LlmRuntimeService::new(&adapter, adapter.clone())
+                .complete(sona_core::llm::runtime::LlmCompletionRequest {
+                    config: sona_core::llm::requests::LlmConfig {
+                        provider,
+                        strategy,
+                        base_url: api_host,
+                        api_key,
+                        model,
+                        api_path,
+                        api_version,
+                        temperature: None,
+                        reasoning_enabled: None,
+                        reasoning_level: None,
+                        timeout_seconds: Some(timeout_seconds),
+                    },
+                    system_prompt: None,
+                    input: "Hello, this is a connection test.".into(),
+                    options: sona_core::llm::runtime::LlmCompletionOptions::default(),
+                    source: Some(sona_core::llm::usage::LlmGenerateSource::ConnectionTest),
+                })
+                .await
+                .map(|_| started.elapsed().as_millis().min(u64::MAX as u128) as u64)
+                .map_err(|error| error.to_string());
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.llm_provider_test_states.insert(
+                    state_key,
+                    match result {
+                        Ok(latency_ms) => OnlineProviderTestState::Success { latency_ms },
+                        Err(message) => OnlineProviderTestState::Error { message },
+                    },
+                );
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn select_llm_model(&mut self, model_id: String, cx: &mut Context<MainShell>) {
+        self.ensure_llm_settings();
+        let selection_key = format!("{}ModelId", self.llm_active_feature);
+        self.model_config["llmSettings"]["selections"][selection_key] = Value::String(model_id);
+        self.persist_llm_settings(cx);
+    }
+
+    fn remove_llm_model(&mut self, model_id: &str, cx: &mut Context<MainShell>) {
+        if remove_llm_model_settings(&mut self.model_config["llmSettings"], model_id) {
+            if self.llm_editing_model.as_deref() == Some(model_id) {
+                self.llm_editing_model = None;
+            }
+            self.persist_llm_settings(cx);
+        }
+    }
+
+    fn begin_llm_model_metadata_edit(&mut self, model_id: String) {
+        self.llm_model_metadata_draft = self
+            .model_config
+            .pointer(&format!("/llmSettings/models/{model_id}/metadata"))
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        self.llm_model_metadata_error = None;
+        self.llm_editing_model = Some(model_id);
+    }
+
+    pub(super) fn set_llm_model_metadata_flag(&mut self, key: &str, value: bool) {
+        self.llm_model_metadata_draft[key] = Value::Bool(value);
+        self.llm_model_metadata_error = None;
+    }
+
+    pub(super) fn set_llm_model_metadata_field(&mut self, key: &str, value: String) {
+        self.llm_model_metadata_draft[key] = Value::String(value);
+        self.llm_model_metadata_error = None;
+    }
+
+    pub(super) fn set_llm_model_metadata_modality(
+        &mut self,
+        field: &str,
+        modality: &str,
+        checked: bool,
+    ) {
+        if !matches!(field, "inputModalities" | "outputModalities")
+            || !matches!(modality, "text" | "image" | "audio" | "video" | "pdf")
+        {
+            return;
+        }
+        if !self.llm_model_metadata_draft[field].is_array() {
+            self.llm_model_metadata_draft[field] = json!([]);
+        }
+        let modalities = self.llm_model_metadata_draft[field]
+            .as_array_mut()
+            .expect("metadata modality array initialized");
+        if checked {
+            if !modalities
+                .iter()
+                .any(|value| value.as_str() == Some(modality))
+            {
+                modalities.push(Value::String(modality.to_string()));
+            }
+        } else {
+            modalities.retain(|value| value.as_str() != Some(modality));
+        }
+    }
+
+    fn save_llm_model_metadata(&mut self, metadata: Value, cx: &mut Context<MainShell>) {
+        let Some(model_id) = self.llm_editing_model.take() else {
+            return;
+        };
+        let Some(model) = self
+            .model_config
+            .pointer_mut(&format!("/llmSettings/models/{model_id}"))
+        else {
+            return;
+        };
+        model["metadata"] = metadata;
+        self.llm_model_metadata_error = None;
+        self.persist_llm_settings(cx);
+    }
+
+    fn set_llm_feature_option(
+        &mut self,
+        feature: &str,
+        option: &str,
+        value: Value,
+        cx: &mut Context<MainShell>,
+    ) {
+        if !matches!(feature, "polish" | "translation" | "summary") {
+            return;
+        }
+        let key = match option {
+            "temperature" => format!("{feature}Temperature"),
+            "reasoningEnabled" => format!("{feature}ReasoningEnabled"),
+            "reasoningLevel" => format!("{feature}ReasoningLevel"),
+            "reasoningBudget" => format!("{feature}ReasoningBudget"),
+            _ => return,
+        };
+        match option {
+            "temperature"
+                if value
+                    .as_f64()
+                    .is_none_or(|v| !v.is_finite() || !(0.0..=2.0).contains(&v)) =>
+            {
+                return;
+            }
+            "reasoningEnabled" if !value.is_boolean() => return,
+            "reasoningLevel"
+                if !value.as_str().is_some_and(|v| {
+                    matches!(v, "minimal" | "low" | "medium" | "high" | "xhigh" | "max")
+                }) =>
+            {
+                return;
+            }
+            "reasoningBudget" if value.as_u64().is_none_or(|v| v == 0) => return,
+            _ => {}
+        }
+        self.ensure_llm_settings();
+        if !self.model_config["llmSettings"]["selections"].is_object() {
+            self.model_config["llmSettings"]["selections"] = json!({});
+        }
+        self.model_config["llmSettings"]["selections"][key] = value;
+        self.persist_llm_settings(cx);
+    }
+
+    fn adjust_llm_timeout(&mut self, delta: i64, cx: &mut Context<MainShell>) {
+        let current = self
+            .model_config
+            .get("llmRequestTimeoutSeconds")
+            .and_then(Value::as_i64)
+            .unwrap_or(180);
+        let next = (current + delta).clamp(1, 3600);
+        self.persist_model_setting("llmRequestTimeoutSeconds".to_string(), json!(next), cx);
     }
 
     pub fn set_online_provider_config_field(
@@ -974,7 +2351,7 @@ impl SettingsModal {
                         shell.settings_modal.audio_devices_error = Some(errors.join("; "));
                     }
                     let should_stop = !shell.settings_modal.is_open
-                        || shell.settings_modal.current_tab != SettingsTab::Audio;
+                        || shell.settings_modal.current_tab != SettingsTab::Microphone;
                     if errors.len() == 2 {
                         shell.settings_modal.audio_preview_started = false;
                     }
@@ -1052,14 +2429,19 @@ impl SettingsModal {
     fn next_tab(current_tab: SettingsTab, reverse: bool) -> SettingsTab {
         let tabs = [
             SettingsTab::General,
+            SettingsTab::Dashboard,
             SettingsTab::Shortcuts,
-            SettingsTab::Audio,
+            SettingsTab::About,
+            SettingsTab::Microphone,
             SettingsTab::Models,
+            SettingsTab::Subtitle,
             SettingsTab::Vocabulary,
-            SettingsTab::Intelligence,
+            SettingsTab::LlmService,
             SettingsTab::Automation,
             SettingsTab::Storage,
             SettingsTab::Sync,
+            SettingsTab::ApiServer,
+            SettingsTab::Mcp,
         ];
         let index = tabs
             .iter()
@@ -1286,14 +2668,19 @@ impl SettingsModal {
     fn tab_title(tab: SettingsTab) -> &'static str {
         match tab {
             SettingsTab::General => "General",
+            SettingsTab::Dashboard => "Dashboard",
             SettingsTab::Shortcuts => "Shortcuts",
-            SettingsTab::Audio => "Audio & Mic",
+            SettingsTab::Microphone => "Input Device",
             SettingsTab::Models => "Models",
+            SettingsTab::Subtitle => "Subtitles & Voice Typing",
             SettingsTab::Vocabulary => "Vocabulary",
-            SettingsTab::Intelligence => "Intelligence & LLM",
+            SettingsTab::LlmService => "LLM Service",
             SettingsTab::Automation => "Automation",
             SettingsTab::Storage => "Storage",
             SettingsTab::Sync => "Cloud Sync",
+            SettingsTab::About => "About",
+            SettingsTab::ApiServer => "API Server",
+            SettingsTab::Mcp => "MCP Agents",
         }
     }
 
@@ -1301,10 +2688,19 @@ impl SettingsModal {
         &mut self,
         shortcut_edit_state: &Entity<InputState>,
         model_search_state: &Entity<InputState>,
+        mcp_search_state: &Entity<InputState>,
+        voice_typing_tool: &mut crate::views::tools::VoiceTypingToolPanel,
+        subtitles_tool: &mut crate::views::tools::SubtitlesToolPanel,
+        api_server_field_states: &HashMap<String, Entity<InputState>>,
         model_engine_select: &Entity<SelectState<Vec<&'static str>>>,
         model_status_select: &Entity<SelectState<Vec<&'static str>>>,
         model_label_select: &Entity<SelectState<Vec<&'static str>>>,
         online_provider_field_states: &HashMap<String, Entity<InputState>>,
+        llm_provider_api_host_state: &Entity<InputState>,
+        llm_provider_api_key_state: &Entity<InputState>,
+        llm_model_draft_state: &Entity<InputState>,
+        llm_custom_provider_name_state: &Entity<InputState>,
+        llm_model_metadata_field_states: &HashMap<String, Entity<InputState>>,
         window: &Window,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
@@ -1318,7 +2714,7 @@ impl SettingsModal {
                         if let Some(peak) = peak {
                             this.update(cx, |shell, cx| {
                                 if !shell.settings_modal.is_open
-                                    || shell.settings_modal.current_tab != SettingsTab::Audio
+                                    || shell.settings_modal.current_tab != SettingsTab::Microphone
                                 {
                                     return;
                                 }
@@ -1332,7 +2728,7 @@ impl SettingsModal {
                         if let Some(peak) = peak {
                             this.update(cx, |shell, cx| {
                                 if !shell.settings_modal.is_open
-                                    || shell.settings_modal.current_tab != SettingsTab::Audio
+                                    || shell.settings_modal.current_tab != SettingsTab::Microphone
                                 {
                                     return;
                                 }
@@ -1557,14 +2953,19 @@ impl SettingsModal {
         let alignment_options = companion_options("alignment");
         let tabs = [
             (SettingsTab::General, "General"),
+            (SettingsTab::Dashboard, "Dashboard"),
             (SettingsTab::Shortcuts, "Shortcuts"),
-            (SettingsTab::Audio, "Audio & Mic"),
+            (SettingsTab::About, "About"),
+            (SettingsTab::Microphone, "Input Device"),
             (SettingsTab::Models, "Models"),
+            (SettingsTab::Subtitle, "Subtitles & Voice Typing"),
             (SettingsTab::Vocabulary, "Vocabulary"),
-            (SettingsTab::Intelligence, "Intelligence & LLM"),
+            (SettingsTab::LlmService, "LLM Service"),
             (SettingsTab::Automation, "Automation"),
             (SettingsTab::Storage, "Storage"),
             (SettingsTab::Sync, "Cloud Sync"),
+            (SettingsTab::ApiServer, "API Server"),
+            (SettingsTab::Mcp, "MCP Agents"),
         ];
 
         div()
@@ -1788,7 +3189,96 @@ impl SettingsModal {
                                                         ),
                                                 ),
                                         ))
-                                        .when(self.current_tab == SettingsTab::Audio, |this| this.child(
+                                        .when(self.current_tab == SettingsTab::Dashboard, |this| {
+                                            this.child(dashboard_panel(
+                                                self.dashboard_snapshot.as_ref(),
+                                                self.dashboard_loading,
+                                                self.dashboard_deep_loading,
+                                                self.dashboard_error.as_deref(),
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::About, |this| {
+                                            this.child(about_panel(
+                                                &self.about_update_status,
+                                                self.about_update_result.as_ref(),
+                                                self.about_update_progress,
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Subtitle, |this| {
+                                            this.child(div().flex().flex_col().gap_4().size_full().min_h_0()
+                                                .child(div().flex().gap_2().px(px(32.0)).pt(px(20.0))
+                                                    .child(Button::new("settings-subtitle-voice-typing")
+                                                        .when(self.subtitle_voice_typing_tab, |button| button.primary())
+                                                        .when(!self.subtitle_voice_typing_tab, |button| button.outline())
+                                                        .small().label("Voice Typing")
+                                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                                            shell.settings_modal.subtitle_voice_typing_tab = true;
+                                                            cx.notify();
+                                                        })))
+                                                    .child(Button::new("settings-subtitle-caption-settings")
+                                                        .when(!self.subtitle_voice_typing_tab, |button| button.primary())
+                                                        .when(self.subtitle_voice_typing_tab, |button| button.outline())
+                                                        .small().label("Subtitle Settings")
+                                                        .on_click(cx.listener(|shell, _, _, cx| {
+                                                            shell.settings_modal.subtitle_voice_typing_tab = false;
+                                                            cx.notify();
+                                                        }))))
+                                                .child(if self.subtitle_voice_typing_tab {
+                                                    voice_typing_tool.render(cx).into_any_element()
+                                                } else {
+                                                    subtitles_tool.render(cx).into_any_element()
+                                                }))
+                                        })
+                                        .when(self.current_tab == SettingsTab::ApiServer, |this| {
+                                            this.child(api_server_settings_panel(api_server_field_states, cx))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Mcp, |this| {
+                                            this.child(mcp_settings_panel(
+                                                &self.mcp_logs,
+                                                self.mcp_logs_loading,
+                                                &self.mcp_log_filter_status,
+                                                &self.mcp_log_query,
+                                                &self.mcp_selected_guide,
+                                                mcp_search_state,
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::LlmService, |this| {
+                                            this.child(llm_service_panel(
+                                                &self.model_config,
+                                                &self.llm_active_feature,
+                                                &self.llm_model_draft,
+                                                &self.llm_custom_provider_name,
+                                                &self.llm_custom_provider_strategy,
+                                                &self.llm_edit_provider_strategy,
+                                                self.llm_show_custom_provider_form,
+                                                self.llm_editing_provider.as_deref(),
+                                                self.llm_discovery_provider.as_deref(),
+                                                self.llm_discovery_loading,
+                                                self.llm_discovery_error.as_deref(),
+                                                &self.llm_discovered_models,
+                                                self.llm_editing_model.as_deref(),
+                                                &self.llm_model_metadata_draft,
+                                                self.llm_model_metadata_error.as_deref(),
+                                                llm_model_metadata_field_states,
+                                                self.llm_provider_test_states.get(
+                                                    self.model_config
+                                                        .pointer("/llmSettings/activeProvider")
+                                                        .and_then(Value::as_str)
+                                                        .unwrap_or("google_translate_free"),
+                                                ),
+                                                &self.llm_provider_test_states,
+                                                llm_provider_api_host_state,
+                                                llm_provider_api_key_state,
+                                                llm_model_draft_state,
+                                                llm_custom_provider_name_state,
+                                                window,
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Microphone, |this| this.child(
                                             div()
                                                 .flex()
                                                 .flex_col()
@@ -2346,24 +3836,136 @@ impl SettingsModal {
 #[cfg(test)]
 mod tests {
     use super::{
-        SettingsModal, SettingsTab, online_provider_added_model_ids, online_provider_default_name,
+        SettingsModal, SettingsTab, apply_llm_model_metadata_inputs,
+        online_provider_added_model_ids, online_provider_default_name,
         online_provider_is_flash_batch_mode, online_provider_languages_tooltip,
-        online_provider_logo_path, online_provider_model_options,
-        update_online_provider_model_config,
+        online_provider_logo_path, online_provider_model_options, remove_custom_provider_settings,
+        remove_llm_model_settings, update_online_provider_model_config,
     };
     use gpui_kit::AssetSource as _;
     use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn deleting_custom_provider_cleans_its_models_and_feature_selections() {
+        let mut settings = json!({
+            "activeProvider": "custom-acme",
+            "customProviders": {
+                "custom-acme": { "name": "Acme", "strategy": "openai_compatible" }
+            },
+            "providers": {
+                "custom-acme": { "apiHost": "https://acme.example", "apiKey": "secret" },
+                "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "key" }
+            },
+            "models": {
+                "acme-a": { "provider": "custom-acme", "model": "a" },
+                "openai-b": { "provider": "open_ai", "model": "b" }
+            },
+            "modelOrder": ["acme-a", "openai-b"],
+            "selections": {
+                "polishModelId": "acme-a",
+                "summaryModelId": "openai-b",
+                "polishTemperature": 0.4
+            }
+        });
+
+        assert!(remove_custom_provider_settings(
+            &mut settings,
+            "custom-acme"
+        ));
+        assert_eq!(settings["activeProvider"], "google_translate_free");
+        assert!(settings["customProviders"].get("custom-acme").is_none());
+        assert!(settings["providers"].get("custom-acme").is_none());
+        assert!(settings["models"].get("acme-a").is_none());
+        assert_eq!(settings["models"]["openai-b"]["model"], "b");
+        assert_eq!(settings["modelOrder"], json!(["openai-b"]));
+        assert!(settings["selections"].get("polishModelId").is_none());
+        assert_eq!(settings["selections"]["summaryModelId"], "openai-b");
+        assert_eq!(settings["selections"]["polishTemperature"], 0.4);
+        assert!(!remove_custom_provider_settings(
+            &mut settings,
+            "custom-acme"
+        ));
+    }
+
+    #[test]
+    fn deleting_llm_model_removes_only_its_feature_selections() {
+        let mut settings = json!({
+            "models": {
+                "model-a": { "provider": "open_ai", "model": "a" },
+                "model-b": { "provider": "anthropic", "model": "b" }
+            },
+            "modelOrder": ["model-a", "model-b"],
+            "selections": {
+                "polishModelId": "model-a",
+                "translationModelId": "model-a",
+                "summaryModelId": "model-b",
+                "polishTemperature": 0.8
+            }
+        });
+
+        assert!(remove_llm_model_settings(&mut settings, "model-a"));
+        assert!(settings["models"].get("model-a").is_none());
+        assert_eq!(settings["modelOrder"], json!(["model-b"]));
+        assert!(settings["selections"].get("polishModelId").is_none());
+        assert!(settings["selections"].get("translationModelId").is_none());
+        assert_eq!(settings["selections"]["summaryModelId"], "model-b");
+        assert_eq!(settings["selections"]["polishTemperature"], 0.8);
+        assert!(!remove_llm_model_settings(&mut settings, "missing"));
+    }
+
+    #[test]
+    fn llm_metadata_editor_validates_numbers_and_preserves_catalog_fields() {
+        let current = json!({
+            "supportsReasoning": true,
+            "reasoningMode": { "type": "effort", "levels": ["low", "high"] },
+            "metadataSources": ["provider"]
+        });
+        let valid = HashMap::from([
+            ("displayName".to_string(), "  Model X  ".to_string()),
+            ("contextWindow".to_string(), "128000".to_string()),
+            ("inputPrice".to_string(), "0.25".to_string()),
+        ]);
+        let updated = apply_llm_model_metadata_inputs(&current, &valid).unwrap();
+        assert_eq!(updated["displayName"], "Model X");
+        assert_eq!(updated["contextWindow"].as_f64(), Some(128000.0));
+        assert_eq!(updated["inputPrice"].as_f64(), Some(0.25));
+        assert_eq!(updated["supportsReasoning"], true);
+        assert_eq!(updated["reasoningMode"]["type"], "effort");
+        assert_eq!(updated["metadataSources"][0], "provider");
+
+        let invalid = HashMap::from([("outputPrice".to_string(), "-1".to_string())]);
+        assert!(apply_llm_model_metadata_inputs(&current, &invalid).is_err());
+    }
 
     #[test]
     fn settings_tab_navigation_wraps_in_both_directions() {
         assert_eq!(
             SettingsModal::next_tab(SettingsTab::General, true),
-            SettingsTab::Sync
+            SettingsTab::Mcp
         );
-        assert_eq!(
-            SettingsModal::next_tab(SettingsTab::Sync, false),
-            SettingsTab::General
-        );
+        let cycle = [
+            SettingsTab::General,
+            SettingsTab::Dashboard,
+            SettingsTab::Shortcuts,
+            SettingsTab::About,
+            SettingsTab::Microphone,
+            SettingsTab::Models,
+            SettingsTab::Subtitle,
+            SettingsTab::Vocabulary,
+            SettingsTab::LlmService,
+            SettingsTab::Automation,
+            SettingsTab::Storage,
+            SettingsTab::Sync,
+            SettingsTab::ApiServer,
+            SettingsTab::Mcp,
+        ];
+        for (index, tab) in cycle.iter().enumerate() {
+            assert_eq!(
+                SettingsModal::next_tab(*tab, false),
+                cycle[(index + 1) % cycle.len()],
+            );
+        }
     }
 
     #[test]

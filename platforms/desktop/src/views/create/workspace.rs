@@ -10,7 +10,7 @@ use gpui_kit::*;
 use super::batch_import::BatchImportPanel;
 use super::live_record::LiveRecordPanel;
 use super::options_capsule::{IngestionSurface, TranscriptionOptionsModel};
-use crate::theme::tokens::{COLOR_PROJECT_BLUE, RADIUS_FULL, RADIUS_MD, RADIUS_SM};
+use crate::theme::tokens::RADIUS_FULL;
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -27,6 +27,8 @@ pub enum CreateWorkspaceTab {
 
 pub struct CreateWorkspacePanel {
     pub active_tab: CreateWorkspaceTab,
+    live_tab_focus: FocusHandle,
+    batch_tab_focus: FocusHandle,
     pub live_record: Entity<LiveRecordPanel>,
     pub batch_import: Entity<BatchImportPanel>,
     pub options_model: Entity<TranscriptionOptionsModel>,
@@ -50,6 +52,8 @@ impl CreateWorkspacePanel {
 
         Self {
             active_tab: CreateWorkspaceTab::LiveRecord,
+            live_tab_focus: cx.focus_handle(),
+            batch_tab_focus: cx.focus_handle(),
             live_record,
             batch_import,
             options_model,
@@ -109,9 +113,7 @@ impl Render for CreateWorkspacePanel {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(cx.theme().background)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
+                    .bg(cx.theme().secondary)
                     .child(
                         // Segmented Navigation Track (p: 4px, rounded-md, bg: secondary, gap: 4px)
                         div()
@@ -119,38 +121,94 @@ impl Render for CreateWorkspacePanel {
                             .flex()
                             .w_full()
                             .p(px(4.0))
-                            .rounded(RADIUS_MD)
-                            .bg(cx.theme().secondary.opacity(0.5))
+                            .rounded(px(12.0))
+                            .bg(cx.theme().muted)
                             .gap(px(4.0))
+                            .role(Role::TabList)
+                            .aria_label("Workspace Input Selection")
+                            .aria_orientation(Orientation::Horizontal)
+                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                                if event.keystroke.modifiers.alt
+                                    || event.keystroke.modifiers.control
+                                    || event.keystroke.modifiers.platform
+                                {
+                                    return;
+                                }
+
+                                let key = event.keystroke.key.to_ascii_lowercase();
+                                let next_tab = match key.as_str() {
+                                    "arrowright" | "right" | "arrowleft" | "left" => {
+                                        Some(match this.active_tab {
+                                            CreateWorkspaceTab::LiveRecord => {
+                                                CreateWorkspaceTab::BatchImport
+                                            }
+                                            CreateWorkspaceTab::BatchImport => {
+                                                CreateWorkspaceTab::LiveRecord
+                                            }
+                                        })
+                                    }
+                                    "arrowdown" | "down" | "end" => {
+                                        Some(CreateWorkspaceTab::BatchImport)
+                                    }
+                                    "arrowup" | "up" | "home" => {
+                                        Some(CreateWorkspaceTab::LiveRecord)
+                                    }
+                                    _ => None,
+                                };
+                                if let Some(tab) = next_tab {
+                                    window.prevent_default();
+                                    this.set_tab(tab, cx);
+                                    let focus_handle = match tab {
+                                        CreateWorkspaceTab::LiveRecord => &this.live_tab_focus,
+                                        CreateWorkspaceTab::BatchImport => &this.batch_tab_focus,
+                                    };
+                                    window.focus(focus_handle, cx);
+                                }
+                            }))
                             // Tab 1: Live Record
                             .child(
                                 div()
                                     .id("create-tab-live")
+                                    .track_focus(&self.live_tab_focus)
+                                    .role(Role::Tab)
+                                    .aria_label("Live Record")
+                                    .aria_selected(is_live_active)
                                     .flex_1()
+                                    .tab_index(if is_live_active { 0 } else { -1 })
                                     .h(px(32.0))
                                     .px(px(12.0))
                                     .flex()
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(RADIUS_SM)
+                                    .rounded(px(10.0))
                                     .cursor_pointer()
                                     .bg(if is_live_active {
-                                        cx.theme().background
+                                        cx.theme().popover
                                     } else {
                                         gpui_kit::transparent_black()
                                     })
-                                    .shadow_sm()
-                                    .text_size(px(13.5))
+                                    .when(is_live_active, |this| this.shadow_sm())
+                                    .focus_visible(|style| {
+                                        style.border_1().border_color(cx.theme().primary)
+                                    })
+                                    .hover(|style| {
+                                        style.text_color(if is_live_active {
+                                            cx.theme().foreground
+                                        } else {
+                                            cx.theme().secondary_foreground
+                                        })
+                                    })
+                                    .text_size(px(14.0))
                                     .font_weight(if is_live_active {
-                                        FontWeight::BOLD
+                                        FontWeight::SEMIBOLD
                                     } else {
                                         FontWeight::MEDIUM
                                     })
                                     .text_color(if is_live_active {
                                         cx.theme().foreground
                                     } else {
-                                        cx.theme().muted_foreground
+                                        cx.theme().secondary_foreground
                                     })
                                     .child(icon(LucideIcon::Mic).size(px(16.0)))
                                     .child(div().child("Live Record"))
@@ -160,7 +218,7 @@ impl Render for CreateWorkspacePanel {
                                             div()
                                                 .size(px(7.0))
                                                 .rounded_full()
-                                                .bg(cx.theme().danger),
+                                                .bg(hsla(0.0, 0.84, 0.60, 1.0)),
                                         )
                                     })
                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -171,42 +229,57 @@ impl Render for CreateWorkspacePanel {
                             .child(
                                 div()
                                     .id("create-tab-batch")
+                                    .track_focus(&self.batch_tab_focus)
+                                    .role(Role::Tab)
+                                    .aria_label("Batch Import")
+                                    .aria_selected(is_batch_active)
                                     .flex_1()
+                                    .tab_index(if is_batch_active { 0 } else { -1 })
                                     .h(px(32.0))
                                     .px(px(12.0))
                                     .flex()
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(RADIUS_SM)
+                                    .rounded(px(10.0))
                                     .cursor_pointer()
                                     .bg(if is_batch_active {
-                                        cx.theme().background
+                                        cx.theme().popover
                                     } else {
                                         gpui_kit::transparent_black()
                                     })
-                                    .shadow_sm()
-                                    .text_size(px(13.5))
+                                    .when(is_batch_active, |this| this.shadow_sm())
+                                    .focus_visible(|style| {
+                                        style.border_1().border_color(cx.theme().primary)
+                                    })
+                                    .hover(|style| {
+                                        style.text_color(if is_batch_active {
+                                            cx.theme().foreground
+                                        } else {
+                                            cx.theme().secondary_foreground
+                                        })
+                                    })
+                                    .text_size(px(14.0))
                                     .font_weight(if is_batch_active {
-                                        FontWeight::BOLD
+                                        FontWeight::SEMIBOLD
                                     } else {
                                         FontWeight::MEDIUM
                                     })
                                     .text_color(if is_batch_active {
                                         cx.theme().foreground
                                     } else {
-                                        cx.theme().muted_foreground
+                                        cx.theme().secondary_foreground
                                     })
                                     .child(icon(LucideIcon::Folder).size(px(16.0)))
                                     .child(div().child("Batch Import"))
                                     .when(show_batch_processing_badge, |this| {
                                         // 7x7px Blue pulsing processing dot
-                                        this.child(
-                                            div()
-                                                .size(px(7.0))
-                                                .rounded_full()
-                                                .bg(COLOR_PROJECT_BLUE),
-                                        )
+                                        this.child(div().size(px(7.0)).rounded_full().bg(hsla(
+                                            196.0 / 360.0,
+                                            0.86,
+                                            0.322,
+                                            1.0,
+                                        )))
                                     })
                                     .when(show_batch_count_badge, |this| {
                                         // 15px height count pill
@@ -214,12 +287,12 @@ impl Render for CreateWorkspacePanel {
                                             div()
                                                 .h(px(15.0))
                                                 .min_w(px(15.0))
-                                                .px(px(4.0))
+                                                .px(px(3.5))
                                                 .rounded(RADIUS_FULL)
-                                                .bg(COLOR_PROJECT_BLUE)
+                                                .bg(hsla(196.0 / 360.0, 0.86, 0.322, 1.0))
                                                 .text_color(gpui_kit::white())
-                                                .text_size(px(10.0))
-                                                .font_weight(FontWeight::BOLD)
+                                                .text_size(px(9.6))
+                                                .font_weight(FontWeight::SEMIBOLD)
                                                 .flex()
                                                 .items_center()
                                                 .justify_center()

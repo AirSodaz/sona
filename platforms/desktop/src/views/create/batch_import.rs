@@ -3,7 +3,8 @@
 //! `QueueItem.tsx`, and `QueueGroup.tsx` (Gaps G10, G11, G12).
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::base::{Disableable as _, FocusableExt as _};
@@ -17,9 +18,13 @@ use gpui_kit::*;
 use sona_core::recovery::types::{
     RecoveredQueueItem, RecoveryItemInput, RecoveryItemStage, RecoverySource,
 };
+use sona_core::transcription::transcript::TranscriptSegment;
 
 use super::options_capsule::TranscriptionOptionsModel;
 use crate::app::{GlobalDesktopServices, GlobalEventBus};
+use crate::integrations::media_server::{
+    MediaServerSubtitleMode, MediaServerSubtitleUploadPayload,
+};
 use crate::theme::tokens::{COLOR_PROJECT_BLUE, RADIUS_FULL, RADIUS_LG, RADIUS_MD, RADIUS_SM};
 
 static RECOVERY_SNAPSHOT_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -106,6 +111,53 @@ pub enum BatchQueueGroupKind {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QueueSummaryStatus {
+    Processing,
+    Paused,
+    Complete,
+    Failed,
+    Idle,
+}
+
+fn queue_summary_status(
+    is_processing: bool,
+    is_paused: bool,
+    is_all_complete: bool,
+    has_failures: bool,
+) -> QueueSummaryStatus {
+    if is_processing {
+        QueueSummaryStatus::Processing
+    } else if is_paused {
+        QueueSummaryStatus::Paused
+    } else if is_all_complete {
+        QueueSummaryStatus::Complete
+    } else if has_failures {
+        QueueSummaryStatus::Failed
+    } else {
+        QueueSummaryStatus::Idle
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaServerTaskContext {
+    pub profile_id: String,
+    pub item_id: String,
+    pub audio_stream_index: i32,
+    pub subtitle_mode: MediaServerSubtitleMode,
+    pub target_language: String,
+    pub source_language: Option<String>,
+    pub existing_external_subtitle_index: Option<i32>,
+    pub container: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BatchItemErrorStage {
+    Transcribe,
+    Upload,
+}
+
 #[derive(Clone, Debug)]
 pub struct BatchQueueItem {
     pub id: String,
@@ -121,7 +173,11 @@ pub struct BatchQueueItem {
     pub project_name: Option<String>,
     pub project_color_index: Option<usize>,
     pub error_message: Option<String>,
+    pub error_stage: Option<BatchItemErrorStage>,
     pub history_id: Option<String>,
+    pub segments: Vec<TranscriptSegment>,
+    pub media_server_context: Option<MediaServerTaskContext>,
+    pub cancel_requested: Option<Arc<AtomicBool>>,
     pub is_media_server: bool,
 }
 
@@ -292,7 +348,7 @@ impl BatchImportPanel {
             if is_match {
                 if let Some(prog) = progress_opt {
                     item.progress = prog.clamp(0.0, 100.0);
-                    if prog >= 100.0 {
+                    if prog >= 100.0 && item.media_server_context.is_none() {
                         item.status = BatchItemStatus::Complete;
                     } else if item.status == BatchItemStatus::Pending {
                         item.status = BatchItemStatus::Processing;
@@ -407,9 +463,46 @@ impl BatchImportPanel {
             project_name: None,
             project_color_index: None,
             error_message: None,
+            error_stage: None,
             history_id: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         });
+    }
+
+    pub fn enqueue_retry_file(
+        &mut self,
+        path: PathBuf,
+        project_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_len = self.queue.len();
+        self.add_file_path(path);
+        if self.queue.len() == previous_len {
+            return;
+        }
+        if let Some(item) = self.queue.last_mut() {
+            item.project_id = project_id;
+        }
+        self.start_next_pending(cx);
+        self.persist_recovery_snapshot(cx, Vec::new());
+        cx.notify();
+    }
+
+    pub fn cancel_task_instance(&mut self, task_id: &str, cx: &mut Context<Self>) -> bool {
+        let item_id = self
+            .queue
+            .iter()
+            .find(|item| item.instance_id.as_deref() == Some(task_id))
+            .map(|item| item.id.clone());
+        if let Some(item_id) = item_id {
+            self.cancel_item(item_id, cx);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn enqueue_recovered_items(
@@ -439,8 +532,24 @@ impl BatchImportPanel {
                 project_name: None,
                 project_color_index: None,
                 error_message: None,
+                error_stage: None,
                 history_id: item.history_id,
-                is_media_server: false,
+                segments: item
+                    .segments
+                    .into_iter()
+                    .filter_map(|segment| {
+                        serde_json::from_value::<TranscriptSegment>(
+                            serde_json::to_value(segment).ok()?,
+                        )
+                        .ok()
+                    })
+                    .collect(),
+                media_server_context: item
+                    .source_metadata
+                    .as_ref()
+                    .and_then(|value| serde_json::from_value(value.clone()).ok()),
+                cancel_requested: None,
+                is_media_server: item.source_metadata.is_some(),
             });
         }
 
@@ -478,94 +587,375 @@ impl BatchImportPanel {
             project_name: None,
             project_color_index: None,
             error_message: None,
+            error_stage: None,
             history_id: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         });
     }
 
-    /// Triggers processing for the next pending queue item in strict serial order.
+    pub fn add_media_server_items(
+        &mut self,
+        items: Vec<(String, MediaServerTaskContext)>,
+        cx: &mut Context<Self>,
+    ) -> usize {
+        let mut existing = self
+            .queue
+            .iter()
+            .filter(|item| {
+                matches!(
+                    item.status,
+                    BatchItemStatus::Pending | BatchItemStatus::Processing
+                )
+            })
+            .filter_map(|item| item.media_server_context.as_ref())
+            .map(|context| format!("{}::{}", context.profile_id, context.item_id))
+            .collect::<std::collections::HashSet<_>>();
+        let mut added = 0;
+        for (filename, context) in items {
+            let key = format!("{}::{}", context.profile_id, context.item_id);
+            if !existing.insert(key) {
+                continue;
+            }
+            self.queue.push(BatchQueueItem {
+                id: format!("media-server-{}", uuid::Uuid::new_v4()),
+                instance_id: None,
+                filename,
+                file_path: String::new(),
+                source_type: BatchSourceType::File,
+                status: BatchItemStatus::Pending,
+                progress: 0.0,
+                file_size_bytes: None,
+                duration_seconds: None,
+                project_id: None,
+                project_name: None,
+                project_color_index: None,
+                error_message: None,
+                error_stage: None,
+                history_id: None,
+                segments: Vec::new(),
+                media_server_context: Some(context),
+                cancel_requested: None,
+                is_media_server: true,
+            });
+            added += 1;
+        }
+
+        if added > 0 {
+            self.media_server_expanded = true;
+            self.pending_expanded = true;
+            self.persist_recovery_snapshot(cx, Vec::new());
+            self.start_next_pending(cx);
+            cx.notify();
+        }
+        added
+    }
+
+    /// Starts the next item and waits for the backend task's terminal ledger state.
     pub fn start_next_pending(&mut self, cx: &mut Context<Self>) {
         if self.is_paused || self.is_processing() {
             return;
         }
 
-        let pending_idx = self
+        let Some(idx) = self
             .queue
             .iter()
-            .position(|i| i.status == BatchItemStatus::Pending);
+            .position(|item| item.status == BatchItemStatus::Pending)
+        else {
+            return;
+        };
 
-        if let Some(idx) = pending_idx {
-            let item = &mut self.queue[idx];
-            let item_id = item.id.clone();
-            let file_path = item.file_path.clone();
-            let instance_id = format!("batch-task-{}", uuid::Uuid::new_v4());
-            item.instance_id = Some(instance_id.clone());
-            item.status = BatchItemStatus::Processing;
-            item.progress = 0.0;
+        let item = &mut self.queue[idx];
+        let item_id = item.id.clone();
+        let filename = item.filename.clone();
+        let mut file_path = item.file_path.clone();
+        let media_context = item.media_server_context.clone();
+        let upload_retry = media_context.is_some()
+            && item.error_stage == Some(BatchItemErrorStage::Upload)
+            && item.history_id.is_some();
+        let instance_id = (!upload_retry).then(|| format!("batch-task-{}", uuid::Uuid::new_v4()));
+        let cancel_requested = Arc::new(AtomicBool::new(false));
+        item.cancel_requested = Some(Arc::clone(&cancel_requested));
+        item.instance_id = instance_id.clone();
+        item.status = BatchItemStatus::Processing;
+        item.progress = 0.0;
 
-            let options = self.options_model.read(cx);
-            let language = if options.batch_language == "auto" {
-                None
+        let options = self.options_model.read(cx);
+        let language = if options.batch_language == "auto" {
+            None
+        } else {
+            Some(options.batch_language.clone())
+        };
+        let project_id = item.project_id.clone();
+        let history_id = item.history_id.clone();
+        let mut segments = item.segments.clone();
+        let services = cx.global::<GlobalDesktopServices>().0.clone();
+        self.persist_recovery_snapshot(cx, Vec::new());
+
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let mut downloaded_path: Option<std::path::PathBuf> = None;
+            let mut error_stage = if upload_retry {
+                BatchItemErrorStage::Upload
             } else {
-                Some(options.batch_language.clone())
+                BatchItemErrorStage::Transcribe
             };
-            let project_id = item.project_id.clone();
-            let history_id = item.history_id.clone();
-            let services = cx.global::<GlobalDesktopServices>().0.clone();
-            self.persist_recovery_snapshot(cx, Vec::new());
+            let result: Result<(String, Vec<TranscriptSegment>), String> = async {
+                let resolved_history_id;
 
-            cx.spawn(async move |this, cx: &mut AsyncApp| {
-                let req = crate::platform::agent_control::facade::types::TranscribeFileRequest {
-                    file_path,
-                    language,
-                    project_id,
-                    history_id,
-                    instance_id: Some(instance_id),
-                    save_to_path: None,
-                };
+                if let Some(context) = media_context.as_ref() {
+                    if upload_retry {
+                        if segments.is_empty() {
+                            segments =
+                                load_history_transcript(&services, history_id.clone()).await?;
+                        }
+                    } else {
+                        if cancel_requested.load(Ordering::Acquire) {
+                            return Err("Task cancelled.".to_string());
+                        }
+                        let extension = context
+                            .container
+                            .as_deref()
+                            .map(safe_media_extension)
+                            .unwrap_or_else(|| "mkv".to_string());
+                        let path = std::env::temp_dir().join(format!(
+                            "sona-media-server-{}.{}",
+                            uuid::Uuid::new_v4(),
+                            extension
+                        ));
+                        this.update(cx, |view, cx| {
+                            if let Some(target) =
+                                view.queue.iter_mut().find(|item| item.id == item_id)
+                            {
+                                target.progress = 2.0;
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+                        services
+                            .media_server
+                            .download_audio(
+                                Some(&context.profile_id),
+                                &context.item_id,
+                                Some(context.audio_stream_index),
+                                &path,
+                            )
+                            .await?;
+                        file_path = path.to_string_lossy().into_owned();
+                        downloaded_path = Some(path);
+                        if cancel_requested.load(Ordering::Acquire) {
+                            return Err("Task cancelled.".to_string());
+                        }
+                    }
+                }
 
-                let res =
-                    crate::platform::agent_control::facade::batch::transcribe_file(&services, req)
-                        .await;
+                if !upload_retry {
+                    let Some(instance_id) = instance_id.as_ref() else {
+                        return Err("Batch task instance ID is missing.".to_string());
+                    };
+                    let request =
+                        crate::platform::agent_control::facade::types::TranscribeFileRequest {
+                            file_path: file_path.clone(),
+                            language: language.clone(),
+                            project_id: project_id.clone(),
+                            history_id: None,
+                            instance_id: Some(instance_id.clone()),
+                            save_to_path: None,
+                        };
+                    let started = crate::platform::agent_control::facade::batch::transcribe_file(
+                        &services, request,
+                    )
+                    .await?;
+                    resolved_history_id = Some(started.history_id.clone());
 
-                this.update(cx, |view, cx| {
-                    if let Some(target) = view.queue.iter_mut().find(|i| i.id == item_id) {
-                        // Only transition if the item is still Processing (not cancelled while in flight)
-                        if target.status == BatchItemStatus::Processing {
-                            match res {
-                                Ok(transcribe_res) => {
-                                    target.history_id = Some(transcribe_res.history_id);
-                                    target.status = BatchItemStatus::Complete;
-                                    target.progress = 100.0;
+                    if let Some(context) = media_context.as_ref() {
+                        let history_id_for_title = started.history_id.clone();
+                        let title = filename.clone();
+                        let request =
+                            sona_core::history::mutation_repository::HistoryUpdateItemMetaRequest {
+                                history_id: history_id_for_title,
+                                updates:
+                                    sona_core::history::mutation_repository::HistoryItemMetaPatch {
+                                        title: Some(title),
+                                        ..Default::default()
+                                    },
+                            };
+                        let _ = services
+                            .history
+                            .mutation_file(move |repository| repository.update_item_meta(request))
+                            .await;
+                        let _ = context;
+                    }
+
+                    let history_id_for_queue = started.history_id.clone();
+                    let task_id_for_queue = instance_id.clone();
+                    this.update(cx, |view, cx| {
+                        if let Some(target) = view.queue.iter_mut().find(|item| item.id == item_id)
+                        {
+                            target.history_id = Some(history_id_for_queue);
+                            target.instance_id = Some(task_id_for_queue);
+                        }
+                        view.persist_recovery_snapshot(cx, Vec::new());
+                    })
+                    .ok();
+
+                    let mut cancel_sent = false;
+                    loop {
+                        if cancel_requested.load(Ordering::Acquire) && !cancel_sent {
+                            let _ =
+                                crate::platform::agent_control::facade::batch::cancel_batch_task(
+                                    &services,
+                                    instance_id.clone(),
+                                )
+                                .await;
+                            cancel_sent = true;
+                        }
+                        let records = services.task_ledger.list_tasks().await?;
+                        let task = records
+                            .iter()
+                            .find(|task| task.id == *instance_id)
+                            .ok_or_else(|| {
+                                format!(
+                                    "Batch task {instance_id} disappeared from the task ledger."
+                                )
+                            })?;
+                        let progress = task.progress.clamp(0.0, 100.0) as f32;
+                        this.update(cx, |view, cx| {
+                            if let Some(target) =
+                                view.queue.iter_mut().find(|item| item.id == item_id)
+                            {
+                                if target.status == BatchItemStatus::Processing {
+                                    target.progress = if media_context.is_some() {
+                                        progress.min(92.0)
+                                    } else {
+                                        progress
+                                    };
                                 }
-                                Err(err) => {
-                                    target.status = BatchItemStatus::Error;
-                                    target.error_message = Some(err);
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+
+                        match &task.status {
+                            sona_core::task_ledger::types::TaskLedgerStatus::Succeeded => break,
+                            sona_core::task_ledger::types::TaskLedgerStatus::Failed
+                            | sona_core::task_ledger::types::TaskLedgerStatus::Interrupted
+                            | sona_core::task_ledger::types::TaskLedgerStatus::Recoverable => {
+                                return Err(task.error_message.clone().unwrap_or_else(|| {
+                                    format!("Transcription failed for {filename}.")
+                                }));
+                            }
+                            sona_core::task_ledger::types::TaskLedgerStatus::Cancelled => {
+                                return Err("Task cancelled.".to_string());
+                            }
+                            _ => tokio::time::sleep(std::time::Duration::from_millis(250)).await,
+                        }
+                    }
+
+                    let history_id_for_load = started.history_id.clone();
+                    segments =
+                        load_history_transcript(&services, Some(history_id_for_load)).await?;
+                } else {
+                    resolved_history_id = history_id.clone();
+                }
+
+                let resolved_history_id = resolved_history_id
+                    .ok_or_else(|| "Transcription did not create a history record.".to_string())?;
+                if let Some(context) = media_context.as_ref() {
+                    if cancel_requested.load(Ordering::Acquire) {
+                        return Err("Task cancelled.".to_string());
+                    }
+                    error_stage = BatchItemErrorStage::Upload;
+                    this.update(cx, |view, cx| {
+                        if let Some(target) = view.queue.iter_mut().find(|item| item.id == item_id)
+                        {
+                            target.progress = 96.0;
+                            target.segments = segments.clone();
+                        }
+                        cx.notify();
+                    })
+                    .ok();
+                    translate_media_server_segments(
+                        &services,
+                        context,
+                        &resolved_history_id,
+                        &mut segments,
+                    )
+                    .await?;
+                    upload_media_server_subtitles(&services, context, &segments).await?;
+                }
+                Ok((resolved_history_id, segments.clone()))
+            }
+            .await;
+
+            if let Some(path) = downloaded_path {
+                let _ = std::fs::remove_file(path);
+            }
+
+            this.update(cx, |view, cx| {
+                if let Some(target) = view.queue.iter_mut().find(|item| item.id == item_id) {
+                    if target.status == BatchItemStatus::Processing {
+                        match result {
+                            Ok((history_id, segments)) => {
+                                target.history_id = Some(history_id);
+                                target.segments = segments;
+                                target.duration_seconds = target
+                                    .segments
+                                    .iter()
+                                    .map(|segment| segment.end)
+                                    .reduce(f64::max);
+                                target.status = BatchItemStatus::Complete;
+                                target.progress = 100.0;
+                                target.error_message = None;
+                                target.error_stage = None;
+                            }
+                            Err(message)
+                                if cancel_requested.load(Ordering::Acquire)
+                                    || message.contains("Task cancelled") =>
+                            {
+                                target.status = BatchItemStatus::Cancelled;
+                                target.progress = 0.0;
+                                target.error_message = None;
+                            }
+                            Err(message) => {
+                                target.status = BatchItemStatus::Error;
+                                target.error_message = Some(message);
+                                target.error_stage = Some(error_stage);
+                                if error_stage == BatchItemErrorStage::Transcribe {
+                                    target.history_id = None;
+                                    target.segments.clear();
+                                } else {
+                                    target.segments = segments.clone();
                                 }
                             }
                         }
                     }
-                    // If all tasks are completed, auto-expand the Completed section
-                    if view.queue.iter().all(|i| {
-                        i.status != BatchItemStatus::Processing
-                            && i.status != BatchItemStatus::Pending
-                    }) {
-                        view.completed_expanded = true;
-                    }
-                    view.start_next_pending(cx);
-                    view.persist_recovery_snapshot(cx, Vec::new());
-                    cx.notify();
-                })
-                .ok();
+                    target.instance_id = None;
+                    target.cancel_requested = None;
+                }
+                if view.queue.iter().all(|item| {
+                    item.status != BatchItemStatus::Processing
+                        && item.status != BatchItemStatus::Pending
+                }) {
+                    view.completed_expanded = true;
+                }
+                view.start_next_pending(cx);
+                view.persist_recovery_snapshot(cx, Vec::new());
+                cx.notify();
             })
-            .detach();
-        }
+            .ok();
+        })
+        .detach();
     }
 
     /// Cancels or removes an item from the queue.
     pub fn cancel_item(&mut self, item_id: String, cx: &mut Context<Self>) {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         if let Some(item) = self.queue.iter_mut().find(|i| i.id == item_id) {
+            if let Some(cancel_requested) = &item.cancel_requested {
+                cancel_requested.store(true, Ordering::Release);
+            }
             if let Some(inst_id) = item.instance_id.clone() {
                 cx.spawn(async move |_this, _cx: &mut AsyncApp| {
                     let _ = crate::platform::agent_control::facade::batch::cancel_batch_task(
@@ -589,6 +979,7 @@ impl BatchImportPanel {
             item.progress = 0.0;
             item.error_message = None;
             item.instance_id = None;
+            item.cancel_requested = None;
         }
         self.start_next_pending(cx);
         self.persist_recovery_snapshot(cx, Vec::new());
@@ -606,6 +997,7 @@ impl BatchImportPanel {
                 item.progress = 0.0;
                 item.error_message = None;
                 item.instance_id = None;
+                item.cancel_requested = None;
             }
         }
         self.start_next_pending(cx);
@@ -695,10 +1087,11 @@ fn recovery_input_for_queue_item(item: &BatchQueueItem) -> RecoveryItemInput {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
         .unwrap_or_default();
-    let source_available = match &item.source_type {
-        BatchSourceType::File => Path::new(&item.file_path).is_file(),
-        BatchSourceType::UrlStream { url, .. } => is_valid_stream_url(url),
-    };
+    let source_available = item.media_server_context.is_some()
+        || match &item.source_type {
+            BatchSourceType::File => Path::new(&item.file_path).is_file(),
+            BatchSourceType::UrlStream { url, .. } => is_valid_stream_url(url),
+        };
     let stage = if item.status == BatchItemStatus::Processing {
         RecoveryItemStage::Transcribing
     } else {
@@ -728,12 +1121,281 @@ fn recovery_input_for_queue_item(item: &BatchQueueItem) -> RecoveryItemInput {
         project_id: item.project_id.clone(),
         history_id: item.history_id.clone(),
         history_title: None,
+        source_metadata: item
+            .media_server_context
+            .as_ref()
+            .and_then(|context| serde_json::to_value(context).ok()),
         last_known_stage: stage,
         updated_at: Some(now_ms),
         has_source_file: Some(source_available),
         can_resume: Some(source_available),
         ..RecoveryItemInput::default()
     }
+}
+
+async fn load_history_transcript(
+    services: &crate::services::DesktopServices,
+    history_id: Option<String>,
+) -> Result<Vec<TranscriptSegment>, String> {
+    let history_id = history_id.ok_or_else(|| "History ID is missing.".to_string())?;
+    let lookup_id = history_id.clone();
+    services
+        .history
+        .query_db(move |repository| repository.load_transcript(&lookup_id))
+        .await?
+        .ok_or_else(|| format!("Transcript not found for history ID: {history_id}"))
+}
+
+fn safe_media_extension(container: &str) -> String {
+    let extension = container
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase();
+    if !extension.is_empty()
+        && extension.len() <= 8
+        && extension
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        extension
+    } else {
+        "mkv".to_string()
+    }
+}
+
+fn clean_subtitle_text(text: &str) -> String {
+    text.replace('\0', "").replace('\r', "").trim().to_string()
+}
+
+async fn translate_media_server_segments(
+    services: &crate::services::DesktopServices,
+    context: &MediaServerTaskContext,
+    history_id: &str,
+    segments: &mut [TranscriptSegment],
+) -> Result<(), String> {
+    let missing: Vec<_> = segments
+        .iter()
+        .enumerate()
+        .filter(|(_, segment)| {
+            segment
+                .translation
+                .as_deref()
+                .is_none_or(|translation| clean_subtitle_text(translation).is_empty())
+                && !clean_subtitle_text(&segment.text).is_empty()
+        })
+        .map(|(index, segment)| (index, segment.id.clone(), segment.text.clone()))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+    let app_config = services
+        .config
+        .load()?
+        .ok_or_else(|| "Application configuration is unavailable for translation.".to_string())?;
+    let config = crate::platform::repositories::api_server_config::
+        resolve_feature_llm_config_from_app_config(&app_config, "translation")
+        .ok_or_else(|| "No translation model is configured for media server subtitles.".to_string())?;
+    let adapter = crate::integrations::llm::DesktopLlmAdapter::with_pool(
+        sona_runtime_fs::default_desktop_models_dir(),
+        None,
+        Some(Arc::clone(&services.translation_pool)),
+    );
+    let translations = adapter
+        .translate_batch(LlmTranslationRequest {
+            config,
+            texts: missing.iter().map(|(_, _, text)| text.clone()).collect(),
+            target_language: context.target_language.clone(),
+            source_language: context.source_language.clone(),
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    if translations.len() != missing.len() {
+        return Err(format!(
+            "Translation returned {} results for {} transcript segments.",
+            translations.len(),
+            missing.len()
+        ));
+    }
+
+    let mut persisted = Vec::with_capacity(missing.len());
+    for ((index, id, _), translation) in missing.into_iter().zip(translations) {
+        segments[index].translation = Some(translation.clone());
+        persisted.push(
+            crate::platform::agent_control::facade::SegmentTranslationInput {
+                id,
+                translation: Some(translation),
+            },
+        );
+    }
+    crate::platform::agent_control::facade::update_translations(
+        services,
+        crate::platform::agent_control::facade::UpdateTranslationsRequest {
+            history_id: history_id.to_string(),
+            translations: persisted,
+            clear_all: Some(false),
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+fn format_srt_timestamp(seconds: f64) -> String {
+    let milliseconds = if seconds.is_finite() {
+        (seconds.max(0.0) * 1000.0).floor() as u64
+    } else {
+        0
+    };
+    let hours = milliseconds / 3_600_000;
+    let minutes = (milliseconds % 3_600_000) / 60_000;
+    let seconds = (milliseconds % 60_000) / 1_000;
+    let millis = milliseconds % 1_000;
+    format!("{hours:02}:{minutes:02}:{seconds:02},{millis:03}")
+}
+
+fn build_srt(
+    segments: &[TranscriptSegment],
+    select_text: impl Fn(&TranscriptSegment) -> String,
+) -> String {
+    let mut blocks = Vec::new();
+    for segment in segments {
+        let text = select_text(segment);
+        if text.trim().is_empty() {
+            continue;
+        }
+        blocks.push(format!(
+            "{}\n{} --> {}\n{}",
+            blocks.len() + 1,
+            format_srt_timestamp(segment.start),
+            format_srt_timestamp(segment.end.max(segment.start)),
+            text
+        ));
+    }
+    if blocks.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", blocks.join("\n\n"))
+    }
+}
+
+async fn upload_media_server_subtitles(
+    services: &crate::services::DesktopServices,
+    context: &MediaServerTaskContext,
+    segments: &[TranscriptSegment],
+) -> Result<(), String> {
+    let upload = |language: String, content: String, delete_existing_index| {
+        let service = Arc::clone(&services.media_server);
+        let profile_id = context.profile_id.clone();
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: context.item_id.clone(),
+            language,
+            format: "srt".to_string(),
+            is_forced: false,
+            content,
+        };
+        async move {
+            service
+                .upload_subtitle(Some(&profile_id), payload, delete_existing_index)
+                .await
+        }
+    };
+
+    match context.subtitle_mode {
+        MediaServerSubtitleMode::PureTranslation => {
+            let content = build_srt(segments, |segment| {
+                let translation = segment
+                    .translation
+                    .as_deref()
+                    .map(clean_subtitle_text)
+                    .unwrap_or_default();
+                if translation.is_empty() {
+                    clean_subtitle_text(&segment.text)
+                } else {
+                    translation
+                }
+            });
+            if !content.trim().is_empty() {
+                upload(
+                    context.target_language.clone(),
+                    content,
+                    context.existing_external_subtitle_index,
+                )
+                .await?;
+            }
+        }
+        MediaServerSubtitleMode::Bilingual => {
+            let content = build_srt(segments, |segment| {
+                let translation = segment
+                    .translation
+                    .as_deref()
+                    .map(clean_subtitle_text)
+                    .unwrap_or_default();
+                let original = clean_subtitle_text(&segment.text);
+                if !translation.is_empty()
+                    && !original.is_empty()
+                    && !translation.eq_ignore_ascii_case(&original)
+                {
+                    format!("{translation}\n{original}")
+                } else if translation.is_empty() {
+                    original
+                } else {
+                    translation
+                }
+            });
+            if !content.trim().is_empty() {
+                upload(
+                    context.target_language.clone(),
+                    content,
+                    context.existing_external_subtitle_index,
+                )
+                .await?;
+            }
+        }
+        MediaServerSubtitleMode::SeparateTracks => {
+            let has_translation = segments.iter().any(|segment| {
+                segment
+                    .translation
+                    .as_deref()
+                    .is_some_and(|translation| !clean_subtitle_text(translation).is_empty())
+            });
+            if has_translation {
+                let translation = build_srt(segments, |segment| {
+                    let translation = segment
+                        .translation
+                        .as_deref()
+                        .map(clean_subtitle_text)
+                        .unwrap_or_default();
+                    if translation.is_empty() {
+                        clean_subtitle_text(&segment.text)
+                    } else {
+                        translation
+                    }
+                });
+                if !translation.trim().is_empty() {
+                    upload(
+                        context.target_language.clone(),
+                        translation,
+                        context.existing_external_subtitle_index,
+                    )
+                    .await?;
+                }
+            }
+            let original = build_srt(segments, |segment| clean_subtitle_text(&segment.text));
+            if !original.trim().is_empty() {
+                upload(
+                    context
+                        .source_language
+                        .clone()
+                        .unwrap_or_else(|| "und".to_string()),
+                    original,
+                    None,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
 }
 
 impl BatchImportPanel {
@@ -943,7 +1605,20 @@ impl Render for BatchImportPanel {
             .iter()
             .filter(|i| i.status == BatchItemStatus::Processing)
             .count();
+        let pending_count = self
+            .queue
+            .iter()
+            .filter(|i| i.status == BatchItemStatus::Pending)
+            .count();
+        let is_all_complete = completed_count == total_count && total_count > 0;
+        let is_all_failed = failed_count == total_count && total_count > 0 && processing_count == 0;
         let is_paused = self.is_paused;
+        let summary_status = queue_summary_status(
+            processing_count > 0,
+            is_paused,
+            is_all_complete,
+            failed_count > 0,
+        );
         let overall_progress = self.overall_progress();
 
         let is_drag = self.is_drag_over;
@@ -954,9 +1629,12 @@ impl Render for BatchImportPanel {
             .flex()
             .flex_col()
             .size_full()
-            .p(px(16.0))
-            .gap(px(14.0))
-            .overflow_y_scroll()
+            .px(px(16.0))
+            .pt(px(16.0))
+            .pb(px(8.0))
+            .gap(px(16.0))
+            .when(is_empty, |this| this.overflow_y_scroll())
+            .when(!is_empty, |this| this.overflow_hidden())
             // ==========================================
             // UrlStreamImportModal (500px width dialog) (Gap G10)
             // ==========================================
@@ -1347,17 +2025,23 @@ impl Render for BatchImportPanel {
                         .id("batch-queue-section")
                         .flex()
                         .flex_col()
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_hidden()
                         .gap(px(12.0))
                         .w_full()
                         // Queue Summary Bar Card
                         .child(
                             div()
                                 .id("queue-summary-bar")
-                                .p(px(12.0))
-                                .rounded(RADIUS_LG)
-                                .bg(cx.theme().background)
+                                .py(px(12.0))
+                                .px(px(14.0))
+                                .rounded(px(16.0))
+                                .bg(cx.theme().popover)
                                 .border_1()
                                 .border_color(cx.theme().border)
+                                .shadow_sm()
+                                .flex_shrink_0()
                                 .flex()
                                 .flex_col()
                                 .gap(px(10.0))
@@ -1374,8 +2058,8 @@ impl Render for BatchImportPanel {
                                                 .gap(px(8.0))
                                                 .child(
                                                     div()
-                                                        .text_size(px(13.5))
-                                                        .font_weight(FontWeight::BOLD)
+                                                        .text_size(px(14.4))
+                                                        .font_weight(FontWeight::SEMIBOLD)
                                                         .child(format!("Batch Queue ({total_count} files)")),
                                                 )
                                                 // Status Pill
@@ -1384,38 +2068,38 @@ impl Render for BatchImportPanel {
                                                         .px(px(8.0))
                                                         .py(px(2.0))
                                                         .rounded(RADIUS_FULL)
-                                                        .text_size(px(11.0))
+                                                        .text_size(px(11.84))
                                                         .font_weight(FontWeight::MEDIUM)
                                                         .flex()
                                                         .items_center()
-                                                        .gap(px(4.0))
-                                                        .when(processing_count > 0 && !is_paused, |p| {
-                                                            p.bg(COLOR_PROJECT_BLUE.opacity(0.15))
-                                                                .text_color(COLOR_PROJECT_BLUE)
+                                                        .gap(px(5.0))
+                                                        .when(summary_status == QueueSummaryStatus::Processing, |pill| {
+                                                            pill.bg(hsla(196.0 / 360.0, 0.86, 0.322, 0.12))
+                                                                .text_color(hsla(196.0 / 360.0, 0.86, 0.322, 1.0))
                                                                 .child(icon(LucideIcon::Loader).size(px(12.0)))
                                                                 .child(format!("Transcribing ({completed_count}/{total_count})"))
                                                         })
-                                                        .when(is_paused, |p| {
-                                                            p.bg(cx.theme().warning.opacity(0.15))
+                                                        .when(summary_status == QueueSummaryStatus::Paused, |pill| {
+                                                            pill.bg(cx.theme().warning.opacity(0.15))
                                                                 .text_color(cx.theme().warning)
                                                                 .child(icon(LucideIcon::Pause).size(px(12.0)))
                                                                 .child("Paused")
                                                         })
-                                                        .when(completed_count == total_count && total_count > 0, |p| {
-                                                            p.bg(cx.theme().success.opacity(0.15))
+                                                        .when(summary_status == QueueSummaryStatus::Complete, |pill| {
+                                                            pill.bg(cx.theme().success.opacity(0.12))
                                                                 .text_color(cx.theme().success)
                                                                 .child(icon(LucideIcon::Check).size(px(12.0)))
                                                                 .child("Completed")
                                                         })
-                                                        .when(failed_count > 0 && processing_count == 0, |p| {
-                                                            p.bg(cx.theme().danger.opacity(0.15))
+                                                        .when(summary_status == QueueSummaryStatus::Failed, |pill| {
+                                                            pill.bg(cx.theme().danger.opacity(0.12))
                                                                 .text_color(cx.theme().danger)
                                                                 .child(icon(LucideIcon::CircleAlert).size(px(12.0)))
                                                                 .child(format!("{completed_count}/{total_count} · {failed_count} failed"))
                                                         })
-                                                        .when(processing_count == 0 && failed_count == 0 && completed_count < total_count && !is_paused, |p| {
-                                                            p.bg(cx.theme().secondary)
-                                                                .text_color(cx.theme().muted_foreground)
+                                                        .when(summary_status == QueueSummaryStatus::Idle, |pill| {
+                                                            pill.bg(cx.theme().muted)
+                                                                .text_color(cx.theme().secondary_foreground)
                                                                 .child(format!("{completed_count}/{total_count}"))
                                                         }),
                                                 ),
@@ -1440,14 +2124,14 @@ impl Render for BatchImportPanel {
                                         .child(
                                             div()
                                                 .h_full()
-                                                .w(relative(overall_progress / 100.0))
+                                                .w(relative(if is_all_failed { 1.0 } else { overall_progress / 100.0 }))
                                                 .rounded_full()
-                                                .bg(if completed_count == total_count && total_count > 0 {
+                                                .bg(if is_all_complete {
                                                     cx.theme().success
-                                                } else if failed_count == total_count && total_count > 0 {
+                                                } else if is_all_failed {
                                                     cx.theme().danger
                                                 } else {
-                                                    COLOR_PROJECT_BLUE
+                                                    hsla(196.0 / 360.0, 0.86, 0.322, 1.0)
                                                 }),
                                         ),
                                 )
@@ -1463,15 +2147,33 @@ impl Render for BatchImportPanel {
                                                 .items_center()
                                                 .gap(px(6.0))
                                                 // Start / Pause toggle
-                                                .child(
+                                                .when(processing_count > 0 && !is_paused, |bar| bar.child(
                                                     Button::new("btn-pause-queue")
                                                         .small()
                                                         .outline()
-                                                        .label(if is_paused { "Resume" } else { "Pause" })
+                                                        .label("Pause Queue")
                                                         .on_click(cx.listener(|this, _, _, cx| {
                                                             this.toggle_queue_pause(cx);
                                                         })),
-                                                )
+                                                ))
+                                                .when(is_paused, |bar| bar.child(
+                                                    Button::new("btn-resume-queue")
+                                                        .small()
+                                                        .primary()
+                                                        .label("Resume Queue")
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.toggle_queue_pause(cx);
+                                                        })),
+                                                ))
+                                                .when(pending_count > 0 && processing_count == 0 && !is_paused, |bar| bar.child(
+                                                    Button::new("btn-start-queue")
+                                                        .small()
+                                                        .primary()
+                                                        .label("Start Queue")
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.start_next_pending(cx);
+                                                        })),
+                                                ))
                                                 // Add More Files button
                                                 .child(
                                                     Button::new("btn-add-files")
@@ -1502,6 +2204,9 @@ impl Render for BatchImportPanel {
                                                 .child(
                                                     div()
                                                         .id("btn-clear-menu-trigger")
+                                                        .role(Role::Button)
+                                                        .aria_label("Clear options")
+                                                        .aria_expanded(clear_open)
                                                         .flex()
                                                         .items_center()
                                                         .gap(px(4.0))
@@ -1518,6 +2223,9 @@ impl Render for BatchImportPanel {
                                                         .child(
                                                             icon(LucideIcon::ChevronDown)
                                                                 .size(px(12.0))
+                                                                .when(clear_open, |chevron| {
+                                                                    chevron.rotate(Radians(std::f32::consts::PI))
+                                                                })
                                                                 .text_color(cx.theme().muted_foreground),
                                                         )
                                                         .on_click(cx.listener(|this, _, _, cx| {
@@ -1530,6 +2238,8 @@ impl Render for BatchImportPanel {
                                                     this.child(
                                                         div()
                                                             .id("clear-menu-popover")
+                                                            .role(Role::Menu)
+                                                            .aria_label("Clear options")
                                                             .absolute()
                                                             .bottom(px(32.0))
                                                             .right_0()
@@ -1546,19 +2256,49 @@ impl Render for BatchImportPanel {
                                                             .child(
                                                                 div()
                                                                     .id("btn-clear-completed-opt")
+                                                                    .role(Role::MenuItem)
+                                                                    .aria_label(format!(
+                                                                        "Clear completed files ({completed_count})"
+                                                                    ))
+                                                                    .when(completed_count == 0, |item| {
+                                                                        item.aria_description("Unavailable when there are no completed files")
+                                                                    })
                                                                     .px(px(8.0))
                                                                     .py(px(5.0))
                                                                     .rounded(RADIUS_SM)
-                                                                    .cursor_pointer()
-                                                                    .hover(|s| s.bg(cx.theme().secondary))
+                                                                    .when(completed_count > 0, |item| {
+                                                                        item.cursor_pointer()
+                                                                            .hover(|s| s.bg(cx.theme().secondary))
+                                                                    })
+                                                                    .when(completed_count == 0, |item| {
+                                                                        item.opacity(0.45).cursor_default()
+                                                                    })
                                                                     .text_size(px(12.0))
-                                                                    .child(format!(
-                                                                        "Clear Completed ({completed_count})"
-                                                                    ))
-                                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                                        this.clear_completed(cx);
-                                                                        this.is_clear_menu_open = false;
-                                                                    })),
+                                                                    .child(
+                                                                        div()
+                                                                            .flex()
+                                                                            .flex_col()
+                                                                            .gap(px(1.0))
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_size(px(13.12))
+                                                                                    .font_weight(FontWeight::MEDIUM)
+                                                                                    .child("Clear Completed"),
+                                                                            )
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_size(px(11.52))
+                                                                                    .text_color(cx.theme().muted_foreground)
+                                                                                    .child(format!("Clear all completed files ({completed_count})")),
+                                                                            ),
+                                                                    )
+                                                                    .when(completed_count > 0, |item| {
+                                                                        item.on_click(cx.listener(|this, _, _, cx| {
+                                                                            this.clear_completed(cx);
+                                                                            this.is_clear_menu_open = false;
+                                                                            cx.notify();
+                                                                        }))
+                                                                    }),
                                                             )
                                                             .child(
                                                                 div()
@@ -1569,6 +2309,10 @@ impl Render for BatchImportPanel {
                                                             .child(
                                                                 div()
                                                                     .id("btn-clear-all-opt")
+                                                                    .role(Role::MenuItem)
+                                                                    .aria_label(format!(
+                                                                        "Clear all files ({total_count})"
+                                                                    ))
                                                                     .px(px(8.0))
                                                                     .py(px(5.0))
                                                                     .rounded(RADIUS_SM)
@@ -1576,7 +2320,24 @@ impl Render for BatchImportPanel {
                                                                     .hover(|s| s.bg(cx.theme().danger.opacity(0.1)))
                                                                     .text_size(px(12.0))
                                                                     .text_color(cx.theme().danger)
-                                                                    .child(format!("Clear All ({total_count})"))
+                                                                    .child(
+                                                                        div()
+                                                                            .flex()
+                                                                            .flex_col()
+                                                                            .gap(px(1.0))
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_size(px(13.12))
+                                                                                    .font_weight(FontWeight::MEDIUM)
+                                                                                    .child("Clear All"),
+                                                                            )
+                                                                            .child(
+                                                                                div()
+                                                                                    .text_size(px(11.52))
+                                                                                    .text_color(cx.theme().muted_foreground)
+                                                                                    .child(format!("Clear all files in queue ({total_count})")),
+                                                                            ),
+                                                                    )
                                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                                         this.is_clear_menu_open = false;
                                                                         let is_running = this.queue.iter().any(|i| i.status == BatchItemStatus::Processing);
@@ -1612,6 +2373,11 @@ impl Render for BatchImportPanel {
                                 .flex()
                                 .flex_col()
                                 .gap(px(12.0))
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_y_scroll()
+                                .pr(px(2.0))
+                                .pb(px(40.0))
                                 // 0. Media Server Tasks Group
                                 .when(!media_server_items.is_empty(), |list| {
                                     list.child(
@@ -1981,5 +2747,34 @@ impl Render for BatchImportPanel {
                         }),
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod queue_summary_tests {
+    use super::{QueueSummaryStatus, queue_summary_status};
+
+    #[test]
+    fn summary_status_follows_react_priority_without_overlapping_states() {
+        assert_eq!(
+            queue_summary_status(true, true, true, true),
+            QueueSummaryStatus::Processing
+        );
+        assert_eq!(
+            queue_summary_status(false, true, true, true),
+            QueueSummaryStatus::Paused
+        );
+        assert_eq!(
+            queue_summary_status(false, false, true, true),
+            QueueSummaryStatus::Complete
+        );
+        assert_eq!(
+            queue_summary_status(false, false, false, true),
+            QueueSummaryStatus::Failed
+        );
+        assert_eq!(
+            queue_summary_status(false, false, false, false),
+            QueueSummaryStatus::Idle
+        );
     }
 }

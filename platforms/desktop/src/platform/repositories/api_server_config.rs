@@ -154,30 +154,119 @@ pub fn resolve_feature_llm_config_from_app_config(
             let provider_settings = llm_settings
                 .get("providers")
                 .and_then(|p| p.get(provider_str));
+            let provider_definition =
+                sona_core::llm::providers::find_llm_provider_by_id_or_alias(provider_str);
+            let default_host = match provider_str {
+                "google_translate_free" => "https://translate.googleapis.com/translate_a/single",
+                "google_translate" => "https://translation.googleapis.com/language/translate/v2",
+                _ => provider_definition
+                    .map(|provider| provider.defaults.api_host.as_str())
+                    .unwrap_or_default(),
+            };
             let api_host = provider_settings
                 .and_then(|s| s.get("apiHost"))
                 .and_then(|v| v.as_str())
-                .unwrap_or_default();
+                .filter(|value| !value.is_empty())
+                .unwrap_or(default_host);
             let api_key = provider_settings
                 .and_then(|s| s.get("apiKey"))
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
+            let api_path = provider_settings
+                .and_then(|s| s.get("apiPath"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    provider_definition.and_then(|provider| provider.defaults.api_path.clone())
+                })
+                .or_else(|| match provider_str {
+                    "google_translate_free" | "google_translate" => None,
+                    _ if provider_str.starts_with("custom-") => {
+                        let custom_strategy = llm_settings
+                            .pointer(&format!("/customProviders/{provider_str}/strategy"))
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("openai_compatible");
+                        match custom_strategy {
+                            "openai_responses" => Some("/v1/responses".to_string()),
+                            "openai_compatible" => Some("/v1/chat/completions".to_string()),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                });
+            let api_version = provider_settings
+                .and_then(|s| s.get("apiVersion"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    provider_definition.and_then(|provider| provider.defaults.api_version.clone())
+                });
 
             let provider: Result<sona_core::domain::LlmProvider, _> =
                 serde_json::from_value(serde_json::Value::String(provider_str.to_string()));
             if let Ok(prov) = provider {
-                let strategy = sona_core::llm::tasks::LlmProviderStrategy::from_provider(&prov);
+                let default_strategy =
+                    sona_core::llm::tasks::LlmProviderStrategy::from_provider(&prov);
+                let strategy = llm_settings
+                    .pointer(&format!("/customProviders/{provider_str}/strategy"))
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|strategy| {
+                        serde_json::from_value(serde_json::Value::String(strategy.to_string())).ok()
+                    })
+                    .unwrap_or(default_strategy);
+                let selections = llm_settings.get("selections");
+                let feature_prefix = match feature {
+                    "translation" | "translate" => "translation",
+                    "summary" => "summary",
+                    _ => "polish",
+                };
+                let temperature = selections
+                    .and_then(|settings| settings.get(format!("{feature_prefix}Temperature")))
+                    .and_then(serde_json::Value::as_f64)
+                    .filter(|temperature| {
+                        temperature.is_finite() && (0.0..=2.0).contains(temperature)
+                    })
+                    .map(|temperature| temperature as f32)
+                    .or(Some(0.7));
+                let reasoning_enabled = selections
+                    .and_then(|settings| settings.get(format!("{feature_prefix}ReasoningEnabled")))
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                let reasoning_mode = model_entry
+                    .pointer("/metadata/reasoningMode")
+                    .and_then(|mode| mode.get("type"))
+                    .and_then(serde_json::Value::as_str);
+                let reasoning_level = if reasoning_mode == Some("budget") {
+                    selections
+                        .and_then(|settings| {
+                            settings.get(format!("{feature_prefix}ReasoningBudget"))
+                        })
+                        .and_then(serde_json::Value::as_u64)
+                        .or_else(|| {
+                            model_entry
+                                .pointer("/metadata/reasoningMode/defaultBudget")
+                                .and_then(serde_json::Value::as_u64)
+                        })
+                        .map(|budget| budget.to_string())
+                } else {
+                    selections
+                        .and_then(|settings| {
+                            settings.get(format!("{feature_prefix}ReasoningLevel"))
+                        })
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string)
+                };
                 return Some(sona_core::llm::requests::LlmConfig {
                     strategy,
                     provider: prov,
                     base_url: api_host.to_string(),
                     api_key: api_key.to_string(),
                     model: model_str.to_string(),
-                    api_path: None,
-                    api_version: None,
-                    temperature: None,
-                    reasoning_enabled: None,
-                    reasoning_level: None,
+                    api_path,
+                    api_version,
+                    temperature,
+                    reasoning_enabled: Some(reasoning_enabled),
+                    reasoning_level,
                     timeout_seconds: config
                         .get("llmRequestTimeoutSeconds")
                         .and_then(|v| v.as_u64()),
@@ -211,6 +300,90 @@ mod tests {
         SqliteAppConfigAdapter::new(db, Arc::new(SystemClock))
             .save_config(config)
             .unwrap();
+    }
+
+    #[test]
+    fn feature_llm_config_preserves_custom_provider_and_feature_options() {
+        let config = serde_json::json!({
+            "llmRequestTimeoutSeconds": 240,
+            "llmSettings": {
+                "selections": {
+                    "polishModelId": "custom-gateway-gpt-model",
+                    "polishTemperature": 0.35,
+                    "polishReasoningEnabled": true,
+                    "polishReasoningLevel": "high"
+                },
+                "models": {
+                    "custom-gateway-gpt-model": {
+                        "provider": "custom-gateway",
+                        "model": "gpt-model",
+                        "metadata": {
+                            "reasoningMode": { "type": "effort" }
+                        }
+                    }
+                },
+                "customProviders": {
+                    "custom-gateway": { "strategy": "openai_responses" }
+                },
+                "providers": {
+                    "custom-gateway": {
+                        "apiHost": "https://llm.example.test",
+                        "apiKey": "secret",
+                        "apiVersion": "2025-01-01"
+                    }
+                }
+            }
+        });
+
+        let resolved = resolve_feature_llm_config_from_app_config(&config, "polish")
+            .expect("selected feature model should resolve");
+
+        assert_eq!(resolved.provider.as_str(), "custom-gateway");
+        assert_eq!(
+            resolved.strategy,
+            sona_core::llm::tasks::LlmProviderStrategy::OpenAiResponses
+        );
+        assert_eq!(resolved.base_url, "https://llm.example.test");
+        assert_eq!(resolved.api_path.as_deref(), Some("/v1/responses"));
+        assert_eq!(resolved.api_version.as_deref(), Some("2025-01-01"));
+        assert_eq!(resolved.temperature, Some(0.35));
+        assert_eq!(resolved.reasoning_enabled, Some(true));
+        assert_eq!(resolved.reasoning_level.as_deref(), Some("high"));
+        assert_eq!(resolved.timeout_seconds, Some(240));
+    }
+
+    #[test]
+    fn feature_llm_config_maps_budget_reasoning_to_runtime_budget_level() {
+        let config = serde_json::json!({
+            "llmSettings": {
+                "selections": {
+                    "summaryModelId": "anthropic-claude",
+                    "summaryReasoningEnabled": true,
+                    "summaryReasoningBudget": 4096
+                },
+                "models": {
+                    "anthropic-claude": {
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4",
+                        "metadata": {
+                            "reasoningMode": {
+                                "type": "budget",
+                                "defaultBudget": 2048
+                            }
+                        }
+                    }
+                },
+                "providers": {
+                    "anthropic": { "apiHost": "https://api.anthropic.com" }
+                }
+            }
+        });
+
+        let resolved = resolve_feature_llm_config_from_app_config(&config, "summary")
+            .expect("selected feature model should resolve");
+
+        assert_eq!(resolved.reasoning_enabled, Some(true));
+        assert_eq!(resolved.reasoning_level.as_deref(), Some("4096"));
     }
 
     fn provider_for_config_test(

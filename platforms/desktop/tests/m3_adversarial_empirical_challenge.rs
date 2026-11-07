@@ -36,6 +36,10 @@ fn create_mock_item(id: &str, status: BatchItemStatus, progress: f32) -> BatchQu
         project_color_index: None,
         error_message: None,
         history_id: None,
+        error_stage: None,
+        segments: Vec::new(),
+        media_server_context: None,
+        cancel_requested: None,
         is_media_server: false,
     }
 }

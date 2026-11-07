@@ -45,6 +45,7 @@ impl GlobalDialog {
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
         let kind = self.kind;
+        let title = self.title.clone();
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -92,6 +93,15 @@ impl GlobalDialog {
                                                     .small()
                                                     .label("Cancel")
                                                     .on_click(cx.listener(|this, _, _, cx| {
+                                                        if this.global_dialog.title
+                                                            == "Delete LLM Provider"
+                                                        {
+                                                            this.settings_modal
+                                                                .llm_pending_delete_provider = None;
+                                                        }
+                                                        if this.global_dialog.title == "Regenerate API Key" {
+                                                            this.settings_modal.api_server_pending_key = None;
+                                                        }
                                                         this.global_dialog.close();
                                                         cx.notify();
                                                     })),
@@ -102,20 +112,50 @@ impl GlobalDialog {
                                         Button::new("btn-dialog-ok")
                                             .primary()
                                             .small()
-                                            .label(if kind == DialogKind::Confirm {
-                                                "Download"
+                                                    .label(if kind == DialogKind::Confirm {
+                                                if title == "Delete LLM Provider" {
+                                                    "Delete"
+                                                } else if title == "Regenerate API Key" {
+                                                    "Generate New Key"
+                                                } else {
+                                                    "Download"
+                                                }
                                             } else {
                                                 "OK"
                                             })
-                                            .on_click(cx.listener(|this, _, _, cx| {
+                                            .on_click(cx.listener(|this, _, window, cx| {
                                                 let confirm_cuda = this.global_dialog.kind
                                                     == DialogKind::Confirm
                                                     && this.global_dialog.title
                                                         == "Download CUDA Add-on";
+                                                let confirm_provider_delete =
+                                                    this.global_dialog.kind == DialogKind::Confirm
+                                                        && this.global_dialog.title
+                                                            == "Delete LLM Provider";
+                                                let confirm_api_key_regeneration =
+                                                    this.global_dialog.kind == DialogKind::Confirm
+                                                        && this.global_dialog.title == "Regenerate API Key";
                                                 this.global_dialog.close();
                                                 if confirm_cuda {
                                                     this.settings_modal
                                                         .begin_cuda_addon_download(cx);
+                                                } else if confirm_provider_delete {
+                                                    this.settings_modal
+                                                        .confirm_delete_llm_custom_provider(cx);
+                                                } else if confirm_api_key_regeneration {
+                                                    if let Some(key) = this.settings_modal.api_server_pending_key.take() {
+                                                        if let Err(error) = cx
+                                                            .global::<crate::app::GlobalDesktopServices>()
+                                                            .0
+                                                            .config
+                                                            .set_setting("httpServerApiKey", &serde_json::json!(key.clone()))
+                                                        {
+                                                            log::error!("Failed to regenerate API key: {error}");
+                                                    } else if let Some(state) = this.api_server_field_states.get("apiKey") {
+                                                            state.update(cx, |state, cx| state.set_value(key, window, cx));
+                                                        }
+                                                    }
+                                                    cx.notify();
                                                 } else {
                                                     cx.notify();
                                                 }

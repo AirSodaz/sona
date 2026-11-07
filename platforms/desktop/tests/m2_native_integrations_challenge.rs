@@ -432,6 +432,10 @@ fn test_hotkey_event_mapping_to_event_bus() {
                 assert_eq!(expected_event, "hotkey:voice_typing");
                 assert_eq!(payload.get("pressed").unwrap().as_bool(), Some(is_pressed));
             }
+            HotkeyAction::VoiceTypingTranslate => {
+                assert_eq!(expected_event, "hotkey:voice_typing_translate");
+                assert_eq!(payload.get("pressed").unwrap().as_bool(), Some(is_pressed));
+            }
             HotkeyAction::LiveSubtitles => {
                 assert_eq!(expected_event, "hotkey:toggle_subtitles");
             }

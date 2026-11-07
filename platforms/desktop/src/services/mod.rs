@@ -20,6 +20,7 @@ use crate::platform::sync::DesktopSyncManager;
 use crate::platform::task_ledger_repository::TaskLedgerService;
 
 pub mod db_runner;
+pub mod media_server;
 pub mod voice_typing_runtime;
 
 pub use db_runner::*;
@@ -101,6 +102,7 @@ pub struct DesktopServices {
     pub projects: Arc<ProjectService>,
     pub history: Arc<HistoryService>,
     pub config: Arc<AppConfigService>,
+    pub media_server: Arc<media_server::MediaServerService>,
     pub sync: Arc<DesktopSyncManager>,
     pub task_ledger: Arc<TaskLedgerService>,
     pub audio: Arc<AudioState>,
@@ -199,6 +201,7 @@ impl DesktopServicesBuilder {
             backup_state,
         ));
         let config = Arc::new(AppConfigService::new(sqlite.clone()));
+        let media_server = Arc::new(media_server::MediaServerService::new(config.clone()));
         let sync = Arc::new(DesktopSyncManager::new(sync_config_path, sqlite.clone()));
         let task_ledger = Arc::new(TaskLedgerService::new(sqlite.clone(), Arc::clone(&emitter)));
 
@@ -221,6 +224,7 @@ impl DesktopServicesBuilder {
             projects,
             history,
             config,
+            media_server,
             sync,
             task_ledger,
             audio,

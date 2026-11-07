@@ -298,6 +298,10 @@ fn test_batch_queue_item_construction_and_retry() {
         project_color_index: None,
         error_message: Some("Corrupt audio frame".to_string()),
         history_id: None,
+        error_stage: None,
+        segments: Vec::new(),
+        media_server_context: None,
+        cancel_requested: None,
         is_media_server: false,
     };
 
@@ -364,6 +368,10 @@ fn make_item(id: &str, status: BatchItemStatus, progress: f32) -> BatchQueueItem
         project_color_index: None,
         error_message: None,
         history_id: None,
+        error_stage: None,
+        segments: Vec::new(),
+        media_server_context: None,
+        cancel_requested: None,
         is_media_server: false,
     }
 }
@@ -877,6 +885,10 @@ fn test_batch_queue_group_kind_partitioning() {
             project_color_index: None,
             error_message: None,
             history_id: None,
+            error_stage: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server,
         };
 
@@ -925,6 +937,10 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
             project_color_index: None,
             error_message: None,
             history_id: None,
+            error_stage: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         },
         BatchQueueItem {
@@ -942,6 +958,10 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
             project_color_index: None,
             error_message: None,
             history_id: None,
+            error_stage: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         },
     ];
@@ -986,6 +1006,10 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
             project_color_index: None,
             error_message: None,
             history_id: None,
+            error_stage: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         },
         BatchQueueItem {
@@ -1003,6 +1027,10 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
             project_color_index: None,
             error_message: None,
             history_id: None,
+            error_stage: None,
+            segments: Vec::new(),
+            media_server_context: None,
+            cancel_requested: None,
             is_media_server: false,
         },
     ];

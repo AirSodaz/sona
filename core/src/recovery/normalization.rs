@@ -42,13 +42,18 @@ impl RecoveryItemInput {
         let saved_can_resume = self
             .can_resume
             .unwrap_or(saved_has_source_file && resolution == RecoveryResolution::Pending);
-        let (has_source_file, can_resume) = resolve_source_flags(
-            &file_path,
-            resolution,
-            saved_has_source_file,
-            saved_can_resume,
-            source_paths,
-        );
+        let source_metadata = self.source_metadata;
+        let (has_source_file, can_resume) = if source_metadata.is_some() {
+            (true, saved_can_resume)
+        } else {
+            resolve_source_flags(
+                &file_path,
+                resolution,
+                saved_has_source_file,
+                saved_can_resume,
+                source_paths,
+            )
+        };
 
         Some(RecoveredQueueItem {
             id,
@@ -68,6 +73,7 @@ impl RecoveryItemInput {
             can_resume,
             automation_rule_id,
             automation_rule_name: self.automation_rule_name,
+            source_metadata,
             resolved_config_snapshot: self.resolved_config_snapshot,
             automation_resolution_snapshot: self.automation_resolution_snapshot,
             export_config: self.export_config.unwrap_or(Value::Null),
@@ -105,8 +111,12 @@ impl RecoveryItemInput {
             RecoverySource::BatchImport
         };
         let resolution = RecoveryResolution::Pending;
-        let (has_source_file, can_resume) =
-            resolve_source_flags(&file_path, resolution, true, true, source_paths);
+        let source_metadata = self.source_metadata;
+        let (has_source_file, can_resume) = if source_metadata.is_some() {
+            (true, true)
+        } else {
+            resolve_source_flags(&file_path, resolution, true, true, source_paths)
+        };
 
         Some(RecoveredQueueItem {
             id,
@@ -126,6 +136,7 @@ impl RecoveryItemInput {
             can_resume,
             automation_rule_id: self.automation_rule_id,
             automation_rule_name: self.automation_rule_name,
+            source_metadata,
             resolved_config_snapshot: self.resolved_config_snapshot,
             automation_resolution_snapshot: self.automation_resolution_snapshot,
             export_config: self.export_config.unwrap_or(Value::Null),

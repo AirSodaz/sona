@@ -331,12 +331,23 @@ pub struct MainShell {
     pub history_rename_state: Entity<InputState>,
     pub model_search_state: Entity<InputState>,
     _model_search_subscription: Subscription,
+    pub mcp_search_state: Entity<InputState>,
+    _mcp_search_subscription: Subscription,
     pub model_engine_select: Entity<SelectState<Vec<&'static str>>>,
     pub model_status_select: Entity<SelectState<Vec<&'static str>>>,
     pub model_label_select: Entity<SelectState<Vec<&'static str>>>,
     _model_filter_subscriptions: [Subscription; 3],
     pub online_provider_field_states: HashMap<String, Entity<InputState>>,
     _online_provider_field_subscriptions: Vec<Subscription>,
+    pub llm_provider_api_host_state: Entity<InputState>,
+    pub llm_provider_api_key_state: Entity<InputState>,
+    pub llm_model_draft_state: Entity<InputState>,
+    pub llm_custom_provider_name_state: Entity<InputState>,
+    _llm_settings_input_subscriptions: [Subscription; 4],
+    pub llm_model_metadata_field_states: HashMap<String, Entity<InputState>>,
+    _llm_model_metadata_subscriptions: Vec<Subscription>,
+    pub api_server_field_states: HashMap<String, Entity<InputState>>,
+    _api_server_field_subscriptions: Vec<Subscription>,
     pub shortcut_edit_state: Entity<InputState>,
     _shortcut_edit_subscription: Subscription,
 
@@ -413,6 +424,15 @@ impl MainShell {
                 }
             },
         );
+        let mcp_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search activity..."));
+        let mcp_search_subscription =
+            cx.subscribe(&mcp_search_state, |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.mcp_log_query = state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            });
         let model_engine_select = cx.new(|cx| {
             SelectState::new(
                 vec!["All Engines", "ONNX", "GGUF"],
@@ -443,6 +463,199 @@ impl MainShell {
             .ok()
             .flatten()
             .unwrap_or_else(|| serde_json::json!({}));
+        let active_llm_provider = initial_config
+            .pointer("/llmSettings/activeProvider")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("google_translate_free");
+        let provider_default_host = match active_llm_provider {
+            "google_translate_free" => {
+                "https://translate.googleapis.com/translate_a/single".to_string()
+            }
+            "google_translate" => {
+                "https://translation.googleapis.com/language/translate/v2".to_string()
+            }
+            provider => sona_core::llm::providers::find_llm_provider_by_id_or_alias(provider)
+                .map(|provider| provider.defaults.api_host.clone())
+                .unwrap_or_default(),
+        };
+        let api_host = initial_config
+            .pointer(&format!(
+                "/llmSettings/providers/{active_llm_provider}/apiHost"
+            ))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(&provider_default_host)
+            .to_string();
+        let api_key = initial_config
+            .pointer(&format!(
+                "/llmSettings/providers/{active_llm_provider}/apiKey"
+            ))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let llm_provider_api_host_state = cx.new(|cx| {
+            let mut state = InputState::new(window, cx).placeholder("API host or endpoint");
+            state.set_value(api_host, window, cx);
+            state
+        });
+        let llm_provider_api_key_state = cx.new(|cx| {
+            let mut state = InputState::new(window, cx)
+                .placeholder("API key")
+                .masked(true);
+            state.set_value(api_key, window, cx);
+            state
+        });
+        let llm_model_draft_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Model ID or deployment name"));
+        let llm_custom_provider_name_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Provider name"));
+        let metadata_fields = [
+            ("displayName", "Display name"),
+            ("contextWindow", "Context window"),
+            ("maxOutputTokens", "Max output tokens"),
+            ("inputPrice", "Input price"),
+            ("outputPrice", "Output price"),
+            ("cacheReadPrice", "Cache read price"),
+            ("cacheWritePrice", "Cache write price"),
+            ("knowledgeCutoff", "Knowledge cutoff"),
+            ("releaseDate", "Release date"),
+            ("lastUpdated", "Last updated"),
+        ];
+        let mut llm_model_metadata_field_states = HashMap::new();
+        let mut llm_model_metadata_subscriptions = Vec::new();
+        for (key, placeholder) in metadata_fields {
+            let state = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            let field = key.to_string();
+            let subscription = cx.subscribe(&state, move |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell
+                        .settings_modal
+                        .set_llm_model_metadata_field(&field, state.read(cx).value().to_string());
+                }
+            });
+            llm_model_metadata_field_states.insert(key.to_string(), state);
+            llm_model_metadata_subscriptions.push(subscription);
+        }
+        let mut api_server_field_states = HashMap::new();
+        let mut api_server_field_subscriptions = Vec::new();
+        for (key, config_key, placeholder, masked) in [
+            ("host", "httpServerHost", "127.0.0.1", false),
+            ("whitelist", "httpServerIpWhitelist", "localhost", false),
+            ("apiKey", "httpServerApiKey", "Optional bearer token", true),
+        ] {
+            let initial_value = initial_config
+                .get(config_key)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(placeholder)
+                .to_string();
+            let state = cx.new(|cx| {
+                let mut state = InputState::new(window, cx)
+                    .placeholder(placeholder)
+                    .masked(masked);
+                state.set_value(initial_value, window, cx);
+                state
+            });
+            let setting_key = config_key;
+            let subscription =
+                cx.subscribe(&state, move |_shell, state, event: &InputEvent, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        let value = state.read(cx).value().to_string();
+                        let config = cx.global::<GlobalDesktopServices>().0.config.clone();
+                        if let Err(error) =
+                            config.set_setting(setting_key, &serde_json::json!(value))
+                        {
+                            log::error!(
+                                "Failed to update API server setting {setting_key}: {error}"
+                            );
+                        }
+                        cx.notify();
+                    }
+                });
+            api_server_field_states.insert(key.to_string(), state);
+            api_server_field_subscriptions.push(subscription);
+        }
+        for (key, config_key, min, max, default) in [
+            ("port", "httpServerPort", 1_i64, 65_535_i64, 14_200_i64),
+            ("maxConcurrent", "httpServerMaxConcurrent", 1, 32, 2),
+            ("maxQueue", "httpServerMaxQueueSize", 0, 1_000, 100),
+            ("maxUpload", "httpServerMaxUploadSizeMB", 0, 10_000, 50),
+            ("jobTtl", "httpServerJobTtlMinutes", 0, 10_080, 60),
+        ] {
+            let initial_value = initial_config
+                .get(config_key)
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(default)
+                .to_string();
+            let state = cx.new(|cx| {
+                let mut state = InputState::new(window, cx).placeholder(&initial_value);
+                state.set_value(initial_value, window, cx);
+                state
+            });
+            let setting_key = config_key;
+            let subscription =
+                cx.subscribe(&state, move |_shell, state, event: &InputEvent, cx| {
+                    if !matches!(event, InputEvent::Change) {
+                        return;
+                    }
+                    let value = state.read(cx).value().to_string();
+                    let Ok(value) = value.parse::<i64>() else {
+                        return;
+                    };
+                    if !(min..=max).contains(&value) {
+                        return;
+                    }
+                    let config = cx.global::<GlobalDesktopServices>().0.config.clone();
+                    if let Err(error) = config.set_setting(setting_key, &serde_json::json!(value)) {
+                        log::error!("Failed to update API server setting {setting_key}: {error}");
+                    }
+                    cx.notify();
+                });
+            api_server_field_states.insert(key.to_string(), state);
+            api_server_field_subscriptions.push(subscription);
+        }
+        let llm_api_host_subscription = cx.subscribe(
+            &llm_provider_api_host_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.set_llm_provider_field(
+                        "apiHost",
+                        state.read(cx).value().to_string(),
+                        cx,
+                    );
+                }
+            },
+        );
+        let llm_api_key_subscription = cx.subscribe(
+            &llm_provider_api_key_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.set_llm_provider_field(
+                        "apiKey",
+                        state.read(cx).value().to_string(),
+                        cx,
+                    );
+                }
+            },
+        );
+        let llm_model_draft_subscription = cx.subscribe(
+            &llm_model_draft_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell
+                        .settings_modal
+                        .set_llm_model_draft(state.read(cx).value().to_string());
+                }
+            },
+        );
+        let llm_custom_name_subscription = cx.subscribe(
+            &llm_custom_provider_name_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell
+                        .settings_modal
+                        .set_llm_custom_provider_name(state.read(cx).value().to_string());
+                }
+            },
+        );
         let mut online_provider_field_states = HashMap::new();
         let mut online_provider_field_subscriptions = Vec::new();
         for provider in sona_core::ports::asr::online_asr_providers() {
@@ -570,6 +783,8 @@ impl MainShell {
             history_rename_state,
             model_search_state,
             _model_search_subscription: model_search_subscription,
+            mcp_search_state,
+            _mcp_search_subscription: mcp_search_subscription,
             model_engine_select,
             model_status_select,
             model_label_select,
@@ -580,6 +795,20 @@ impl MainShell {
             ],
             online_provider_field_states,
             _online_provider_field_subscriptions: online_provider_field_subscriptions,
+            llm_provider_api_host_state,
+            llm_provider_api_key_state,
+            llm_model_draft_state,
+            llm_custom_provider_name_state,
+            _llm_settings_input_subscriptions: [
+                llm_api_host_subscription,
+                llm_api_key_subscription,
+                llm_model_draft_subscription,
+                llm_custom_name_subscription,
+            ],
+            llm_model_metadata_field_states,
+            _llm_model_metadata_subscriptions: llm_model_metadata_subscriptions,
+            api_server_field_states,
+            _api_server_field_subscriptions: api_server_field_subscriptions,
             shortcut_edit_state,
             _shortcut_edit_subscription: shortcut_edit_subscription,
 
@@ -588,7 +817,7 @@ impl MainShell {
             voice_typing_tool: VoiceTypingToolPanel::new(),
             api_server_tool: ApiServerToolPanel::new(),
             mcp_tool: McpToolPanel::new(),
-            media_server_tool: MediaServerToolPanel::new(),
+            media_server_tool: MediaServerToolPanel::new(window, cx),
 
             workbench: TranscriptWorkbench::new(window, cx),
 
@@ -606,10 +835,134 @@ impl MainShell {
         let mut voice_typing_events = cx.global::<GlobalEventBus>().0.subscribe();
         shell._voice_typing_event_task = Some(cx.spawn(async move |this, cx: &mut AsyncApp| {
             while let Ok(event) = voice_typing_events.recv().await {
-                if event.is("voice-typing:show") {
+                if event.is(sona_core::task_ledger::types::TASK_LEDGER_UPDATED_EVENT) {
+                    let Ok(tasks) = serde_json::from_value::<
+                        Vec<sona_core::task_ledger::types::TaskLedgerRecord>,
+                    >(event.payload["tasks"].clone()) else {
+                        continue;
+                    };
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.notification_center.update(cx, |center, cx| {
+                            center.set_tasks(tasks, cx);
+                        });
+                    });
+                } else if event.is("voice-typing:show") {
                     let initial_recall = event.payload["recall"].as_bool().unwrap_or(false);
                     let _ = this.update(cx, |_, cx| {
                         crate::app::open_voice_typing_island(cx, initial_recall);
+                    });
+                } else if event.is("notification:open-recovery") {
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.notification_center.update(cx, |center, cx| {
+                            center.is_open = false;
+                            cx.notify();
+                        });
+                        shell.recovery_modal.open(cx);
+                    });
+                } else if event.is("notification:open-automation") {
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.notification_center.update(cx, |center, cx| {
+                            center.is_open = false;
+                            cx.notify();
+                        });
+                        shell.settings_modal.set_tab(SettingsTab::Automation, cx);
+                        shell.settings_modal.open(cx);
+                    });
+                } else if event.is("notification:retry-batch") {
+                    let file_path = event.payload["filePath"]
+                        .as_str()
+                        .map(std::path::PathBuf::from);
+                    let project_id = event.payload["projectId"].as_str().map(str::to_owned);
+                    let task_id = event.payload["taskId"].as_str().map(str::to_owned);
+                    if let (Some(file_path), Some(task_id)) = (file_path, task_id) {
+                        let services = this.update(cx, |shell, cx| {
+                            shell.notification_center.update(cx, |center, cx| {
+                                center.is_open = false;
+                                cx.notify();
+                            });
+                            shell.create_workspace.update(cx, |workspace, cx| {
+                                workspace.set_tab(
+                                    crate::views::create::CreateWorkspaceTab::BatchImport,
+                                    cx,
+                                );
+                                workspace.batch_import.update(cx, |batch, cx| {
+                                    batch.enqueue_retry_file(file_path, project_id, cx);
+                                });
+                            });
+                            cx.global::<GlobalDesktopServices>().0.clone()
+                        });
+                        if let Ok(services) = services {
+                            cx.spawn(async move |_cx: &mut AsyncApp| {
+                                let _ = services.task_ledger.remove_task(task_id).await;
+                            })
+                            .detach();
+                        }
+                    }
+                } else if event.is("notification:cancel-task") {
+                    if let Some(task_id) = event.payload["taskId"].as_str().map(str::to_owned) {
+                        let _ = this.update(cx, |shell, cx| {
+                            shell.create_workspace.update(cx, |workspace, cx| {
+                                workspace.batch_import.update(cx, |batch, cx| {
+                                    batch.cancel_task_instance(&task_id, cx);
+                                });
+                            });
+                        });
+                    }
+                } else if event.is("live-record:started") {
+                    let Some(session_id) = event.payload["sessionId"].as_str().map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let title = event.payload["title"]
+                        .as_str()
+                        .unwrap_or("Recording")
+                        .to_owned();
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.projects_results.selected_id = Some(session_id.clone());
+                        shell.has_active_transcript = true;
+                        shell.workbench.begin_loading(session_id, title);
+                        shell.workbench.set_transcript(Vec::new(), 0.0);
+                        cx.notify();
+                    });
+                } else if event.is("live-record:transcript-updated") {
+                    let Some(session_id) = event.payload["sessionId"].as_str().map(str::to_owned)
+                    else {
+                        continue;
+                    };
+                    let Ok(segments) = serde_json::from_value::<
+                        Vec<sona_core::transcription::transcript::TranscriptSegment>,
+                    >(event.payload["segments"].clone()) else {
+                        continue;
+                    };
+                    let duration = event.payload["duration"].as_f64().unwrap_or_default();
+                    let _ = this.update(cx, |shell, cx| {
+                        if shell.workbench.history_id.as_deref() == Some(&session_id) {
+                            shell.workbench.set_transcript(segments, duration);
+                            cx.notify();
+                        }
+                    });
+                } else if event.is("live-record:stopped") {
+                    let session_id = event.payload["sessionId"].as_str().map(str::to_owned);
+                    let title = event.payload["title"].as_str().map(str::to_owned);
+                    let _ = this.update(cx, |shell, cx| {
+                        if let Some(session_id) = session_id.as_deref() {
+                            if shell.workbench.history_id.as_deref() == Some(session_id) {
+                                if let Some(title) = title {
+                                    shell.workbench.session_title = title;
+                                }
+                            }
+                        }
+                        shell.projects_results.load_data(cx);
+                        cx.notify();
+                    });
+                } else if event.is("live-record:error") {
+                    let message = event.payload["message"]
+                        .as_str()
+                        .unwrap_or("Recording failed.")
+                        .to_owned();
+                    let _ = this.update(cx, |shell, cx| {
+                        shell.error_dialog.show(message, "");
+                        cx.notify();
                     });
                 }
             }
@@ -1362,6 +1715,22 @@ impl Render for MainShell {
                     return;
                 }
 
+                if event.keystroke.key.eq_ignore_ascii_case("escape")
+                    && this.notification_center.read(cx).is_open
+                {
+                    this.notification_center.update(cx, |center, cx| {
+                        if center.clear_menu_open {
+                            center.clear_menu_open = false;
+                        } else {
+                            center.is_open = false;
+                        }
+                        cx.notify();
+                    });
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    return;
+                }
+
                 if this.settings_modal.is_recording_shortcut {
                     let key = event.keystroke.key.as_str();
                     if key.eq_ignore_ascii_case("escape") {
@@ -1560,6 +1929,11 @@ impl Render for MainShell {
                     .is_focused(window)
                     || this
                         .model_search_state
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window)
+                    || this
+                        .mcp_search_state
                         .read(cx)
                         .focus_handle(cx)
                         .is_focused(window)
@@ -1888,10 +2262,19 @@ impl Render for MainShell {
             .child(self.settings_modal.render(
                 &self.shortcut_edit_state,
                 &self.model_search_state,
+                &self.mcp_search_state,
+                &mut self.voice_typing_tool,
+                &mut self.subtitles_tool,
+                &self.api_server_field_states,
                 &self.model_engine_select,
                 &self.model_status_select,
                 &self.model_label_select,
                 &self.online_provider_field_states,
+                &self.llm_provider_api_host_state,
+                &self.llm_provider_api_key_state,
+                &self.llm_model_draft_state,
+                &self.llm_custom_provider_name_state,
+                &self.llm_model_metadata_field_states,
                 window,
                 cx,
             ))

@@ -206,6 +206,100 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
     language_family(s_base) == language_family(pref_base)
 }
 
+pub fn has_target_subtitle(streams: &[MediaServerStreamInfo], target: &str) -> bool {
+    streams.iter().any(|stream| {
+        if !stream.stream_type.eq_ignore_ascii_case("subtitle") {
+            return false;
+        }
+        let language = stream
+            .language
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .replace('_', "-")
+            .to_ascii_lowercase();
+        let title = stream
+            .display_title
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if target == "zh-CN" || target == "zh-TW" {
+            let traditional = [
+                "繁体",
+                "繁體",
+                "繁中",
+                "traditional",
+                "zh-hk",
+                "zh-mo",
+                "zh-tw",
+                "zh-hant",
+                "cht",
+                "zht",
+                "big5",
+            ]
+            .iter()
+            .any(|marker| title.contains(marker));
+            let simplified = [
+                "简体",
+                "簡體",
+                "简中",
+                "簡中",
+                "simplified",
+                "zh-cn",
+                "zh-sg",
+                "zh-hans",
+                "zh-chs",
+                "chs",
+                "gb2312",
+                "gbk",
+                "gb18030",
+            ]
+            .iter()
+            .any(|marker| title.contains(marker));
+            let has_tag = |tags: &[&str]| {
+                tags.iter()
+                    .any(|tag| language == *tag || language.starts_with(&format!("{tag}-")))
+            };
+            let traditional_tag = has_tag(&["zh-tw", "zh-hk", "zh-mo", "zh-hant", "cht", "zht"]);
+            let simplified_tag =
+                has_tag(&["zh-cn", "zh-sg", "zh-hans", "zh-chs", "chs", "cmn-hans"]);
+            let chinese_tag = has_tag(&["zh", "chi", "zho", "cmn", "yue", "chinese"]);
+            if target == "zh-TW" {
+                if simplified && !traditional {
+                    return false;
+                }
+                if traditional_tag {
+                    return true;
+                }
+                if simplified_tag || chinese_tag {
+                    return traditional;
+                }
+                return traditional;
+            }
+            if traditional && !simplified {
+                return false;
+            }
+            if traditional_tag || language == "yue" {
+                return simplified;
+            }
+            if simplified_tag {
+                return true;
+            }
+            return (chinese_tag
+                || is_chinese_language(
+                    stream.language.as_deref(),
+                    stream.display_title.as_deref(),
+                ))
+                && !traditional;
+        }
+        stream
+            .language
+            .as_deref()
+            .is_some_and(|language| language_matches(Some(language), target))
+            || title.contains(&target.to_ascii_lowercase())
+    })
+}
+
 pub fn select_best_audio_stream<'a>(
     streams: &'a [MediaServerStreamInfo],
     preferred_language: Option<&str>,
@@ -646,5 +740,25 @@ mod tests {
         assert!(is_chinese_language(None, Some("Movie.chs.srt")));
         assert!(is_chinese_language(None, Some("中文字幕")));
         assert!(!is_chinese_language(Some("en"), Some("English")));
+    }
+
+    #[test]
+    fn target_subtitle_matching_distinguishes_chinese_scripts() {
+        let stream = |title: &str| MediaServerStreamInfo {
+            index: 1,
+            stream_type: "Subtitle".to_string(),
+            language: Some("chi".to_string()),
+            display_title: Some(title.to_string()),
+            codec: Some("srt".to_string()),
+            is_external: true,
+            is_forced: false,
+            is_default: false,
+        };
+        let simplified = stream("简体中文");
+        let traditional = stream("繁體中文");
+        assert!(has_target_subtitle(&[simplified.clone()], "zh-CN"));
+        assert!(!has_target_subtitle(&[simplified], "zh-TW"));
+        assert!(!has_target_subtitle(&[traditional.clone()], "zh-CN"));
+        assert!(has_target_subtitle(&[traditional], "zh-TW"));
     }
 }

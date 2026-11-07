@@ -192,6 +192,7 @@ fn test_voice_typing_empty_state_and_initialization() {
         interim_text: "Listening...".to_string(),
         translation_text: None,
         target_language: "EN".to_string(),
+        has_selection: false,
         audio_peak_volume: 0.0,
         context_preset: None,
         error_message: None,
@@ -252,12 +253,13 @@ fn test_voice_typing_history_dynamic_serde_shapes() {
 }
 
 #[test]
-fn test_voice_typing_history_push_dedup_and_cap() {
+fn test_voice_typing_history_preserves_repeats_and_caps_at_react_limit() {
     let mut island = VoiceTypingIsland {
         phase: VoiceTypingPhase::Listening,
         interim_text: "Listening...".to_string(),
         translation_text: None,
         target_language: "EN".to_string(),
+        has_selection: false,
         audio_peak_volume: 0.0,
         context_preset: None,
         error_message: None,
@@ -284,18 +286,14 @@ fn test_voice_typing_history_push_dedup_and_cap() {
         "Meeting notes: AI models discussed."
     );
 
-    // Consecutive duplicate rejection
+    // Repeated dictations remain distinct entries in the React store.
     island.push_history_snippet("Meeting notes: AI models discussed.");
     island.push_history_snippet("  Meeting notes: AI models discussed.  ");
-    assert_eq!(
-        island.history.len(),
-        1,
-        "Consecutive duplicate must be ignored"
-    );
+    assert_eq!(island.history.len(), 3);
 
     // Prepend new entry
     island.push_history_snippet("Second entry: action items recorded.");
-    assert_eq!(island.history.len(), 2);
+    assert_eq!(island.history.len(), 4);
     assert_eq!(
         island.history[0].injected_text,
         "Second entry: action items recorded."
@@ -305,16 +303,16 @@ fn test_voice_typing_history_push_dedup_and_cap() {
         "Meeting notes: AI models discussed."
     );
 
-    // Fill beyond 20 entries to verify cap
-    for i in 3..=30 {
+    // Fill beyond the React store's 100-entry limit.
+    for i in 3..=110 {
         island.push_history_snippet(&format!("Snippet number {}", i));
     }
     assert_eq!(
         island.history.len(),
-        20,
-        "History must be strictly capped at 20 items"
+        100,
+        "History must be strictly capped at 100 items"
     );
-    assert_eq!(island.history[0].injected_text, "Snippet number 30");
+    assert_eq!(island.history[0].injected_text, "Snippet number 110");
 }
 
 // ============================================================================

@@ -180,6 +180,12 @@ pub struct RecoveryItemInput {
         specta(type = Option<specta_typescript::Unknown>)
     )]
     pub stage_config: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Unknown>)
+    )]
+    pub source_metadata: Option<Value>,
     #[serde_as(as = "DefaultOnError")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(type = Option<String>))]
@@ -254,6 +260,8 @@ pub struct RecoveredQueueItem {
     pub automation_rule_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automation_rule_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_metadata: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "specta",
