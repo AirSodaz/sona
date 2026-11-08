@@ -1,12 +1,18 @@
 //! Global dialog component for alerts, confirmations, and prompts.
+//! Strict 1:1 parity with React `GlobalDialog.tsx`.
 
+use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Icon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::super::shell::MainShell;
+use crate::theme::tokens::{
+    COLOR_PROJECT_AMBER, COLOR_PROJECT_BLUE, RADIUS_LG, RADIUS_MD, RADIUS_SM,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DialogKind {
@@ -15,11 +21,23 @@ pub enum DialogKind {
     Prompt,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DialogVariant {
+    Info,
+    Warning,
+    Error,
+    Success,
+}
+
 pub struct GlobalDialog {
     pub is_open: bool,
     pub title: String,
     pub message: String,
     pub kind: DialogKind,
+    pub variant: DialogVariant,
+    pub checkbox_label: Option<String>,
+    pub checkbox_checked: bool,
+    pub checkbox_notice: Option<String>,
 }
 
 impl GlobalDialog {
@@ -29,6 +47,10 @@ impl GlobalDialog {
             title: String::new(),
             message: String::new(),
             kind: DialogKind::Alert,
+            variant: DialogVariant::Info,
+            checkbox_label: None,
+            checkbox_checked: false,
+            checkbox_notice: None,
         }
     }
 
@@ -36,11 +58,44 @@ impl GlobalDialog {
         self.title = title.into();
         self.message = msg.into();
         self.kind = kind;
+        self.variant = match kind {
+            DialogKind::Confirm => DialogVariant::Warning,
+            _ => DialogVariant::Info,
+        };
+        self.checkbox_label = None;
+        self.checkbox_checked = false;
+        self.checkbox_notice = None;
         self.is_open = true;
+    }
+
+    pub fn show_with_variant(
+        &mut self,
+        title: impl Into<String>,
+        msg: impl Into<String>,
+        kind: DialogKind,
+        variant: DialogVariant,
+    ) {
+        self.title = title.into();
+        self.message = msg.into();
+        self.kind = kind;
+        self.variant = variant;
+        self.checkbox_label = None;
+        self.checkbox_checked = false;
+        self.checkbox_notice = None;
+        self.is_open = true;
+    }
+
+    pub fn set_checkbox(&mut self, label: impl Into<String>, notice: Option<String>) {
+        self.checkbox_label = Some(label.into());
+        self.checkbox_checked = false;
+        self.checkbox_notice = notice;
     }
 
     pub fn close(&mut self) {
         self.is_open = false;
+        self.checkbox_label = None;
+        self.checkbox_checked = false;
+        self.checkbox_notice = None;
     }
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
@@ -49,35 +104,138 @@ impl GlobalDialog {
         div().when(self.is_open, |this| {
             this.child(
                 div()
+                    .id("global-dialog-backdrop")
+                    .absolute()
+                    .inset_0()
                     .flex()
                     .items_center()
                     .justify_center()
                     .size_full()
                     .bg(hsla(0.0, 0.0, 0.0, 0.5))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.global_dialog.close();
+                        cx.notify();
+                    }))
                     .child(
                         div()
+                            .id("global-dialog-content")
                             .flex()
                             .flex_col()
-                            .w(px(420.0))
+                            .w(px(440.0))
                             .p_6()
-                            .rounded_xl()
+                            .rounded(RADIUS_LG)
                             .bg(cx.theme().background)
                             .border_1()
                             .border_color(cx.theme().border)
-                            .shadow_xl()
+                            .shadow_2xl()
                             .gap_4()
+                            .on_click(|_, _, cx| cx.stop_propagation())
+                            // Header: Variant icon + Title
                             .child(
                                 div()
-                                    .text_size(px(16.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .child(self.title.clone()),
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(match self.variant {
+                                        DialogVariant::Error => Icon::new(LucideIcon::CircleAlert)
+                                            .size(px(22.0))
+                                            .text_color(hsla(0.0, 0.84, 0.60, 1.0)),
+                                        DialogVariant::Warning => Icon::new(LucideIcon::TriangleAlert)
+                                            .size(px(22.0))
+                                            .text_color(COLOR_PROJECT_AMBER),
+                                        DialogVariant::Success => Icon::new(LucideIcon::CircleCheck)
+                                            .size(px(22.0))
+                                            .text_color(cx.theme().success),
+                                        DialogVariant::Info => Icon::new(LucideIcon::Info)
+                                            .size(px(22.0))
+                                            .text_color(COLOR_PROJECT_BLUE),
+                                    })
+                                    .child(
+                                        div()
+                                            .text_size(px(16.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(cx.theme().foreground)
+                                            .child(self.title.clone()),
+                                    ),
                             )
+                            // Message
                             .child(
                                 div()
                                     .text_size(px(13.0))
+                                    .line_height(relative(1.5))
                                     .text_color(cx.theme().muted)
                                     .child(self.message.clone()),
                             )
+                            // Optional Checkbox
+                            .when_some(self.checkbox_label.clone(), |this, label| {
+                                let is_checked = self.checkbox_checked;
+                                let notice = self.checkbox_notice.clone();
+                                this.child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .p_2p5()
+                                        .rounded(RADIUS_MD)
+                                        .bg(cx.theme().secondary)
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .child(
+                                            div()
+                                                .id("global-dialog-checkbox-toggle")
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .cursor_pointer()
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.global_dialog.checkbox_checked =
+                                                        !this.global_dialog.checkbox_checked;
+                                                    cx.notify();
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .size(px(16.0))
+                                                        .rounded(RADIUS_SM)
+                                                        .border_1()
+                                                        .border_color(if is_checked {
+                                                            cx.theme().primary
+                                                        } else {
+                                                            cx.theme().border
+                                                        })
+                                                        .bg(if is_checked {
+                                                            cx.theme().primary
+                                                        } else {
+                                                            cx.theme().background
+                                                        })
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .when(is_checked, |ch| {
+                                                            ch.child(
+                                                                Icon::new(LucideIcon::Check)
+                                                                    .size(px(12.0))
+                                                                    .text_color(cx.theme().background),
+                                                            )
+                                                        }),
+                                                )
+                                                .child(div().text_size(px(13.0)).child(label)),
+                                        )
+                                        .when(is_checked && notice.is_some(), |this| {
+                                            this.child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_1p5()
+                                                    .pl_6()
+                                                    .text_size(px(11.0))
+                                                    .text_color(hsla(0.0, 0.84, 0.60, 1.0))
+                                                    .child(Icon::new(LucideIcon::TriangleAlert).size(px(12.0)))
+                                                    .child(notice.unwrap_or_default()),
+                                            )
+                                        }),
+                                )
+                            })
+                            // Actions
                             .child(
                                 div()
                                     .flex()
@@ -123,7 +281,7 @@ impl GlobalDialog {
                                         Button::new("btn-dialog-ok")
                                             .primary()
                                             .small()
-                                                    .label(if kind == DialogKind::Confirm {
+                                            .label(if kind == DialogKind::Confirm {
                                                 if title == "Delete LLM Provider" {
                                                     "Delete"
                                                 } else if title == "Regenerate API Key" {
@@ -180,7 +338,7 @@ impl GlobalDialog {
                                                             .set_setting("httpServerApiKey", &serde_json::json!(key.clone()))
                                                         {
                                                             log::error!("Failed to regenerate API key: {error}");
-                                                    } else if let Some(state) = this.api_server_field_states.get("apiKey") {
+                                                        } else if let Some(state) = this.api_server_field_states.get("apiKey") {
                                                             state.update(cx, |state, cx| state.set_value(key, window, cx));
                                                         }
                                                     }

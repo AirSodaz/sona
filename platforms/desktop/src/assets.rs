@@ -37,5 +37,10 @@ mod tests {
         assert!(assets.load("models/openai.png").unwrap().is_some());
         assert!(assets.load("providers/azure.svg").unwrap().is_some());
         assert!(assets.load("icons/search.svg").unwrap().is_some());
+        assert!(assets.load("sona.png").unwrap().is_some());
+        assert!(assets.load("sona.svg").unwrap().is_some());
+        assert!(assets.load("icons/square-pen.svg").unwrap().is_some());
+        assert!(assets.load("icons/wrench.svg").unwrap().is_some());
+        assert!(assets.load("icons/circle-plus.svg").unwrap().is_some());
     }
 }

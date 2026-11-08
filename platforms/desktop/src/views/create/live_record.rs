@@ -24,7 +24,10 @@ use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 
 use super::options_capsule::TranscriptionOptionsModel;
 use crate::app::{GlobalDesktopServices, GlobalEventBus};
-use crate::theme::tokens::{RADIUS_LG, RADIUS_MD, RADIUS_SM};
+use crate::theme::tokens::{
+    COLOR_BG_ELEVATED_LIGHT, COLOR_BORDER_LIGHT, COLOR_RECORDING_RED, COLOR_TEXT_MUTED_LIGHT,
+    RADIUS_MD, RADIUS_SM,
+};
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -765,10 +768,6 @@ impl Render for LiveRecordPanel {
                             .id("visualizer-wrapper")
                             .w_full()
                             .h(px(160.0))
-                            .rounded(RADIUS_LG)
-                            .bg(cx.theme().secondary)
-                            .border_1()
-                            .border_color(cx.theme().border)
                             .overflow_hidden()
                             .child(
                                 canvas(
@@ -972,8 +971,14 @@ impl Render for LiveRecordPanel {
                                     .id("btn-live-start")
                                     .size(px(64.0))
                                     .rounded_full()
-                                    .bg(hsla(0.0, 0.84, 0.60, 1.0)) // Red #ef4444
-                                    .shadow_md()
+                                    .bg(COLOR_RECORDING_RED)
+                                    .shadow(vec![BoxShadow {
+                                        color: hsla(0.0, 0.73, 0.56, 0.25),
+                                        offset: point(px(0.0), px(4.0)),
+                                        blur_radius: px(12.0),
+                                        spread_radius: px(0.0),
+                                        inset: false,
+                                    }])
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -1005,8 +1010,14 @@ impl Render for LiveRecordPanel {
                                     .id("btn-live-stop")
                                     .size(px(64.0))
                                     .rounded_full()
-                                    .bg(hsla(0.0, 0.84, 0.60, 1.0))
-                                    .shadow_lg()
+                                    .bg(COLOR_RECORDING_RED)
+                                    .shadow(vec![BoxShadow {
+                                        color: hsla(0.0, 0.73, 0.56, 0.25),
+                                        offset: point(px(0.0), px(4.0)),
+                                        blur_radius: px(12.0),
+                                        spread_radius: px(0.0),
+                                        inset: false,
+                                    }])
                                     .flex()
                                     .items_center()
                                     .justify_center()
@@ -1052,12 +1063,13 @@ impl Render for LiveRecordPanel {
                                             div()
                                                 .id("source-select-trigger")
                                                 .min_w(px(180.0))
-                                                .h(px(32.0))
-                                                .px(px(12.0))
+                                                .h(px(36.0))
+                                                .px(px(14.0))
                                                 .rounded(RADIUS_MD)
-                                                .bg(cx.theme().secondary.opacity(0.6))
+                                                .bg(COLOR_BG_ELEVATED_LIGHT)
                                                 .border_1()
-                                                .border_color(cx.theme().border)
+                                                .border_color(COLOR_BORDER_LIGHT)
+                                                .shadow_xs()
                                                 .flex()
                                                 .items_center()
                                                 .justify_between()
@@ -1195,7 +1207,7 @@ impl Render for LiveRecordPanel {
                             .items_center()
                             .justify_center()
                             .text_size(px(14.0))
-                            .text_color(cx.theme().muted_foreground)
+                            .text_color(COLOR_TEXT_MUTED_LIGHT)
                             .child(self.status_helper_text()),
                     ),
             )

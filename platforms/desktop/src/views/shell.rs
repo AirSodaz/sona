@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
+use gpui_kit::component::input::{Input, InputEvent, InputState, TextareaState};
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -38,8 +38,10 @@ use super::tools::{
 use super::transcript::TranscriptWorkbench;
 use crate::app::{GlobalDesktopServices, GlobalEventBus, GlobalHotkeyController};
 use crate::theme::tokens::{
-    COLOR_PROJECT_AMBER, HEADER_HEIGHT, PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_MD,
-    RADIUS_SM, project_color_from_index,
+    COLOR_BG_ELEVATED_LIGHT, COLOR_BG_SECONDARY_LIGHT, COLOR_BG_TERTIARY_LIGHT, COLOR_BORDER_LIGHT,
+    COLOR_HEADER_BG_LIGHT, COLOR_PROJECT_AMBER, COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT,
+    COLOR_TEXT_SECONDARY_LIGHT, HEADER_HEIGHT, PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_LG,
+    RADIUS_MD, RADIUS_SM, project_color_from_index,
 };
 
 #[inline]
@@ -328,6 +330,8 @@ pub struct MainShell {
     pub selection_bar: SelectionBar,
     pub project_search_state: Entity<InputState>,
     _project_search_subscription: Subscription,
+    pub project_dropdown_search_state: Entity<InputState>,
+    _project_dropdown_search_subscription: Subscription,
     pub history_rename_state: Entity<InputState>,
     pub model_search_state: Entity<InputState>,
     _model_search_subscription: Subscription,
@@ -425,6 +429,17 @@ impl MainShell {
                 if matches!(event, InputEvent::Change) {
                     this.projects_results
                         .set_search_query(state.read(cx).value().to_string(), cx);
+                }
+            },
+        );
+        let project_dropdown_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search projects..."));
+        let project_dropdown_search_subscription = cx.subscribe(
+            &project_dropdown_search_state,
+            |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.project_selector.query = state.read(cx).value().to_string();
+                    cx.notify();
                 }
             },
         );
@@ -1195,6 +1210,8 @@ impl MainShell {
             selection_bar: SelectionBar::new(),
             project_search_state,
             _project_search_subscription: project_search_subscription,
+            project_dropdown_search_state,
+            _project_dropdown_search_subscription: project_dropdown_search_subscription,
             history_rename_state,
             model_search_state,
             _model_search_subscription: model_search_subscription,
@@ -1275,7 +1292,7 @@ impl MainShell {
             diagnostics_modal: DiagnosticsModal::new(),
             recovery_modal: RecoveryModal::new(),
             global_dialog: GlobalDialog::new(),
-            export_modal: ExportModal::new(),
+            export_modal: ExportModal::new(window, cx),
             onboarding: OnboardingWizard::new(),
             project_dialogs: ProjectDialogs::new(window, cx),
             error_dialog: ErrorDialog::new(),
@@ -1575,7 +1592,6 @@ impl MainShell {
         let count_inbox = self.project_selector.count_inbox;
         let project_counts = self.project_selector.project_counts.clone();
         let active_pid = self.project_selector.active_project_id.clone();
-        let query = self.project_selector.query.clone();
 
         div()
             .relative()
@@ -1603,7 +1619,15 @@ impl MainShell {
                     }))
                     // Swatch or Inbox Icon
                     .child(if let Some(proj) = active_proj {
-                        let swatch_color = project_color_from_index(proj.sort_order);
+                        let swatch_color = proj
+                            .color
+                            .as_deref()
+                            .and_then(crate::theme::tokens::hex_to_hsla)
+                            .unwrap_or_else(|| project_color_from_index(proj.sort_order));
+                        let custom_emoji = proj
+                            .icon
+                            .as_ref()
+                            .filter(|ic| !ic.is_empty() && !ic.starts_with("system:"));
                         div()
                             .size(px(16.0))
                             .rounded(px(4.0))
@@ -1611,7 +1635,12 @@ impl MainShell {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(div().size(px(8.0)).rounded_full().bg(swatch_color))
+                            .when_some(custom_emoji, |this, emoji| {
+                                this.child(div().text_size(px(11.0)).child(emoji.clone()))
+                            })
+                            .when(custom_emoji.is_none(), |this| {
+                                this.child(div().size(px(8.0)).rounded_full().bg(swatch_color))
+                            })
                             .into_any_element()
                     } else {
                         div()
@@ -1671,7 +1700,7 @@ impl MainShell {
                                 .items_center()
                                 .gap_2()
                                 .px_2()
-                                .py_1p5()
+                                .py_1()
                                 .border_b_1()
                                 .border_color(cx.theme().border)
                                 .child(
@@ -1680,14 +1709,11 @@ impl MainShell {
                                         .text_color(cx.theme().muted),
                                 )
                                 .child(
-                                    div()
-                                        .text_size(px(13.0))
-                                        .text_color(cx.theme().muted)
-                                        .child(if query.is_empty() {
-                                            "Search projects...".to_string()
-                                        } else {
-                                            query
-                                        }),
+                                    div().flex_1().min_w(px(0.0)).child(
+                                        Input::new(&self.project_dropdown_search_state)
+                                            .cleanable(true)
+                                            .small(),
+                                    ),
                                 ),
                         )
                         // Inbox item row
@@ -1706,7 +1732,10 @@ impl MainShell {
                                     gpui_kit::transparent_black()
                                 })
                                 .cursor_pointer()
-                                .on_click(cx.listener(|this, _, _, cx| {
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.project_dropdown_search_state.update(cx, |input, cx| {
+                                        input.set_value("", window, cx);
+                                    });
                                     this.project_selector.select_project(None, cx);
                                 }))
                                 .child(icon(LucideIcon::Inbox).size(px(14.0)))
@@ -1732,7 +1761,17 @@ impl MainShell {
                                 .children(filtered.into_iter().enumerate().map(|(i, proj)| {
                                     let is_active = active_pid.as_deref() == Some(&proj.id);
                                     let count = project_counts.get(&proj.id).copied().unwrap_or(0);
-                                    let p_color = project_color_from_index(proj.sort_order);
+                                    let swatch_color = proj
+                                        .color
+                                        .as_deref()
+                                        .and_then(crate::theme::tokens::hex_to_hsla)
+                                        .unwrap_or_else(|| {
+                                            project_color_from_index(proj.sort_order)
+                                        });
+                                    let custom_emoji = proj
+                                        .icon
+                                        .as_ref()
+                                        .filter(|ic| !ic.is_empty() && !ic.starts_with("system:"));
                                     let p_has_zap =
                                         proj.pipeline.as_ref().map_or(false, |p| p.enabled);
                                     let pid = proj.id.clone();
@@ -1751,11 +1790,40 @@ impl MainShell {
                                             gpui_kit::transparent_black()
                                         })
                                         .cursor_pointer()
-                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.project_dropdown_search_state.update(
+                                                cx,
+                                                |input, cx| {
+                                                    input.set_value("", window, cx);
+                                                },
+                                            );
                                             this.project_selector
                                                 .select_project(Some(pid.clone()), cx);
                                         }))
-                                        .child(div().size(px(14.0)).rounded_full().bg(p_color))
+                                        .child(
+                                            div()
+                                                .size(px(16.0))
+                                                .rounded(px(4.0))
+                                                .bg(swatch_color.opacity(0.14))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .when_some(custom_emoji, |this, emoji| {
+                                                    this.child(
+                                                        div()
+                                                            .text_size(px(11.0))
+                                                            .child(emoji.clone()),
+                                                    )
+                                                })
+                                                .when(custom_emoji.is_none(), |this| {
+                                                    this.child(
+                                                        div()
+                                                            .size(px(8.0))
+                                                            .rounded_full()
+                                                            .bg(swatch_color),
+                                                    )
+                                                }),
+                                        )
                                         .child(
                                             div()
                                                 .flex_1()
@@ -1820,9 +1888,9 @@ impl MainShell {
 
     fn render_tab_navigation(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let modes = [
-            (AppMode::Create, LucideIcon::SquarePen, "Create"),
-            (AppMode::Projects, LucideIcon::Book, "Projects"),
-            (AppMode::Tools, LucideIcon::Wrench, "Tools"),
+            (AppMode::Create, "Create"),
+            (AppMode::Projects, "Projects"),
+            (AppMode::Tools, "Tools"),
         ];
 
         let active_index = match self.mode {
@@ -1837,8 +1905,8 @@ impl MainShell {
             .flex()
             .items_center()
             .p(px(4.0))
-            .rounded(RADIUS_MD)
-            .bg(cx.theme().input)
+            .rounded(px(12.0))
+            .bg(COLOR_BG_TERTIARY_LIGHT)
             .gap(px(4.0))
             // Sliding Pill Background Indicator (width 120px, height 32px, left animated)
             .child(
@@ -1849,53 +1917,47 @@ impl MainShell {
                     .left(px(4.0 + (active_index as f32) * (120.0 + 4.0)))
                     .w(px(120.0))
                     .h(px(32.0))
-                    .rounded(RADIUS_SM)
-                    .bg(cx.theme().background)
+                    .rounded(px(6.0))
+                    .bg(COLOR_BG_ELEVATED_LIGHT)
                     .shadow_sm(),
             )
             // 3 Mode Tab Buttons
-            .children(
-                modes
-                    .into_iter()
-                    .enumerate()
-                    .map(|(_i, (mode, icon_asset, label))| {
-                        let is_active = self.mode == mode;
+            .children(modes.into_iter().enumerate().map(|(_i, (mode, label))| {
+                let is_active = self.mode == mode;
 
-                        div()
-                            .id(ElementId::from(format!("tab-btn-{:?}", mode)))
-                            .relative()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap(px(8.0))
-                            .h(px(32.0))
-                            .w(px(120.0))
-                            .px(px(12.0))
-                            .rounded(RADIUS_SM)
-                            .cursor_pointer()
-                            .text_size(px(14.0))
-                            .font_weight(if is_active {
-                                FontWeight::SEMIBOLD
-                            } else {
-                                FontWeight::MEDIUM
-                            })
-                            .text_color(if is_active {
-                                cx.theme().foreground
-                            } else {
-                                cx.theme().muted
-                            })
-                            .child(icon(icon_asset).size(px(16.0)))
-                            .child(label)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.set_mode(mode, cx);
-                            }))
-                    }),
-            )
+                div()
+                    .id(ElementId::from(format!("tab-btn-{:?}", mode)))
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .h(px(32.0))
+                    .w(px(120.0))
+                    .px(px(12.0))
+                    .rounded(px(6.0))
+                    .cursor_pointer()
+                    .text_size(px(14.0))
+                    .font_weight(if is_active {
+                        FontWeight::SEMIBOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
+                    .text_color(if is_active {
+                        COLOR_TEXT_PRIMARY_LIGHT
+                    } else {
+                        COLOR_TEXT_MUTED_LIGHT
+                    })
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.set_mode(mode, cx);
+                    }))
+            }))
     }
 
     fn render_sync_pill(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_open = self.sync_pill.is_open;
         let is_busy = self.sync_pill.is_action_busy;
+        let is_loaded = self.sync_pill.status.is_some();
         let lifecycle = self
             .sync_pill
             .status
@@ -1909,28 +1971,69 @@ impl MainShell {
             .map(|s| s.conflict_count)
             .unwrap_or(0);
 
+        let time_label = if let Some(ref status) = self.sync_pill.status {
+            if let Some(ts) = status.last_success_at_ms {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let diff_sec = now.saturating_sub(ts) / 1000;
+                if diff_sec < 60 {
+                    "Just now".to_string()
+                } else if diff_sec < 3600 {
+                    format!("{}m ago", diff_sec / 60)
+                } else if diff_sec < 86400 {
+                    format!("{}h ago", diff_sec / 3600)
+                } else {
+                    "Synced".to_string()
+                }
+            } else {
+                "Just now".to_string()
+            }
+        } else {
+            "Never".to_string()
+        };
+
         div()
             .relative()
             .child(
-                // Status Pill trigger button
+                // Status Pill trigger button (matches React sync-header-pill-btn)
                 div()
                     .id("sync-header-pill-trigger")
                     .flex()
                     .items_center()
-                    .h(px(30.0))
-                    .px(px(10.0))
-                    .py(px(4.0))
+                    .h(px(32.0))
+                    .px(px(12.0))
                     .gap(px(6.0))
                     .border_1()
-                    .border_color(cx.theme().border)
+                    .border_color(COLOR_BORDER_LIGHT)
                     .rounded_full()
-                    .bg(cx.theme().background)
-                    .text_size(px(12.0))
+                    .bg(COLOR_BG_SECONDARY_LIGHT)
+                    .text_size(px(12.8))
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.sync_pill.toggle(cx);
                     }))
-                    .child(if conflict_count > 0 {
+                    .child(if !is_loaded || lifecycle == SyncLifecycleState::Disabled {
+                        // Real Unconfigured / Empty state: <CloudOff size={14} /> Cloud Sync
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                icon(LucideIcon::CloudOff)
+                                    .size(px(14.0))
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.8))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                    .child("Cloud Sync"),
+                            )
+                            .into_any_element()
+                    } else if conflict_count > 0 {
                         div()
                             .flex()
                             .items_center()
@@ -1944,17 +2047,6 @@ impl MainShell {
                             .into_any_element()
                     } else {
                         match lifecycle {
-                            SyncLifecycleState::Disabled => div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .child(
-                                    icon(LucideIcon::CloudOff)
-                                        .size(px(14.0))
-                                        .text_color(cx.theme().muted),
-                                )
-                                .child("Cloud Sync")
-                                .into_any_element(),
                             SyncLifecycleState::Syncing => div()
                                 .flex()
                                 .items_center()
@@ -1973,7 +2065,7 @@ impl MainShell {
                                 .child(
                                     icon(LucideIcon::Pause)
                                         .size(px(14.0))
-                                        .text_color(cx.theme().muted),
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT),
                                 )
                                 .child("Paused")
                                 .into_any_element(),
@@ -1984,7 +2076,7 @@ impl MainShell {
                                 .child(
                                     icon(LucideIcon::Lock)
                                         .size(px(14.0))
-                                        .text_color(cx.theme().muted),
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT),
                                 )
                                 .child("Locked")
                                 .into_any_element(),
@@ -2003,47 +2095,74 @@ impl MainShell {
                                 .flex()
                                 .items_center()
                                 .gap(px(6.0))
-                                .child(div().size(px(6.0)).rounded_full().bg(cx.theme().success))
-                                .child(icon(LucideIcon::Cloud).size(px(14.0)))
-                                .child("Synced")
+                                .child(
+                                    div()
+                                        .size(px(6.0))
+                                        .rounded_full()
+                                        .bg(hsla(139.0 / 360.0, 0.35, 0.47, 1.0)),
+                                )
+                                .child(
+                                    icon(LucideIcon::Cloud)
+                                        .size(px(14.0))
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.8))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                        .child(time_label),
+                                )
                                 .into_any_element(),
                         }
                     }),
             )
-            // Popover dialog (width 280px)
+            // Popover dialog (width 300px, rounded-lg, matching React sync-header-popover)
             .when(is_open, |this| {
                 this.child(
                     div()
                         .id("sync-header-popover")
                         .absolute()
-                        .top(px(36.0))
+                        .top(px(40.0))
                         .right_0()
-                        .w(px(280.0))
-                        .p_3()
-                        .rounded(RADIUS_MD)
+                        .w(px(300.0))
+                        .rounded(RADIUS_LG)
                         .bg(cx.theme().background)
                         .border_1()
-                        .border_color(cx.theme().border)
-                        .shadow_xl()
+                        .border_color(COLOR_BORDER_LIGHT)
+                        .shadow_lg()
                         .flex()
                         .flex_col()
-                        .gap_3()
+                        .overflow_hidden()
                         // Popover header
                         .child(
                             div()
+                                .id("sync-popover-header")
                                 .flex()
                                 .items_center()
                                 .justify_between()
+                                .px_4()
+                                .py_3()
+                                .bg(COLOR_BG_SECONDARY_LIGHT)
+                                .border_b_1()
+                                .border_color(COLOR_BORDER_LIGHT)
                                 .child(
                                     div()
                                         .flex()
                                         .items_center()
                                         .gap_2()
-                                        .child(icon(LucideIcon::Cloud).size(px(16.0)))
+                                        .child(
+                                            if !is_loaded || lifecycle == SyncLifecycleState::Disabled {
+                                                icon(LucideIcon::CloudOff).size(px(16.0))
+                                            } else {
+                                                icon(LucideIcon::Cloud).size(px(16.0))
+                                            },
+                                        )
                                         .child(
                                             div()
                                                 .text_size(px(14.0))
-                                                .font_weight(FontWeight::BOLD)
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(COLOR_TEXT_PRIMARY_LIGHT)
                                                 .child("Cloud Sync"),
                                         ),
                                 )
@@ -2052,57 +2171,107 @@ impl MainShell {
                                         .px_2()
                                         .py_0p5()
                                         .rounded_full()
-                                        .bg(cx.theme().secondary)
+                                        .bg(if !is_loaded || lifecycle == SyncLifecycleState::Disabled {
+                                            COLOR_BG_TERTIARY_LIGHT
+                                        } else {
+                                            hsla(139.0 / 360.0, 0.35, 0.47, 0.15)
+                                        })
                                         .text_size(px(11.0))
-                                        .child(format!("{:?}", lifecycle)),
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(if !is_loaded || lifecycle == SyncLifecycleState::Disabled {
+                                            COLOR_TEXT_MUTED_LIGHT
+                                        } else {
+                                            hsla(139.0 / 360.0, 0.35, 0.47, 1.0)
+                                        })
+                                        .child(match lifecycle {
+                                            SyncLifecycleState::Disabled => "Disabled",
+                                            SyncLifecycleState::Idle => "Connected",
+                                            SyncLifecycleState::Syncing => "Syncing",
+                                            SyncLifecycleState::Paused => "Paused",
+                                            SyncLifecycleState::Locked => "Locked",
+                                            SyncLifecycleState::Error => "Error",
+                                        }),
                                 ),
                         )
-                        // Actions Toolbar
+                        // Popover body
                         .child(
                             div()
+                                .id("sync-popover-body")
+                                .p_4()
                                 .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    Button::new("btn-sync-run-now")
-                                        .primary()
-                                        .small()
-                                        .label("Sync now")
-                                        .disabled(
-                                            is_busy
-                                                || lifecycle == SyncLifecycleState::Syncing
-                                                || lifecycle == SyncLifecycleState::Paused,
-                                        )
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.sync_pill.run_sync_now(cx);
-                                        })),
-                                )
-                                .child(
-                                    Button::new("btn-sync-pause")
-                                        .ghost()
-                                        .small()
-                                        .label(if lifecycle == SyncLifecycleState::Paused {
-                                            "Resume"
-                                        } else {
-                                            "Pause"
-                                        })
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.sync_pill.toggle_pause(cx);
-                                        })),
-                                )
-                                .child(
-                                    Button::new("btn-sync-settings")
-                                        .ghost()
-                                        .small()
-                                        .label("⚙")
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.sync_pill.is_open = false;
-                                            this.settings_modal.set_tab(SettingsTab::Sync, cx);
-                                            this.settings_modal.open(cx);
-                                            this.settings_modal.load_preferences(cx);
-                                            cx.notify();
-                                        })),
-                                ),
+                                .flex_col()
+                                .gap_3()
+                                .when(!is_loaded || lifecycle == SyncLifecycleState::Disabled, |this| {
+                                    this.child(
+                                        div()
+                                            .text_size(px(13.0))
+                                            .line_height(relative(1.5))
+                                            .text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                            .child("Multi-device sync is not configured yet. Set up WebDAV cloud sync to keep your transcripts safe and in sync across devices."),
+                                    )
+                                    .child(
+                                        Button::new("btn-enable-sync")
+                                            .primary()
+                                            .small()
+                                            .label("Enable Cloud Sync")
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.sync_pill.is_open = false;
+                                                this.settings_modal.set_tab(SettingsTab::Sync, cx);
+                                                this.settings_modal.open(cx);
+                                                this.settings_modal.load_preferences(cx);
+                                                cx.notify();
+                                            })),
+                                    )
+                                })
+                                .when(is_loaded && lifecycle != SyncLifecycleState::Disabled, |this| {
+                                    this.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                Button::new("btn-sync-run-now")
+                                                    .primary()
+                                                    .small()
+                                                    .label("Sync now")
+                                                    .disabled(
+                                                        is_busy
+                                                            || lifecycle == SyncLifecycleState::Syncing
+                                                            || lifecycle == SyncLifecycleState::Paused,
+                                                    )
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.sync_pill.run_sync_now(cx);
+                                                    })),
+                                            )
+                                            .child(
+                                                Button::new("btn-sync-pause")
+                                                    .ghost()
+                                                    .small()
+                                                    .label(if lifecycle == SyncLifecycleState::Paused {
+                                                        "Resume"
+                                                    } else {
+                                                        "Pause"
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.sync_pill.toggle_pause(cx);
+                                                    })),
+                                            )
+                                            .child(
+                                                Button::new("btn-sync-settings")
+                                                    .ghost()
+                                                    .small()
+                                                    .icon(LucideIcon::Settings)
+                                                    .label("Manage")
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.sync_pill.is_open = false;
+                                                        this.settings_modal.set_tab(SettingsTab::Sync, cx);
+                                                        this.settings_modal.open(cx);
+                                                        this.settings_modal.load_preferences(cx);
+                                                        cx.notify();
+                                                    })),
+                                            ),
+                                    )
+                                }),
                         ),
                 )
             })
@@ -2122,8 +2291,8 @@ impl Render for MainShell {
             .flex()
             .flex_col()
             .size_full()
-            .bg(cx.theme().background)
-            .text_color(cx.theme().foreground)
+            .bg(COLOR_BG_SECONDARY_LIGHT)
+            .text_color(COLOR_TEXT_PRIMARY_LIGHT)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.is_held {
                     return;
@@ -2459,9 +2628,7 @@ impl Render for MainShell {
                     .h(HEADER_HEIGHT)
                     .w_full()
                     .px(px(24.0)) // padding: 8px 24px
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().title_bar)
+                    .bg(COLOR_HEADER_BG_LIGHT)
                     // Column 1: Left Logo & ProjectSelectorDropdown (1fr)
                     .child(
                         div()
@@ -2472,12 +2639,13 @@ impl Render for MainShell {
                             .justify_start()
                             .gap(px(8.0))
                             .child(
-                                div()
-                                    .size(px(28.0))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(icon(LucideIcon::SquarePen).size(px(20.0))),
+                                img("sona.png")
+                                    .id("app-logo-img")
+                                    .w(px(28.0))
+                                    .h(px(28.0))
+                                    .rounded(px(6.0))
+                                    .opacity(0.92)
+                                    .hover(|style| style.opacity(1.0)),
                             )
                             .child(self.render_project_selector(window, cx)),
                     )
@@ -2499,15 +2667,6 @@ impl Render for MainShell {
                             .justify_end()
                             .gap(px(8.0))
                             .child(self.render_sync_pill(cx))
-                            .child(
-                                Button::new("btn-open-recovery")
-                                    .ghost()
-                                    .small()
-                                    .label("Recovery")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.recovery_modal.open(cx);
-                                    })),
-                            )
                             .child(self.notification_center.clone())
                             .child(
                                 // Icon-only Settings button (36x36px)
@@ -2564,7 +2723,7 @@ impl Render for MainShell {
                                             .h_full()
                                             .flex()
                                             .flex_col()
-                                            .bg(cx.theme().background)
+                                            .bg(COLOR_BG_TERTIARY_LIGHT)
                                             .child(
                                                 // .panel-content (holding CreateWorkspacePanel)
                                                 div()
@@ -2597,18 +2756,18 @@ impl Render for MainShell {
                                                     ),
                                             ),
                                     )
-                                    // Right Panel (.panel-right: flex 1, min-width 500px, rounded-tl 8px)
+                                    // Right Panel (.panel-right: flex 1, min-width 500px, rounded-tl 16px)
                                     .child(
                                         div()
                                             .id("panel-right")
                                             .flex_1()
                                             .min_w(PANEL_RIGHT_MIN_WIDTH)
                                             .h_full()
-                                            .bg(cx.theme().background)
+                                            .bg(gpui_kit::white())
                                             .border_t_1()
                                             .border_l_1()
-                                            .border_color(cx.theme().border)
-                                            .rounded_tl(RADIUS_MD)
+                                            .border_color(COLOR_BORDER_LIGHT)
+                                            .rounded_tl(px(16.0))
                                             .overflow_hidden()
                                             .child(self.workbench.render(window, cx)),
                                     ),
@@ -2688,8 +2847,24 @@ impl Render for MainShell {
                                 .id("tools-mode-shell")
                                 .flex()
                                 .size_full()
+                                .bg(cx.theme().secondary)
                                 .child(self.tools_sidebar.render(cx))
-                                .child(div().flex_1().h_full().child(tool_panel))
+                                .child(
+                                    div()
+                                        .id("tools-detail-pane")
+                                        .flex_1()
+                                        .min_w(PANEL_RIGHT_MIN_WIDTH)
+                                        .h_full()
+                                        .bg(cx.theme().background)
+                                        .border_t_1()
+                                        .border_l_1()
+                                        .border_color(cx.theme().border)
+                                        .rounded_tl(RADIUS_LG)
+                                        .overflow_y_scroll()
+                                        .p_8()
+                                        .px(px(48.0))
+                                        .child(tool_panel),
+                                )
                                 .into_any_element()
                         }
                     })

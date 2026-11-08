@@ -349,6 +349,7 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             )?,
             export_config: parse_json_leaf("export_config_json", export_config_json)?,
             stage_config: parse_json_leaf("stage_config_json", stage_config_json)?,
+            source_metadata: None,
             source_fingerprint,
             file_stat: file_stat.map(Into::into),
             export_file_name_prefix,

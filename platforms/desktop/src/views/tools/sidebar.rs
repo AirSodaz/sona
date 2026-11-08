@@ -73,9 +73,7 @@ impl ToolsSidebar {
             .h_full()
             .p_3()
             .gap_1()
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
+            .bg(cx.theme().secondary)
             .children(tools.into_iter().map(|(kind, label, description, icon)| {
                 let is_active = self.active_tool == kind;
                 let hover_bg = cx.theme().muted;

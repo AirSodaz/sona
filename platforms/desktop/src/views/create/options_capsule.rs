@@ -7,7 +7,10 @@ use gpui_kit::component::Icon;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::theme::tokens::{COLOR_PROJECT_AMBER, RADIUS_LG, RADIUS_SM};
+use crate::theme::tokens::{
+    COLOR_BG_PRIMARY_LIGHT, COLOR_BORDER_LIGHT, COLOR_PROJECT_AMBER, COLOR_TEXT_PRIMARY_LIGHT,
+    COLOR_TEXT_SECONDARY_LIGHT, RADIUS_LG, RADIUS_SM,
+};
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -884,22 +887,22 @@ impl OptionsCapsule {
                     .justify_center()
                     .gap(px(8.0))
                     .px(px(12.0))
-                    .py(px(6.0))
-                    .min_h(px(32.0))
+                    .py(px(4.0))
+                    .h(px(32.0))
                     .rounded(px(20.0))
-                    .bg(cx.theme().background)
+                    .bg(gpui_kit::white())
                     .border_1()
                     .border_color(if is_open {
-                        cx.theme().primary
+                        COLOR_TEXT_PRIMARY_LIGHT
                     } else {
-                        cx.theme().border
+                        COLOR_BORDER_LIGHT
                     })
-                    .shadow_sm()
+                    .shadow_xs()
                     .when(disabled, |this| this.opacity(0.55).cursor_default())
                     .when(!disabled, |this| {
                         let model_handle = self.model.clone();
                         this.cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().secondary.opacity(0.4)))
+                            .hover(|s| s.bg(COLOR_BG_PRIMARY_LIGHT))
                             .on_click(cx.listener(move |_view, _, _, cx| {
                                 model_handle.update(cx, |m, cx| {
                                     m.is_popover_open = !m.is_popover_open;
@@ -911,8 +914,13 @@ impl OptionsCapsule {
                             }))
                     })
                     // 1. Status Accent Dot (6x6 circle)
-                    .child(div().size(px(6.0)).rounded_full().bg(cx.theme().primary))
-                    // 2. Active Model Pill (Icon + Text, max-width 110px with ellipsis)
+                    .child(
+                        div()
+                            .size(px(6.0))
+                            .rounded_full()
+                            .bg(COLOR_TEXT_PRIMARY_LIGHT),
+                    )
+                    // 2. Active Model Pill (Icon + Text)
                     .child(
                         div()
                             .flex()
@@ -921,21 +929,21 @@ impl OptionsCapsule {
                             .child(
                                 icon(LucideIcon::Cpu)
                                     .size(px(13.0))
-                                    .text_color(cx.theme().muted_foreground),
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
                             )
                             .child(
                                 div()
-                                    .text_size(px(12.5))
+                                    .text_size(px(12.0))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .max_w(px(110.0))
+                                    .text_color(COLOR_TEXT_PRIMARY_LIGHT)
+                                    .max_w(px(120.0))
                                     .overflow_hidden()
                                     .whitespace_nowrap()
                                     .child(model_label),
                             ),
                     )
                     // 3. Subtle Vertical Divider
-                    .child(div().w(px(1.0)).h(px(12.0)).bg(cx.theme().border))
+                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
                     // 4. Language Selector Pill (Icon + Text)
                     .child(
                         div()
@@ -945,29 +953,29 @@ impl OptionsCapsule {
                             .child(
                                 icon(LucideIcon::Globe)
                                     .size(px(13.0))
-                                    .text_color(cx.theme().muted_foreground),
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground)
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                                     .child(lang_label),
                             ),
                     )
-                    // 5. Mode Pill (Timeline / Subtitle / Dictation badge)
+                    // 5. Subtle Vertical Divider
+                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
+                    // 6. Mode Pill (Timeline / Subtitle / Dictation badge)
                     .child(
                         div()
-                            .px(px(6.0))
-                            .py(px(1.5))
-                            .rounded(px(4.0))
-                            .bg(cx.theme().secondary)
-                            .text_size(px(10.5))
+                            .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(cx.theme().foreground)
+                            .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                             .child(mode_label),
                     )
-                    // 6. Parameter Settings Gear & Chevron Trigger
+                    // 7. Subtle Vertical Divider
+                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
+                    // 8. Parameter Settings Gear & Chevron Trigger
                     .child(
                         div()
                             .flex()
@@ -976,7 +984,7 @@ impl OptionsCapsule {
                             .child(
                                 icon(LucideIcon::Settings)
                                     .size(px(13.0))
-                                    .text_color(cx.theme().muted_foreground),
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
                             )
                             .child(
                                 icon(if is_open {
@@ -985,7 +993,7 @@ impl OptionsCapsule {
                                     LucideIcon::ChevronDown
                                 })
                                 .size(px(12.0))
-                                .text_color(cx.theme().muted_foreground),
+                                .text_color(COLOR_TEXT_SECONDARY_LIGHT),
                             ),
                     ),
             )

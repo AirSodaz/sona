@@ -10,7 +10,10 @@ use gpui_kit::*;
 use super::batch_import::BatchImportPanel;
 use super::live_record::LiveRecordPanel;
 use super::options_capsule::{IngestionSurface, TranscriptionOptionsModel};
-use crate::theme::tokens::RADIUS_FULL;
+use crate::theme::tokens::{
+    COLOR_BG_ELEVATED_LIGHT, COLOR_BG_SECONDARY_LIGHT, COLOR_BG_TERTIARY_LIGHT,
+    COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, RADIUS_FULL,
+};
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -113,16 +116,16 @@ impl Render for CreateWorkspacePanel {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(cx.theme().secondary)
+                    .bg(COLOR_BG_SECONDARY_LIGHT)
                     .child(
-                        // Segmented Navigation Track (p: 4px, rounded-md, bg: secondary, gap: 4px)
+                        // Segmented Navigation Track (p: 4px, rounded-md, bg: tertiary, gap: 4px)
                         div()
                             .id("create-tab-navigation")
                             .flex()
                             .w_full()
                             .p(px(4.0))
                             .rounded(px(12.0))
-                            .bg(cx.theme().muted)
+                            .bg(COLOR_BG_TERTIARY_LIGHT)
                             .gap(px(4.0))
                             .role(Role::TabList)
                             .aria_label("Workspace Input Selection")
@@ -181,23 +184,16 @@ impl Render for CreateWorkspacePanel {
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(px(10.0))
+                                    .rounded(px(6.0))
                                     .cursor_pointer()
                                     .bg(if is_live_active {
-                                        cx.theme().popover
+                                        COLOR_BG_ELEVATED_LIGHT
                                     } else {
                                         gpui_kit::transparent_black()
                                     })
                                     .when(is_live_active, |this| this.shadow_sm())
                                     .focus_visible(|style| {
                                         style.border_1().border_color(cx.theme().primary)
-                                    })
-                                    .hover(|style| {
-                                        style.text_color(if is_live_active {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().secondary_foreground
-                                        })
                                     })
                                     .text_size(px(14.0))
                                     .font_weight(if is_live_active {
@@ -206,9 +202,9 @@ impl Render for CreateWorkspacePanel {
                                         FontWeight::MEDIUM
                                     })
                                     .text_color(if is_live_active {
-                                        cx.theme().foreground
+                                        COLOR_TEXT_PRIMARY_LIGHT
                                     } else {
-                                        cx.theme().secondary_foreground
+                                        COLOR_TEXT_MUTED_LIGHT
                                     })
                                     .child(icon(LucideIcon::Mic).size(px(16.0)))
                                     .child(div().child("Live Record"))
@@ -241,23 +237,16 @@ impl Render for CreateWorkspacePanel {
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(px(10.0))
+                                    .rounded(px(6.0))
                                     .cursor_pointer()
                                     .bg(if is_batch_active {
-                                        cx.theme().popover
+                                        COLOR_BG_ELEVATED_LIGHT
                                     } else {
                                         gpui_kit::transparent_black()
                                     })
                                     .when(is_batch_active, |this| this.shadow_sm())
                                     .focus_visible(|style| {
                                         style.border_1().border_color(cx.theme().primary)
-                                    })
-                                    .hover(|style| {
-                                        style.text_color(if is_batch_active {
-                                            cx.theme().foreground
-                                        } else {
-                                            cx.theme().secondary_foreground
-                                        })
                                     })
                                     .text_size(px(14.0))
                                     .font_weight(if is_batch_active {
@@ -266,9 +255,9 @@ impl Render for CreateWorkspacePanel {
                                         FontWeight::MEDIUM
                                     })
                                     .text_color(if is_batch_active {
-                                        cx.theme().foreground
+                                        COLOR_TEXT_PRIMARY_LIGHT
                                     } else {
-                                        cx.theme().secondary_foreground
+                                        COLOR_TEXT_MUTED_LIGHT
                                     })
                                     .child(icon(LucideIcon::Folder).size(px(16.0)))
                                     .child(div().child("Batch Import"))
