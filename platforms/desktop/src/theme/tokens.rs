@@ -12,10 +12,19 @@ pub const SETTINGS_MODAL_HEIGHT: Pixels = px(780.0);
 pub const PANEL_LEFT_WIDTH: Pixels = px(350.0);
 pub const PANEL_RIGHT_MIN_WIDTH: Pixels = px(500.0);
 
-pub const RADIUS_SM: Pixels = px(4.0);
-pub const RADIUS_MD: Pixels = px(8.0);
+pub const RADIUS_XS: Pixels = px(6.0);
+pub const RADIUS_SM: Pixels = px(10.0);
+pub const RADIUS_MD: Pixels = px(12.0);
 pub const RADIUS_LG: Pixels = px(16.0);
+pub const RADIUS_XL: Pixels = px(20.0);
 pub const RADIUS_FULL: Pixels = px(9999.0);
+
+pub const SPACING_XS: Pixels = px(4.0);
+pub const SPACING_SM: Pixels = px(8.0);
+pub const SPACING_MD: Pixels = px(16.0);
+pub const SPACING_LG: Pixels = px(24.0);
+pub const SPACING_XL: Pixels = px(32.0);
+pub const SPACING_2XL: Pixels = px(48.0);
 
 // Header & Theme Colors
 pub const COLOR_HEADER_BG_LIGHT: Hsla = hsla(60.0 / 360.0, 0.03, 0.95, 1.0); // #f3f3f2

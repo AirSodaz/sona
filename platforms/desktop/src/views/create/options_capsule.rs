@@ -1,16 +1,18 @@
 //! Persistent bottom options capsule and parameter settings popover.
 //! Strict 1:1 parity with React `TranscriptionOptions.tsx` and `ParameterSettingsPopover.tsx` (Gap G13).
 
+use crate::app::GlobalDesktopServices;
+use crate::theme::tokens::{
+    COLOR_BG_ELEVATED_LIGHT, COLOR_BG_PRIMARY_LIGHT, COLOR_BG_SECONDARY_LIGHT,
+    COLOR_BORDER_HOVER_LIGHT, COLOR_BORDER_LIGHT, COLOR_PROJECT_AMBER, COLOR_TEXT_MUTED_LIGHT,
+    COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_LG, RADIUS_SM,
+};
 use gpui_kit::assets::IconName as LucideIcon;
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::component::Icon;
+use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-
-use crate::theme::tokens::{
-    COLOR_BG_PRIMARY_LIGHT, COLOR_BORDER_LIGHT, COLOR_PROJECT_AMBER, COLOR_TEXT_PRIMARY_LIGHT,
-    COLOR_TEXT_SECONDARY_LIGHT, RADIUS_LG, RADIUS_SM,
-};
 
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -95,6 +97,48 @@ impl TranscriptionOptionsModel {
             is_model_selector_open: false,
             is_lang_selector_open: false,
             catalog: None,
+        }
+    }
+    /// Loads persisted settings from DesktopServices configuration.
+    pub fn load_from_services(&mut self, services: &crate::services::DesktopServices) {
+        if let Ok(Some(config)) = services.config.load() {
+            if let Some(timeline) = config
+                .get("enableTimeline")
+                .and_then(serde_json::Value::as_bool)
+            {
+                self.enable_timeline = timeline;
+            }
+            if let Some(live_diar) = config
+                .get("liveSpeakerDiarizationEnabled")
+                .and_then(serde_json::Value::as_bool)
+            {
+                self.live_diarization = live_diar;
+            }
+            if let Some(batch_diar) = config
+                .get("batchSpeakerDiarizationEnabled")
+                .and_then(serde_json::Value::as_bool)
+            {
+                self.batch_diarization = batch_diar;
+            }
+            if let Some(lang) = config.get("language").and_then(serde_json::Value::as_str) {
+                self.live_language = lang.to_string();
+                self.batch_language = lang.to_string();
+            }
+            if let Some(stream_model) = config
+                .get("streamingModelPath")
+                .and_then(serde_json::Value::as_str)
+                .filter(|s| !s.trim().is_empty())
+            {
+                self.live_model_id = stream_model.to_string();
+            }
+            if let Some(batch_model) = config
+                .get("batchModelPath")
+                .and_then(serde_json::Value::as_str)
+                .filter(|s| !s.trim().is_empty())
+            {
+                self.batch_model_id = batch_model.to_string();
+            }
+            self.coerce_languages();
         }
     }
 
@@ -276,13 +320,13 @@ impl OptionsCapsule {
         let is_open = model.is_popover_open && !disabled;
         let model_label = model.active_model_label();
         let lang_label = model.active_language_label();
-        let mode_label = model.mode.label();
+        let _mode_label = model.mode.label();
         let diarization_supported = model.is_diarization_supported();
         let is_lang_locked = model.is_language_locked();
         let enable_timeline = model.enable_timeline;
         let is_model_selector_open = model.is_model_selector_open;
         let is_lang_selector_open = model.is_lang_selector_open;
-        let vad_sens = model.vad_sensitivity;
+        let _vad_sens = model.vad_sensitivity;
         let current_surface = model.surface;
         let active_diarization = match current_surface {
             IngestionSurface::Live => model.live_diarization,
@@ -326,52 +370,15 @@ impl OptionsCapsule {
                         .absolute()
                         .bottom(px(44.0))
                         .w(px(310.0))
-                        .p(px(14.0))
+                        .p(px(16.0))
                         .rounded(RADIUS_LG)
-                        .bg(cx.theme().background)
+                        .bg(COLOR_BG_ELEVATED_LIGHT)
                         .border_1()
-                        .border_color(cx.theme().border)
+                        .border_color(COLOR_BORDER_LIGHT)
                         .shadow_xl()
                         .flex()
                         .flex_col()
-                        .gap(px(12.0))
-                        // Popover Header
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .child(
-                                    div()
-                                        .text_size(px(13.0))
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .child("Transcription Options"),
-                                )
-                                .child(
-                                    div()
-                                        .id("btn-close-popover")
-                                        .cursor_pointer()
-                                        .p(px(2.0))
-                                        .rounded(RADIUS_SM)
-                                        .child(
-                                            icon(LucideIcon::X)
-                                                .size(px(14.0))
-                                                .text_color(cx.theme().muted_foreground),
-                                        )
-                                        .on_click(cx.listener({
-                                            let model_handle = model_handle.clone();
-                                            move |_view, _, _, cx| {
-                                                model_handle.update(cx, |m, cx| {
-                                                    m.is_popover_open = false;
-                                                    m.is_model_selector_open = false;
-                                                    m.is_lang_selector_open = false;
-                                                    cx.notify();
-                                                });
-                                            }
-                                        })),
-                                ),
-                        )
+                        .gap(px(14.0))
                         // Field 1: Model Selection
                         .child(
                             div()
@@ -474,17 +481,23 @@ impl OptionsCapsule {
                                                         .on_click(cx.listener(
                                                             move |_view, _, _, cx| {
                                                                 let mid_target = mid_clone.clone();
+                                                                let services = cx.global::<GlobalDesktopServices>().0.clone();
                                                                 model_handle.update(cx, |m, cx| {
-                                                                    match m.surface {
+                                                                    let key = match m.surface {
                                                                         IngestionSurface::Live => {
-                                                                            m.live_model_id =
-                                                                                mid_target;
+                                                                            m.live_model_id = mid_target.clone();
+                                                                            "streamingModelPath"
                                                                         }
                                                                         IngestionSurface::Batch => {
-                                                                            m.batch_model_id =
-                                                                                mid_target;
+                                                                            m.batch_model_id = mid_target.clone();
+                                                                            "batchModelPath"
                                                                         }
-                                                                    }
+                                                                    };
+                                                                    let _ = crate::platform::agent_control::facade::settings::update_setting(
+                                                                        &services,
+                                                                        key.to_string(),
+                                                                        serde_json::Value::String(mid_target),
+                                                                    );
                                                                     m.coerce_languages();
                                                                     m.is_model_selector_open =
                                                                         false;
@@ -522,30 +535,20 @@ impl OptionsCapsule {
                                         ),
                                 )
                                 .child(
-                                    div()
-                                        .id("switch-timeline")
-                                        .w(px(36.0))
-                                        .h(px(20.0))
-                                        .rounded_full()
-                                        .cursor_pointer()
-                                        .p(px(2.0))
-                                        .bg(if enable_timeline {
-                                            cx.theme().primary
-                                        } else {
-                                            cx.theme().secondary
-                                        })
-                                        .child(
-                                            div()
-                                                .size(px(16.0))
-                                                .rounded_full()
-                                                .bg(gpui_kit::white())
-                                                .when(enable_timeline, |t| t.ml(px(16.0))),
-                                        )
-                                        .on_click(cx.listener({
+                                    Switch::new("switch-timeline")
+                                        .checked(enable_timeline)
+                                        .on_change(cx.listener({
                                             let model_handle = model_handle.clone();
-                                            move |_view, _, _, cx| {
+                                            move |_view, checked, _, cx| {
+                                                let val = *checked;
+                                                let services = cx.global::<GlobalDesktopServices>().0.clone();
+                                                let _ = crate::platform::agent_control::facade::settings::update_setting(
+                                                    &services,
+                                                    "enableTimeline".to_string(),
+                                                    serde_json::Value::Bool(val),
+                                                );
                                                 model_handle.update(cx, |m, cx| {
-                                                    m.enable_timeline = !m.enable_timeline;
+                                                    m.enable_timeline = val;
                                                     cx.notify();
                                                 });
                                             }
@@ -585,50 +588,34 @@ impl OptionsCapsule {
                                         ),
                                 )
                                 .child(
-                                    div()
-                                        .id("switch-diarization")
-                                        .w(px(36.0))
-                                        .h(px(20.0))
-                                        .rounded_full()
-                                        .p(px(2.0))
-                                        .when(!diarization_supported, |this| {
-                                            this.opacity(0.4).cursor_default()
-                                        })
-                                        .when(diarization_supported, |this| {
-                                            this.cursor_pointer().on_click(cx.listener({
-                                                let model_handle = model_handle.clone();
-                                                move |_view, _, _, cx| {
-                                                    model_handle.update(cx, |m, cx| {
-                                                        match m.surface {
-                                                            IngestionSurface::Live => {
-                                                                m.live_diarization =
-                                                                    !m.live_diarization;
-                                                            }
-                                                            IngestionSurface::Batch => {
-                                                                m.batch_diarization =
-                                                                    !m.batch_diarization;
-                                                            }
+                                    Switch::new("switch-diarization")
+                                        .checked(active_diarization && diarization_supported)
+                                        .disabled(!diarization_supported)
+                                        .on_change(cx.listener({
+                                            let model_handle = model_handle.clone();
+                                            move |_view, checked, _, cx| {
+                                                let val = *checked;
+                                                let services = cx.global::<GlobalDesktopServices>().0.clone();
+                                                model_handle.update(cx, |m, cx| {
+                                                    let key = match m.surface {
+                                                        IngestionSurface::Live => {
+                                                            m.live_diarization = val;
+                                                            "liveSpeakerDiarizationEnabled"
                                                         }
-                                                        cx.notify();
-                                                    });
-                                                }
-                                            }))
-                                        })
-                                        .bg(if active_diarization && diarization_supported {
-                                            cx.theme().primary
-                                        } else {
-                                            cx.theme().secondary
-                                        })
-                                        .child(
-                                            div()
-                                                .size(px(16.0))
-                                                .rounded_full()
-                                                .bg(gpui_kit::white())
-                                                .when(
-                                                    active_diarization && diarization_supported,
-                                                    |t| t.ml(px(16.0)),
-                                                ),
-                                        ),
+                                                        IngestionSurface::Batch => {
+                                                            m.batch_diarization = val;
+                                                            "batchSpeakerDiarizationEnabled"
+                                                        }
+                                                    };
+                                                    let _ = crate::platform::agent_control::facade::settings::update_setting(
+                                                        &services,
+                                                        key.to_string(),
+                                                        serde_json::Value::Bool(val),
+                                                    );
+                                                    cx.notify();
+                                                });
+                                            }
+                                        })),
                                 ),
                         )
                         // Field 4: Language Selection
@@ -767,15 +754,21 @@ impl OptionsCapsule {
                                                     .on_click(cx.listener(
                                                         move |_view, _, _, cx| {
                                                             let code = target_code.clone();
+                                                            let services = cx.global::<GlobalDesktopServices>().0.clone();
                                                             model_handle.update(cx, |m, cx| {
                                                                 match m.surface {
                                                                     IngestionSurface::Live => {
-                                                                        m.live_language = code;
+                                                                        m.live_language = code.clone();
                                                                     }
                                                                     IngestionSurface::Batch => {
-                                                                        m.batch_language = code;
+                                                                        m.batch_language = code.clone();
                                                                     }
                                                                 }
+                                                                let _ = crate::platform::agent_control::facade::settings::update_setting(
+                                                                    &services,
+                                                                    "language".to_string(),
+                                                                    serde_json::Value::String(code),
+                                                                );
                                                                 m.is_lang_selector_open = false;
                                                                 cx.notify();
                                                             });
@@ -784,100 +777,11 @@ impl OptionsCapsule {
                                             })),
                                     )
                                 }),
-                        )
-                        // Field 5: VAD Sensitivity
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .child(
-                                            div()
-                                                .text_size(px(12.0))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(cx.theme().foreground)
-                                                .child("VAD Sensitivity"),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(10.5))
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child("Speech detection threshold (0.2 - 0.9)"),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(6.0))
-                                        .child(
-                                            div()
-                                                .id("btn-vad-dec")
-                                                .size(px(22.0))
-                                                .rounded(RADIUS_SM)
-                                                .bg(cx.theme().secondary)
-                                                .border_1()
-                                                .border_color(cx.theme().border)
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .child(div().text_size(px(12.0)).child("-"))
-                                                .on_click(cx.listener({
-                                                    let model_handle = model_handle.clone();
-                                                    move |_view, _, _, cx| {
-                                                        model_handle.update(cx, |m, cx| {
-                                                            m.vad_sensitivity = (m.vad_sensitivity
-                                                                - 0.05)
-                                                                .clamp(0.2, 0.9);
-                                                            cx.notify();
-                                                        });
-                                                    }
-                                                })),
-                                        )
-                                        .child(
-                                            div()
-                                                .w(px(36.0))
-                                                .text_size(px(11.5))
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_align(TextAlign::Center)
-                                                .child(format!("{:.0}%", vad_sens * 100.0)),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("btn-vad-inc")
-                                                .size(px(22.0))
-                                                .rounded(RADIUS_SM)
-                                                .bg(cx.theme().secondary)
-                                                .border_1()
-                                                .border_color(cx.theme().border)
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .child(div().text_size(px(12.0)).child("+"))
-                                                .on_click(cx.listener({
-                                                    let model_handle = model_handle.clone();
-                                                    move |_view, _, _, cx| {
-                                                        model_handle.update(cx, |m, cx| {
-                                                            m.vad_sensitivity = (m.vad_sensitivity
-                                                                + 0.05)
-                                                                .clamp(0.2, 0.9);
-                                                            cx.notify();
-                                                        });
-                                                    }
-                                                })),
-                                        ),
-                                ),
                         ),
                 )
             })
             // ==========================================
-            // 4-Pill Persistent Airy Capsule Trigger
+            // Persistent Airy Capsule Trigger (matching React TranscriptionOptions.tsx 1:1)
             // ==========================================
             .child(
                 div()
@@ -886,27 +790,37 @@ impl OptionsCapsule {
                     .items_center()
                     .justify_center()
                     .gap(px(8.0))
-                    .px(px(12.0))
-                    .py(px(4.0))
+                    .px(px(14.0))
+                    .py(px(6.0))
                     .h(px(32.0))
                     .rounded(px(20.0))
-                    .bg(gpui_kit::white())
+                    .bg(if is_open {
+                        COLOR_BG_SECONDARY_LIGHT
+                    } else {
+                        COLOR_BG_PRIMARY_LIGHT
+                    })
                     .border_1()
                     .border_color(if is_open {
-                        COLOR_TEXT_PRIMARY_LIGHT
+                        COLOR_BORDER_HOVER_LIGHT
                     } else {
                         COLOR_BORDER_LIGHT
                     })
                     .shadow_xs()
+                    .tooltip({
+                        let tooltip_text = format!("Preset: {}, {}", model_label, lang_label);
+                        move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx)
+                    })
                     .when(disabled, |this| this.opacity(0.55).cursor_default())
                     .when(!disabled, |this| {
                         let model_handle = self.model.clone();
                         this.cursor_pointer()
-                            .hover(|s| s.bg(COLOR_BG_PRIMARY_LIGHT))
+                            .hover(|s| s.bg(COLOR_BG_SECONDARY_LIGHT))
                             .on_click(cx.listener(move |_view, _, _, cx| {
+                                let services = cx.global::<GlobalDesktopServices>().0.clone();
                                 model_handle.update(cx, |m, cx| {
                                     m.is_popover_open = !m.is_popover_open;
                                     if m.is_popover_open {
+                                        m.load_from_services(&services);
                                         m.refresh_catalog(cx);
                                     }
                                     cx.notify();
@@ -916,85 +830,58 @@ impl OptionsCapsule {
                     // 1. Status Accent Dot (6x6 circle)
                     .child(
                         div()
+                            .id("parameter-settings-status-dot")
                             .size(px(6.0))
                             .rounded_full()
                             .bg(COLOR_TEXT_PRIMARY_LIGHT),
                     )
-                    // 2. Active Model Pill (Icon + Text)
+                    // 2. Summary: Model / Language
                     .child(
                         div()
+                            .id("parameter-settings-capsule-summary")
                             .flex()
                             .items_center()
                             .gap(px(4.0))
                             .child(
-                                icon(LucideIcon::Cpu)
-                                    .size(px(13.0))
-                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
-                            )
-                            .child(
                                 div()
-                                    .text_size(px(12.0))
+                                    .id("parameter-settings-summary-model")
+                                    .text_size(px(12.5))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(COLOR_TEXT_PRIMARY_LIGHT)
-                                    .max_w(px(120.0))
+                                    .max_w(px(130.0))
                                     .overflow_hidden()
                                     .whitespace_nowrap()
                                     .child(model_label),
-                            ),
-                    )
-                    // 3. Subtle Vertical Divider
-                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
-                    // 4. Language Selector Pill (Icon + Text)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.0))
-                            .child(
-                                icon(LucideIcon::Globe)
-                                    .size(px(13.0))
-                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
                             )
                             .child(
                                 div()
+                                    .id("parameter-settings-summary-divider")
+                                    .text_size(px(12.0))
+                                    .text_color(COLOR_TEXT_MUTED_LIGHT)
+                                    .child("/"),
+                            )
+                            .child(
+                                div()
+                                    .id("parameter-settings-summary-lang")
                                     .text_size(px(12.0))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                                     .child(lang_label),
                             ),
                     )
-                    // 5. Subtle Vertical Divider
-                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
-                    // 6. Mode Pill (Timeline / Subtitle / Dictation badge)
+                    // 3. Chevron Up/Down (14x14)
                     .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(COLOR_TEXT_SECONDARY_LIGHT)
-                            .child(mode_label),
-                    )
-                    // 7. Subtle Vertical Divider
-                    .child(div().w(px(1.0)).h(px(12.0)).bg(COLOR_BORDER_LIGHT))
-                    // 8. Parameter Settings Gear & Chevron Trigger
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(2.0))
-                            .child(
-                                icon(LucideIcon::Settings)
-                                    .size(px(13.0))
-                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT),
-                            )
-                            .child(
-                                icon(if is_open {
-                                    LucideIcon::ChevronUp
-                                } else {
-                                    LucideIcon::ChevronDown
-                                })
-                                .size(px(12.0))
-                                .text_color(COLOR_TEXT_SECONDARY_LIGHT),
-                            ),
+                        icon(if is_open {
+                            LucideIcon::ChevronDown
+                        } else {
+                            LucideIcon::ChevronUp
+                        })
+                        .size(px(14.0))
+                        .text_color(if is_open {
+                            COLOR_TEXT_PRIMARY_LIGHT
+                        } else {
+                            COLOR_TEXT_MUTED_LIGHT
+                        }),
                     ),
             )
     }

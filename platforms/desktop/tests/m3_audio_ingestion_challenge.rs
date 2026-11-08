@@ -637,7 +637,7 @@ fn test_circular_button_geometry_and_controls_proportions() {
     assert_eq!(CONTROLS_GAP, 24.0);
 
     // Inner element fits comfortably inside 64px outer button
-    assert!(INNER_INDICATOR_SIZE < RECORD_BUTTON_SIZE);
+    const { assert!(INNER_INDICATOR_SIZE < RECORD_BUTTON_SIZE) };
     let padding_radius = (RECORD_BUTTON_SIZE - INNER_INDICATOR_SIZE) / 2.0;
     assert_eq!(padding_radius, 20.0);
 }

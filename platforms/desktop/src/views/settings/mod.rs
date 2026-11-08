@@ -17,6 +17,7 @@ use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::{Select, SelectState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
@@ -64,6 +65,8 @@ pub enum SettingsTab {
     Mcp,
 }
 
+type TabItem = (SettingsTab, &'static str, LucideIcon);
+type TabGroup = (&'static str, &'static [TabItem]);
 fn storage_cleanup_summary(report: &sona_core::history::HistoryAudioCleanupReport) -> String {
     let mut parts = Vec::new();
     if report.removed_count > 0 {
@@ -3711,21 +3714,54 @@ impl SettingsModal {
         let speaker_segmentation_options = companion_options("speaker-segmentation");
         let speaker_embedding_options = companion_options("speaker-embedding");
         let alignment_options = companion_options("alignment");
-        let tabs = [
-            (SettingsTab::General, "General"),
-            (SettingsTab::Dashboard, "Dashboard"),
-            (SettingsTab::Shortcuts, "Shortcuts"),
-            (SettingsTab::About, "About"),
-            (SettingsTab::Microphone, "Input Device"),
-            (SettingsTab::Models, "Models"),
-            (SettingsTab::Subtitle, "Subtitles & Voice Typing"),
-            (SettingsTab::Vocabulary, "Vocabulary"),
-            (SettingsTab::LlmService, "LLM Service"),
-            (SettingsTab::Automation, "Automation"),
-            (SettingsTab::Storage, "Storage"),
-            (SettingsTab::Sync, "Cloud Sync"),
-            (SettingsTab::ApiServer, "API Server"),
-            (SettingsTab::Mcp, "MCP Agents"),
+        let tab_groups: &[TabGroup] = &[
+            (
+                "GENERAL",
+                &[
+                    (
+                        SettingsTab::General,
+                        "General",
+                        LucideIcon::SlidersHorizontal,
+                    ),
+                    (SettingsTab::Dashboard, "Dashboard", LucideIcon::Activity),
+                    (SettingsTab::Shortcuts, "Shortcuts", LucideIcon::Keyboard),
+                    (SettingsTab::About, "About", LucideIcon::Info),
+                ],
+            ),
+            (
+                "AUDIO",
+                &[
+                    (SettingsTab::Microphone, "Input Device", LucideIcon::Mic),
+                    (SettingsTab::Models, "Models", LucideIcon::Box),
+                    (SettingsTab::Vocabulary, "Vocabulary", LucideIcon::BookOpen),
+                ],
+            ),
+            (
+                "INTELLIGENCE",
+                &[
+                    (SettingsTab::LlmService, "LLM Service", LucideIcon::Bot),
+                    (SettingsTab::Automation, "Automation", LucideIcon::Zap),
+                ],
+            ),
+            (
+                "INFRASTRUCTURE",
+                &[
+                    (SettingsTab::Storage, "Storage", LucideIcon::HardDrive),
+                    (SettingsTab::Sync, "Cloud Sync", LucideIcon::Cloud),
+                ],
+            ),
+            (
+                "TOOLS",
+                &[
+                    (
+                        SettingsTab::Subtitle,
+                        "Subtitles & Voice Typing",
+                        LucideIcon::Captions,
+                    ),
+                    (SettingsTab::ApiServer, "API Server", LucideIcon::Server),
+                    (SettingsTab::Mcp, "MCP Agents", LucideIcon::Bot),
+                ],
+            ),
         ];
 
         div()
@@ -3767,50 +3803,94 @@ impl SettingsModal {
                                         .flex_col()
                                         .w(sidebar_width)
                                         .h_full()
-                                        .p_3()
+                                        .py_3()
+                                        .px_2()
                                         .border_r_1()
                                         .border_color(cx.theme().border)
-                                        .bg(cx.theme().background)
-                                        .gap_1()
+                                        .bg(cx.theme().secondary)
+                                        .overflow_y_scrollbar()
+                                        .gap_2()
                                         .child(
                                             div()
-                                                .px_2()
+                                                .px_3()
                                                 .py_1()
-                                                .text_size(px(14.0))
+                                                .text_size(px(15.0))
                                                 .font_weight(FontWeight::BOLD)
+                                                .text_color(cx.theme().foreground)
                                                 .child("Settings"),
                                         )
-                                        .children(tabs.into_iter().map(|(tab, label)| {
-                                            let is_selected = self.current_tab == tab;
+                                        .children(tab_groups.iter().map(|(group_name, group_tabs)| {
                                             div()
-                                                .id(ElementId::from(format!("tab-btn-{:?}", tab)))
                                                 .flex()
-                                                .items_center()
-                                                .px_3()
-                                                .py_2()
-                                                .rounded_md()
-                                                .bg(if is_selected {
-                                                    cx.theme().accent
-                                                } else {
-                                                    gpui_kit::transparent_black()
-                                                })
-                                                .cursor_pointer()
-                                                .hover(|style| style.bg(cx.theme().accent))
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    this.settings_modal.set_tab(tab, cx);
-                                                    cx.notify();
-                                                }))
+                                                .flex_col()
+                                                .gap_1()
                                                 .child(
                                                     div()
-                                                        .text_size(px(13.0))
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .text_color(if is_selected {
-                                                            cx.theme().primary
-                                                        } else {
-                                                            cx.theme().foreground
-                                                        })
-                                                        .child(label),
+                                                        .px_3()
+                                                        .pt_2()
+                                                        .pb_1()
+                                                        .text_size(px(11.0))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(cx.theme().muted)
+                                                        .child(*group_name),
                                                 )
+                                                .children(group_tabs.iter().map(|(tab, label, icon_name)| {
+                                                    let is_selected = self.current_tab == *tab;
+                                                    let tab_val = *tab;
+                                                    div()
+                                                        .id(ElementId::from(format!("tab-btn-{:?}", tab)))
+                                                        .flex()
+                                                        .items_center()
+                                                        .h(px(40.0))
+                                                        .px_3()
+                                                        .py_2()
+                                                        .gap(px(12.0))
+                                                        .rounded(RADIUS_MD)
+                                                        .bg(if is_selected {
+                                                            cx.theme().background
+                                                        } else {
+                                                            gpui_kit::transparent_black()
+                                                        })
+                                                        .border_1()
+                                                        .border_color(if is_selected {
+                                                            cx.theme().border
+                                                        } else {
+                                                            gpui_kit::transparent_black()
+                                                        })
+                                                        .cursor_pointer()
+                                                        .hover(|style| style.bg(if is_selected { cx.theme().background } else { cx.theme().accent }))
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            this.settings_modal.set_tab(tab_val, cx);
+                                                            cx.notify();
+                                                        }))
+                                                        .child(
+                                                            Icon::new(*icon_name)
+                                                                .size(px(18.0))
+                                                                .text_color(if is_selected {
+                                                                    cx.theme().primary
+                                                                } else {
+                                                                    cx.theme().muted
+                                                                }),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .text_size(px(14.0))
+                                                                .font_weight(if is_selected {
+                                                                    FontWeight::SEMIBOLD
+                                                                } else {
+                                                                    FontWeight::MEDIUM
+                                                                })
+                                                                .text_color(if is_selected {
+                                                                    cx.theme().foreground
+                                                                } else {
+                                                                    cx.theme().muted_foreground
+                                                                })
+                                                                .overflow_hidden()
+                                                                .whitespace_nowrap()
+                                                                .child(*label),
+                                                        )
+                                                }))
                                         })),
                                 )
                                 .child(
@@ -3822,6 +3902,7 @@ impl SettingsModal {
                                         .h_full()
                                         .p_6()
                                         .gap_4()
+                                        .overflow_y_scrollbar()
                                         .child(
                                             div()
                                                 .flex()
@@ -3829,15 +3910,28 @@ impl SettingsModal {
                                                 .justify_between()
                                                 .child(
                                                     div()
-                                                        .text_size(px(18.0))
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .child(format!("{} Settings", Self::tab_title(self.current_tab))),
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap_2()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(20.0))
+                                                                .font_weight(FontWeight::BOLD)
+                                                                .text_color(cx.theme().foreground)
+                                                                .child(format!("{} Settings", Self::tab_title(self.current_tab))),
+                                                        ),
                                                 )
                                                 .child(
-                                                    Button::new("btn-close-settings-modal")
-                                                        .ghost()
-                                                        .small()
-                                                        .label("Close")
+                                                    div()
+                                                        .id("btn-close-settings-modal")
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .size(px(32.0))
+                                                        .rounded(RADIUS_MD)
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.bg(cx.theme().accent))
+                                                        .child(Icon::new(LucideIcon::X).size(px(18.0)))
                                                         .on_click(cx.listener(|this, _, _, cx| {
                                                             this.settings_modal.close(cx);
                                                             cx.notify();
@@ -3926,15 +4020,19 @@ impl SettingsModal {
                                                         .child(div().flex_1().flex().flex_col().gap_1()
                                                             .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Launch on startup"))
                                                             .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Start Sona automatically when you sign in to Windows.")))
-                                                        .child(Button::new("btn-toggle-autostart").outline().small().label(if self.autostart { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
-                                                            let value = !this.settings_modal.autostart;
-                                                            this.settings_modal.autostart = value;
-                                                            if !value {
-                                                                this.settings_modal.silent_start = false;
-                                                            }
-                                                            this.settings_modal.persist_preference("autoStart", value, cx);
-                                                            cx.notify();
-                                                        }))),
+                                                        .child(
+                                                            Switch::new("btn-toggle-autostart")
+                                                                .checked(self.autostart)
+                                                                .on_change(cx.listener(|this, checked, _, cx| {
+                                                                    let value = *checked;
+                                                                    this.settings_modal.autostart = value;
+                                                                    if !value {
+                                                                        this.settings_modal.silent_start = false;
+                                                                    }
+                                                                    this.settings_modal.persist_preference("autoStart", value, cx);
+                                                                    cx.notify();
+                                                                })),
+                                                        ),
                                                 )
                                                 .child(
                                                     div()
@@ -3946,15 +4044,19 @@ impl SettingsModal {
                                                         .child(div().flex_1().flex().flex_col().gap_1()
                                                             .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Minimize to tray on exit"))
                                                             .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Keep Sona running in the system tray when the main window closes.")))
-                                                        .child(Button::new("btn-toggle-tray").outline().small().label(if self.minimize_to_tray { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
-                                                            let value = !this.settings_modal.minimize_to_tray;
-                                                            this.settings_modal.minimize_to_tray = value;
-                                                            if !value {
-                                                                this.settings_modal.silent_start = false;
-                                                            }
-                                                            this.settings_modal.persist_preference("minimizeToTrayOnExit", value, cx);
-                                                            cx.notify();
-                                                        }))),
+                                                        .child(
+                                                            Switch::new("btn-toggle-tray")
+                                                                .checked(self.minimize_to_tray)
+                                                                .on_change(cx.listener(|this, checked, _, cx| {
+                                                                    let value = *checked;
+                                                                    this.settings_modal.minimize_to_tray = value;
+                                                                    if !value {
+                                                                        this.settings_modal.silent_start = false;
+                                                                    }
+                                                                    this.settings_modal.persist_preference("minimizeToTrayOnExit", value, cx);
+                                                                    cx.notify();
+                                                                })),
+                                                        ),
                                                 )
                                                 .child(
                                                     div()
@@ -3966,15 +4068,20 @@ impl SettingsModal {
                                                         .child(div().flex_1().flex().flex_col().gap_1()
                                                             .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Start minimized"))
                                                             .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child(if !self.autostart || !self.minimize_to_tray { "Requires Launch on startup and Minimize to tray on exit to be enabled." } else { "Open Sona directly in the system tray at sign-in." })))
-                                                        .child(Button::new("btn-toggle-silent-start").outline().small().label(if self.silent_start { "On" } else { "Off" }).disabled(!self.autostart || !self.minimize_to_tray).on_click(cx.listener(|this, _, _, cx| {
-                                                            if !this.settings_modal.autostart || !this.settings_modal.minimize_to_tray {
-                                                                return;
-                                                            }
-                                                            let value = !this.settings_modal.silent_start;
-                                                            this.settings_modal.silent_start = value;
-                                                            this.settings_modal.persist_preference("silentStart", value, cx);
-                                                            cx.notify();
-                                                        }))),
+                                                        .child(
+                                                            Switch::new("btn-toggle-silent-start")
+                                                                .checked(self.autostart && self.minimize_to_tray && self.silent_start)
+                                                                .disabled(!self.autostart || !self.minimize_to_tray)
+                                                                .on_change(cx.listener(|this, checked, _, cx| {
+                                                                    if !this.settings_modal.autostart || !this.settings_modal.minimize_to_tray {
+                                                                        return;
+                                                                    }
+                                                                    let value = *checked;
+                                                                    this.settings_modal.silent_start = value;
+                                                                    this.settings_modal.persist_preference("silentStart", value, cx);
+                                                                    cx.notify();
+                                                                })),
+                                                        ),
                                                 )
                                                 .child(
                                                     div()
@@ -3986,12 +4093,16 @@ impl SettingsModal {
                                                         .child(div().flex_1().flex().flex_col().gap_1()
                                                             .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Check for updates automatically"))
                                                             .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Check for new Sona releases automatically.")))
-                                                        .child(Button::new("btn-toggle-auto-check-updates").outline().small().label(if self.auto_check_updates { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
-                                                            let value = !this.settings_modal.auto_check_updates;
-                                                            this.settings_modal.auto_check_updates = value;
-                                                            this.settings_modal.persist_preference("autoCheckUpdates", value, cx);
-                                                            cx.notify();
-                                                        }))),
+                                                        .child(
+                                                            Switch::new("btn-toggle-auto-check-updates")
+                                                                .checked(self.auto_check_updates)
+                                                                .on_change(cx.listener(|this, checked, _, cx| {
+                                                                    let value = *checked;
+                                                                    this.settings_modal.auto_check_updates = value;
+                                                                    this.settings_modal.persist_preference("autoCheckUpdates", value, cx);
+                                                                    cx.notify();
+                                                                })),
+                                                        ),
                                                 )
                                                 .child(div().flex().flex_col().gap_1().pt_3().border_t_1().border_color(cx.theme().border)
                                                     .child(div().text_size(px(15.0)).font_weight(FontWeight::SEMIBOLD).child("Model & Environment Diagnostics"))

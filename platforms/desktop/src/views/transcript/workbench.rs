@@ -1111,8 +1111,9 @@ impl TranscriptWorkbench {
                     .child(
                         div()
                             .absolute()
-                            .top_4()
-                            .right_4()
+                            .bottom(px(24.0))
+                            .left_1_2()
+                            .ml(px(-160.0))
                             .child(self.search.render(cx)),
                     ),
             )

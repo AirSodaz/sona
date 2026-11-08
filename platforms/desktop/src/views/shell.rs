@@ -29,7 +29,9 @@ use super::dialogs::{
     DiagnosticsModal, ErrorDialog, ExportModal, GlobalDialog, NotificationCenter, OnboardingWizard,
     ProjectDialogs, RecoveryModal,
 };
-use super::projects::{ProjectsRail, ProjectsResults, ProjectsToolbar, SelectionBar};
+use super::projects::{
+    ProjectsHeader, ProjectsRail, ProjectsResults, ProjectsToolbar, SelectionBar,
+};
 use super::settings::{SettingsModal, SettingsTab, ShortcutTarget};
 use super::tools::{
     ApiServerToolPanel, McpToolPanel, MediaServerToolPanel, SubtitlesToolPanel, ToolKind,
@@ -38,10 +40,11 @@ use super::tools::{
 use super::transcript::TranscriptWorkbench;
 use crate::app::{GlobalDesktopServices, GlobalEventBus, GlobalHotkeyController};
 use crate::theme::tokens::{
-    COLOR_BG_ELEVATED_LIGHT, COLOR_BG_SECONDARY_LIGHT, COLOR_BG_TERTIARY_LIGHT, COLOR_BORDER_LIGHT,
-    COLOR_HEADER_BG_LIGHT, COLOR_PROJECT_AMBER, COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT,
-    COLOR_TEXT_SECONDARY_LIGHT, HEADER_HEIGHT, PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_LG,
-    RADIUS_MD, RADIUS_SM, project_color_from_index,
+    COLOR_BG_ELEVATED_LIGHT, COLOR_BG_PRIMARY_LIGHT, COLOR_BG_SECONDARY_LIGHT,
+    COLOR_BG_TERTIARY_LIGHT, COLOR_BORDER_LIGHT, COLOR_HEADER_BG_LIGHT, COLOR_PROJECT_AMBER,
+    COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, HEADER_HEIGHT,
+    PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_LG, RADIUS_MD, RADIUS_SM,
+    project_color_from_index,
 };
 
 #[inline]
@@ -337,6 +340,7 @@ pub struct MainShell {
     pub create_workspace: Entity<CreateWorkspacePanel>,
 
     pub projects_rail: ProjectsRail,
+    pub projects_header: ProjectsHeader,
     pub projects_toolbar: ProjectsToolbar,
     pub projects_results: ProjectsResults,
     pub selection_bar: SelectionBar,
@@ -427,7 +431,12 @@ impl MainShell {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let notification_center = cx.new(|_| NotificationCenter::new());
 
-        let options_model = cx.new(|_| TranscriptionOptionsModel::new());
+        let options_model = cx.new(|cx| {
+            let mut model = TranscriptionOptionsModel::new();
+            model.load_from_services(&services);
+            model.refresh_catalog(cx);
+            model
+        });
         let options_capsule = OptionsCapsule::new(options_model.clone());
         let create_workspace = cx.new(|cx| CreateWorkspacePanel::new(options_model.clone(), cx));
         let projects_toolbar = ProjectsToolbar::new(window, cx);
@@ -1217,6 +1226,7 @@ impl MainShell {
             create_workspace,
 
             projects_rail: ProjectsRail::new(),
+            projects_header: ProjectsHeader::new(),
             projects_toolbar,
             projects_results: ProjectsResults::new(),
             selection_bar: SelectionBar::new(),
@@ -2556,8 +2566,25 @@ impl Render for MainShell {
                         cx.notify();
                         return;
                     }
+                } else if event.keystroke.key.eq_ignore_ascii_case("tab")
+                    && event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.platform
+                    && !this.diagnostics_modal.is_open
+                    && !this.recovery_modal.is_open
+                    && !this.global_dialog.is_open
+                    && !this.export_modal.is_open
+                    && !this.onboarding.is_open
+                    && !this.project_dialogs.is_create_open
+                    && !this.project_dialogs.is_delete_open
+                    && !this.error_dialog.is_open
+                {
+                    this.cycle_mode(event.keystroke.modifiers.shift, cx);
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
                 }
-
                 let batch_import = this.create_workspace.read(cx).batch_import.clone();
                 let batch_import = batch_import.read(cx);
                 let text_input_focused = this
@@ -2795,12 +2822,25 @@ impl Render for MainShell {
                                 project_trash_count,
                                 cx,
                             ))
-                            .child(
+                            .child({
+                                let browse_project = match &self.projects_results.scope {
+                                    HistoryWorkspaceScope::Project { project_id } => {
+                                        self.project_selector.projects.iter().find(|p| &p.id == project_id)
+                                    }
+                                    _ => None,
+                                };
                                 div()
                                     .flex()
                                     .flex_col()
                                     .flex_1()
                                     .h_full()
+                                    .child(self.projects_header.render(
+                                        &self.projects_results.scope,
+                                        browse_project,
+                                        self.projects_results.summary.as_ref(),
+                                        project_trash_count,
+                                        cx,
+                                    ))
                                     .child(
                                         self.projects_toolbar
                                             .render(&self.project_search_state, cx),
@@ -2834,8 +2874,8 @@ impl Render for MainShell {
                                                     ))
                                                 },
                                             ),
-                                    ),
-                            )
+                                    )
+                            })
                             .into_any_element(),
                         AppMode::Tools => {
                             let tool_panel: AnyElement = match self.tools_sidebar.active_tool {
@@ -2893,9 +2933,9 @@ impl Render for MainShell {
                                     .left(PANEL_LEFT_WIDTH)
                                     .border_t_1()
                                     .border_l_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_tl(RADIUS_MD)
-                                    .bg(cx.theme().background)
+                                    .border_color(COLOR_BORDER_LIGHT)
+                                    .rounded_tl(RADIUS_LG)
+                                    .bg(COLOR_BG_PRIMARY_LIGHT)
                                     .overflow_hidden()
                                     .child(self.workbench.render(window, cx)),
                             )

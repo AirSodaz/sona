@@ -24,7 +24,7 @@ use sona_core::history::store::HistoryStore as _;
 use sona_core::history::{
     HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryWorkspaceDateFilter,
     HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
 };
 use sona_core::project::ProjectRecord;
 
@@ -51,6 +51,7 @@ pub struct ProjectsResults {
     pub scoped_count: usize,
     pub has_more: bool,
     pub trash_count: usize,
+    pub summary: Option<HistoryWorkspaceSummary>,
     pub is_loading: bool,
     pub is_loading_more: bool,
     pub load_error: bool,
@@ -76,6 +77,7 @@ impl ProjectsResults {
             scoped_count: 0,
             has_more: false,
             trash_count: 0,
+            summary: None,
             is_loading: false,
             is_loading_more: false,
             load_error: false,
@@ -161,6 +163,7 @@ impl ProjectsResults {
                         results.scoped_count = page.summary.total_items;
                         results.has_more = page.has_more;
                         results.trash_count = page.item_counts.trash;
+                        results.summary = Some(page.summary);
                         results
                             .items
                             .extend(page.filtered_items.into_iter().map(history_item));
@@ -180,6 +183,7 @@ impl ProjectsResults {
         self.scoped_count = page.summary.total_items;
         self.has_more = page.has_more;
         self.trash_count = page.item_counts.trash;
+        self.summary = Some(page.summary);
         self.items = page.filtered_items.into_iter().map(history_item).collect();
         self.retain_visible_selection();
     }
