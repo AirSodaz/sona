@@ -9,8 +9,6 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use sona_core::recovery::types::{RecoveredQueueItem, RecoveryItemInput, RecoverySource};
 
-use super::super::shell::MainShell;
-
 pub struct RecoveryModal {
     pub is_open: bool,
     items: Vec<RecoveredQueueItem>,
@@ -19,6 +17,12 @@ pub struct RecoveryModal {
     is_busy: bool,
     error: Option<String>,
 }
+#[derive(Clone, Debug)]
+pub enum RecoveryModalEvent {
+    ResumeBatch(Vec<RecoveredQueueItem>),
+}
+
+impl EventEmitter<RecoveryModalEvent> for RecoveryModal {}
 
 impl RecoveryModal {
     pub fn new() -> Self {
@@ -32,7 +36,7 @@ impl RecoveryModal {
         }
     }
 
-    pub fn open(&mut self, cx: &mut Context<MainShell>) {
+    pub fn open(&mut self, cx: &mut Context<Self>) {
         self.is_open = true;
         self.load(cx);
     }
@@ -41,7 +45,7 @@ impl RecoveryModal {
         self.is_open = false;
     }
 
-    pub fn load(&mut self, cx: &mut Context<MainShell>) {
+    pub fn load(&mut self, cx: &mut Context<Self>) {
         self.is_loading = true;
         self.error = None;
         cx.notify();
@@ -49,18 +53,17 @@ impl RecoveryModal {
         let provider = crate::platform::system::paths::DesktopPathProvider::from_default();
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let result = crate::platform::recovery_repository::load_snapshot(&provider).await;
-            this.update(cx, |shell, cx| {
-                let modal = &mut shell.recovery_modal;
-                modal.is_loading = false;
+            this.update(cx, |this, cx| {
+                this.is_loading = false;
                 match result {
                     Ok(snapshot) => {
-                        modal.items = snapshot.items;
-                        modal.updated_at = snapshot.updated_at;
-                        if modal.items.is_empty() {
-                            modal.is_open = false;
+                        this.items = snapshot.items;
+                        this.updated_at = snapshot.updated_at;
+                        if this.items.is_empty() {
+                            this.is_open = false;
                         }
                     }
-                    Err(error) => modal.error = Some(error),
+                    Err(error) => this.error = Some(error),
                 }
                 cx.notify();
             })
@@ -69,7 +72,7 @@ impl RecoveryModal {
         .detach();
     }
 
-    fn discard(&mut self, id: Option<String>, cx: &mut Context<MainShell>) {
+    fn discard(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         if self.is_busy {
             return;
         }
@@ -118,24 +121,22 @@ impl RecoveryModal {
                         .await;
                 }
             }
-            this.update(cx, |shell, cx| {
-                let modal = &mut shell.recovery_modal;
-                modal.is_busy = false;
+            this.update(cx, |this, cx| {
+                this.is_busy = false;
                 match result {
                     Ok(snapshot) => {
-                        modal.items = snapshot.items;
-                        modal.updated_at = snapshot.updated_at;
+                        this.items = snapshot.items;
+                        this.updated_at = snapshot.updated_at;
                     }
-                    Err(error) => modal.error = Some(error),
+                    Err(error) => this.error = Some(error),
                 }
                 cx.notify();
             })
-            .ok();
         })
         .detach();
     }
 
-    fn resume(&mut self, id: Option<String>, cx: &mut Context<MainShell>) {
+    fn resume(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         if self.is_busy {
             return;
         }
@@ -191,23 +192,15 @@ impl RecoveryModal {
                         .await;
                 }
             }
-            this.update(cx, |shell, cx| {
-                let modal = &mut shell.recovery_modal;
-                modal.is_busy = false;
+            this.update(cx, |this, cx| {
+                this.is_busy = false;
                 match result {
                     Ok(snapshot) => {
-                        modal.items = snapshot.items;
-                        modal.updated_at = snapshot.updated_at;
-                        let workspace = shell.create_workspace.clone();
-                        workspace.update(cx, |workspace, cx| {
-                            workspace
-                                .set_tab(crate::views::create::CreateWorkspaceTab::BatchImport, cx);
-                            workspace.batch_import.update(cx, |batch, cx| {
-                                batch.enqueue_recovered_items(selected, cx);
-                            });
-                        });
+                        this.items = snapshot.items;
+                        this.updated_at = snapshot.updated_at;
+                        cx.emit(RecoveryModalEvent::ResumeBatch(selected));
                     }
-                    Err(error) => modal.error = Some(error),
+                    Err(error) => this.error = Some(error),
                 }
                 cx.notify();
             })
@@ -215,8 +208,10 @@ impl RecoveryModal {
         })
         .detach();
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+impl Render for RecoveryModal {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
         }
@@ -260,8 +255,8 @@ impl RecoveryModal {
                     .justify_center()
                     .size_full()
                     .bg(hsla(0.0, 0.0, 0.0, 0.4))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.recovery_modal.close();
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close();
                         cx.notify();
                     }))
                     .child(
@@ -331,8 +326,8 @@ impl RecoveryModal {
                                                             .small()
                                                             .label("Resume All")
                                                             .disabled(is_busy || items.is_empty() || has_missing_sources || has_unsupported_source)
-                                                            .on_click(cx.listener(|shell, _, _, cx| {
-                                                                shell.recovery_modal.resume(None, cx);
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.resume(None, cx);
                                                             })),
                                                     )
                                                     .child(
@@ -341,8 +336,8 @@ impl RecoveryModal {
                                                             .small()
                                                             .label("Discard All")
                                                             .disabled(is_busy || items.is_empty())
-                                                            .on_click(cx.listener(|shell, _, _, cx| {
-                                                                shell.recovery_modal.discard(None, cx);
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.discard(None, cx);
                                                             })),
                                                     ),
                                             )
@@ -351,8 +346,8 @@ impl RecoveryModal {
                                                     .ghost()
                                                     .small()
                                                     .label("Close")
-                                                    .on_click(cx.listener(|shell, _, _, cx| {
-                                                        shell.recovery_modal.close();
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.close();
                                                         cx.notify();
                                                     })),
                                             ),
@@ -456,7 +451,7 @@ fn overview_card(
     description: &'static str,
     items: &[RecoveredQueueItem],
     icon: LucideIcon,
-    cx: &Context<MainShell>,
+    cx: &Context<RecoveryModal>,
 ) -> impl IntoElement {
     let draft_count = items
         .iter()
@@ -498,7 +493,7 @@ fn overview_card(
         )
 }
 
-fn metric(icon: LucideIcon, label: String, cx: &Context<MainShell>) -> impl IntoElement {
+fn metric(icon: LucideIcon, label: String, cx: &Context<RecoveryModal>) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -519,7 +514,7 @@ fn section(
     description: &'static str,
     items: Vec<RecoveredQueueItem>,
     is_busy: bool,
-    cx: &mut Context<MainShell>,
+    cx: &mut Context<RecoveryModal>,
 ) -> impl IntoElement {
     div()
         .flex()
@@ -619,10 +614,8 @@ fn section(
                                         .small()
                                         .label("Resume")
                                         .disabled(is_busy || !can_resume)
-                                        .on_click(cx.listener(move |shell, _, _, cx| {
-                                            shell
-                                                .recovery_modal
-                                                .resume(Some(resume_id.clone()), cx);
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.resume(Some(resume_id.clone()), cx);
                                         })),
                                 )
                                 .child(
@@ -631,8 +624,8 @@ fn section(
                                         .small()
                                         .label("Discard")
                                         .disabled(is_busy)
-                                        .on_click(cx.listener(move |shell, _, _, cx| {
-                                            shell.recovery_modal.discard(Some(item_id.clone()), cx);
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.discard(Some(item_id.clone()), cx);
                                         })),
                                 ),
                         )

@@ -1,4 +1,5 @@
-use crate::views::shell::MainShell;
+#![allow(dead_code)]
+use super::SettingsModal;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Disableable as _;
@@ -24,17 +25,17 @@ pub(crate) fn speaker_profiles_panel(
     >,
     name_state: &Entity<InputState>,
     search_state: &Entity<InputState>,
-    cx: &mut Context<MainShell>,
+    cx: &mut Context<SettingsModal>,
 ) -> AnyElement {
     let profiles = normalized_profiles(config);
     let name = name_state.read(cx).value().trim().to_string();
     let query = search_state.read(cx).value().trim().to_lowercase();
-    let scope_filter = settings.speaker_scope_filter.clone();
-    let selected_scope = settings.speaker_new_scope.clone();
-    let expanded = settings.speaker_expanded_ids.clone();
-    let edit_scope = settings.speaker_edit_scope.clone();
-    let selected_project_ids = settings.speaker_scope_project_ids.clone();
-    let import_error = settings.speaker_import_error.clone();
+    let scope_filter = settings.vocabulary.speaker_scope_filter.clone();
+    let selected_scope = settings.vocabulary.speaker_new_scope.clone();
+    let expanded = settings.vocabulary.speaker_expanded_ids.clone();
+    let edit_scope = settings.vocabulary.speaker_edit_scope.clone();
+    let selected_project_ids = settings.vocabulary.speaker_scope_project_ids.clone();
+    let import_error = settings.vocabulary.speaker_import_error.clone();
     let mut filter_items = vec![("all".to_string(), "All Scopes".to_string(), profiles.len())];
     filter_items.push((
         "global".to_string(),
@@ -76,9 +77,9 @@ pub(crate) fn speaker_profiles_panel(
                 Button::new(ElementId::Name(format!("speaker-scope-filter-{id}").into()))
                     .when(selected, |button| button.primary()).when(!selected, |button| button.outline())
                     .small().label(format!("{label} ({count})"))
-                    .on_click(cx.listener(move |shell, _, _, cx| {
-                        shell.settings_modal.speaker_scope_filter = id.clone();
-                        shell.settings_modal.speaker_new_scope = if id == "all" { "global".to_string() } else { id.clone() };
+                    .on_click(cx.listener(move |modal, _, _, cx| {
+                        modal.vocabulary.speaker_scope_filter = id.clone();
+                        modal.vocabulary.speaker_new_scope = if id == "all" { "global".to_string() } else { id.clone() };
                         cx.notify();
                     }))
             })))
@@ -90,49 +91,49 @@ pub(crate) fn speaker_profiles_panel(
             .child(div().w(px(200.0)).flex().flex_col().gap_1()
                 .child(label("Target Scope", cx))
                 .child(Button::new("speaker-new-scope").outline().small().label(scope_label(&selected_scope, projects))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.settings_modal.speaker_new_scope_open = !shell.settings_modal.speaker_new_scope_open;
+                    .on_click(cx.listener(|modal, _, _, cx| {
+                        modal.vocabulary.speaker_new_scope_open = !modal.vocabulary.speaker_new_scope_open;
                         cx.notify();
                     }))))
             .child(Button::new("speaker-add-profile").primary().small().label("Add Profile").disabled(name.is_empty())
-                .on_click(cx.listener(move |shell, _, window, cx| {
-                    let name = shell.speaker_profile_name_state.read(cx).value().trim().to_string();
+                .on_click(cx.listener(move |modal, _, window, cx| {
+                    let name = modal.vocabulary.speaker_profile_name_state.read(cx).value().trim().to_string();
                     if name.is_empty() { return; }
-                    let scope = shell.settings_modal.speaker_new_scope.clone();
+                    let scope = modal.vocabulary.speaker_new_scope.clone();
                     let profile = SpeakerProfile {
                         id: Uuid::new_v4().to_string(), name: name.clone(), enabled: true,
                         scope: if scope == "global" { "global" } else { "project" }.to_string(),
                         project_ids: if scope == "global" { Vec::new() } else { vec![scope] },
                         samples: Vec::new(),
                     };
-                    let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                    let mut profiles = normalized_profiles(&modal.model_config);
                     let id = profile.id.clone();
                     profiles.push(profile);
-                    shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                    modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
                     let profile_name_state = cx.new(|cx| InputState::new(window, cx).default_value(name));
                     let profile_name_id = id.clone();
-                    let subscription = cx.subscribe(&profile_name_state, move |shell, state, event: &gpui_kit::component::input::InputEvent, cx| {
+                    let subscription = cx.subscribe(&profile_name_state, move |modal, state, event: &gpui_kit::component::input::InputEvent, cx| {
                         if !matches!(event, gpui_kit::component::input::InputEvent::Change) { return; }
                         let name = state.read(cx).value().to_string();
-                        let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                        let mut profiles = normalized_profiles(&modal.model_config);
                         if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == profile_name_id) { profile.name = name; }
-                        shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                        modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
                     });
-                    shell.speaker_profile_name_states.insert(id.clone(), (profile_name_state, subscription));
-                    shell.speaker_profile_name_state.update(cx, |state, cx| state.set_value("", window, cx));
-                    shell.settings_modal.speaker_expanded_ids.insert(id);
+                    modal.vocabulary.speaker_profile_name_states.insert(id.clone(), (profile_name_state, subscription));
+                    modal.vocabulary.speaker_profile_name_state.update(cx, |state, cx| state.set_value("", window, cx));
+                    modal.vocabulary.speaker_expanded_ids.insert(id);
                     cx.notify();
                 }))))
-        .when(settings.speaker_new_scope_open, |this| {
+        .when(settings.vocabulary.speaker_new_scope_open, |this| {
             let options = std::iter::once(("global".to_string(), "Global".to_string())).chain(projects.iter().map(|project| (project.id.clone(), project.name.clone())).collect::<Vec<_>>());
             this.child(div().flex().flex_wrap().gap_1().children(options.map(|(id, label)| {
                 let selected = selected_scope == id;
                 Button::new(ElementId::Name(format!("speaker-new-scope-option-{id}").into()))
                     .when(selected, |button| button.primary()).when(!selected, |button| button.ghost())
                     .small().label(label)
-                    .on_click(cx.listener(move |shell, _, _, cx| {
-                        shell.settings_modal.speaker_new_scope = id.clone();
-                        shell.settings_modal.speaker_new_scope_open = false;
+                    .on_click(cx.listener(move |modal, _, _, cx| {
+                        modal.vocabulary.speaker_new_scope = id.clone();
+                        modal.vocabulary.speaker_new_scope_open = false;
                         cx.notify();
                     }))
             })))
@@ -163,40 +164,40 @@ pub(crate) fn speaker_profiles_panel(
                         .icon(icon(if is_expanded { LucideIcon::ChevronDown } else { LucideIcon::ChevronRight }))
                         .tooltip(if is_expanded { "Collapse profile" } else { "Expand profile" })
                         .accessibility_label(if is_expanded { "Collapse speaker profile" } else { "Expand speaker profile" })
-                        .on_click(cx.listener(move |shell, _, _, cx| {
-                            if !shell.settings_modal.speaker_expanded_ids.insert(expand_id.clone()) { shell.settings_modal.speaker_expanded_ids.remove(&expand_id); }
+                        .on_click(cx.listener(move |modal, _, _, cx| {
+                            if !modal.vocabulary.speaker_expanded_ids.insert(expand_id.clone()) { modal.vocabulary.speaker_expanded_ids.remove(&expand_id); }
                             cx.notify();
                         })))
                     .child(div().flex_1().min_w_0().child(name_field))
                     .child(Button::new(ElementId::Name(format!("speaker-profile-scope-{}", profile.id).into())).outline().small()
                         .label(scope_label_profile(&profile, projects))
                         .tooltip("Click to edit target scope")
-                        .on_click(cx.listener(move |shell, _, _, cx| {
-                            shell.settings_modal.speaker_edit_scope = Some(scope_id.clone());
-                            shell.settings_modal.speaker_scope_project_ids = scope_profile_ids.clone();
-                            shell.settings_modal.speaker_scope_modal_type = scope_profile_scope.clone();
+                        .on_click(cx.listener(move |modal, _, _, cx| {
+                            modal.vocabulary.speaker_edit_scope = Some(scope_id.clone());
+                            modal.vocabulary.speaker_scope_project_ids = scope_profile_ids.clone();
+                            modal.vocabulary.speaker_scope_modal_type = scope_profile_scope.clone();
                             cx.notify();
                         })))
                     .child(div().text_size(px(11.0)).text_color(cx.theme().muted_foreground).child(format!("{} samples", profile.samples.len())))
                     .child(div().flex_1().min_w_0().text_size(px(11.0)).text_color(cx.theme().muted_foreground).child(readiness.2))
                     .child(Switch::new(ElementId::Name(format!("speaker-profile-enabled-{}", profile.id).into())).checked(profile.enabled).accessibility_label("Enable speaker profile")
-                        .on_change(cx.listener(move |shell, enabled, _, cx| {
-                            let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                        .on_change(cx.listener(move |modal, enabled, _, cx| {
+                            let mut profiles = normalized_profiles(&modal.model_config);
                             if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == enabled_id) { profile.enabled = *enabled; }
-                            shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                            modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
                         })))
                         .child(Button::new(ElementId::Name(format!("speaker-profile-delete-{}", profile.id).into())).ghost().small().icon(icon(LucideIcon::Trash)).tooltip(format!("Delete {}", delete_label)).accessibility_label(format!("Delete {}", delete_label))
-                        .on_click(cx.listener(move |shell, _, _, cx| {
-                            let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                        .on_click(cx.listener(move |modal, _, _, cx| {
+                            let mut profiles = normalized_profiles(&modal.model_config);
                             if let Some(profile) = profiles.iter().find(|item| item.id == delete_id).cloned() {
                                 let paths = profile.samples.into_iter().map(|sample| sample.file_path).collect::<Vec<_>>();
                                 cx.spawn(async move |_this, _cx| { for path in paths { let _ = tokio::fs::remove_file(path).await; } }).detach();
                             }
                             profiles.retain(|item| item.id != delete_id);
-                            shell.speaker_profile_name_states.remove(&delete_id);
-                            shell.settings_modal.speaker_expanded_ids.remove(&delete_id);
-                            shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
-                            shell.settings_modal.remove_automation_profile_dependency("speakerProfile", delete_id.clone(), cx);
+                            modal.vocabulary.speaker_profile_name_states.remove(&delete_id);
+                            modal.vocabulary.speaker_expanded_ids.remove(&delete_id);
+                            modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                            modal.automation.remove_automation_profile_dependency("speakerProfile", delete_id.clone(), cx);
                         }))))
                 .when(is_expanded, |this| {
                     let id = profile.id.clone();
@@ -204,7 +205,7 @@ pub(crate) fn speaker_profiles_panel(
                         .child(div().flex_1().text_size(px(11.0)).text_color(cx.theme().muted_foreground).child("Import local reference clips. Audio is normalized to 16k mono WAV and stored under app-managed data."))
                         .child(div().text_size(px(11.0)).text_color(cx.theme().muted_foreground).child(readiness.1))
                         .child(Button::new(ElementId::Name(format!("speaker-import-{}", id).into())).outline().small().label("Import Samples")
-                            .on_click(cx.listener(move |_shell, _, _, cx| {
+                            .on_click(cx.listener(move |_modal, _, _, cx| {
                                 let id = id.clone();
                                 cx.spawn(async move |this, cx: &mut AsyncApp| {
                                     let selected = rfd::AsyncFileDialog::new().add_filter("Audio Files", &["wav", "mp3", "m4a", "aac", "ogg", "flac", "mp4", "webm"]).pick_files().await;
@@ -217,15 +218,15 @@ pub(crate) fn speaker_profiles_panel(
                                         let source_name = file.file_name();
                                         match crate::platform::models::speaker_processing::import_speaker_profile_sample(&provider, id.clone(), source, Some(source_name)).await { Ok(sample) => imported.push(sample), Err(error) => import_error = Some(error) }
                                     }
-                                    this.update(cx, |shell, cx| {
-                                        shell.settings_modal.speaker_import_error = import_error.map(|_| "Failed to import one or more speaker reference samples.".to_string());
+                                    this.update(cx, |modal, cx| {
+                                        modal.vocabulary.speaker_import_error = import_error.map(|_| "Failed to import one or more speaker reference samples.".to_string());
                                         if imported.is_empty() { cx.notify(); return; }
-                                        let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                                        let mut profiles = normalized_profiles(&modal.model_config);
                                         if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == id) {
                                             for sample in imported { if !profile.samples.iter().any(|saved| saved.id == sample.id) { profile.samples.push(sample); } }
                                         }
-                                        shell.settings_modal.speaker_expanded_ids.insert(id.clone());
-                                        shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                                        modal.vocabulary.speaker_expanded_ids.insert(id.clone());
+                                        modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
                                     }).ok();
                                 }).detach();
                             })))
@@ -237,34 +238,34 @@ pub(crate) fn speaker_profiles_panel(
             this.child(div().flex().flex_col().gap_2().p_3().rounded_md().border_1().border_color(cx.theme().border).bg(cx.theme().group_box)
                 .child(div().text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD).child("Edit target scope"))
                 .child(div().flex().gap_1().children([("global", "Global"), ("project", "Specific Projects")].into_iter().map(|(scope, label)| {
-                    let selected = settings.speaker_scope_modal_type == scope;
+                    let selected = settings.vocabulary.speaker_scope_modal_type == scope;
                     Button::new(ElementId::Name(format!("speaker-scope-modal-{scope}").into())).when(selected, |button| button.primary()).when(!selected, |button| button.outline()).small().label(label)
-                        .on_click(cx.listener(move |_shell, _, _, cx| { _shell.settings_modal.speaker_scope_modal_type = scope.to_string(); cx.notify(); }))
+                        .on_click(cx.listener(move |modal, _, _, cx| { modal.vocabulary.speaker_scope_modal_type = scope.to_string(); cx.notify(); }))
                 })))
-                .when(settings.speaker_scope_modal_type == "project", |this| {
+                .when(settings.vocabulary.speaker_scope_modal_type == "project", |this| {
                     let this = this.when(projects.is_empty(), |this| this.child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("No projects created yet.")));
                     this.children(projects.iter().map(|project| {
                         let id = project.id.clone();
                         let selected = selected_project_ids.contains(&id);
                         Button::new(ElementId::Name(format!("speaker-scope-project-{id}").into())).when(selected, |button| button.primary()).when(!selected, |button| button.outline()).small().label(project.name.clone())
-                            .on_click(cx.listener(move |shell, _, _, cx| {
-                                let ids = &mut shell.settings_modal.speaker_scope_project_ids;
+                            .on_click(cx.listener(move |modal, _, _, cx| {
+                                let ids = &mut modal.vocabulary.speaker_scope_project_ids;
                                 if ids.contains(&id) { ids.retain(|item| item != &id); } else { ids.push(id.clone()); }
                                 cx.notify();
                             }))
                     }))
                 })
                 .child(div().flex().justify_end().gap_2()
-                    .child(Button::new("speaker-scope-cancel").ghost().small().label("Cancel").on_click(cx.listener(|shell, _, _, cx| { shell.settings_modal.speaker_edit_scope = None; cx.notify(); })))
-                    .child(Button::new("speaker-scope-save").primary().small().label("Save").on_click(cx.listener(move |shell, _, _, cx| {
-                        let scope = shell.settings_modal.speaker_scope_modal_type.clone();
-                        let project_ids = shell.settings_modal.speaker_scope_project_ids.clone();
-                        let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+                    .child(Button::new("speaker-scope-cancel").ghost().small().label("Cancel").on_click(cx.listener(|modal, _, _, cx| { modal.vocabulary.speaker_edit_scope = None; cx.notify(); })))
+                    .child(Button::new("speaker-scope-save").primary().small().label("Save").on_click(cx.listener(move |modal, _, _, cx| {
+                        let scope = modal.vocabulary.speaker_scope_modal_type.clone();
+                        let project_ids = modal.vocabulary.speaker_scope_project_ids.clone();
+                        let mut profiles = normalized_profiles(&modal.model_config);
                         if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == profile_id) {
                             profile.scope = scope.clone(); profile.project_ids = if scope == "project" { project_ids } else { Vec::new() };
                         }
-                        shell.settings_modal.speaker_edit_scope = None;
-                        shell.settings_modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
+                        modal.vocabulary.speaker_edit_scope = None;
+                        modal.persist_model_setting("speakerProfiles".into(), serde_json::to_value(profiles).unwrap_or_else(|_| json!([])), cx);
                     }))))
             )
         })
@@ -274,7 +275,7 @@ pub(crate) fn speaker_profiles_panel(
 fn section_header(
     title: &'static str,
     description: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<SettingsModal>,
 ) -> impl IntoElement {
     div()
         .flex()
@@ -294,7 +295,7 @@ fn section_header(
         )
 }
 
-fn label(text: &'static str, cx: &Context<MainShell>) -> impl IntoElement {
+fn label(text: &'static str, cx: &Context<SettingsModal>) -> impl IntoElement {
     div()
         .text_size(px(11.0))
         .text_color(cx.theme().muted_foreground)
@@ -383,7 +384,7 @@ fn icon(name: LucideIcon) -> Icon {
 fn sample_row(
     sample: &SpeakerProfileSample,
     profile_id: &str,
-    cx: &Context<MainShell>,
+    cx: &Context<SettingsModal>,
 ) -> impl IntoElement {
     let sample_id = sample.id.clone();
     let file_path = sample.file_path.clone();
@@ -425,8 +426,8 @@ fn sample_row(
             .icon(icon(LucideIcon::Trash))
             .tooltip("Delete sample")
             .accessibility_label("Delete sample")
-            .on_click(cx.listener(move |shell, _, _, cx| {
-                let mut profiles = normalized_profiles(&shell.settings_modal.model_config);
+            .on_click(cx.listener(move |modal, _, _, cx| {
+                let mut profiles = normalized_profiles(&modal.model_config);
                 if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == profile_id)
                 {
                     profile.samples.retain(|sample| sample.id != sample_id);
@@ -436,7 +437,7 @@ fn sample_row(
                     let _ = tokio::fs::remove_file(path).await;
                 })
                 .detach();
-                shell.settings_modal.persist_model_setting(
+                modal.persist_model_setting(
                     "speakerProfiles".into(),
                     serde_json::to_value(profiles).unwrap_or_else(|_| json!([])),
                     cx,

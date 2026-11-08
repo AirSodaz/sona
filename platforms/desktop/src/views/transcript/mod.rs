@@ -16,4 +16,4 @@ pub use speaker_review_sheet::SpeakerReviewSheet;
 pub use summary_sheet::SummarySheet;
 pub use toolbar::EditorToolbar;
 pub use version_sheet::VersionSheet;
-pub use workbench::TranscriptWorkbench;
+pub use workbench::{TranscriptWorkbench, WorkbenchEvent};

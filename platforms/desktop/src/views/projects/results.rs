@@ -56,6 +56,7 @@ pub struct ProjectsResults {
     pub is_loading_more: bool,
     pub load_error: bool,
     pub load_more_error: bool,
+    pub rename_input_state: Entity<InputState>,
     rename_target: Option<String>,
     rename_error: Option<String>,
     rename_busy: bool,
@@ -63,7 +64,9 @@ pub struct ProjectsResults {
 }
 
 impl ProjectsResults {
-    pub fn new() -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+        let rename_input_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Transcript title"));
         Self {
             items: Vec::new(),
             selected_id: None,
@@ -82,6 +85,7 @@ impl ProjectsResults {
             is_loading_more: false,
             load_error: false,
             load_more_error: false,
+            rename_input_state,
             rename_target: None,
             rename_error: None,
             rename_busy: false,
@@ -265,17 +269,11 @@ impl ProjectsResults {
         self.selected_ids.clear();
     }
 
-    fn begin_rename(
-        &mut self,
-        id: String,
-        rename_input: &Entity<InputState>,
-        window: &mut Window,
-        cx: &mut Context<MainShell>,
-    ) {
+    fn begin_rename(&mut self, id: String, window: &mut Window, cx: &mut Context<MainShell>) {
         let Some(item) = self.items.iter().find(|item| item.id == id) else {
             return;
         };
-        rename_input.update(cx, |state, cx| {
+        self.rename_input_state.update(cx, |state, cx| {
             state.set_value(item.title.clone(), window, cx);
         });
         self.rename_target = Some(id);
@@ -283,11 +281,11 @@ impl ProjectsResults {
         cx.notify();
     }
 
-    fn save_rename(&mut self, rename_input: &Entity<InputState>, cx: &mut Context<MainShell>) {
+    fn save_rename(&mut self, cx: &mut Context<MainShell>) {
         let Some(id) = self.rename_target.clone() else {
             return;
         };
-        let title = rename_input.read(cx).value().trim().to_string();
+        let title = self.rename_input_state.read(cx).value().trim().to_string();
         if title.is_empty() || self.rename_busy {
             return;
         }
@@ -338,7 +336,6 @@ impl ProjectsResults {
         view_mode: ViewMode,
         selection_mode: bool,
         projects: &[ProjectRecord],
-        rename_input: &Entity<InputState>,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
         let selected_ids = self.selected_ids.clone();
@@ -428,8 +425,6 @@ impl ProjectsResults {
                                 .label("Clear filters")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.projects_toolbar.reset_filters(window, cx);
-                                    this.project_search_state
-                                        .update(cx, |state, cx| state.set_value("", window, cx));
                                 })),
                         )
                 })
@@ -513,7 +508,7 @@ impl ProjectsResults {
         let rename_target = self.rename_target.clone();
         let rename_busy = self.rename_busy;
         let rename_error = self.rename_error.clone();
-        let rename_input = rename_input.clone();
+
         div()
             .relative()
             .flex()
@@ -555,7 +550,7 @@ impl ProjectsResults {
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .child(format!("Rename \"{title}\"")),
                                 )
-                                .child(Input::new(&rename_input).focus_ring(true))
+                                .child(Input::new(&self.rename_input_state).focus_ring(true))
                                 .when_some(rename_error, |dialog, error| {
                                     dialog.child(
                                         div()
@@ -592,22 +587,13 @@ impl ProjectsResults {
                                                 })
                                                 .disabled(rename_busy)
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.projects_results.save_rename(
-                                                        &this.history_rename_state,
-                                                        cx,
-                                                    );
+                                                    this.projects_results.save_rename(cx);
                                                 })),
                                         ),
                                 ),
                         ),
                 )
             })
-    }
-}
-
-impl Default for ProjectsResults {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -914,12 +900,8 @@ fn render_history_item(
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 cx.stop_propagation();
-                                this.projects_results.begin_rename(
-                                    rename_id.clone(),
-                                    &this.history_rename_state,
-                                    window,
-                                    cx,
-                                );
+                                this.projects_results
+                                    .begin_rename(rename_id.clone(), window, cx);
                             },
                         )),
                     )
@@ -1280,7 +1262,7 @@ fn render_history_item(
                             .update(cx, |shell, cx| {
                                 shell
                                     .projects_results
-                                    .begin_rename(rename_id.clone(), &shell.history_rename_state, window, cx);
+                                    .begin_rename(rename_id.clone(), window, cx);
                             })
                             .ok();
                     }),
@@ -1376,11 +1358,13 @@ fn render_history_item(
                                     };
                                     if let Err(error) = result {
                                         this.update(cx, |shell, cx| {
-                                            shell.global_dialog.show(
-                                                "Could Not Reveal History Item",
-                                                error,
-                                                crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                            );
+                                            shell.global_dialog.update(cx, |d, _| {
+                                                d.show(
+                                                    "Could Not Reveal History Item",
+                                                    error,
+                                                    crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                                );
+                                            });
                                             cx.notify();
                                         })
                                         .ok();

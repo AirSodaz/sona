@@ -212,8 +212,9 @@ impl ProjectsHeader {
                                         .tooltip("Project Settings")
                                         .accessibility_label("Project Settings")
                                         .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.project_dialogs
-                                                .open_settings(&p_clone, window, cx);
+                                            this.project_dialogs.update(cx, |dialogs, cx| {
+                                                dialogs.open_settings(&p_clone, window, cx);
+                                            });
                                         })),
                                 )
                             })

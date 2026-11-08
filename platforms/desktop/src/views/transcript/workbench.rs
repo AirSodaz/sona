@@ -12,7 +12,21 @@ use gpui_kit::*;
 use sona_core::ports::llm::LlmTextGeneratorPort;
 use std::time::Duration;
 
-use super::super::shell::MainShell;
+#[derive(Clone, Debug)]
+pub enum WorkbenchEvent {
+    Export {
+        title: String,
+        has_translation: bool,
+        segments: Vec<TranscriptSegment>,
+    },
+    Closed,
+    ItemRenamed {
+        id: String,
+        title: String,
+    },
+}
+
+impl EventEmitter<WorkbenchEvent> for TranscriptWorkbench {}
 use super::audio_player::AudioPlayerBar;
 use super::editor::TranscriptEditor;
 use super::search_overlay::SearchOverlay;
@@ -78,7 +92,7 @@ pub struct TranscriptWorkbench {
 }
 
 impl TranscriptWorkbench {
-    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let rename_title_state =
             cx.new(|cx| InputState::new(window, cx).placeholder("Transcript title"));
         Self {
@@ -145,7 +159,7 @@ impl TranscriptWorkbench {
         self.editor.segments.iter().any(|s| s.translation.is_some())
     }
 
-    pub fn undo_polish(&mut self, cx: &mut Context<MainShell>) {
+    pub fn undo_polish(&mut self, cx: &mut Context<Self>) {
         if let Some(undo) = self.undo_segments.take() {
             self.redo_segments = Some(self.editor.segments.clone());
             self.editor.segments = undo;
@@ -155,7 +169,7 @@ impl TranscriptWorkbench {
         }
     }
 
-    pub fn redo_polish(&mut self, cx: &mut Context<MainShell>) {
+    pub fn redo_polish(&mut self, cx: &mut Context<Self>) {
         if let Some(redo) = self.redo_segments.take() {
             self.undo_segments = Some(self.editor.segments.clone());
             self.editor.segments = redo;
@@ -165,7 +179,7 @@ impl TranscriptWorkbench {
         }
     }
 
-    pub fn resync_media_server(&mut self, cx: &mut Context<MainShell>) {
+    pub fn resync_media_server(&mut self, cx: &mut Context<Self>) {
         let Some(ctx) = self.media_server_context.clone() else {
             return;
         };
@@ -191,7 +205,7 @@ impl TranscriptWorkbench {
 
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let delete_index = ctx.existing_external_subtitle_index;
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let payload = crate::integrations::media_server::MediaServerSubtitleUploadPayload {
                 item_id: ctx.item_id.clone(),
                 language: ctx.target_language.clone(),
@@ -203,13 +217,12 @@ impl TranscriptWorkbench {
                 .media_server
                 .upload_subtitle(Some(&ctx.profile_id), payload, delete_index)
                 .await;
-            shell
-                .update(cx, |shell, cx| {
-                    shell.workbench.is_syncing_media_server = false;
-                    shell.workbench.media_server_sync_success = result.is_ok();
-                    cx.notify();
-                })
-                .ok();
+            this.update(cx, |this, cx| {
+                this.is_syncing_media_server = false;
+                this.media_server_sync_success = result.is_ok();
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
@@ -284,7 +297,7 @@ impl TranscriptWorkbench {
             .collect()
     }
 
-    fn persist_current(&mut self, cx: &mut Context<MainShell>) {
+    fn persist_current(&mut self, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
@@ -293,7 +306,7 @@ impl TranscriptWorkbench {
         let edited_for_commit = edited_segments.clone();
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         self.toolbar.is_saving = true;
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result = services
                 .history
                 .mutation_db(move |service| {
@@ -306,47 +319,46 @@ impl TranscriptWorkbench {
                     })
                 })
                 .await;
-            shell
-                .update(cx, |shell, cx| {
-                    shell.workbench.toolbar.is_saving = false;
-                    if matches!(
-                        result,
-                        Ok(HistoryCommitTranscriptEditResult::Committed { .. }
-                            | HistoryCommitTranscriptEditResult::Unchanged)
-                    ) {
-                        shell.workbench.base_segments = edited_segments;
-                    }
-                    cx.notify();
-                })
-                .ok();
+            this.update(cx, |this, cx| {
+                this.toolbar.is_saving = false;
+                if matches!(
+                    result,
+                    Ok(HistoryCommitTranscriptEditResult::Committed { .. }
+                        | HistoryCommitTranscriptEditResult::Unchanged)
+                ) {
+                    this.base_segments = edited_segments;
+                }
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn begin_edit(&mut self, id: &str, window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn begin_edit(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.begin_edit(id, window, cx);
     }
 
-    pub fn save_edit(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn save_edit(&mut self, id: &str, cx: &mut Context<Self>) {
         self.editor.save_edit(id, cx);
         self.persist_current(cx);
     }
 
-    pub fn persist_editor_change(&mut self, cx: &mut Context<MainShell>) {
+    pub fn persist_editor_change(&mut self, cx: &mut Context<Self>) {
         self.persist_current(cx);
     }
 
-    pub fn delete_segment(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn delete_segment(&mut self, id: &str, cx: &mut Context<Self>) {
         self.editor.delete_segment(id);
         self.persist_current(cx);
     }
 
-    pub fn merge_with_next(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn merge_with_next(&mut self, id: &str, cx: &mut Context<Self>) {
         self.editor.merge_with_next(id);
         self.persist_current(cx);
     }
 
-    pub fn split_segment(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn split_segment(&mut self, id: &str, cx: &mut Context<Self>) {
         self.editor.split_segment(id);
         self.persist_current(cx);
     }
@@ -357,7 +369,7 @@ impl TranscriptWorkbench {
         self.has_session = false;
     }
 
-    pub fn open_rename(&mut self, window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn open_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let title = self.session_title.clone();
         self.rename_icon = self.session_icon.clone();
         self.rename_title_state.update(cx, |input, cx| {
@@ -367,7 +379,7 @@ impl TranscriptWorkbench {
         cx.notify();
     }
 
-    pub fn save_rename(&mut self, cx: &mut Context<MainShell>) {
+    pub fn save_rename(&mut self, cx: &mut Context<Self>) {
         let new_title = self.rename_title_state.read(cx).value().trim().to_string();
         if new_title.is_empty() {
             return;
@@ -378,33 +390,37 @@ impl TranscriptWorkbench {
         if let Some(history_id) = self.history_id.clone() {
             let services = cx.global::<GlobalDesktopServices>().0.clone();
             let new_icon = self.rename_icon.clone();
-            cx.spawn(async move |shell, cx| {
+            cx.spawn(async move |this, cx| {
+                let hid = history_id.clone();
+                let title = new_title.clone();
                 let _ = services
                     .history
                     .mutation_db(move |mutator| {
                         mutator.update_item_meta(HistoryUpdateItemMetaRequest {
-                            history_id,
+                            history_id: hid,
                             updates: HistoryItemMetaPatch {
-                                title: Some(new_title),
+                                title: Some(title),
                                 icon: Some(new_icon),
                                 ..Default::default()
                             },
                         })
                     })
                     .await;
-                shell
-                    .update(cx, |shell, cx| {
-                        shell.project_selector.load_data(cx);
-                        cx.notify();
-                    })
-                    .ok();
+                this.update(cx, |_this, cx| {
+                    cx.emit(WorkbenchEvent::ItemRenamed {
+                        id: history_id,
+                        title: new_title,
+                    });
+                    cx.notify();
+                })
+                .ok();
             })
             .detach();
         }
         cx.notify();
     }
 
-    pub fn generate_ai_title(&mut self, _window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn generate_ai_title(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let segments = self.current_segments();
         if segments.is_empty() {
             return;
@@ -413,7 +429,7 @@ impl TranscriptWorkbench {
         self.is_ai_renaming = true;
         cx.notify();
 
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let new_title = async {
                 let config = services
                     .config
@@ -466,20 +482,19 @@ impl TranscriptWorkbench {
             }
             .await;
 
-            shell
-                .update(cx, |shell, cx| {
-                    if let Ok(title) = new_title {
-                        shell.workbench.session_title = title;
-                    }
-                    shell.workbench.is_ai_renaming = false;
-                    cx.notify();
-                })
-                .ok();
+            this.update(cx, |this, cx| {
+                if let Ok(title) = new_title {
+                    this.session_title = title;
+                }
+                this.is_ai_renaming = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn start_polish(&mut self, cx: &mut Context<MainShell>) {
+    pub fn start_polish(&mut self, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
@@ -493,7 +508,7 @@ impl TranscriptWorkbench {
         self.is_polishing = true;
         self.polish_error = None;
         cx.notify();
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result: Result<Vec<TranscriptSegment>, String> = async {
                 let config = services
                     .config
@@ -567,26 +582,25 @@ impl TranscriptWorkbench {
             }
             .await;
 
-            shell
-                .update(cx, |shell, cx| {
-                    match result {
-                        Ok(new_segments) => {
-                            let duration = shell.workbench.player.total_duration;
-                            shell.workbench.set_transcript(new_segments, duration);
-                        }
-                        Err(err) => {
-                            shell.workbench.polish_error = Some(err);
-                        }
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(new_segments) => {
+                        let duration = this.player.total_duration;
+                        this.set_transcript(new_segments, duration);
                     }
-                    shell.workbench.is_polishing = false;
-                    cx.notify();
-                })
-                .ok();
+                    Err(err) => {
+                        this.polish_error = Some(err);
+                    }
+                }
+                this.is_polishing = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn start_translate(&mut self, target_lang: &str, cx: &mut Context<MainShell>) {
+    pub fn start_translate(&mut self, target_lang: &str, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
@@ -600,7 +614,7 @@ impl TranscriptWorkbench {
         self.translate_error = None;
         cx.notify();
 
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result: Result<Vec<TranscriptSegment>, String> = async {
                 let config = services
                     .config
@@ -677,21 +691,20 @@ impl TranscriptWorkbench {
             }
             .await;
 
-            shell
-                .update(cx, |shell, cx| {
-                    match result {
-                        Ok(new_segments) => {
-                            let duration = shell.workbench.player.total_duration;
-                            shell.workbench.set_transcript(new_segments, duration);
-                        }
-                        Err(err) => {
-                            shell.workbench.translate_error = Some(err);
-                        }
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(new_segments) => {
+                        let duration = this.player.total_duration;
+                        this.set_transcript(new_segments, duration);
                     }
-                    shell.workbench.is_translating = false;
-                    cx.notify();
-                })
-                .ok();
+                    Err(err) => {
+                        this.translate_error = Some(err);
+                    }
+                }
+                this.is_translating = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
@@ -718,7 +731,7 @@ impl TranscriptWorkbench {
             .unwrap_or_default();
     }
 
-    pub fn save_summary_edit(&mut self, cx: &mut Context<MainShell>) {
+    pub fn save_summary_edit(&mut self, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
@@ -726,7 +739,7 @@ impl TranscriptWorkbench {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         self.summary_sheet.is_saving = true;
         self.summary_sheet.error_message = None;
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result = crate::platform::agent_control::facade::history::save_summary(
                 &services,
                 crate::platform::agent_control::facade::types::SaveSummaryRequest {
@@ -737,47 +750,45 @@ impl TranscriptWorkbench {
                 },
             )
             .await;
-            shell
-                .update(cx, |shell, cx| {
-                    match result {
-                        Ok(_) => shell.workbench.summary_sheet.summary_text = content,
-                        Err(error) => shell.workbench.summary_sheet.error_message = Some(error),
-                    }
-                    shell.workbench.summary_sheet.is_saving = false;
-                    cx.notify();
-                })
-                .ok();
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(_) => this.summary_sheet.summary_text = content,
+                    Err(error) => this.summary_sheet.error_message = Some(error),
+                }
+                this.summary_sheet.is_saving = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn delete_summary(&mut self, cx: &mut Context<MainShell>) {
+    pub fn delete_summary(&mut self, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         self.summary_sheet.is_saving = true;
         self.summary_sheet.error_message = None;
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result = crate::platform::agent_control::facade::history::delete_summary(
                 &services, history_id,
             )
             .await;
-            shell
-                .update(cx, |shell, cx| {
-                    match result {
-                        Ok(_) => shell.workbench.summary_sheet.summary_text.clear(),
-                        Err(error) => shell.workbench.summary_sheet.error_message = Some(error),
-                    }
-                    shell.workbench.summary_sheet.is_saving = false;
-                    cx.notify();
-                })
-                .ok();
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(_) => this.summary_sheet.summary_text.clear(),
+                    Err(error) => this.summary_sheet.error_message = Some(error),
+                }
+                this.summary_sheet.is_saving = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn save_speaker_rename(&mut self, target_id: &str, cx: &mut Context<MainShell>) {
+    pub fn save_speaker_rename(&mut self, target_id: &str, cx: &mut Context<Self>) {
         let Some(state) = &self.speaker_sheet.edit_name_state else {
             return;
         };
@@ -820,7 +831,7 @@ impl TranscriptWorkbench {
         cx.notify();
     }
 
-    pub fn refresh_summary(&mut self, cx: &mut Context<MainShell>) {
+    pub fn refresh_summary(&mut self, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             self.summary_sheet.is_generating = false;
             return;
@@ -829,7 +840,7 @@ impl TranscriptWorkbench {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         self.summary_sheet.is_generating = true;
         self.summary_sheet.error_message = None;
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let summary = async {
                 let config = services
                     .config
@@ -904,32 +915,31 @@ impl TranscriptWorkbench {
                 Ok::<String, String>(result.content)
             }
             .await;
-            shell
-                .update(cx, |shell, cx| {
-                    match summary {
-                        Ok(content) => {
-                            shell.workbench.summary_sheet.summary_text = content;
-                        }
-                        Err(error) => {
-                            shell.workbench.summary_sheet.error_message = Some(error);
-                        }
+            this.update(cx, |this, cx| {
+                match summary {
+                    Ok(content) => {
+                        this.summary_sheet.summary_text = content;
                     }
-                    shell.workbench.summary_sheet.is_generating = false;
-                    cx.notify();
-                })
-                .ok();
+                    Err(error) => {
+                        this.summary_sheet.error_message = Some(error);
+                    }
+                }
+                this.summary_sheet.is_generating = false;
+                cx.notify();
+            })
+            .ok();
         })
         .detach();
     }
 
-    pub fn restore_version(&mut self, snapshot_id: &str, cx: &mut Context<MainShell>) {
+    pub fn restore_version(&mut self, snapshot_id: &str, cx: &mut Context<Self>) {
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
         let snapshot_id = snapshot_id.to_string();
         let duration = self.player.total_duration;
         let services = cx.global::<GlobalDesktopServices>().0.clone();
-        cx.spawn(async move |shell, cx| {
+        cx.spawn(async move |this, cx| {
             let result =
                 crate::platform::agent_control::facade::transcript::revert_transcript_snapshot(
                     &services,
@@ -943,19 +953,18 @@ impl TranscriptWorkbench {
                     .query_db(move |query| query.load_transcript(&history_id))
                     .await
             {
-                shell
-                    .update(cx, |shell, cx| {
-                        shell.workbench.set_transcript(segments, duration);
-                        shell.workbench.version_sheet.is_open = false;
-                        cx.notify();
-                    })
-                    .ok();
+                this.update(cx, |this, cx| {
+                    this.set_transcript(segments, duration);
+                    this.version_sheet.is_open = false;
+                    cx.notify();
+                })
+                .ok();
             }
         })
         .detach();
     }
 
-    pub fn render(&mut self, window: &mut Window, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let query = self
             .search
             .query_state
@@ -1157,7 +1166,7 @@ impl TranscriptWorkbench {
                                     .icon(LucideIcon::Pencil)
                                     .tooltip("Rename")
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.workbench.open_rename(window, cx);
+                                        this.open_rename(window, cx);
                                     })),
                             )
                             .child(
@@ -1168,7 +1177,7 @@ impl TranscriptWorkbench {
                                     .label("Summary")
                                     .tooltip("AI Summary")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.summary_sheet.toggle();
+                                        this.summary_sheet.toggle();
                                         cx.notify();
                                     })),
                             )
@@ -1180,7 +1189,7 @@ impl TranscriptWorkbench {
                                     .label("Speakers")
                                     .tooltip("Speaker Review")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.speaker_sheet.toggle();
+                                        this.speaker_sheet.toggle();
                                         cx.notify();
                                     })),
                             )
@@ -1192,7 +1201,7 @@ impl TranscriptWorkbench {
                                     .label("Versions")
                                     .tooltip("Version History")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.version_sheet.toggle();
+                                        this.version_sheet.toggle();
                                         cx.notify();
                                     })),
                             ),
@@ -1221,7 +1230,7 @@ impl TranscriptWorkbench {
                                         .disabled(self.is_syncing_media_server || self.editor.segments.is_empty())
                                         .tooltip("Re-sync subtitles to Media Server")
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            this.workbench.resync_media_server(cx);
+                                            this.resync_media_server(cx);
                                         })),
                                 )
                             })
@@ -1241,8 +1250,8 @@ impl TranscriptWorkbench {
                                             .tooltip("Polish transcript with LLM")
                                             .disabled(self.is_polishing)
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.workbench.polish_menu_open = !this.workbench.polish_menu_open;
-                                                this.workbench.translate_menu_open = false;
+                                                this.polish_menu_open = !this.polish_menu_open;
+                                                this.translate_menu_open = false;
                                                 cx.notify();
                                             })),
                                     )
@@ -1271,8 +1280,8 @@ impl TranscriptWorkbench {
                                                         .label("LLM Polish")
                                                         .disabled(self.is_polishing)
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.workbench.polish_menu_open = false;
-                                                            this.workbench.start_polish(cx);
+                                                            this.polish_menu_open = false;
+                                                            this.start_polish(cx);
                                                         })),
                                                  )
                                                 .when(self.undo_segments.is_some(), |menu| {
@@ -1283,7 +1292,7 @@ impl TranscriptWorkbench {
                                                             .icon(LucideIcon::Undo2)
                                                             .label("Undo Polish")
                                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.workbench.undo_polish(cx);
+                                                                this.undo_polish(cx);
                                                             })),
                                                     )
                                                 })
@@ -1295,7 +1304,7 @@ impl TranscriptWorkbench {
                                                             .icon(LucideIcon::Redo2)
                                                             .label("Redo Polish")
                                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.workbench.redo_polish(cx);
+                                                                this.redo_polish(cx);
                                                             })),
                                                     )
                                                 })
@@ -1325,8 +1334,8 @@ impl TranscriptWorkbench {
                                                         .icon(if is_active { LucideIcon::Check } else { LucideIcon::Sparkles })
                                                         .label(label)
                                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                                            this.workbench.polish_preset = p.clone();
-                                                            this.workbench.polish_menu_open = false;
+                                                            this.polish_preset = p.clone();
+                                                            this.polish_menu_open = false;
                                                             cx.notify();
                                                         }))
                                                 })),
@@ -1349,8 +1358,8 @@ impl TranscriptWorkbench {
                                             .tooltip("Translate transcript")
                                             .disabled(self.is_translating)
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.workbench.translate_menu_open = !this.workbench.translate_menu_open;
-                                                this.workbench.polish_menu_open = false;
+                                                this.translate_menu_open = !this.translate_menu_open;
+                                                this.polish_menu_open = false;
                                                 cx.notify();
                                             })),
                                     )
@@ -1379,9 +1388,9 @@ impl TranscriptWorkbench {
                                                         .label(if self.has_translation() { "Retranslate" } else { "Start Translation" })
                                                         .disabled(self.is_translating)
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            let target = this.workbench.translation_target_lang.clone();
-                                                            this.workbench.translate_menu_open = false;
-                                                            this.workbench.start_translate(&target, cx);
+                                                            let target = this.translation_target_lang.clone();
+                                                            this.translate_menu_open = false;
+                                                            this.start_translate(&target, cx);
                                                         })),
                                                 )
                                                 .child(
@@ -1391,9 +1400,9 @@ impl TranscriptWorkbench {
                                                         .icon(if self.show_translations { LucideIcon::EyeOff } else { LucideIcon::Eye })
                                                         .label(if self.show_translations { "Hide Translations" } else { "Show Translations" })
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.workbench.show_translations = !this.workbench.show_translations;
-                                                            this.workbench.editor.show_translations = this.workbench.show_translations;
-                                                            this.workbench.translate_menu_open = false;
+                                                            this.show_translations = !this.show_translations;
+                                                            this.editor.show_translations = this.show_translations;
+                                                            this.translate_menu_open = false;
                                                             cx.notify();
                                                         })),
                                                 )
@@ -1419,7 +1428,7 @@ impl TranscriptWorkbench {
                                                                 .icon(LucideIcon::ArrowLeftRight)
                                                                 .tooltip("Swap Source & Target")
                                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                                    std::mem::swap(&mut this.workbench.translation_source_lang, &mut this.workbench.translation_target_lang);
+                                                                    std::mem::swap(&mut this.translation_source_lang, &mut this.translation_target_lang);
                                                                     cx.notify();
                                                                 })),
                                                         ),
@@ -1442,8 +1451,8 @@ impl TranscriptWorkbench {
                                                         .icon(if is_selected { LucideIcon::Check } else { LucideIcon::Languages })
                                                         .label(name)
                                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                                            this.workbench.translation_target_lang = c.clone();
-                                                            this.workbench.translate_menu_open = false;
+                                                            this.translation_target_lang = c.clone();
+                                                            this.translate_menu_open = false;
                                                             cx.notify();
                                                         }))
                                                 })),
@@ -1457,20 +1466,19 @@ impl TranscriptWorkbench {
                                     .icon(LucideIcon::Download)
                                     .label("Export")
                                     .tooltip("Export transcript to file")
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                    .on_click(cx.listener(|this, _, _window, cx| {
                                         let has_translation = this
-                                            .workbench
                                             .editor
                                             .segments
                                             .iter()
                                             .any(|s| s.translation.is_some());
-                                        this.export_modal.open(
-                                            &this.workbench.session_title,
+                                        let segments = this.base_segments.clone();
+                                        let title = this.session_title.clone();
+                                        cx.emit(WorkbenchEvent::Export {
+                                            title,
                                             has_translation,
-                                            window,
-                                            cx,
-                                        );
-                                        cx.notify();
+                                            segments,
+                                        });
                                     })),
                             )
                             .child(
@@ -1480,8 +1488,9 @@ impl TranscriptWorkbench {
                                     .icon(LucideIcon::X)
                                     .tooltip("Close transcript")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.has_session = false;
-                                        this.workbench.history_id = None;
+                                        this.has_session = false;
+                                        this.history_id = None;
+                                        cx.emit(WorkbenchEvent::Closed);
                                         cx.notify();
                                     })),
                             ),
@@ -1533,7 +1542,7 @@ impl TranscriptWorkbench {
                         .items_center()
                         .justify_center()
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.workbench.is_rename_open = false;
+                            this.is_rename_open = false;
                             cx.notify();
                         }))
                         .child(
@@ -1598,7 +1607,7 @@ impl TranscriptWorkbench {
                                                     div().text_size(px(12.0)).child(icon_val).into_any_element()
                                                 })
                                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                                    this.workbench.rename_icon = Some(icon_str.clone());
+                                                    this.rename_icon = Some(icon_str.clone());
                                                     cx.notify();
                                                 }))
                                         }))
@@ -1623,7 +1632,7 @@ impl TranscriptWorkbench {
                                                 .tooltip("AI Auto-rename")
                                                 .disabled(self.is_ai_renaming)
                                                 .on_click(cx.listener(|this, _, window, cx| {
-                                                    this.workbench.generate_ai_title(window, cx);
+                                                    this.generate_ai_title(window, cx);
                                                 })),
                                         ),
                                 )
@@ -1639,7 +1648,7 @@ impl TranscriptWorkbench {
                                                 .small()
                                                 .label("Cancel")
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.workbench.is_rename_open = false;
+                                                    this.is_rename_open = false;
                                                     cx.notify();
                                                 })),
                                         )
@@ -1649,12 +1658,17 @@ impl TranscriptWorkbench {
                                                 .small()
                                                 .label("Save")
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.workbench.save_rename(cx);
+                                                    this.save_rename(cx);
                                                 })),
                                         ),
                                 ),
                         ),
                 )
             })
+    }
+}
+impl Render for TranscriptWorkbench {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        Self::render(self, window, cx)
     }
 }

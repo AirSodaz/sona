@@ -7,7 +7,6 @@ use crate::theme::tokens::{
     COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_MD,
     RADIUS_SM, hex_to_hsla,
 };
-use crate::views::shell::MainShell;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Disableable as _;
@@ -74,7 +73,7 @@ impl SubtitlesToolPanel {
         Self
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render<V: 'static>(&mut self, cx: &mut Context<V>) -> impl IntoElement {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
 
         // 1. Live Caption State
@@ -742,12 +741,12 @@ fn language_badge(lang_code: &str) -> impl IntoElement {
         .child(name)
 }
 
-fn mode_button(
+fn mode_button<V: 'static>(
     id: &'static str,
     label: &'static str,
     is_active: bool,
     value: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> impl IntoElement {
     div()
         .id(ElementId::from(id))
@@ -780,12 +779,12 @@ fn mode_button(
         }))
 }
 
-fn order_button(
+fn order_button<V: 'static>(
     id: &'static str,
     label: &'static str,
     is_active: bool,
     value: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> impl IntoElement {
     div()
         .id(ElementId::from(id))
@@ -818,10 +817,10 @@ fn order_button(
         }))
 }
 
-fn section(
+fn section<V: 'static>(
     title: &'static str,
     description: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     div()
         .flex()
@@ -855,12 +854,12 @@ fn section(
         )
 }
 
-fn toggle_row(
+fn toggle_row<V: 'static>(
     title: &'static str,
     hint: &'static str,
     key: &'static str,
     checked: bool,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     div()
         .flex()
@@ -902,11 +901,11 @@ fn toggle_row(
         )
 }
 
-fn color_swatch_picker(
+fn color_swatch_picker<V: 'static>(
     key: &'static str,
     current_hex: &str,
     presets: &[&'static str],
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     div()
         .flex()
@@ -948,13 +947,13 @@ fn color_swatch_picker(
         }))
 }
 
-fn color_row(
+fn color_row<V: 'static>(
     title: &'static str,
     hint: &'static str,
     key: &'static str,
     current_hex: &str,
     presets: &[&'static str],
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     div()
         .flex()
@@ -986,7 +985,7 @@ fn color_row(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn stepper_row(
+fn stepper_row<V: 'static>(
     title: &'static str,
     hint: &'static str,
     key: &'static str,
@@ -995,7 +994,7 @@ fn stepper_row(
     max: f64,
     step: f64,
     unit: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     let display_str = if step.fract() != 0.0 {
         format!("{current_value:.1}{unit}")
@@ -1072,12 +1071,12 @@ fn stepper_row(
         )
 }
 
-fn segmented_alignment_row(
+fn segmented_alignment_row<V: 'static>(
     title: &'static str,
     hint: &'static str,
     key: &'static str,
     current: &str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     let is_center = current == "center";
     div()

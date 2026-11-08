@@ -44,8 +44,10 @@ impl OnboardingWizard {
             self.step -= 1;
         }
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
+impl Render for OnboardingWizard {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
         }
@@ -62,7 +64,7 @@ impl OnboardingWizard {
                     .justify_center()
                     .bg(hsla(0.0, 0.0, 0.0, 0.65))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.onboarding.is_open = false;
+                        this.is_open = false;
                         cx.notify();
                     }))
                     .child(
@@ -494,7 +496,7 @@ impl OnboardingWizard {
                                                     .ghost()
                                                     .label("Later")
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.onboarding.is_open = false;
+                                                        this.is_open = false;
                                                         cx.notify();
                                                     })),
                                             )
@@ -509,7 +511,7 @@ impl OnboardingWizard {
                                                                 .ghost()
                                                                 .label("Back")
                                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                                    this.onboarding.prev_step();
+                                                                    this.prev_step();
                                                                     cx.notify();
                                                                 })),
                                                         )
@@ -523,7 +525,7 @@ impl OnboardingWizard {
                                                                 "Finish"
                                                             })
                                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.onboarding.next_step();
+                                                                this.next_step();
                                                                 cx.notify();
                                                             })),
                                                     ),

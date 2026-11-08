@@ -1,6 +1,6 @@
 //! In-editor floating search widget with match counter and navigation.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use crate::theme::tokens::RADIUS_LG;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -18,7 +18,7 @@ pub struct SearchOverlay {
 }
 
 impl SearchOverlay {
-    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<TranscriptWorkbench>) -> Self {
         Self {
             query_state: cx
                 .new(|cx| InputState::new(window, cx).placeholder("Find in transcript...")),
@@ -29,7 +29,7 @@ impl SearchOverlay {
         }
     }
 
-    pub fn open(&mut self, window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn open(&mut self, window: &mut Window, cx: &mut Context<TranscriptWorkbench>) {
         self.is_visible = true;
         self.query_state
             .update(cx, |state, cx| state.focus(window, cx));
@@ -39,7 +39,7 @@ impl SearchOverlay {
         self.is_visible = !self.is_visible;
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<TranscriptWorkbench>) -> impl IntoElement {
         self.query = self.query_state.read(cx).value().to_string();
         div().when(self.is_visible, |this| {
             let count_text = if self.match_count > 0 {
@@ -97,11 +97,10 @@ impl SearchOverlay {
                                     .icon(LucideIcon::ChevronUp)
                                     .tooltip("Previous match (Shift+Enter)")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.workbench.search.match_count > 0 {
-                                            let count = this.workbench.search.match_count;
-                                            this.workbench.search.current_match =
-                                                (this.workbench.search.current_match + count - 1)
-                                                    % count;
+                                        if this.search.match_count > 0 {
+                                            let count = this.search.match_count;
+                                            this.search.current_match =
+                                                (this.search.current_match + count - 1) % count;
                                             cx.notify();
                                         }
                                     })),
@@ -113,10 +112,10 @@ impl SearchOverlay {
                                     .icon(LucideIcon::ChevronDown)
                                     .tooltip("Next match (Enter)")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if this.workbench.search.match_count > 0 {
-                                            this.workbench.search.current_match =
-                                                (this.workbench.search.current_match + 1)
-                                                    % this.workbench.search.match_count;
+                                        if this.search.match_count > 0 {
+                                            this.search.current_match = (this.search.current_match
+                                                + 1)
+                                                % this.search.match_count;
                                             cx.notify();
                                         }
                                     })),
@@ -128,7 +127,7 @@ impl SearchOverlay {
                                     .icon(LucideIcon::X)
                                     .tooltip("Close (Esc)")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.search.is_visible = false;
+                                        this.search.is_visible = false;
                                         cx.notify();
                                     })),
                             ),

@@ -2,7 +2,6 @@
 
 use crate::app::GlobalDesktopServices;
 use crate::views::settings::ShortcutTarget;
-use crate::views::shell::MainShell;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -47,11 +46,12 @@ impl VoiceTypingToolPanel {
         Self
     }
 
-    pub fn render(
+    pub fn render<V: 'static>(
         &mut self,
         is_recording_shortcut: bool,
         shortcut_recording_target: Option<ShortcutTarget>,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<V>,
+        on_record: impl Fn(&mut V, ShortcutTarget, &mut Context<V>) + 'static + Clone,
     ) -> impl IntoElement {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let enabled = setting_bool(&services, "voiceTypingEnabled", false);
@@ -167,10 +167,11 @@ impl VoiceTypingToolPanel {
                                             .label(if is_recording_shortcut
                                                 && shortcut_recording_target == Some(ShortcutTarget::VoiceTyping)
                                             { "Recording..." } else { shortcut.as_str() })
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.settings_modal.is_recording_shortcut = true;
-                                                this.settings_modal.shortcut_recording_target = Some(ShortcutTarget::VoiceTyping);
-                                                cx.notify();
+                                            .on_click(cx.listener({
+                                                let on_record = on_record.clone();
+                                                move |this, _, _, cx| {
+                                                    on_record(this, ShortcutTarget::VoiceTyping, cx);
+                                                }
                                             })),
                                     ))
                                 .child(row("Quick Recall Shortcut", "Open floating history to re-inject recent dictations.", cx)
@@ -181,10 +182,11 @@ impl VoiceTypingToolPanel {
                                             .label(if is_recording_shortcut
                                                 && shortcut_recording_target == Some(ShortcutTarget::VoiceTypingQuickRecall)
                                             { "Recording..." } else { recall_shortcut.as_str() })
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.settings_modal.is_recording_shortcut = true;
-                                                this.settings_modal.shortcut_recording_target = Some(ShortcutTarget::VoiceTypingQuickRecall);
-                                                cx.notify();
+                                            .on_click(cx.listener({
+                                                let on_record = on_record.clone();
+                                                move |this, _, _, cx| {
+                                                    on_record(this, ShortcutTarget::VoiceTypingQuickRecall, cx);
+                                                }
                                             })),
                                     ))
                                 .child(row("Translate Shortcut", "Dictate and translate into the configured target language.", cx)
@@ -195,10 +197,11 @@ impl VoiceTypingToolPanel {
                                             .label(if is_recording_shortcut
                                                 && shortcut_recording_target == Some(ShortcutTarget::VoiceTypingTranslate)
                                             { "Recording..." } else { translate_shortcut.as_str() })
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.settings_modal.is_recording_shortcut = true;
-                                                this.settings_modal.shortcut_recording_target = Some(ShortcutTarget::VoiceTypingTranslate);
-                                                cx.notify();
+                                            .on_click(cx.listener({
+                                                let on_record = on_record.clone();
+                                                move |this, _, _, cx| {
+                                                    on_record(this, ShortcutTarget::VoiceTypingTranslate, cx);
+                                                }
                                             })),
                                     ))
                                 .child(row("Mode", "How the shortcut triggers listening.", cx)
@@ -346,10 +349,10 @@ impl Default for VoiceTypingToolPanel {
     }
 }
 
-fn section(
+fn section<V: 'static>(
     title: &'static str,
     description: &'static str,
-    cx: &Context<MainShell>,
+    cx: &Context<V>,
 ) -> gpui_kit::Div {
     div()
         .flex()
@@ -382,7 +385,7 @@ fn section(
         )
 }
 
-fn row(title: &'static str, hint: &'static str, cx: &Context<MainShell>) -> gpui_kit::Div {
+fn row<V: 'static>(title: &'static str, hint: &'static str, cx: &Context<V>) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()

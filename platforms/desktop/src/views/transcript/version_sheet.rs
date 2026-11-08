@@ -1,6 +1,6 @@
 //! Version history and diff drawer.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -24,7 +24,7 @@ impl VersionSheet {
         self.is_open = !self.is_open;
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<TranscriptWorkbench>) -> impl IntoElement {
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -54,7 +54,7 @@ impl VersionSheet {
                                     .small()
                                     .label("✕")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.version_sheet.is_open = false;
+                                        this.version_sheet.is_open = false;
                                         cx.notify();
                                     })),
                             ),
@@ -108,8 +108,7 @@ impl VersionSheet {
                                                     .unwrap_or(v)
                                                     .to_string();
                                                 move |this, _, _, cx| {
-                                                    this.workbench
-                                                        .restore_version(&snapshot_id, cx);
+                                                    this.restore_version(&snapshot_id, cx);
                                                 }
                                             })),
                                     )

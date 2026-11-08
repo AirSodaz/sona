@@ -1,2 +1,2 @@
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:8388608"]
+# Standard Windows 1MB default thread stack used.
+# Artificial 8MB stack inflation workaround removed after view entity refactoring.

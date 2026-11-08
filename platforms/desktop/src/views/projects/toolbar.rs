@@ -6,7 +6,7 @@ use gpui_kit::base::FocusableExt as _;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
 use gpui_kit::component::{ActiveTheme as _, Disableable as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -30,12 +30,13 @@ pub struct ProjectsToolbar {
     pub view_mode: ViewMode,
     pub is_selection_active: bool,
     pub is_filter_menu_open: bool,
+    pub search_state: Entity<InputState>,
+    _search_subscription: Subscription,
     sort_select: Entity<SelectState<Vec<&'static str>>>,
     type_select: Entity<SelectState<Vec<&'static str>>>,
     date_select: Entity<SelectState<Vec<&'static str>>>,
     _filter_subscriptions: [Subscription; 3],
 }
-
 impl ProjectsToolbar {
     pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
         let view_mode = view_mode_from_config(
@@ -46,6 +47,16 @@ impl ProjectsToolbar {
                 .ok()
                 .flatten(),
         );
+        let search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search transcripts"));
+        let search_subscription =
+            cx.subscribe(&search_state, |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let query = state.read(cx).value().to_string();
+                    shell.projects_results.set_search_query(query.clone(), cx);
+                    shell.projects_toolbar.search_query = query;
+                }
+            });
         let sort_select = cx.new(|cx| {
             SelectState::new(
                 vec![
@@ -123,6 +134,8 @@ impl ProjectsToolbar {
             view_mode,
             is_selection_active: false,
             is_filter_menu_open: false,
+            search_state,
+            _search_subscription: search_subscription,
             sort_select,
             type_select,
             date_select,
@@ -140,12 +153,14 @@ impl ProjectsToolbar {
     }
 
     pub fn reset_filters(&mut self, window: &mut Window, cx: &mut Context<MainShell>) {
+        self.search_state
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.search_query.clear();
         self.sync_filter_selects(window, cx);
         self.sort_select.update(cx, |state, cx| {
             state.set_selected_value(&"Newest first", window, cx);
         });
     }
-
     pub fn set_view_mode(&mut self, mode: ViewMode, cx: &mut Context<MainShell>) {
         self.view_mode = mode;
         let config_service = cx.global::<GlobalDesktopServices>().0.config.clone();
@@ -182,11 +197,13 @@ impl ProjectsToolbar {
             };
             if let Err(error) = result {
                 this.update(cx, |shell, cx| {
-                    shell.global_dialog.show(
-                        "Could Not Open History Folder",
-                        error,
-                        crate::views::dialogs::global_dialog::DialogKind::Alert,
-                    );
+                    shell.global_dialog.update(cx, |d, _| {
+                        d.show(
+                            "Could Not Open History Folder",
+                            error,
+                            crate::views::dialogs::global_dialog::DialogKind::Alert,
+                        );
+                    });
                     cx.notify();
                 })
                 .ok();
@@ -197,7 +214,6 @@ impl ProjectsToolbar {
 
     pub fn render(
         &mut self,
-        search_state: &Entity<InputState>,
         filter_type: HistoryWorkspaceFilterType,
         date_filter: HistoryWorkspaceDateFilter,
         filtered_count: usize,
@@ -288,7 +304,7 @@ impl ProjectsToolbar {
                                     )
                                     .child(
                                         div().flex_1().min_w(px(0.0)).child(
-                                            Input::new(search_state)
+                                            Input::new(&self.search_state)
                                                 .cleanable(true)
                                                 .focus_ring(true)
                                                 .small(),

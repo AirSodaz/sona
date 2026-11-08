@@ -1,7 +1,7 @@
 //! Integrated sticky bottom audio player bar.
 //! Strict 1:1 parity with React `AudioPlayer.tsx`.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Icon;
@@ -85,7 +85,7 @@ impl AudioPlayerBar {
         format!("{:02}:{:02}", mins, secs)
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<TranscriptWorkbench>) -> impl IntoElement {
         let progress = if self.total_duration > 0.0 {
             (self.current_time / self.total_duration).clamp(0.0, 1.0) as f32
         } else {
@@ -123,7 +123,7 @@ impl AudioPlayerBar {
                             .size(px(18.0)),
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.workbench.player.toggle_play();
+                            this.player.toggle_play();
                             cx.notify();
                         })),
                 ),
@@ -212,7 +212,7 @@ impl AudioPlayerBar {
                                     .replace("0x", "x"),
                             )
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.workbench.player.cycle_speed();
+                                this.player.cycle_speed();
                                 cx.notify();
                             })),
                     )
@@ -235,7 +235,7 @@ impl AudioPlayerBar {
                                 .size(px(16.0)),
                             )
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.workbench.player.toggle_mute();
+                                this.player.toggle_mute();
                                 cx.notify();
                             })),
                     )

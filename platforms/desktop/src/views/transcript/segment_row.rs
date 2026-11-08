@@ -1,6 +1,6 @@
 //! Individual transcript segment row with speaker badge, timestamp seek, and text.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use crate::theme::tokens::{
     COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_FULL, RADIUS_SM,
 };
@@ -123,7 +123,7 @@ impl SegmentRow {
         translation_editing: bool,
         translation_state: Option<Entity<InputState>>,
         show_translations: bool,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) -> impl IntoElement + use<> {
         let id = data.id.clone();
         let timestamp = Self::format_timestamp(data.start_time);
@@ -180,7 +180,7 @@ impl SegmentRow {
                                     .on_click(cx.listener({
                                         let time = data.start_time;
                                         move |this, _, _, cx| {
-                                            this.workbench.player.current_time = time;
+                                            this.player.current_time = time;
                                             cx.notify();
                                         }
                                     })),
@@ -230,11 +230,9 @@ impl SegmentRow {
                                                         .on_click(cx.listener({
                                                             let id = id.clone();
                                                             move |this, _, _, cx| {
-                                                                this.workbench
-                                                                    .editor
+                                                                this.editor
                                                                     .save_translation(&id, cx);
-                                                                this.workbench
-                                                                    .persist_editor_change(cx);
+                                                                this.persist_editor_change(cx);
                                                                 cx.notify();
                                                             }
                                                         })),
@@ -272,7 +270,7 @@ impl SegmentRow {
                                         .on_click(cx.listener({
                                             let id = id.clone();
                                             move |this, _, window, cx| {
-                                                this.workbench.begin_edit(&id, window, cx);
+                                                this.begin_edit(&id, window, cx);
                                                 cx.notify();
                                             }
                                         })),
@@ -286,7 +284,7 @@ impl SegmentRow {
                                         .on_click(cx.listener({
                                             let id = id.clone();
                                             move |this, _, _, cx| {
-                                                this.workbench.merge_with_next(&id, cx);
+                                                this.merge_with_next(&id, cx);
                                                 cx.notify();
                                             }
                                         })),
@@ -300,7 +298,7 @@ impl SegmentRow {
                                         .on_click(cx.listener({
                                             let id = id.clone();
                                             move |this, _, _, cx| {
-                                                this.workbench.split_segment(&id, cx);
+                                                this.split_segment(&id, cx);
                                                 cx.notify();
                                             }
                                         })),
@@ -315,8 +313,7 @@ impl SegmentRow {
                                             .on_click(cx.listener({
                                                 let id = id.clone();
                                                 move |this, _, window, cx| {
-                                                    this.workbench
-                                                        .editor
+                                                    this.editor
                                                         .begin_translation_edit(&id, window, cx);
                                                     cx.notify();
                                                 }
@@ -332,7 +329,7 @@ impl SegmentRow {
                                         .on_click(cx.listener({
                                             let id = id.clone();
                                             move |this, _, _, cx| {
-                                                this.workbench.delete_segment(&id, cx);
+                                                this.delete_segment(&id, cx);
                                                 cx.notify();
                                             }
                                         })),
@@ -348,7 +345,7 @@ impl SegmentRow {
                                         .on_click(cx.listener({
                                             let id = id.clone();
                                             move |this, _, _, cx| {
-                                                this.workbench.save_edit(&id, cx);
+                                                this.save_edit(&id, cx);
                                                 cx.notify();
                                             }
                                         })),
@@ -360,7 +357,7 @@ impl SegmentRow {
                                         .icon(LucideIcon::X)
                                         .label("Cancel")
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            this.workbench.editor.cancel_edit();
+                                            this.editor.cancel_edit();
                                             cx.notify();
                                         })),
                                 )

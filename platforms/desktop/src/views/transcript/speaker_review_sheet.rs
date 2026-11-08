@@ -1,6 +1,6 @@
 //! Speaker review and voice sample enrollment sheet drawer.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -30,7 +30,7 @@ impl SpeakerReviewSheet {
         id: &str,
         name: &str,
         window: &mut Window,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) {
         self.editing_speaker_id = Some(id.to_string());
         let current_name = name.to_string();
@@ -44,7 +44,7 @@ impl SpeakerReviewSheet {
         cx.notify();
     }
 
-    pub fn cancel_rename(&mut self, cx: &mut Context<MainShell>) {
+    pub fn cancel_rename(&mut self, cx: &mut Context<TranscriptWorkbench>) {
         self.editing_speaker_id = None;
         self.edit_name_state = None;
         cx.notify();
@@ -54,7 +54,7 @@ impl SpeakerReviewSheet {
         self.is_open = !self.is_open;
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(&mut self, cx: &mut Context<TranscriptWorkbench>) -> impl IntoElement {
         div().when(self.is_open, |this| {
             this.child(
                 div()
@@ -84,7 +84,7 @@ impl SpeakerReviewSheet {
                                     .small()
                                     .label("✕")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.speaker_sheet.is_open = false;
+                                        this.speaker_sheet.is_open = false;
                                         cx.notify();
                                     })),
                             ),
@@ -152,10 +152,9 @@ impl SpeakerReviewSheet {
                                                             .on_click(cx.listener({
                                                                 let spk_id = speaker_id.clone();
                                                                 move |this, _, _, cx| {
-                                                                    this.workbench
-                                                                        .save_speaker_rename(
-                                                                            &spk_id, cx,
-                                                                        );
+                                                                    this.save_speaker_rename(
+                                                                        &spk_id, cx,
+                                                                    );
                                                                 }
                                                             })),
                                                     )
@@ -168,9 +167,7 @@ impl SpeakerReviewSheet {
                                                         .xsmall()
                                                         .label("Cancel")
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.workbench
-                                                                .speaker_sheet
-                                                                .cancel_rename(cx);
+                                                            this.speaker_sheet.cancel_rename(cx);
                                                         })),
                                                     )
                                                     .into_any_element()
@@ -183,11 +180,9 @@ impl SpeakerReviewSheet {
                                                         let spk_id = speaker_id.clone();
                                                         let spk_name = speaker_name.clone();
                                                         move |this, _, window, cx| {
-                                                            this.workbench
-                                                                .speaker_sheet
-                                                                .start_rename(
-                                                                    &spk_id, &spk_name, window, cx,
-                                                                );
+                                                            this.speaker_sheet.start_rename(
+                                                                &spk_id, &spk_name, window, cx,
+                                                            );
                                                         }
                                                     }))
                                                     .into_any_element()

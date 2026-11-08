@@ -9,7 +9,6 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::super::shell::MainShell;
 use crate::theme::tokens::{
     COLOR_PROJECT_AMBER, COLOR_PROJECT_BLUE, RADIUS_LG, RADIUS_MD, RADIUS_SM,
 };
@@ -28,6 +27,18 @@ pub enum DialogVariant {
     Error,
     Success,
 }
+#[derive(Clone, Debug)]
+pub enum GlobalDialogEvent {
+    Confirmed {
+        title: String,
+        checkbox_checked: bool,
+    },
+    Cancelled {
+        title: String,
+    },
+}
+
+impl EventEmitter<GlobalDialogEvent> for GlobalDialog {}
 
 pub struct GlobalDialog {
     pub is_open: bool,
@@ -97,8 +108,10 @@ impl GlobalDialog {
         self.checkbox_checked = false;
         self.checkbox_notice = None;
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+impl Render for GlobalDialog {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
         }
@@ -116,7 +129,7 @@ impl GlobalDialog {
                     .size_full()
                     .bg(hsla(0.0, 0.0, 0.0, 0.5))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.global_dialog.close();
+                        this.close();
                         cx.notify();
                     }))
                     .child(
@@ -143,12 +156,16 @@ impl GlobalDialog {
                                         DialogVariant::Error => Icon::new(LucideIcon::CircleAlert)
                                             .size(px(22.0))
                                             .text_color(hsla(0.0, 0.84, 0.60, 1.0)),
-                                        DialogVariant::Warning => Icon::new(LucideIcon::TriangleAlert)
-                                            .size(px(22.0))
-                                            .text_color(COLOR_PROJECT_AMBER),
-                                        DialogVariant::Success => Icon::new(LucideIcon::CircleCheck)
-                                            .size(px(22.0))
-                                            .text_color(cx.theme().success),
+                                        DialogVariant::Warning => {
+                                            Icon::new(LucideIcon::TriangleAlert)
+                                                .size(px(22.0))
+                                                .text_color(COLOR_PROJECT_AMBER)
+                                        }
+                                        DialogVariant::Success => {
+                                            Icon::new(LucideIcon::CircleCheck)
+                                                .size(px(22.0))
+                                                .text_color(cx.theme().success)
+                                        }
                                         DialogVariant::Info => Icon::new(LucideIcon::Info)
                                             .size(px(22.0))
                                             .text_color(COLOR_PROJECT_BLUE),
@@ -191,8 +208,7 @@ impl GlobalDialog {
                                                 .gap_2()
                                                 .cursor_pointer()
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.global_dialog.checkbox_checked =
-                                                        !this.global_dialog.checkbox_checked;
+                                                    this.checkbox_checked = !this.checkbox_checked;
                                                     cx.notify();
                                                 }))
                                                 .child(
@@ -217,7 +233,9 @@ impl GlobalDialog {
                                                             ch.child(
                                                                 Icon::new(LucideIcon::Check)
                                                                     .size(px(12.0))
-                                                                    .text_color(cx.theme().background),
+                                                                    .text_color(
+                                                                        cx.theme().background,
+                                                                    ),
                                                             )
                                                         }),
                                                 )
@@ -232,7 +250,10 @@ impl GlobalDialog {
                                                     .pl_6()
                                                     .text_size(px(11.0))
                                                     .text_color(hsla(0.0, 0.84, 0.60, 1.0))
-                                                    .child(Icon::new(LucideIcon::TriangleAlert).size(px(12.0)))
+                                                    .child(
+                                                        Icon::new(LucideIcon::TriangleAlert)
+                                                            .size(px(12.0)),
+                                                    )
                                                     .child(notice.unwrap_or_default()),
                                             )
                                         }),
@@ -254,27 +275,11 @@ impl GlobalDialog {
                                                     .small()
                                                     .label("Cancel")
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        if this.global_dialog.title
-                                                            == "Delete LLM Provider"
-                                                        {
-                                                            this.settings_modal
-                                                                .llm_pending_delete_provider = None;
-                                                        }
-                                                        if this.global_dialog.title == "Regenerate API Key" {
-                                                            this.settings_modal.api_server_pending_key = None;
-                                                        }
-                                                        if this.global_dialog.title == "Change Data Directory?"
-                                                            || this.global_dialog.title == "Change Models Directory?"
-                                                        {
-                                                            this.settings_modal.storage_pending_migration = None;
-                                                        }
-                                                        if this.global_dialog.title == "Clean History Audio?" {
-                                                            this.settings_modal.storage_cleanup_pending = None;
-                                                        }
-                                                        if matches!(this.global_dialog.title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?") {
-                                                            this.settings_modal.storage_pending_reset = None;
-                                                        }
-                                                        this.global_dialog.close();
+                                                        let title = this.title.clone();
+                                                        this.close();
+                                                        cx.emit(GlobalDialogEvent::Cancelled {
+                                                            title,
+                                                        });
                                                         cx.notify();
                                                     })),
                                             )
@@ -291,9 +296,17 @@ impl GlobalDialog {
                                                     "Generate New Key"
                                                 } else if title == "Clean History Audio?" {
                                                     "Clean Now"
-                                                } else if matches!(title.as_str(), "Change Data Directory?" | "Change Models Directory?") {
+                                                } else if matches!(
+                                                    title.as_str(),
+                                                    "Change Data Directory?"
+                                                        | "Change Models Directory?"
+                                                ) {
                                                     "Confirm & Migrate"
-                                                } else if matches!(title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?") {
+                                                } else if matches!(
+                                                    title.as_str(),
+                                                    "Restore Default Data Directory?"
+                                                        | "Restore Default Models Directory?"
+                                                ) {
                                                     "Restore Default"
                                                 } else {
                                                     "Download"
@@ -301,60 +314,15 @@ impl GlobalDialog {
                                             } else {
                                                 "OK"
                                             })
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                let confirm_cuda = this.global_dialog.kind
-                                                    == DialogKind::Confirm
-                                                    && this.global_dialog.title
-                                                        == "Download CUDA Add-on";
-                                                let confirm_provider_delete =
-                                                    this.global_dialog.kind == DialogKind::Confirm
-                                                        && this.global_dialog.title
-                                                            == "Delete LLM Provider";
-                                                let confirm_api_key_regeneration =
-                                                    this.global_dialog.kind == DialogKind::Confirm
-                                                        && this.global_dialog.title == "Regenerate API Key";
-                                                let confirm_storage_migration =
-                                                    this.global_dialog.kind == DialogKind::Confirm
-                                                        && matches!(this.global_dialog.title.as_str(), "Change Data Directory?" | "Change Models Directory?")
-                                                        && this.settings_modal.storage_pending_migration.is_some();
-                                                let confirm_storage_cleanup =
-                                                    this.global_dialog.kind == DialogKind::Confirm
-                                                        && this.global_dialog.title == "Clean History Audio?"
-                                                        && this.settings_modal.storage_cleanup_pending.is_some();
-                                                let confirm_storage_reset =
-                                                    this.global_dialog.kind == DialogKind::Confirm
-                                                        && matches!(this.global_dialog.title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?")
-                                                        && this.settings_modal.storage_pending_reset.is_some();
-                                                this.global_dialog.close();
-                                                if confirm_cuda {
-                                                    this.settings_modal
-                                                        .begin_cuda_addon_download(cx);
-                                                } else if confirm_provider_delete {
-                                                    this.settings_modal
-                                                        .confirm_delete_llm_custom_provider(cx);
-                                                } else if confirm_api_key_regeneration {
-                                                    if let Some(key) = this.settings_modal.api_server_pending_key.take() {
-                                                        if let Err(error) = cx
-                                                            .global::<crate::app::GlobalDesktopServices>()
-                                                            .0
-                                                            .config
-                                                            .set_setting("httpServerApiKey", &serde_json::json!(key.clone()))
-                                                        {
-                                                            log::error!("Failed to regenerate API key: {error}");
-                                                        } else if let Some(state) = this.api_server_field_states.get("apiKey") {
-                                                            state.update(cx, |state, cx| state.set_value(key, window, cx));
-                                                        }
-                                                    }
-                                                    cx.notify();
-                                                } else if confirm_storage_migration {
-                                                    this.settings_modal.confirm_storage_migration(cx);
-                                                } else if confirm_storage_cleanup {
-                                                    this.settings_modal.confirm_storage_cleanup(cx);
-                                                } else if confirm_storage_reset {
-                                                    this.settings_modal.confirm_storage_directory_reset(cx);
-                                                } else {
-                                                    cx.notify();
-                                                }
+                                            .on_click(cx.listener(|this, _, _window, cx| {
+                                                let title = this.title.clone();
+                                                let checkbox_checked = this.checkbox_checked;
+                                                this.close();
+                                                cx.emit(GlobalDialogEvent::Confirmed {
+                                                    title,
+                                                    checkbox_checked,
+                                                });
+                                                cx.notify();
                                             })),
                                     ),
                             ),

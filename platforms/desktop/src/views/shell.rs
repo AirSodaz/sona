@@ -12,10 +12,8 @@
 use std::collections::HashMap;
 
 use gpui_kit::assets::IconName as LucideIcon;
-use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputEvent, InputState, TextareaState};
-use gpui_kit::component::select::{SelectEvent, SelectState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -27,18 +25,16 @@ use sona_core::sync::{SyncLifecycleState, SyncStatusSnapshot};
 
 use super::create::{CreateWorkspacePanel, OptionsCapsule, TranscriptionOptionsModel};
 use super::dialogs::{
-    DiagnosticsModal, ErrorDialog, ExportModal, GlobalDialog, NotificationCenter, OnboardingWizard,
-    ProjectDialogs, RecoveryModal,
+    DiagnosticsModal, ErrorDialog, ExportModal, GlobalDialog, GlobalDialogEvent,
+    NotificationCenter, OnboardingWizard, ProjectDialogEvent, ProjectDialogs, RecoveryModal,
+    RecoveryModalEvent,
 };
 use super::projects::{
     ProjectsHeader, ProjectsRail, ProjectsResults, ProjectsToolbar, SelectionBar,
 };
-use super::settings::{SettingsModal, SettingsTab, ShortcutTarget};
-use super::tools::{
-    ApiServerToolPanel, McpToolPanel, MediaServerToolPanel, SubtitlesToolPanel, ToolKind,
-    ToolsSidebar, VoiceTypingToolPanel,
-};
-use super::transcript::TranscriptWorkbench;
+use super::settings::{SettingsModal, SettingsModalEvent, SettingsTab, ShortcutTarget};
+use super::tools::ToolsWorkspace;
+use super::transcript::{TranscriptWorkbench, WorkbenchEvent};
 use crate::app::{GlobalDesktopServices, GlobalEventBus, GlobalHotkeyController};
 use crate::theme::tokens::{
     COLOR_BG_ELEVATED_LIGHT, COLOR_BG_PRIMARY_LIGHT, COLOR_BG_SECONDARY_LIGHT,
@@ -140,10 +136,21 @@ pub struct ProjectSelectorDropdown {
     pub count_inbox: usize,
     pub project_counts: HashMap<String, usize>,
     pub is_recording: bool,
+    pub search_state: Entity<InputState>,
+    _search_subscription: Subscription,
 }
 
 impl ProjectSelectorDropdown {
-    pub fn new() -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+        let search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search projects..."));
+        let search_subscription =
+            cx.subscribe(&search_state, |this, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.project_selector.query = state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            });
         Self {
             is_open: false,
             query: String::new(),
@@ -152,6 +159,8 @@ impl ProjectSelectorDropdown {
             count_inbox: 0,
             project_counts: HashMap::new(),
             is_recording: false,
+            search_state,
+            _search_subscription: search_subscription,
         }
     }
 
@@ -228,12 +237,6 @@ impl ProjectSelectorDropdown {
                 .filter(|p| p.name.to_lowercase().contains(&q))
                 .collect()
         }
-    }
-}
-
-impl Default for ProjectSelectorDropdown {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -345,86 +348,32 @@ pub struct MainShell {
     pub projects_toolbar: ProjectsToolbar,
     pub projects_results: ProjectsResults,
     pub selection_bar: SelectionBar,
-    pub project_search_state: Entity<InputState>,
-    _project_search_subscription: Subscription,
-    pub project_dropdown_search_state: Entity<InputState>,
-    _project_dropdown_search_subscription: Subscription,
-    pub history_rename_state: Entity<InputState>,
-    pub model_search_state: Entity<InputState>,
-    _model_search_subscription: Subscription,
-    pub mcp_search_state: Entity<InputState>,
-    _mcp_search_subscription: Subscription,
-    pub model_engine_select: Entity<SelectState<Vec<&'static str>>>,
-    pub model_status_select: Entity<SelectState<Vec<&'static str>>>,
-    pub model_label_select: Entity<SelectState<Vec<&'static str>>>,
-    _model_filter_subscriptions: [Subscription; 3],
-    pub translation_language_select: Entity<SelectState<Vec<&'static str>>>,
-    _translation_language_subscription: Subscription,
-    pub general_log_level_select: Entity<SelectState<Vec<&'static str>>>,
-    _general_log_level_subscription: Subscription,
-    pub general_language_select: Entity<SelectState<Vec<&'static str>>>,
-    _general_language_subscription: Subscription,
-    pub general_font_select: Entity<SelectState<Vec<&'static str>>>,
-    _general_font_subscription: Subscription,
-    pub online_provider_field_states: HashMap<String, Entity<InputState>>,
-    _online_provider_field_subscriptions: Vec<Subscription>,
-    pub llm_provider_api_host_state: Entity<InputState>,
-    pub llm_provider_api_key_state: Entity<InputState>,
-    pub llm_model_draft_state: Entity<InputState>,
-    pub llm_custom_provider_name_state: Entity<InputState>,
-    _llm_settings_input_subscriptions: [Subscription; 4],
-    pub llm_model_metadata_field_states: HashMap<String, Entity<InputState>>,
-    _llm_model_metadata_subscriptions: Vec<Subscription>,
-    pub api_server_field_states: HashMap<String, Entity<InputState>>,
-    _api_server_field_subscriptions: Vec<Subscription>,
-    pub shortcut_edit_state: Entity<InputState>,
-    _shortcut_edit_subscription: Subscription,
-    pub dictionary_textarea_state: Entity<TextareaState>,
-    _dictionary_textarea_subscription: Subscription,
-    pub dictionary_quick_add_state: Entity<InputState>,
-    _dictionary_quick_add_subscription: Subscription,
-    pub dictionary_inline_hotword_state: Entity<InputState>,
-    _dictionary_inline_hotword_subscription: Subscription,
-    pub dictionary_word_state: Entity<InputState>,
-    _dictionary_word_subscription: Subscription,
-    pub dictionary_weight_state: Entity<InputState>,
-    _dictionary_weight_subscription: Subscription,
-    pub dictionary_from_state: Entity<InputState>,
-    _dictionary_from_subscription: Subscription,
-    pub dictionary_to_state: Entity<InputState>,
-    _dictionary_to_subscription: Subscription,
-    pub dictionary_search_state: Entity<InputState>,
-    _dictionary_search_subscription: Subscription,
-    pub dictionary_test_state: Entity<InputState>,
-    _dictionary_test_subscription: Subscription,
-    pub vocabulary_name_state: Entity<InputState>,
-    _vocabulary_name_subscription: Subscription,
-    pub vocabulary_body_state: Entity<TextareaState>,
-    _vocabulary_body_subscription: Subscription,
-    pub speaker_profile_name_state: Entity<InputState>,
-    _speaker_profile_name_subscription: Subscription,
-    pub speaker_profile_search_state: Entity<InputState>,
-    _speaker_profile_search_subscription: Subscription,
-    pub speaker_profile_name_states: HashMap<String, (Entity<InputState>, Subscription)>,
 
-    pub tools_sidebar: ToolsSidebar,
-    pub subtitles_tool: SubtitlesToolPanel,
-    pub voice_typing_tool: VoiceTypingToolPanel,
-    pub api_server_tool: ApiServerToolPanel,
-    pub mcp_tool: McpToolPanel,
-    pub media_server_tool: MediaServerToolPanel,
+    pub tools: ToolsWorkspace,
 
-    pub workbench: TranscriptWorkbench,
+    pub workbench: Entity<TranscriptWorkbench>,
 
     // Modals & Overlays
-    pub settings_modal: SettingsModal,
-    pub diagnostics_modal: DiagnosticsModal,
-    pub recovery_modal: RecoveryModal,
-    pub global_dialog: GlobalDialog,
-    pub export_modal: ExportModal,
-    pub onboarding: OnboardingWizard,
-    pub project_dialogs: ProjectDialogs,
-    pub error_dialog: ErrorDialog,
+    pub settings_modal: Entity<SettingsModal>,
+    pub diagnostics_modal: Entity<DiagnosticsModal>,
+    pub recovery_modal: Entity<RecoveryModal>,
+    pub global_dialog: Entity<GlobalDialog>,
+    pub export_modal: Entity<ExportModal>,
+    pub onboarding: Entity<OnboardingWizard>,
+    pub project_dialogs: Entity<ProjectDialogs>,
+    pub error_dialog: Entity<ErrorDialog>,
+}
+impl std::ops::Deref for MainShell {
+    type Target = ToolsWorkspace;
+    fn deref(&self) -> &Self::Target {
+        &self.tools
+    }
+}
+
+impl std::ops::DerefMut for MainShell {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tools
+    }
 }
 
 impl MainShell {
@@ -441,775 +390,42 @@ impl MainShell {
         let options_capsule = OptionsCapsule::new(options_model.clone());
         let create_workspace = cx.new(|cx| CreateWorkspacePanel::new(options_model.clone(), cx));
         let projects_toolbar = ProjectsToolbar::new(window, cx);
-        let project_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search transcripts"));
-        let history_rename_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Transcript title"));
-        let project_search_subscription = cx.subscribe(
-            &project_search_state,
-            |this, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.projects_results
-                        .set_search_query(state.read(cx).value().to_string(), cx);
-                }
-            },
-        );
-        let project_dropdown_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search projects..."));
-        let project_dropdown_search_subscription = cx.subscribe(
-            &project_dropdown_search_state,
-            |this, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.project_selector.query = state.read(cx).value().to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let shortcut_edit_state = cx.new(|cx| InputState::new(window, cx));
-        let shortcut_edit_subscription = cx.subscribe(
-            &shortcut_edit_state,
-            |shell, state, event: &InputEvent, cx| {
-                if !shell.settings_modal.is_editing_shortcut {
-                    return;
-                }
 
-                match event {
-                    InputEvent::Change => {
-                        shell.settings_modal.shortcut_draft = state.read(cx).value().to_string();
-                    }
-                    InputEvent::PressEnter { .. } | InputEvent::Blur => {
-                        let value = state.read(cx).value().to_string();
-                        shell.settings_modal.commit_shortcut_edit(value, cx);
-                    }
-                    InputEvent::Focus => {}
+        let settings_modal = cx.new(|cx| SettingsModal::new(window, cx));
+        cx.subscribe(&settings_modal, |this, _modal, event, cx| {
+            match event {
+                SettingsModalEvent::OpenDiagnostics => {
+                    this.diagnostics_modal.update(cx, |d, cx| d.open(cx));
                 }
-            },
-        );
-        let model_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search models..."));
-        let model_search_subscription = cx.subscribe(
-            &model_search_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.model_search_query = state.read(cx).value().to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let mcp_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search activity..."));
-        let mcp_search_subscription =
-            cx.subscribe(&mcp_search_state, |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.mcp_log_query = state.read(cx).value().to_string();
-                    cx.notify();
-                }
-            });
-        let model_engine_select = cx.new(|cx| {
-            SelectState::new(
-                vec!["All Engines", "ONNX", "GGUF"],
-                Some(IndexPath::new(0)),
-                window,
-                cx,
-            )
-        });
-        let model_status_select = cx.new(|cx| {
-            SelectState::new(
-                vec!["All Statuses", "Installed", "Not Installed", "Downloading"],
-                Some(IndexPath::new(0)),
-                window,
-                cx,
-            )
-        });
-        let model_label_select = cx.new(|cx| {
-            SelectState::new(
-                vec!["All Tags", "Accurate", "Lite"],
-                Some(IndexPath::new(0)),
-                window,
-                cx,
-            )
-        });
-        let initial_config = services
-            .config
-            .load()
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| serde_json::json!({}));
-        let configured_theme = initial_config
-            .get("theme")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("auto");
-        let theme_mode = match configured_theme {
-            "light" => gpui_kit::component::theme::ThemeMode::Light,
-            "dark" => gpui_kit::component::theme::ThemeMode::Dark,
-            _ => gpui_kit::component::theme::ThemeMode::from(window.appearance()),
-        };
-        gpui_kit::component::theme::Theme::change(theme_mode, None, cx);
-        let translation_language = initial_config
-            .get("translationLanguage")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("zh");
-        let translation_language_index = crate::views::settings::LANGUAGE_OPTIONS
-            .iter()
-            .position(|(code, _)| *code == translation_language)
-            .unwrap_or_else(|| {
-                crate::views::settings::LANGUAGE_OPTIONS
-                    .iter()
-                    .position(|(code, _)| *code == "zh")
-                    .unwrap_or(0)
-            });
-        let translation_language_select = cx.new(|cx| {
-            SelectState::new(
-                crate::views::settings::LANGUAGE_OPTIONS
-                    .iter()
-                    .map(|(_, name)| *name)
-                    .collect::<Vec<_>>(),
-                Some(IndexPath::new(translation_language_index)),
-                window,
-                cx,
-            )
-        });
-        let log_levels = ["trace", "debug", "info", "warn", "error"];
-        let configured_log_level = initial_config
-            .get("logLevel")
-            .and_then(serde_json::Value::as_str)
-            .filter(|level| log_levels.contains(level))
-            .unwrap_or("info");
-        log::set_max_level(match configured_log_level {
-            "trace" => log::LevelFilter::Trace,
-            "debug" => log::LevelFilter::Debug,
-            "warn" => log::LevelFilter::Warn,
-            "error" => log::LevelFilter::Error,
-            _ => log::LevelFilter::Info,
-        });
-        let log_level_index = log_levels
-            .iter()
-            .position(|level| *level == configured_log_level)
-            .unwrap_or(2);
-        let general_log_level_select = cx.new(|cx| {
-            SelectState::new(
-                log_levels.to_vec(),
-                Some(IndexPath::new(log_level_index)),
-                window,
-                cx,
-            )
-        });
-        let general_log_level_subscription = cx.subscribe(
-            &general_log_level_select,
-            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(level)) = event {
-                    log::set_max_level(match *level {
-                        "trace" => log::LevelFilter::Trace,
-                        "debug" => log::LevelFilter::Debug,
-                        "warn" => log::LevelFilter::Warn,
-                        "error" => log::LevelFilter::Error,
-                        _ => log::LevelFilter::Info,
-                    });
-                    shell.settings_modal.persist_general_setting(
-                        "logLevel",
-                        serde_json::Value::String((*level).to_string()),
-                        cx,
-                    );
-                }
-            },
-        );
-        let app_language_options = [
-            ("auto", "Automatic"),
-            ("en", "English"),
-            ("zh", "简体中文"),
-            ("zh-TW", "繁體中文"),
-            ("ja", "日本語"),
-            ("ko", "한국어"),
-        ];
-        let app_language = initial_config
-            .get("appLanguage")
-            .and_then(serde_json::Value::as_str)
-            .filter(|value| app_language_options.iter().any(|(code, _)| code == value))
-            .unwrap_or("auto");
-        let app_language_index = app_language_options
-            .iter()
-            .position(|(code, _)| *code == app_language)
-            .unwrap_or(0);
-        let general_language_select = cx.new(|cx| {
-            SelectState::new(
-                app_language_options
-                    .iter()
-                    .map(|(_, label)| *label)
-                    .collect::<Vec<_>>(),
-                Some(IndexPath::new(app_language_index)),
-                window,
-                cx,
-            )
-        });
-        let general_language_subscription = cx.subscribe(
-            &general_language_select,
-            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(label)) = event
-                    && let Some((language, _)) = app_language_options
-                        .iter()
-                        .find(|(_, option_label)| *option_label == *label)
-                {
-                    shell.settings_modal.selected_lang = (*language).to_string();
-                    shell.settings_modal.persist_general_setting(
-                        "appLanguage",
-                        serde_json::Value::String((*language).to_string()),
-                        cx,
-                    );
-                }
-            },
-        );
-        let font_options = [
-            ("system", "System"),
-            ("serif", "Serif"),
-            ("sans", "Sans-serif"),
-            ("mono", "Monospace"),
-            ("arial", "Arial"),
-            ("georgia", "Georgia"),
-        ];
-        let font = initial_config
-            .get("font")
-            .and_then(serde_json::Value::as_str)
-            .filter(|value| font_options.iter().any(|(code, _)| code == value))
-            .unwrap_or("system");
-        let font_index = font_options
-            .iter()
-            .position(|(code, _)| *code == font)
-            .unwrap_or(0);
-        let general_font_select = cx.new(|cx| {
-            SelectState::new(
-                font_options
-                    .iter()
-                    .map(|(_, label)| *label)
-                    .collect::<Vec<_>>(),
-                Some(IndexPath::new(font_index)),
-                window,
-                cx,
-            )
-        });
-        let general_font_subscription = cx.subscribe(
-            &general_font_select,
-            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(label)) = event
-                    && let Some((font, _)) = font_options
-                        .iter()
-                        .find(|(_, option_label)| *option_label == *label)
-                {
-                    shell.settings_modal.selected_font = (*font).to_string();
-                    shell.settings_modal.persist_general_setting(
-                        "font",
-                        serde_json::Value::String((*font).to_string()),
-                        cx,
-                    );
-                }
-            },
-        );
-        let dictionary_initial_content =
-            crate::views::settings::vocabulary::effective_dictionary_content(&initial_config);
-        let dictionary_textarea_state =
-            cx.new(|cx| TextareaState::new(window, cx).default_value(dictionary_initial_content));
-        let dictionary_textarea_subscription = cx.subscribe(
-            &dictionary_textarea_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    let content = state.read(cx).value().to_string();
-                    let (hotword_sets, replacement_sets) =
-                        crate::views::settings::vocabulary::legacy_dictionary_sets(&content);
-                    shell.settings_modal.persist_model_settings(
-                        vec![
-                            (
-                                "dictionaryContent".to_string(),
-                                serde_json::Value::String(content),
-                            ),
-                            ("hotwordSets".to_string(), hotword_sets),
-                            ("textReplacementSets".to_string(), replacement_sets),
-                        ],
-                        cx,
-                    );
-                }
-            },
-        );
-        let dictionary_quick_add_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Term (e.g. Sona) or From -> To"));
-        let dictionary_quick_add_subscription = cx.subscribe(
-            &dictionary_quick_add_state,
-            |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let dictionary_inline_hotword_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("+ Add hotword..."));
-        let dictionary_inline_hotword_subscription = cx.subscribe(
-            &dictionary_inline_hotword_state,
-            |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let dictionary_word_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Sona or DeepSeek"));
-        let dictionary_word_subscription =
-            cx.subscribe(&dictionary_word_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let dictionary_weight_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. 2.0"));
-        let dictionary_weight_subscription =
-            cx.subscribe(&dictionary_weight_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let dictionary_from_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Misrecognized word"));
-        let dictionary_from_subscription =
-            cx.subscribe(&dictionary_from_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let dictionary_to_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Corrected word"));
-        let dictionary_to_subscription =
-            cx.subscribe(&dictionary_to_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let dictionary_search_state = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Search hotwords or replacements...")
-        });
-        let dictionary_search_subscription = cx.subscribe(
-            &dictionary_search_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.vocabulary_dictionary_search_query =
-                        state.read(cx).value().to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let dictionary_test_state = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Type or paste text to test replacement...")
-        });
-        let dictionary_test_subscription = cx.subscribe(
-            &dictionary_test_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.vocabulary_dictionary_test_input =
-                        state.read(cx).value().to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let vocabulary_name_state = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
-        let vocabulary_name_subscription =
-            cx.subscribe(&vocabulary_name_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let vocabulary_body_state = cx.new(|cx| {
-            TextareaState::new(window, cx).placeholder("Enter context or instructions...")
-        });
-        let vocabulary_body_subscription =
-            cx.subscribe(&vocabulary_body_state, |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
-        let speaker_profile_name_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Alice"));
-        let speaker_profile_name_subscription = cx.subscribe(
-            &speaker_profile_name_state,
-            |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let speaker_profile_search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search speakers..."));
-        let speaker_profile_search_subscription = cx.subscribe(
-            &speaker_profile_search_state,
-            |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let mut speaker_profile_name_states = HashMap::new();
-        if let Some(profiles) = initial_config
-            .get("speakerProfiles")
-            .and_then(serde_json::Value::as_array)
-        {
-            for value in profiles {
-                let Ok(profile) = serde_json::from_value::<
-                    sona_core::transcription::speaker::SpeakerProfile,
-                >(value.clone()) else {
-                    continue;
-                };
-                let profile_id = profile.id;
-                let subscription_profile_id = profile_id.clone();
-                let name_state =
-                    cx.new(|cx| InputState::new(window, cx).default_value(profile.name));
-                let subscription =
-                    cx.subscribe(&name_state, move |shell, state, event: &InputEvent, cx| {
-                        if !matches!(event, InputEvent::Change) {
-                            return;
-                        }
-                        let name = state.read(cx).value().to_string();
-                        let mut profiles = shell
-                            .settings_modal
-                            .model_config
-                            .get("speakerProfiles")
-                            .and_then(serde_json::Value::as_array)
-                            .cloned()
-                            .unwrap_or_default();
-                        for value in &mut profiles {
-                            if value.get("id").and_then(serde_json::Value::as_str)
-                                == Some(subscription_profile_id.as_str())
-                            {
-                                value["name"] = serde_json::Value::String(name.clone());
-                            }
-                        }
-                        shell.settings_modal.persist_model_setting(
-                            "speakerProfiles".to_string(),
-                            serde_json::Value::Array(profiles),
-                            cx,
+                SettingsModalEvent::RequestApiKeyRegenConfirm => {
+                    this.global_dialog.update(cx, |d, _| {
+                        d.show(
+                            "Regenerate API Key",
+                            "Regenerating the API key will invalidate the current key and require updating all external clients. Do you want to continue?",
+                            crate::views::dialogs::global_dialog::DialogKind::Confirm,
                         );
                     });
-                speaker_profile_name_states.insert(profile_id, (name_state, subscription));
+                }
+                SettingsModalEvent::RequestCudaDownloadConfirm => {
+                    this.global_dialog.update(cx, |d, _| {
+                        d.show(
+                            "Download CUDA Add-on",
+                            "CUDA acceleration requires an additional runtime package. Download and install it now?",
+                            crate::views::dialogs::global_dialog::DialogKind::Confirm,
+                        );
+                    });
+                }
+                SettingsModalEvent::RequestProviderDeleteConfirm { provider_id: _, name } => {
+                    this.global_dialog.update(cx, |d, _| {
+                        d.show(
+                            "Delete LLM Provider",
+                            format!("Delete {name} and its saved models?"),
+                            crate::views::dialogs::global_dialog::DialogKind::Confirm,
+                        );
+                    });
+                }
             }
-        }
-        let active_llm_provider = initial_config
-            .pointer("/llmSettings/activeProvider")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("google_translate_free");
-        let provider_default_host = match active_llm_provider {
-            "google_translate_free" => {
-                "https://translate.googleapis.com/translate_a/single".to_string()
-            }
-            "google_translate" => {
-                "https://translation.googleapis.com/language/translate/v2".to_string()
-            }
-            provider => sona_core::llm::providers::find_llm_provider_by_id_or_alias(provider)
-                .map(|provider| provider.defaults.api_host.clone())
-                .unwrap_or_default(),
-        };
-        let api_host = initial_config
-            .pointer(&format!(
-                "/llmSettings/providers/{active_llm_provider}/apiHost"
-            ))
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(&provider_default_host)
-            .to_string();
-        let api_key = initial_config
-            .pointer(&format!(
-                "/llmSettings/providers/{active_llm_provider}/apiKey"
-            ))
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-        let llm_provider_api_host_state = cx.new(|cx| {
-            let mut state = InputState::new(window, cx).placeholder("API host or endpoint");
-            state.set_value(api_host, window, cx);
-            state
-        });
-        let llm_provider_api_key_state = cx.new(|cx| {
-            let mut state = InputState::new(window, cx)
-                .placeholder("API key")
-                .masked(true);
-            state.set_value(api_key, window, cx);
-            state
-        });
-        let llm_model_draft_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Model ID or deployment name"));
-        let llm_custom_provider_name_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Provider name"));
-        let metadata_fields = [
-            ("displayName", "Display name"),
-            ("contextWindow", "Context window"),
-            ("maxOutputTokens", "Max output tokens"),
-            ("inputPrice", "Input price"),
-            ("outputPrice", "Output price"),
-            ("cacheReadPrice", "Cache read price"),
-            ("cacheWritePrice", "Cache write price"),
-            ("knowledgeCutoff", "Knowledge cutoff"),
-            ("releaseDate", "Release date"),
-            ("lastUpdated", "Last updated"),
-        ];
-        let mut llm_model_metadata_field_states = HashMap::new();
-        let mut llm_model_metadata_subscriptions = Vec::new();
-        for (key, placeholder) in metadata_fields {
-            let state = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-            let field = key.to_string();
-            let subscription = cx.subscribe(&state, move |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell
-                        .settings_modal
-                        .set_llm_model_metadata_field(&field, state.read(cx).value().to_string());
-                }
-            });
-            llm_model_metadata_field_states.insert(key.to_string(), state);
-            llm_model_metadata_subscriptions.push(subscription);
-        }
-        let mut api_server_field_states = HashMap::new();
-        let mut api_server_field_subscriptions = Vec::new();
-        for (key, config_key, placeholder, masked) in [
-            ("host", "httpServerHost", "127.0.0.1", false),
-            ("whitelist", "httpServerIpWhitelist", "localhost", false),
-            ("apiKey", "httpServerApiKey", "Optional bearer token", true),
-        ] {
-            let initial_value = initial_config
-                .get(config_key)
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or(placeholder)
-                .to_string();
-            let state = cx.new(|cx| {
-                let mut state = InputState::new(window, cx)
-                    .placeholder(placeholder)
-                    .masked(masked);
-                state.set_value(initial_value, window, cx);
-                state
-            });
-            let setting_key = config_key;
-            let subscription =
-                cx.subscribe(&state, move |_shell, state, event: &InputEvent, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        let value = state.read(cx).value().to_string();
-                        let config = cx.global::<GlobalDesktopServices>().0.config.clone();
-                        if let Err(error) =
-                            config.set_setting(setting_key, &serde_json::json!(value))
-                        {
-                            log::error!(
-                                "Failed to update API server setting {setting_key}: {error}"
-                            );
-                        }
-                        cx.notify();
-                    }
-                });
-            api_server_field_states.insert(key.to_string(), state);
-            api_server_field_subscriptions.push(subscription);
-        }
-        for (key, config_key, min, max, default) in [
-            ("port", "httpServerPort", 1_i64, 65_535_i64, 14_200_i64),
-            ("maxConcurrent", "httpServerMaxConcurrent", 1, 32, 2),
-            ("maxQueue", "httpServerMaxQueueSize", 0, 1_000, 100),
-            ("maxUpload", "httpServerMaxUploadSizeMB", 0, 10_000, 50),
-            ("jobTtl", "httpServerJobTtlMinutes", 0, 10_080, 60),
-        ] {
-            let initial_value = initial_config
-                .get(config_key)
-                .and_then(serde_json::Value::as_i64)
-                .unwrap_or(default)
-                .to_string();
-            let state = cx.new(|cx| {
-                let mut state = InputState::new(window, cx).placeholder(&initial_value);
-                state.set_value(initial_value, window, cx);
-                state
-            });
-            let setting_key = config_key;
-            let subscription =
-                cx.subscribe(&state, move |_shell, state, event: &InputEvent, cx| {
-                    if !matches!(event, InputEvent::Change) {
-                        return;
-                    }
-                    let value = state.read(cx).value().to_string();
-                    let Ok(value) = value.parse::<i64>() else {
-                        return;
-                    };
-                    if !(min..=max).contains(&value) {
-                        return;
-                    }
-                    let config = cx.global::<GlobalDesktopServices>().0.config.clone();
-                    if let Err(error) = config.set_setting(setting_key, &serde_json::json!(value)) {
-                        log::error!("Failed to update API server setting {setting_key}: {error}");
-                    }
-                    cx.notify();
-                });
-            api_server_field_states.insert(key.to_string(), state);
-            api_server_field_subscriptions.push(subscription);
-        }
-        let llm_api_host_subscription = cx.subscribe(
-            &llm_provider_api_host_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.set_llm_provider_field(
-                        "apiHost",
-                        state.read(cx).value().to_string(),
-                        cx,
-                    );
-                }
-            },
-        );
-        let llm_api_key_subscription = cx.subscribe(
-            &llm_provider_api_key_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell.settings_modal.set_llm_provider_field(
-                        "apiKey",
-                        state.read(cx).value().to_string(),
-                        cx,
-                    );
-                }
-            },
-        );
-        let llm_model_draft_subscription = cx.subscribe(
-            &llm_model_draft_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell
-                        .settings_modal
-                        .set_llm_model_draft(state.read(cx).value().to_string());
-                }
-            },
-        );
-        let llm_custom_name_subscription = cx.subscribe(
-            &llm_custom_provider_name_state,
-            |shell, state, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    shell
-                        .settings_modal
-                        .set_llm_custom_provider_name(state.read(cx).value().to_string());
-                }
-            },
-        );
-        let mut online_provider_field_states = HashMap::new();
-        let mut online_provider_field_subscriptions = Vec::new();
-        for provider in sona_core::ports::asr::online_asr_providers() {
-            let provider_id = provider.id.clone();
-            let mut fields = vec![("apiKey".to_string(), "password".to_string())];
-            fields.extend(
-                provider
-                    .ui
-                    .fields
-                    .iter()
-                    .filter(|field| field.name != "apiKey" && field.name != "model")
-                    .map(|field| (field.name.clone(), field.field_type.clone())),
-            );
-            for (field_name, field_type) in fields {
-                let state_key = format!("{provider_id}::{field_name}");
-                let value = initial_config
-                    .pointer(&format!("/asr/providers/online/{provider_id}/{field_name}"))
-                    .and_then(serde_json::Value::as_str)
-                    .or_else(|| {
-                        provider
-                            .defaults
-                            .get(&field_name)
-                            .and_then(serde_json::Value::as_str)
-                    })
-                    .unwrap_or_default()
-                    .to_string();
-                let placeholder = match (provider_id.as_str(), field_name.as_str()) {
-                    ("volcengine-doubao", "apiKey") => "X-Api-Key".to_string(),
-                    ("groq-whisper", "apiKey") => "gsk_...".to_string(),
-                    (_, "apiKey") => "API Key".to_string(),
-                    _ => field_name.clone(),
-                };
-                let state = cx.new(|cx| {
-                    let mut state = InputState::new(window, cx).placeholder(placeholder);
-                    if field_type == "password" {
-                        state = state.masked(true);
-                    }
-                    state.set_value(value, window, cx);
-                    state
-                });
-                let subscription_provider_id = provider_id.clone();
-                let subscription_field_name = field_name.clone();
-                online_provider_field_subscriptions.push(cx.subscribe(
-                    &state,
-                    move |shell, state, event: &InputEvent, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            shell.settings_modal.set_online_provider_config_field(
-                                &subscription_provider_id,
-                                &subscription_field_name,
-                                state.read(cx).value().to_string(),
-                                cx,
-                            );
-                        }
-                    },
-                ));
-                online_provider_field_states.insert(state_key, state);
-            }
-        }
-        let engine_subscription = cx.subscribe(
-            &model_engine_select,
-            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(value)) = event {
-                    shell.settings_modal.model_engine_filter = match *value {
-                        "ONNX" => "sherpa-onnx",
-                        "GGUF" => "llama-cpp",
-                        _ => "all",
-                    }
-                    .to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let status_subscription = cx.subscribe(
-            &model_status_select,
-            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(value)) = event {
-                    shell.settings_modal.model_status_filter = match *value {
-                        "Installed" => "installed",
-                        "Not Installed" => "not-installed",
-                        "Downloading" => "downloading",
-                        _ => "all",
-                    }
-                    .to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let label_subscription = cx.subscribe(
-            &model_label_select,
-            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(value)) = event {
-                    shell.settings_modal.model_label_filter = match *value {
-                        "Accurate" => "accurate",
-                        "Lite" => "lite",
-                        _ => "all",
-                    }
-                    .to_string();
-                    cx.notify();
-                }
-            },
-        );
-        let translation_language_subscription = cx.subscribe(
-            &translation_language_select,
-            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
-                if let SelectEvent::Confirm(Some(value)) = event
-                    && let Some((code, _)) = crate::views::settings::LANGUAGE_OPTIONS
-                        .iter()
-                        .find(|(_, name)| *name == *value)
-                {
-                    shell.settings_modal.persist_model_setting(
-                        "translationLanguage".to_string(),
-                        serde_json::Value::String((*code).to_string()),
-                        cx,
-                    );
-                }
-            },
-        );
-
-        let mut settings_modal = SettingsModal::new();
-        settings_modal.selected_theme = configured_theme.to_string();
-        settings_modal.selected_lang = initial_config
-            .get("appLanguage")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("auto")
-            .to_string();
-        settings_modal.selected_font = initial_config
-            .get("font")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("system")
-            .to_string();
-
+        }).detach();
         let mut shell = Self {
             _voice_typing_event_task: None,
             mode: AppMode::Create,
@@ -1218,7 +434,7 @@ impl MainShell {
             loading: true,
             has_active_transcript: false,
 
-            project_selector: ProjectSelectorDropdown::new(),
+            project_selector: ProjectSelectorDropdown::new(window, cx),
             sync_pill: SyncHeaderPill::new(),
             notification_center,
 
@@ -1229,99 +445,160 @@ impl MainShell {
             projects_rail: ProjectsRail::new(),
             projects_header: ProjectsHeader::new(),
             projects_toolbar,
-            projects_results: ProjectsResults::new(),
+            projects_results: ProjectsResults::new(window, cx),
             selection_bar: SelectionBar::new(),
-            project_search_state,
-            _project_search_subscription: project_search_subscription,
-            project_dropdown_search_state,
-            _project_dropdown_search_subscription: project_dropdown_search_subscription,
-            history_rename_state,
-            model_search_state,
-            _model_search_subscription: model_search_subscription,
-            mcp_search_state,
-            _mcp_search_subscription: mcp_search_subscription,
-            model_engine_select,
-            model_status_select,
-            model_label_select,
-            _model_filter_subscriptions: [
-                engine_subscription,
-                status_subscription,
-                label_subscription,
-            ],
-            translation_language_select,
-            _translation_language_subscription: translation_language_subscription,
-            general_log_level_select,
-            _general_log_level_subscription: general_log_level_subscription,
-            general_language_select,
-            _general_language_subscription: general_language_subscription,
-            general_font_select,
-            _general_font_subscription: general_font_subscription,
-            online_provider_field_states,
-            _online_provider_field_subscriptions: online_provider_field_subscriptions,
-            llm_provider_api_host_state,
-            llm_provider_api_key_state,
-            llm_model_draft_state,
-            llm_custom_provider_name_state,
-            _llm_settings_input_subscriptions: [
-                llm_api_host_subscription,
-                llm_api_key_subscription,
-                llm_model_draft_subscription,
-                llm_custom_name_subscription,
-            ],
-            llm_model_metadata_field_states,
-            _llm_model_metadata_subscriptions: llm_model_metadata_subscriptions,
-            api_server_field_states,
-            _api_server_field_subscriptions: api_server_field_subscriptions,
-            shortcut_edit_state,
-            _shortcut_edit_subscription: shortcut_edit_subscription,
-            dictionary_textarea_state,
-            _dictionary_textarea_subscription: dictionary_textarea_subscription,
-            dictionary_quick_add_state,
-            _dictionary_quick_add_subscription: dictionary_quick_add_subscription,
-            dictionary_inline_hotword_state,
-            _dictionary_inline_hotword_subscription: dictionary_inline_hotword_subscription,
-            dictionary_word_state,
-            _dictionary_word_subscription: dictionary_word_subscription,
-            dictionary_weight_state,
-            _dictionary_weight_subscription: dictionary_weight_subscription,
-            dictionary_from_state,
-            _dictionary_from_subscription: dictionary_from_subscription,
-            dictionary_to_state,
-            _dictionary_to_subscription: dictionary_to_subscription,
-            dictionary_search_state,
-            _dictionary_search_subscription: dictionary_search_subscription,
-            dictionary_test_state,
-            _dictionary_test_subscription: dictionary_test_subscription,
-            vocabulary_name_state,
-            _vocabulary_name_subscription: vocabulary_name_subscription,
-            vocabulary_body_state,
-            _vocabulary_body_subscription: vocabulary_body_subscription,
-            speaker_profile_name_state,
-            _speaker_profile_name_subscription: speaker_profile_name_subscription,
-            speaker_profile_search_state,
-            _speaker_profile_search_subscription: speaker_profile_search_subscription,
-            speaker_profile_name_states,
 
-            tools_sidebar: ToolsSidebar::new(),
-            subtitles_tool: SubtitlesToolPanel::new(),
-            voice_typing_tool: VoiceTypingToolPanel::new(),
-            api_server_tool: ApiServerToolPanel::new(),
-            mcp_tool: McpToolPanel::new(),
-            media_server_tool: MediaServerToolPanel::new(window, cx),
+            tools: ToolsWorkspace::new(window, cx),
 
-            workbench: TranscriptWorkbench::new(window, cx),
+            workbench: {
+                let workbench = cx.new(|cx| TranscriptWorkbench::new(window, cx));
+                cx.subscribe(
+                    &workbench,
+                    |this, _wb, event: &WorkbenchEvent, cx| match event {
+                        WorkbenchEvent::Export {
+                            title,
+                            has_translation,
+                            segments,
+                        } => {
+                            let segments = segments.clone();
+                            this.export_modal.update(cx, |m, cx| {
+                                m.open(title, *has_translation, segments, cx);
+                            });
+                        }
+                        WorkbenchEvent::Closed => {
+                            this.has_active_transcript = false;
+                            cx.notify();
+                        }
+                        WorkbenchEvent::ItemRenamed { .. } => {
+                            this.project_selector.load_data(cx);
+                            this.projects_results.load_data(cx);
+                            cx.notify();
+                        }
+                    },
+                )
+                .detach();
+                workbench
+            },
 
             settings_modal,
-            diagnostics_modal: DiagnosticsModal::new(),
-            recovery_modal: RecoveryModal::new(),
-            global_dialog: GlobalDialog::new(),
-            export_modal: ExportModal::new(window, cx),
-            onboarding: OnboardingWizard::new(),
-            project_dialogs: ProjectDialogs::new(window, cx),
-            error_dialog: ErrorDialog::new(),
+            diagnostics_modal: cx.new(|_| DiagnosticsModal::new()),
+            recovery_modal: {
+                let recovery_modal = cx.new(|_| RecoveryModal::new());
+                cx.subscribe(&recovery_modal, |this, _modal, event, cx| match event {
+                    RecoveryModalEvent::ResumeBatch(selected) => {
+                        let workspace = this.create_workspace.clone();
+                        workspace.update(cx, |workspace, cx| {
+                            workspace
+                                .set_tab(crate::views::create::CreateWorkspaceTab::BatchImport, cx);
+                            workspace.batch_import.update(cx, |batch, cx| {
+                                batch.enqueue_recovered_items(selected.clone(), cx);
+                            });
+                        });
+                    }
+                })
+                .detach();
+                recovery_modal
+            },
+            global_dialog: {
+                let global_dialog = cx.new(|_| GlobalDialog::new());
+                cx.subscribe(&global_dialog, |this, _dialog, event, cx| match event {
+                    GlobalDialogEvent::Cancelled { title } => {
+                        this.settings_modal.update(cx, |m, _| {
+                            if title == "Delete LLM Provider" {
+                                m.llm_service.pending_delete_provider = None;
+                            }
+                            if title == "Regenerate API Key" {
+                                m.api_server.pending_key = None;
+                            }
+                            if title == "Change Data Directory?"
+                                || title == "Change Models Directory?"
+                            {
+                                m.storage.pending_migration = None;
+                            }
+                            if title == "Clean History Audio?" {
+                                m.storage.cleanup_pending = None;
+                            }
+                            if matches!(
+                                title.as_str(),
+                                "Restore Default Data Directory?"
+                                    | "Restore Default Models Directory?"
+                            ) {
+                                m.storage.pending_reset = None;
+                            }
+                        });
+                    }
+                    GlobalDialogEvent::Confirmed { title, .. } => {
+                        if title == "Download CUDA Add-on" {
+                            this.settings_modal
+                                .update(cx, |m, cx| m.models.begin_cuda_addon_download(cx));
+                        } else if title == "Delete LLM Provider" {
+                            this.settings_modal.update(cx, |m, cx| {
+                                if let Some(id) = m.llm_service.pending_delete_provider.take() {
+                                    m.remove_llm_model(&id, cx);
+                                }
+                            });
+                        } else if title == "Regenerate API Key" {
+                            this.settings_modal.update(cx, |m, cx| {
+                                if let Some(key) = m.api_server.pending_key.take()
+                                    && let Err(error) = cx
+                                        .global::<crate::app::GlobalDesktopServices>()
+                                        .0
+                                        .config
+                                        .set_setting("httpServerApiKey", &serde_json::json!(key))
+                                {
+                                    log::error!("Failed to regenerate API key: {error}");
+                                }
+                            });
+                            cx.notify();
+                        } else if matches!(
+                            title.as_str(),
+                            "Change Data Directory?" | "Change Models Directory?"
+                        ) {
+                            this.settings_modal
+                                .update(cx, |m, cx| m.storage.confirm_storage_migration(cx));
+                        } else if title == "Clean History Audio?" {
+                            this.settings_modal
+                                .update(cx, |m, cx| m.storage.confirm_storage_cleanup(cx));
+                        } else if matches!(
+                            title.as_str(),
+                            "Restore Default Data Directory?" | "Restore Default Models Directory?"
+                        ) {
+                            this.settings_modal
+                                .update(cx, |m, cx| m.storage.confirm_storage_directory_reset(cx));
+                        } else {
+                            cx.notify();
+                        }
+                    }
+                })
+                .detach();
+                global_dialog
+            },
+            export_modal: cx.new(|cx| ExportModal::new(window, cx)),
+            onboarding: cx.new(|_| OnboardingWizard::new()),
+            project_dialogs: {
+                let project_dialogs = cx.new(|cx| ProjectDialogs::new(window, cx));
+                cx.subscribe(&project_dialogs, |this, _dialogs, event, cx| match event {
+                    ProjectDialogEvent::ProjectCreated(_)
+                    | ProjectDialogEvent::ProjectUpdated(_) => {
+                        this.project_selector.load_data(cx);
+                        this.projects_results.load_data(cx);
+                    }
+                    ProjectDialogEvent::ProjectDeleted(project_id) => {
+                        if this.project_selector.active_project_id.as_deref()
+                            == Some(project_id.as_str())
+                        {
+                            this.project_selector.active_project_id = None;
+                        }
+                        this.project_selector.load_data(cx);
+                        this.projects_results.load_data(cx);
+                    }
+                })
+                .detach();
+                project_dialogs
+            },
+            error_dialog: cx.new(|_| ErrorDialog::new()),
         };
 
-        shell.settings_modal.model_config = initial_config;
         let mut voice_typing_events = cx.global::<GlobalEventBus>().0.subscribe();
         shell._voice_typing_event_task = Some(cx.spawn(async move |this, cx: &mut AsyncApp| {
             while let Ok(event) = voice_typing_events.recv().await {
@@ -1347,7 +624,7 @@ impl MainShell {
                             center.is_open = false;
                             cx.notify();
                         });
-                        shell.recovery_modal.open(cx);
+                        shell.recovery_modal.update(cx, |m, cx| m.open(cx));
                     });
                 } else if event.is("notification:open-automation") {
                     let _ = this.update(cx, |shell, cx| {
@@ -1355,8 +632,9 @@ impl MainShell {
                             center.is_open = false;
                             cx.notify();
                         });
-                        shell.settings_modal.set_tab(SettingsTab::Automation, cx);
-                        shell.settings_modal.open(cx);
+                        shell.settings_modal.update(cx, |m, cx| {
+                            m.open(SettingsTab::Automation, cx);
+                        });
                     });
                 } else if event.is("notification:retry-batch") {
                     let file_path = event.payload["filePath"]
@@ -1410,12 +688,15 @@ impl MainShell {
                     let _ = this.update(cx, |shell, cx| {
                         shell.projects_results.selected_id = Some(session_id.clone());
                         shell.has_active_transcript = true;
-                        shell.workbench.begin_loading(
-                            session_id,
-                            title,
-                            Some("system:mic".to_string()),
-                            false,
-                        );
+                        shell.workbench.update(cx, |w, cx| {
+                            w.begin_loading(
+                                session_id,
+                                title,
+                                Some("system:mic".to_string()),
+                                false,
+                            );
+                            cx.notify();
+                        });
                         cx.notify();
                     });
                 } else if event.is("live-record:transcript-updated") {
@@ -1430,20 +711,26 @@ impl MainShell {
                     };
                     let duration = event.payload["duration"].as_f64().unwrap_or_default();
                     let _ = this.update(cx, |shell, cx| {
-                        if shell.workbench.history_id.as_deref() == Some(&session_id) {
-                            shell.workbench.set_transcript(segments, duration);
-                            cx.notify();
-                        }
+                        shell.workbench.update(cx, |w, cx| {
+                            if w.history_id.as_deref() == Some(&session_id) {
+                                w.set_transcript(segments, duration);
+                                cx.notify();
+                            }
+                        });
                     });
                 } else if event.is("live-record:stopped") {
                     let session_id = event.payload["sessionId"].as_str().map(str::to_owned);
                     let title = event.payload["title"].as_str().map(str::to_owned);
                     let _ = this.update(cx, |shell, cx| {
-                        if let Some(session_id) = session_id.as_deref()
-                            && shell.workbench.history_id.as_deref() == Some(session_id)
-                            && let Some(title) = title
-                        {
-                            shell.workbench.session_title = title;
+                        if let Some(session_id) = session_id.as_deref() {
+                            shell.workbench.update(cx, |w, cx| {
+                                if w.history_id.as_deref() == Some(session_id)
+                                    && let Some(title) = title
+                                {
+                                    w.session_title = title;
+                                    cx.notify();
+                                }
+                            });
                         }
                         shell.projects_results.load_data(cx);
                         cx.notify();
@@ -1454,7 +741,7 @@ impl MainShell {
                         .unwrap_or("Recording failed.")
                         .to_owned();
                     let _ = this.update(cx, |shell, cx| {
-                        shell.error_dialog.show(message, "");
+                        shell.error_dialog.update(cx, |d, _| d.show(message, ""));
                         cx.notify();
                     });
                 }
@@ -1466,7 +753,9 @@ impl MainShell {
         shell
             .notification_center
             .update(cx, |nc, cx| nc.load_tasks(cx));
-        shell.settings_modal.load_preferences(cx);
+        shell
+            .settings_modal
+            .update(cx, |m, cx| m.load_preferences(cx));
 
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let projects = services.projects.list().await.unwrap_or_default();
@@ -1521,10 +810,11 @@ impl MainShell {
             .iter()
             .find(|item| item.history_id.as_deref() == Some(&id))
             .and_then(|item| item.media_server_context.clone());
-        self.workbench.media_server_context = media_context;
-        self.workbench
-            .begin_loading(id.clone(), record.title, record.icon.clone(), is_batch);
-
+        self.workbench.update(cx, |w, cx| {
+            w.media_server_context = media_context;
+            w.begin_loading(id.clone(), record.title, record.icon.clone(), is_batch);
+            cx.notify();
+        });
         let duration = record.duration;
         let selected_id = id.clone();
         let services = cx.global::<GlobalDesktopServices>().0.clone();
@@ -1551,14 +841,17 @@ impl MainShell {
                 if shell.projects_results.selected_id.as_deref() != Some(&selected_id) {
                     return;
                 }
-                match result {
-                    Ok(Some(segments)) => {
-                        shell.workbench.set_transcript(segments, duration);
-                        shell.workbench.set_versions(snapshots);
-                        shell.workbench.set_summary(summary);
+                shell.workbench.update(cx, |w, cx| {
+                    match result {
+                        Ok(Some(segments)) => {
+                            w.set_transcript(segments, duration);
+                            w.set_versions(snapshots);
+                            w.set_summary(summary);
+                        }
+                        _ => w.set_load_error(),
                     }
-                    _ => shell.workbench.set_load_error(),
-                }
+                    cx.notify();
+                });
                 cx.notify();
             })
             .ok();
@@ -1573,9 +866,7 @@ impl MainShell {
         cx: &mut Context<Self>,
     ) {
         self.projects_results.set_scope(scope, cx);
-        self.projects_toolbar.sync_filter_selects(window, cx);
-        self.project_search_state
-            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.projects_toolbar.reset_filters(window, cx);
         cx.notify();
     }
 
@@ -1759,7 +1050,7 @@ impl MainShell {
                                 )
                                 .child(
                                     div().flex_1().min_w(px(0.0)).child(
-                                        Input::new(&self.project_dropdown_search_state)
+                                        Input::new(&self.project_selector.search_state)
                                             .cleanable(true)
                                             .small(),
                                     ),
@@ -1783,7 +1074,7 @@ impl MainShell {
                                 .cursor_pointer()
                                 .hover(|style| style.bg(COLOR_BG_TERTIARY_LIGHT))
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.project_dropdown_search_state.update(cx, |input, cx| {
+                                    this.project_selector.search_state.update(cx, |input, cx| {
                                         input.set_value("", window, cx);
                                     });
                                     this.project_selector.select_project(None, cx);
@@ -1842,7 +1133,7 @@ impl MainShell {
                                         .cursor_pointer()
                                         .hover(|style| style.bg(COLOR_BG_TERTIARY_LIGHT))
                                         .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.project_dropdown_search_state.update(
+                                            this.project_selector.search_state.update(
                                                 cx,
                                                 |input, cx| {
                                                     input.set_value("", window, cx);
@@ -1918,7 +1209,8 @@ impl MainShell {
                                         .label("+ New Project")
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.project_selector.is_open = false;
-                                            this.project_dialogs.open_create(window, cx);
+                                            this.project_dialogs
+                                                .update(cx, |d, cx| d.open_create(window, cx));
                                             cx.notify();
                                         })),
                                 )
@@ -2270,9 +1562,10 @@ impl MainShell {
                                             .label("Enable Cloud Sync")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.sync_pill.is_open = false;
-                                                this.settings_modal.set_tab(SettingsTab::Sync, cx);
-                                                this.settings_modal.open(cx);
-                                                this.settings_modal.load_preferences(cx);
+                                                this.settings_modal.update(cx, |m, cx| {
+                                                    m.open(SettingsTab::Sync, cx);
+                                                    m.load_preferences(cx);
+                                                });
                                                 cx.notify();
                                             })),
                                     )
@@ -2296,9 +1589,10 @@ impl MainShell {
                                                 .cursor_pointer()
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.sync_pill.is_open = false;
-                                                    this.settings_modal.set_tab(SettingsTab::Sync, cx);
-                                                    this.settings_modal.open(cx);
-                                                    this.settings_modal.load_preferences(cx);
+                                                    this.settings_modal.update(cx, |m, cx| {
+                                                        m.open(SettingsTab::Sync, cx);
+                                                        m.load_preferences(cx);
+                                                    });
                                                     cx.notify();
                                                 }))
                                                 .child(
@@ -2429,9 +1723,10 @@ impl MainShell {
                                                     .label("Manage")
                                                     .on_click(cx.listener(|this, _, _, cx| {
                                                         this.sync_pill.is_open = false;
-                                                        this.settings_modal.set_tab(SettingsTab::Sync, cx);
-                                                        this.settings_modal.open(cx);
-                                                        this.settings_modal.load_preferences(cx);
+                                                        this.settings_modal.update(cx, |m, cx| {
+                                                            m.open(SettingsTab::Sync, cx);
+                                                            m.load_preferences(cx);
+                                                        });
                                                         cx.notify();
                                                     })),
                                             ),
@@ -2463,10 +1758,15 @@ impl Render for MainShell {
                     return;
                 }
 
-                if event.keystroke.key.eq_ignore_ascii_case("escape")
-                    && this.workbench.search.is_visible
-                {
-                    this.workbench.search.is_visible = false;
+                let (search_visible, has_session) = {
+                    let wb = this.workbench.read(cx);
+                    (wb.search.is_visible, wb.has_session)
+                };
+                if event.keystroke.key.eq_ignore_ascii_case("escape") && search_visible {
+                    this.workbench.update(cx, |w, cx| {
+                        w.search.is_visible = false;
+                        cx.notify();
+                    });
                     window.prevent_default();
                     cx.stop_propagation();
                     cx.notify();
@@ -2476,28 +1776,18 @@ impl Render for MainShell {
                 if event.keystroke.key.eq_ignore_ascii_case("f")
                     && (event.keystroke.modifiers.control || event.keystroke.modifiers.platform)
                     && this.should_show_transcript_host()
+                    && has_session
                 {
-                    this.workbench.search.open(window, cx);
+                    this.workbench.update(cx, |w, cx| {
+                        w.search.open(window, cx);
+                        cx.notify();
+                    });
                     window.prevent_default();
                     cx.stop_propagation();
                     cx.notify();
                     return;
                 }
 
-                if this.settings_modal.is_editing_shortcut {
-                    if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                        let current = this.settings_modal.live_record_shortcut.clone();
-                        this.settings_modal.shortcut_draft = current.clone();
-                        this.settings_modal.is_editing_shortcut = false;
-                        this.shortcut_edit_state.update(cx, |state, cx| {
-                            state.set_value(current, window, cx);
-                        });
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        cx.notify();
-                    }
-                    return;
-                }
 
                 if event.keystroke.key.eq_ignore_ascii_case("escape")
                     && this.notification_center.read(cx).is_open
@@ -2515,11 +1805,13 @@ impl Render for MainShell {
                     return;
                 }
 
-                if this.settings_modal.is_recording_shortcut {
+                if this.settings_modal.read(cx).shortcuts.is_recording_shortcut {
                     let key = event.keystroke.key.as_str();
                     if key.eq_ignore_ascii_case("escape") {
-                        this.settings_modal.is_recording_shortcut = false;
-                        this.settings_modal.shortcut_recording_target = None;
+                        this.settings_modal.update(cx, |m, _| {
+                            m.shortcuts.is_recording_shortcut = false;
+                            m.shortcuts.shortcut_recording_target = None;
+                        });
                     } else if !["control", "ctrl", "alt", "shift", "meta", "super"]
                         .iter()
                         .any(|modifier| key.eq_ignore_ascii_case(modifier))
@@ -2547,16 +1839,16 @@ impl Render for MainShell {
                         };
                         parts.push(&main_key);
                         let shortcut = parts.join(" + ");
-                        let target = this
-                            .settings_modal
-                            .shortcut_recording_target
-                            .take()
-                            .unwrap_or(ShortcutTarget::LiveRecord);
-                        this.settings_modal.is_recording_shortcut = false;
+                        let target = this.settings_modal.update(cx, |m, _| {
+                            m.shortcuts.is_recording_shortcut = false;
+                            m.shortcuts.shortcut_recording_target.take().unwrap_or(ShortcutTarget::LiveRecord)
+                        });
                         match target {
                             ShortcutTarget::LiveRecord => {
-                                this.settings_modal.live_record_shortcut = shortcut.clone();
-                                this.settings_modal.persist_shortcut(shortcut, cx);
+                                this.settings_modal.update(cx, |m, cx| {
+                                    m.shortcuts.live_record_shortcut = shortcut.clone();
+                                    m.shortcuts.persist_shortcut(shortcut, cx);
+                                });
                             }
                             ShortcutTarget::VoiceTyping => {
                                 let controller = cx.global::<GlobalHotkeyController>().0.clone();
@@ -2574,18 +1866,18 @@ impl Render for MainShell {
                                             "voiceTypingShortcut".to_string(),
                                             serde_json::Value::String(shortcut),
                                         ) {
-                                            this.global_dialog.show(
+                                            this.global_dialog.update(cx, |d, _| d.show(
                                                 "Shortcut Save Failed",
                                                 error,
                                                 crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                            );
+                                            ));
                                         }
                                     }
-                                    Err(error) => this.global_dialog.show(
+                                    Err(error) => this.global_dialog.update(cx, |d, _| d.show(
                                         "Shortcut Registration Failed",
                                         error,
                                         crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                    ),
+                                    )),
                                 }
                             }
                             ShortcutTarget::VoiceTypingTranslate => {
@@ -2602,18 +1894,18 @@ impl Render for MainShell {
                                             "voiceTypingTranslateShortcut".to_string(),
                                             serde_json::Value::String(shortcut),
                                         ) {
-                                            this.global_dialog.show(
+                                            this.global_dialog.update(cx, |d, _| d.show(
                                                 "Shortcut Save Failed",
                                                 error,
                                                 crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                            );
+                                            ));
                                         }
                                     }
-                                    Err(error) => this.global_dialog.show(
+                                    Err(error) => this.global_dialog.update(cx, |d, _| d.show(
                                         "Shortcut Registration Failed",
                                         error,
                                         crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                    ),
+                                    )),
                                 }
                             }
                             ShortcutTarget::VoiceTypingQuickRecall => {
@@ -2632,18 +1924,18 @@ impl Render for MainShell {
                                             "voiceTypingQuickRecallShortcut".to_string(),
                                             serde_json::Value::String(shortcut),
                                         ) {
-                                            this.global_dialog.show(
+                                            this.global_dialog.update(cx, |d, _| d.show(
                                                 "Shortcut Save Failed",
                                                 error,
                                                 crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                            );
+                                            ));
                                         }
                                     }
-                                    Err(error) => this.global_dialog.show(
+                                    Err(error) => this.global_dialog.update(cx, |d, _| d.show(
                                         "Shortcut Registration Failed",
                                         error,
                                         crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                    ),
+                                    )),
                                 }
                             }
                         }
@@ -2654,45 +1946,39 @@ impl Render for MainShell {
                     return;
                 }
 
-                if this.recovery_modal.is_open && event.keystroke.key.eq_ignore_ascii_case("escape")
-                {
-                    this.recovery_modal.close();
-                    window.prevent_default();
-                    cx.stop_propagation();
-                    cx.notify();
-                    return;
-                }
-
-                if this.diagnostics_modal.is_open
+                if this.recovery_modal.read(cx).is_open
                     && event.keystroke.key.eq_ignore_ascii_case("escape")
                 {
-                    this.diagnostics_modal.close();
+                    this.recovery_modal.update(cx, |m, _| m.close());
                     window.prevent_default();
                     cx.stop_propagation();
                     cx.notify();
                     return;
                 }
 
-                if this.global_dialog.is_open && event.keystroke.key.eq_ignore_ascii_case("escape")
+                if this.diagnostics_modal.read(cx).is_open
+                    && event.keystroke.key.eq_ignore_ascii_case("escape")
                 {
-                    this.global_dialog.close();
+                    this.diagnostics_modal.update(cx, |m, _| m.close());
                     window.prevent_default();
                     cx.stop_propagation();
                     cx.notify();
                     return;
                 }
 
-                if this.settings_modal.is_open {
+                if this.global_dialog.read(cx).is_open
+                    && event.keystroke.key.eq_ignore_ascii_case("escape")
+                {
+                    this.global_dialog.update(cx, |d, _| d.close());
+                    window.prevent_default();
+                    cx.stop_propagation();
+                    cx.notify();
+                    return;
+                }
+
+                if this.settings_modal.read(cx).is_open() {
                     if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                        if this.settings_modal.vocabulary_dictionary_dialog_open {
-                            this.settings_modal.vocabulary_dictionary_dialog_open = false;
-                            this.settings_modal.vocabulary_dictionary_edit_line = None;
-                            window.prevent_default();
-                            cx.stop_propagation();
-                            cx.notify();
-                            return;
-                        }
-                        this.settings_modal.close(cx);
+                        this.settings_modal.update(cx, |m, cx| m.close(cx));
                         window.prevent_default();
                         cx.stop_propagation();
                         cx.notify();
@@ -2703,8 +1989,11 @@ impl Render for MainShell {
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.platform
                     {
-                        this.settings_modal
-                            .cycle_tab(event.keystroke.modifiers.shift, cx);
+                        let reverse = event.keystroke.modifiers.shift;
+                        this.settings_modal.update(cx, |m, cx| {
+                            let next = SettingsModal::next_tab(m.current_tab, reverse);
+                            m.set_tab(next, cx);
+                        });
                         window.prevent_default();
                         cx.stop_propagation();
                         cx.notify();
@@ -2714,14 +2003,14 @@ impl Render for MainShell {
                     && event.keystroke.modifiers.control
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.platform
-                    && !this.diagnostics_modal.is_open
-                    && !this.recovery_modal.is_open
-                    && !this.global_dialog.is_open
-                    && !this.export_modal.is_open
-                    && !this.onboarding.is_open
-                    && !this.project_dialogs.is_create_open
-                    && !this.project_dialogs.is_delete_open
-                    && !this.error_dialog.is_open
+                    && !this.settings_modal.read(cx).is_open()
+                    && !this.diagnostics_modal.read(cx).is_open
+                    && !this.recovery_modal.read(cx).is_open
+                    && !this.global_dialog.read(cx).is_open
+                    && !this.export_modal.read(cx).is_open
+                    && !this.onboarding.read(cx).is_open
+                    && !this.project_dialogs.read(cx).is_any_open()
+                    && !this.error_dialog.read(cx).is_open
                 {
                     this.cycle_mode(event.keystroke.modifiers.shift, cx);
                     window.prevent_default();
@@ -2729,37 +2018,7 @@ impl Render for MainShell {
                     cx.notify();
                     return;
                 }
-                let batch_import = this.create_workspace.read(cx).batch_import.clone();
-                let batch_import = batch_import.read(cx);
-                let text_input_focused = this
-                    .project_search_state
-                    .read(cx)
-                    .focus_handle(cx)
-                    .is_focused(window)
-                    || this
-                        .model_search_state
-                        .read(cx)
-                        .focus_handle(cx)
-                        .is_focused(window)
-                    || this
-                        .mcp_search_state
-                        .read(cx)
-                        .focus_handle(cx)
-                        .is_focused(window)
-                    || this
-                        .shortcut_edit_state
-                        .read(cx)
-                        .focus_handle(cx)
-                        .is_focused(window)
-                    || batch_import
-                        .stream_url_state
-                        .as_ref()
-                        .is_some_and(|state| state.read(cx).focus_handle(cx).is_focused(window))
-                    || batch_import
-                        .stream_alias_state
-                        .as_ref()
-                        .is_some_and(|state| state.read(cx).focus_handle(cx).is_focused(window));
-                if text_input_focused {
+                if window.focused(cx).is_some() {
                     return;
                 }
 
@@ -2768,8 +2027,9 @@ impl Render for MainShell {
                     let panel = live_record.read(cx);
                     (panel.is_recording, panel.is_initializing)
                 };
+                let live_record_shortcut = this.settings_modal.read(cx).shortcuts.live_record_shortcut.clone();
                 let is_start_stop = shortcut_matches(
-                    &this.settings_modal.live_record_shortcut,
+                    &live_record_shortcut,
                     &event.keystroke.key,
                     event.keystroke.modifiers,
                 );
@@ -2868,8 +2128,10 @@ impl Render for MainShell {
                                     .tooltip(|window, cx| Tooltip::new("Settings").build(window, cx))
                                     .child(icon(LucideIcon::Settings).size(px(18.0)))
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.settings_modal.open(cx);
-                                        this.settings_modal.load_preferences(cx);
+                                        this.settings_modal.update(cx, |m, cx| {
+                                            m.open(SettingsTab::General, cx);
+                                            m.load_preferences(cx);
+                                        });
                                         cx.notify();
                                     })),
                             ),
@@ -2957,7 +2219,7 @@ impl Render for MainShell {
                                             .border_color(COLOR_BORDER_LIGHT)
                                             .rounded_tl(px(16.0))
                                             .overflow_hidden()
-                                            .child(self.workbench.render(window, cx)),
+                                            .child(self.workbench.clone()),
                                     ),
                             )
                             .into_any_element(),
@@ -2993,7 +2255,6 @@ impl Render for MainShell {
                                     ))
                                     .child(
                                         self.projects_toolbar.render(
-                                            &self.project_search_state,
                                             self.projects_results.filter_type,
                                             self.projects_results.date_filter,
                                             self.projects_results.filtered_count,
@@ -3010,7 +2271,6 @@ impl Render for MainShell {
                                                 self.projects_toolbar.view_mode,
                                                 self.projects_toolbar.is_selection_active,
                                                 &self.project_selector.projects,
-                                                &self.history_rename_state,
                                                 cx,
                                             ))
                                             .when(
@@ -3039,11 +2299,10 @@ impl Render for MainShell {
                             })
                             .into_any_element(),
                         AppMode::Tools => {
-                            let media_server_name = self.media_server_tool.server_name();
-                            let is_recording_shortcut = self.settings_modal.is_recording_shortcut;
-                            let shortcut_target = self.settings_modal.shortcut_recording_target;
+                            let is_recording_shortcut = self.settings_modal.read(cx).shortcuts.is_recording_shortcut;
+                            let shortcut_target = self.settings_modal.read(cx).shortcuts.shortcut_recording_target;
                             let queued_media_ids = {
-                                let profile_id = self.media_server_tool.active_profile_id.as_deref();
+                                let profile_id = self.tools.media_server_tool.active_profile_id.as_deref();
                                 self.create_workspace
                                     .read(cx)
                                     .batch_import
@@ -3063,43 +2322,12 @@ impl Render for MainShell {
                                     .collect::<std::collections::HashSet<_>>()
                             };
 
-                            let tool_panel: AnyElement = match self.tools_sidebar.active_tool {
-                                ToolKind::Subtitles => {
-                                    self.subtitles_tool.render(cx).into_any_element()
-                                }
-                                ToolKind::VoiceTyping => {
-                                    self.voice_typing_tool.render(is_recording_shortcut, shortcut_target, cx).into_any_element()
-                                }
-                                ToolKind::ApiServer => {
-                                    self.api_server_tool.render(&self.api_server_field_states, cx).into_any_element()
-                                }
-                                ToolKind::Mcp => self.mcp_tool.render(cx).into_any_element(),
-                                ToolKind::MediaServer => {
-                                    self.media_server_tool.render(&queued_media_ids, cx).into_any_element()
-                                }
-                            };
-
-                            div()
-                                .id("tools-mode-shell")
-                                .flex()
-                                .size_full()
-                                .bg(cx.theme().secondary)
-                                .child(self.tools_sidebar.render(media_server_name.as_deref(), cx))
-                                .child(
-                                    div()
-                                        .id("tools-detail-pane")
-                                        .flex_1()
-                                        .min_w(PANEL_RIGHT_MIN_WIDTH)
-                                        .h_full()
-                                        .bg(cx.theme().background)
-                                        .border_t_1()
-                                        .border_l_1()
-                                        .border_color(cx.theme().border)
-                                        .rounded_tl(RADIUS_LG)
-                                        .overflow_y_scroll()
-                                        .p_8()
-                                        .px(px(48.0))
-                                        .child(tool_panel),
+                            self.tools
+                                .render(
+                                    is_recording_shortcut,
+                                    shortcut_target,
+                                    &queued_media_ids,
+                                    cx,
                                 )
                                 .into_any_element()
                         }
@@ -3122,76 +2350,36 @@ impl Render for MainShell {
                                     .rounded_tl(RADIUS_LG)
                                     .bg(COLOR_BG_PRIMARY_LIGHT)
                                     .overflow_hidden()
-                                    .child(self.workbench.render(window, cx)),
+                                    .child(self.workbench.clone()),
                             )
                         },
                     ),
             )
             // Modals & Dialogs (conditionally mounted to prevent stack overflow and frame overhead)
-            .when(self.settings_modal.is_open, |this| {
-                this.child(self.settings_modal.render(
-                    &self.shortcut_edit_state,
-                    &self.model_search_state,
-                    &self.mcp_search_state,
-                    &mut self.voice_typing_tool,
-                    &mut self.subtitles_tool,
-                    &self.api_server_field_states,
-                    &self.model_engine_select,
-                    &self.model_status_select,
-                    &self.model_label_select,
-                    &self.online_provider_field_states,
-                    &self.llm_provider_api_host_state,
-                    &self.llm_provider_api_key_state,
-                    &self.llm_model_draft_state,
-                    &self.llm_custom_provider_name_state,
-                    &self.llm_model_metadata_field_states,
-                    &self.dictionary_textarea_state,
-                    &self.dictionary_quick_add_state,
-                    &self.dictionary_search_state,
-                    &self.dictionary_test_state,
-                    &self.vocabulary_name_state,
-                    &self.vocabulary_body_state,
-                    &self.translation_language_select,
-                    &self.general_log_level_select,
-                    &self.general_language_select,
-                    &self.general_font_select,
-                    &self.project_selector.projects,
-                    self.workbench.history_id.as_deref(),
-                    &self.dictionary_word_state,
-                    &self.dictionary_weight_state,
-                    &self.dictionary_from_state,
-                    &self.dictionary_to_state,
-                    &self.dictionary_inline_hotword_state,
-                    &self.speaker_profile_name_state,
-                    &self.speaker_profile_search_state,
-                    &self.speaker_profile_name_states,
-                    window,
-                    cx,
-                ))
+            .when(self.settings_modal.read(cx).is_open(), |this| {
+                this.child(self.settings_modal.clone())
             })
-            .when(self.diagnostics_modal.is_open, |this| {
-                this.child(self.diagnostics_modal.render(cx))
+            .when(self.diagnostics_modal.read(cx).is_open, |this| {
+                this.child(self.diagnostics_modal.clone())
             })
-            .when(self.recovery_modal.is_open, |this| {
-                this.child(self.recovery_modal.render(cx))
+            .when(self.recovery_modal.read(cx).is_open, |this| {
+                this.child(self.recovery_modal.clone())
             })
-            .when(self.global_dialog.is_open, |this| {
-                this.child(self.global_dialog.render(cx))
+            .when(self.global_dialog.read(cx).is_open, |this| {
+                this.child(self.global_dialog.clone())
             })
-            .when(self.export_modal.is_open, |this| {
-                this.child(self.export_modal.render(cx))
+            .when(self.export_modal.read(cx).is_open, |this| {
+                this.child(self.export_modal.clone())
             })
-            .when(self.onboarding.is_open, |this| {
-                this.child(self.onboarding.render(cx))
+            .when(self.onboarding.read(cx).is_open, |this| {
+                this.child(self.onboarding.clone())
             })
             .when(
-                self.project_dialogs.is_create_open
-                    || self.project_dialogs.is_settings_open
-                    || self.project_dialogs.is_delete_open,
-                |this| this.child(self.project_dialogs.render(cx)),
+                self.project_dialogs.read(cx).is_any_open(),
+                |this| this.child(self.project_dialogs.clone()),
             )
-            .when(self.error_dialog.is_open, |this| {
-                this.child(self.error_dialog.render(cx))
+            .when(self.error_dialog.read(cx).is_open, |this| {
+                this.child(self.error_dialog.clone())
             })
     }
 }

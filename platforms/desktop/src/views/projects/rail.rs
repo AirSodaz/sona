@@ -254,7 +254,9 @@ impl ProjectsRail {
                                     .tooltip("New Project")
                                     .accessibility_label("New Project")
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.project_dialogs.open_create(window, cx);
+                                        this.project_dialogs.update(cx, |dialogs, cx| {
+                                            dialogs.open_create(window, cx);
+                                        });
                                         cx.notify();
                                     })),
                             ),
@@ -395,7 +397,9 @@ impl ProjectsRail {
                                                     .on_click(move |_, window, cx| {
                                                         let p = p_record.clone();
                                                         shell_for_settings.update(cx, |shell, cx| {
-                                                            shell.project_dialogs.open_settings(&p, window, cx);
+                                                            shell.project_dialogs.update(cx, |dialogs, cx| {
+                                                                dialogs.open_settings(&p, window, cx);
+                                                            });
                                                         });
                                                     }),
                                             )
@@ -407,12 +411,14 @@ impl ProjectsRail {
                                                         let p_id = p_id_del.clone();
                                                         let p_name = p_name_del.clone();
                                                         shell_for_del.update(cx, |shell, cx| {
-                                                            shell.project_dialogs.open_delete(
-                                                                p_id,
-                                                                p_name,
-                                                                p_count,
-                                                                cx,
-                                                            );
+                                                            shell.project_dialogs.update(cx, |dialogs, cx| {
+                                                                dialogs.open_delete(
+                                                                    p_id,
+                                                                    p_name,
+                                                                    p_count,
+                                                                    cx,
+                                                                );
+                                                            });
                                                         });
                                                     }),
                                             )

@@ -1,6 +1,6 @@
 //! AI Summary Sheet drawer.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::base::Disableable as _;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Sizable as _;
@@ -21,7 +21,7 @@ pub struct SummarySheet {
 }
 
 impl SummarySheet {
-    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<TranscriptWorkbench>) -> Self {
         let editor_state =
             cx.new(|cx| TextareaState::new(window, cx).placeholder("Write or generate a summary"));
         Self {
@@ -40,7 +40,7 @@ impl SummarySheet {
         self.is_open = !self.is_open;
     }
 
-    pub fn sync_editor(&mut self, window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn sync_editor(&mut self, window: &mut Window, cx: &mut Context<TranscriptWorkbench>) {
         if self.summary_text != self.last_synced_text {
             self.editor_state.update(cx, |state, cx| {
                 state.set_value(self.summary_text.clone(), window, cx)
@@ -49,7 +49,11 @@ impl SummarySheet {
         }
     }
 
-    pub fn render(&mut self, window: &mut Window, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<TranscriptWorkbench>,
+    ) -> impl IntoElement {
         self.sync_editor(window, cx);
         div().when(self.is_open, |this| {
             this.child(
@@ -86,7 +90,6 @@ impl SummarySheet {
                                             .label("Copy")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 let text = this
-                                                    .workbench
                                                     .summary_sheet
                                                     .editor_state
                                                     .read(cx)
@@ -105,7 +108,7 @@ impl SummarySheet {
                                             .small()
                                             .label("Close")
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.workbench.summary_sheet.is_open = false;
+                                                this.summary_sheet.is_open = false;
                                                 cx.notify();
                                             })),
                                     ),
@@ -127,7 +130,7 @@ impl SummarySheet {
                                     })
                                     .disabled(self.is_generating || self.is_saving)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.refresh_summary(cx);
+                                        this.refresh_summary(cx);
                                         cx.notify();
                                     })),
                             )
@@ -138,7 +141,7 @@ impl SummarySheet {
                                     .label(if self.is_saving { "Saving…" } else { "Save" })
                                     .disabled(self.is_saving || self.is_generating)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.save_summary_edit(cx);
+                                        this.save_summary_edit(cx);
                                     })),
                             )
                             .child(
@@ -148,7 +151,7 @@ impl SummarySheet {
                                     .label("Delete")
                                     .disabled(self.is_saving || self.is_generating)
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.delete_summary(cx);
+                                        this.delete_summary(cx);
                                     })),
                             ),
                     )

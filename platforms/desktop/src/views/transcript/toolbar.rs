@@ -1,7 +1,7 @@
 //! Transcript editor formatting toolbar.
 //! Strict 1:1 parity with React `EditorToolbar.tsx`.
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Icon;
@@ -49,7 +49,7 @@ impl EditorToolbar {
         &mut self,
         is_editing: bool,
         _window: &mut Window,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) -> impl IntoElement {
         let is_visible = is_editing || self.is_saving || self.save_status.is_some();
         div()
@@ -135,8 +135,8 @@ impl EditorToolbar {
                                     .label("Split")
                                     .tooltip("Split segment at cursor")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(id) = this.workbench.editor.editing_id.clone() {
-                                            this.workbench.split_segment(&id, cx);
+                                        if let Some(id) = this.editor.editing_id.clone() {
+                                            this.split_segment(&id, cx);
                                         }
                                     })),
                             ),

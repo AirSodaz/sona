@@ -12,8 +12,6 @@ use gpui_kit::{StatefulInteractiveElement as _, *};
 use serde_json::Value;
 use sona_core::sync::SyncLifecycleState;
 
-use super::super::shell::MainShell;
-
 #[derive(Clone)]
 struct DiagnosticCheck {
     name: &'static str,
@@ -40,7 +38,7 @@ impl DiagnosticsModal {
         }
     }
 
-    pub fn open(&mut self, cx: &mut Context<MainShell>) {
+    pub fn open(&mut self, cx: &mut Context<Self>) {
         self.is_open = true;
         self.load(cx);
     }
@@ -49,11 +47,10 @@ impl DiagnosticsModal {
         self.is_open = false;
     }
 
-    pub fn load(&mut self, cx: &mut Context<MainShell>) {
+    pub fn load(&mut self, cx: &mut Context<Self>) {
         self.is_loading = true;
         self.error_message = None;
         cx.notify();
-
         let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let config = services.config.load();
@@ -160,14 +157,14 @@ impl DiagnosticsModal {
                 (Ok(None), _) => Err("Application settings are unavailable".to_string()),
             };
 
-            this.update(cx, |shell, cx| {
-                shell.diagnostics_modal.is_loading = false;
+            this.update(cx, |this, cx| {
+                this.is_loading = false;
                 match result {
                     Ok((checks, log_dir)) => {
-                        shell.diagnostics_modal.checks = checks;
-                        shell.diagnostics_modal.log_dir = Some(log_dir);
+                        this.checks = checks;
+                        this.log_dir = Some(log_dir);
                     }
-                    Err(error) => shell.diagnostics_modal.error_message = Some(error),
+                    Err(error) => this.error_message = Some(error),
                 }
                 cx.notify();
             })
@@ -176,7 +173,7 @@ impl DiagnosticsModal {
         .detach();
     }
 
-    fn open_logs(&mut self, cx: &mut Context<MainShell>) {
+    fn open_logs(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.log_dir.clone() else {
             self.error_message =
                 Some("Log directory is unavailable until diagnostics finish loading".into());
@@ -192,8 +189,8 @@ impl DiagnosticsModal {
             .map_err(|error| error.to_string())
             .and_then(|result| result.map_err(|error| error.to_string()));
             if let Err(error) = result {
-                this.update(cx, |shell, cx| {
-                    shell.diagnostics_modal.error_message = Some(error);
+                this.update(cx, |this, cx| {
+                    this.error_message = Some(error);
                     cx.notify();
                 })
                 .ok();
@@ -201,8 +198,10 @@ impl DiagnosticsModal {
         })
         .detach();
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+impl Render for DiagnosticsModal {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
         }
@@ -219,7 +218,7 @@ impl DiagnosticsModal {
                     .bg(hsla(0.0, 0.0, 0.0, 0.5))
                     .id("diagnostics-backdrop")
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.diagnostics_modal.close();
+                        this.close();
                         cx.notify();
                     }))
                     .child(
@@ -273,7 +272,7 @@ impl DiagnosticsModal {
                                                     })
                                                     .disabled(is_loading)
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.diagnostics_modal.load(cx);
+                                                        this.load(cx);
                                                     })),
                                             )
                                             .child(
@@ -282,7 +281,7 @@ impl DiagnosticsModal {
                                                     .small()
                                                     .label("Close")
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.diagnostics_modal.close();
+                                                        this.close();
                                                         cx.notify();
                                                     })),
                                             ),
@@ -360,7 +359,7 @@ impl DiagnosticsModal {
                                         .small()
                                         .label("Open Log Folder")
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            this.diagnostics_modal.open_logs(cx);
+                                            this.open_logs(cx);
                                         })),
                                 ),
                             ),

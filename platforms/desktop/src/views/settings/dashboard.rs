@@ -9,7 +9,7 @@ use sona_core::dashboard::models::{
     ContentTrendPoint, DashboardSnapshotDomainModel, UsageBreakdown, UsageTrendPoint,
 };
 
-use crate::views::shell::MainShell;
+use super::SettingsModal;
 
 #[derive(Clone, Copy)]
 struct DashboardColors {
@@ -19,6 +19,113 @@ struct DashboardColors {
     muted: Hsla,
     danger: Hsla,
     accent: Hsla,
+}
+#[derive(Default)]
+pub struct DashboardSettingsTab {
+    pub snapshot: Option<DashboardSnapshotDomainModel>,
+    pub loading: bool,
+    pub deep_loading: bool,
+    pub error: Option<String>,
+    pub load_attempted: bool,
+    pub request_generation: u64,
+}
+
+impl DashboardSettingsTab {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn retry_dashboard(&mut self, cx: &mut Context<SettingsModal>) {
+        self.load_attempted = false;
+        self.snapshot = None;
+        self.error = None;
+        self.load_dashboard(cx);
+    }
+
+    pub fn load_dashboard(&mut self, cx: &mut Context<SettingsModal>) {
+        let context = match cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sqlite
+            .current_context()
+        {
+            Ok(context) => context,
+            Err(error) => {
+                self.error = Some(error);
+                self.load_attempted = true;
+                return;
+            }
+        };
+        let app_local_data_dir = context.app_data_dir().to_path_buf();
+        self.request_generation += 1;
+        let generation = self.request_generation;
+        self.loading = true;
+        self.deep_loading = false;
+        self.error = None;
+        self.load_attempted = true;
+
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let fast_snapshot = sona_sqlite::load_dashboard_snapshot(
+                app_local_data_dir.clone(),
+                false,
+                dashboard_snapshot_time(),
+            )
+            .await
+            .map_err(|error| error.to_string());
+            let has_items = fast_snapshot
+                .as_ref()
+                .is_ok_and(|snapshot| snapshot.content.overview.item_count > 0);
+            let fast_ok = fast_snapshot.is_ok();
+            this.update(cx, |modal, cx| {
+                if modal.dashboard.request_generation != generation {
+                    return;
+                }
+                modal.dashboard.loading = false;
+                match fast_snapshot {
+                    Ok(snapshot) => modal.dashboard.snapshot = Some(snapshot),
+                    Err(error) => modal.dashboard.error = Some(error),
+                }
+                modal.dashboard.deep_loading = fast_ok && has_items;
+                cx.notify();
+            })
+            .ok();
+
+            if !has_items {
+                return;
+            }
+
+            let deep_snapshot = sona_sqlite::load_dashboard_snapshot(
+                app_local_data_dir,
+                true,
+                dashboard_snapshot_time(),
+            )
+            .await
+            .map_err(|error| error.to_string());
+            this.update(cx, |modal, cx| {
+                if modal.dashboard.request_generation != generation {
+                    return;
+                }
+                modal.dashboard.deep_loading = false;
+                match deep_snapshot {
+                    Ok(snapshot) => modal.dashboard.snapshot = Some(snapshot),
+                    Err(error) => modal.dashboard.error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn render(&mut self, cx: &mut Context<SettingsModal>) -> impl IntoElement {
+        dashboard_panel(
+            self.snapshot.as_ref(),
+            self.loading,
+            self.deep_loading,
+            self.error.as_deref(),
+            cx,
+        )
+    }
 }
 
 pub(super) fn dashboard_snapshot_time() -> DashboardSnapshotTime {
@@ -155,7 +262,7 @@ pub(super) fn dashboard_panel(
     is_fast_loading: bool,
     is_deep_loading: bool,
     error: Option<&str>,
-    cx: &mut Context<MainShell>,
+    cx: &mut Context<SettingsModal>,
 ) -> AnyElement {
     let colors = DashboardColors {
         background: cx.theme().background,
@@ -211,8 +318,8 @@ pub(super) fn dashboard_panel(
                         .outline()
                         .small()
                         .label("Retry")
-                        .on_click(cx.listener(|shell, _, _, cx| {
-                            shell.settings_modal.retry_dashboard(cx);
+                        .on_click(cx.listener(|modal, _, _, cx| {
+                            modal.dashboard.retry_dashboard(cx);
                             cx.notify();
                         })),
                 )

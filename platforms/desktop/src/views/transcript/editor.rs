@@ -3,7 +3,7 @@
 use gpui_kit::assets::IconName as LucideIcon;
 use std::collections::HashMap;
 
-use super::super::shell::MainShell;
+use super::workbench::TranscriptWorkbench;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{ActiveTheme as _, Icon};
@@ -21,7 +21,7 @@ pub struct TranscriptEditor {
     pub show_translations: bool,
 }
 impl TranscriptEditor {
-    pub fn new(_window: &mut Window, _cx: &mut Context<MainShell>) -> Self {
+    pub fn new(_window: &mut Window, _cx: &mut Context<TranscriptWorkbench>) -> Self {
         Self {
             segments: Vec::new(),
             editing_id: None,
@@ -38,7 +38,7 @@ impl TranscriptEditor {
         id: &str,
         value: &str,
         window: &mut Window,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) -> Entity<InputState> {
         if let Some(state) = self.edit_states.get(id) {
             return state.clone();
@@ -53,7 +53,12 @@ impl TranscriptEditor {
         state
     }
 
-    pub fn begin_edit(&mut self, id: &str, window: &mut Window, cx: &mut Context<MainShell>) {
+    pub fn begin_edit(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<TranscriptWorkbench>,
+    ) {
         if let Some(segment) = self
             .segments
             .iter()
@@ -66,7 +71,7 @@ impl TranscriptEditor {
         }
     }
 
-    pub fn save_edit(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn save_edit(&mut self, id: &str, cx: &mut Context<TranscriptWorkbench>) {
         let Some(state) = self.edit_states.get(id) else {
             return;
         };
@@ -86,7 +91,7 @@ impl TranscriptEditor {
         id: &str,
         value: &str,
         window: &mut Window,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) -> Entity<InputState> {
         if let Some(state) = self.translation_states.get(id) {
             return state.clone();
@@ -106,7 +111,7 @@ impl TranscriptEditor {
         &mut self,
         id: &str,
         window: &mut Window,
-        cx: &mut Context<MainShell>,
+        cx: &mut Context<TranscriptWorkbench>,
     ) {
         let translation = self
             .segments
@@ -120,7 +125,7 @@ impl TranscriptEditor {
         }
     }
 
-    pub fn save_translation(&mut self, id: &str, cx: &mut Context<MainShell>) {
+    pub fn save_translation(&mut self, id: &str, cx: &mut Context<TranscriptWorkbench>) {
         let Some(state) = self.translation_states.get(id) else {
             return;
         };
@@ -189,7 +194,11 @@ impl TranscriptEditor {
         );
     }
 
-    pub fn render(&mut self, window: &mut Window, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<TranscriptWorkbench>,
+    ) -> impl IntoElement {
         if self.segments.is_empty() {
             return div()
                 .flex()

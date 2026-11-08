@@ -7,7 +7,6 @@ use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::super::shell::MainShell;
 use crate::theme::tokens::RADIUS_LG;
 
 pub struct ErrorDialog {
@@ -49,8 +48,10 @@ impl ErrorDialog {
     pub fn close(&mut self) {
         self.is_open = false;
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+impl Render for ErrorDialog {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
         }
@@ -65,8 +66,8 @@ impl ErrorDialog {
                     .justify_center()
                     .size_full()
                     .bg(hsla(0.0, 0.0, 0.0, 0.5))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.error_dialog.close();
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close();
                         cx.notify();
                     }))
                     .child(
@@ -166,11 +167,10 @@ impl ErrorDialog {
                                                 .outline()
                                                 .small()
                                                 .label("Copy Report")
-                                                .on_click(cx.listener(|shell, _, _, cx| {
+                                                .on_click(cx.listener(|this, _, _, cx| {
                                                     let text = format!(
                                                         "{}\n\n{}",
-                                                        shell.error_dialog.error_message,
-                                                        shell.error_dialog.stack_trace
+                                                        this.error_message, this.stack_trace
                                                     );
                                                     cx.write_to_clipboard(
                                                         ClipboardItem::new_string(text),
@@ -183,8 +183,8 @@ impl ErrorDialog {
                                             .primary()
                                             .small()
                                             .label("Dismiss")
-                                            .on_click(cx.listener(|shell, _, _, cx| {
-                                                shell.error_dialog.close();
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.close();
                                                 cx.notify();
                                             })),
                                     ),

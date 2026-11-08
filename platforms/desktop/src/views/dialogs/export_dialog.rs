@@ -12,12 +12,12 @@ use gpui_kit::*;
 use sona_core::export::{ExportFormat, ExportMode};
 use sona_core::transcription::transcript::TranscriptSegment;
 
-use super::super::shell::MainShell;
 use crate::theme::tokens::{RADIUS_LG, RADIUS_SM};
 
 pub struct ExportModal {
     pub is_open: bool,
     pub filename_state: Entity<InputState>,
+    pub pending_filename: Option<String>,
     pub directory: PathBuf,
     pub format: ExportFormat,
     pub export_mode: ExportMode,
@@ -25,10 +25,11 @@ pub struct ExportModal {
     pub is_exporting: bool,
     pub copied: bool,
     pub error_message: Option<String>,
+    pub segments: Vec<TranscriptSegment>,
 }
 
 impl ExportModal {
-    pub fn new(window: &mut Window, cx: &mut Context<MainShell>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let default_dir = std::env::var("USERPROFILE")
             .or_else(|_| std::env::var("HOME"))
             .map(|home| PathBuf::from(home).join("Downloads"))
@@ -37,6 +38,7 @@ impl ExportModal {
         Self {
             is_open: false,
             filename_state: cx.new(|cx| InputState::new(window, cx).placeholder("File name")),
+            pending_filename: None,
             directory: default_dir,
             format: ExportFormat::Srt,
             export_mode: ExportMode::Original,
@@ -44,6 +46,7 @@ impl ExportModal {
             is_exporting: false,
             copied: false,
             error_message: None,
+            segments: Vec::new(),
         }
     }
 
@@ -51,8 +54,8 @@ impl ExportModal {
         &mut self,
         title: &str,
         has_translation: bool,
-        window: &mut Window,
-        cx: &mut Context<MainShell>,
+        default_segments: Vec<TranscriptSegment>,
+        cx: &mut Context<Self>,
     ) {
         let clean_name = title
             .chars()
@@ -66,16 +69,31 @@ impl ExportModal {
             clean_name
         };
 
-        self.filename_state.update(cx, |state, cx| {
-            state.set_value(initial_name, window, cx);
-            state.focus(window, cx);
-        });
-
+        self.pending_filename = Some(initial_name);
+        self.segments = default_segments;
         self.has_translation = has_translation;
         self.copied = false;
         self.is_exporting = false;
         self.error_message = None;
         self.is_open = true;
+        cx.notify();
+    }
+
+    pub fn open_with_window(
+        &mut self,
+        title: &str,
+        has_translation: bool,
+        default_segments: Vec<TranscriptSegment>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open(title, has_translation, default_segments, cx);
+        if let Some(initial_name) = self.pending_filename.take() {
+            self.filename_state.update(cx, |state, cx| {
+                state.set_value(initial_name, window, cx);
+                state.focus(window, cx);
+            });
+        }
     }
 
     pub fn close(&mut self) {
@@ -85,15 +103,15 @@ impl ExportModal {
         self.error_message = None;
     }
 
-    pub fn browse_directory(&mut self, cx: &mut Context<MainShell>) {
+    pub fn browse_directory(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let picked = tokio::task::spawn_blocking(|| rfd::FileDialog::new().pick_folder())
                 .await
                 .ok()
                 .flatten();
             if let Some(folder) = picked {
-                this.update(cx, |shell, cx| {
-                    shell.export_modal.directory = folder;
+                this.update(cx, |modal, cx| {
+                    modal.directory = folder;
                     cx.notify();
                 })
                 .ok();
@@ -102,11 +120,8 @@ impl ExportModal {
         .detach();
     }
 
-    pub fn copy_to_clipboard(
-        &mut self,
-        segments: &[TranscriptSegment],
-        cx: &mut Context<MainShell>,
-    ) {
+    pub fn copy_to_clipboard(&mut self, cx: &mut Context<Self>) {
+        let segments = &self.segments;
         match sona_core::export::export_segments_with_mode(segments, self.format, self.export_mode)
         {
             Ok(text) => {
@@ -122,11 +137,8 @@ impl ExportModal {
         }
     }
 
-    pub fn export_to_file(
-        &mut self,
-        segments: Vec<TranscriptSegment>,
-        cx: &mut Context<MainShell>,
-    ) {
+    pub fn export_to_file(&mut self, cx: &mut Context<Self>) {
+        let segments = self.segments.clone();
         let filename = self.filename_state.read(cx).value().trim().to_string();
         let filename = if filename.is_empty() {
             "transcript".to_string()
@@ -160,14 +172,14 @@ impl ExportModal {
 
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let res = tokio::fs::write(&path, text.as_bytes()).await;
-            this.update(cx, |shell, cx| {
-                shell.export_modal.is_exporting = false;
+            this.update(cx, |modal, cx| {
+                modal.is_exporting = false;
                 match res {
                     Ok(()) => {
-                        shell.export_modal.close();
+                        modal.close();
                     }
                     Err(e) => {
-                        shell.export_modal.error_message =
+                        modal.error_message =
                             Some(format!("Failed to write file to {}: {e}", path.display()));
                     }
                 }
@@ -177,10 +189,18 @@ impl ExportModal {
         })
         .detach();
     }
+}
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+impl Render for ExportModal {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.is_open {
             return div();
+        }
+        if let Some(initial_name) = self.pending_filename.take() {
+            self.filename_state.update(cx, |state, cx| {
+                state.set_value(initial_name, window, cx);
+                state.focus(window, cx);
+            });
         }
         let formats = [
             (ExportFormat::Srt, "SubRip (.srt)"),
@@ -207,8 +227,8 @@ impl ExportModal {
                     .justify_center()
                     .size_full()
                     .bg(hsla(0.0, 0.0, 0.0, 0.5))
-                    .on_click(cx.listener(|shell, _, _, cx| {
-                        shell.export_modal.close();
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close();
                         cx.notify();
                     }))
                     .child(
@@ -244,8 +264,8 @@ impl ExportModal {
                                             .ghost()
                                             .small()
                                             .label("✕")
-                                            .on_click(cx.listener(|shell, _, _, cx| {
-                                                shell.export_modal.close();
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.close();
                                                 cx.notify();
                                             })),
                                     ),
@@ -306,8 +326,8 @@ impl ExportModal {
                                                     .secondary()
                                                     .small()
                                                     .label("Browse...")
-                                                    .on_click(cx.listener(|shell, _, _, cx| {
-                                                        shell.export_modal.browse_directory(cx);
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.browse_directory(cx);
                                                     })),
                                             ),
                                     ),
@@ -362,12 +382,10 @@ impl ExportModal {
                                                     } else {
                                                         cx.theme().muted
                                                     })
-                                                    .on_click(cx.listener(
-                                                        move |shell, _, _, cx| {
-                                                            shell.export_modal.format = fmt;
-                                                            cx.notify();
-                                                        },
-                                                    ))
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        this.format = fmt;
+                                                        cx.notify();
+                                                    }))
                                                     .child(label)
                                                     .child(if is_sel { "✓" } else { "" })
                                             })),
@@ -403,9 +421,8 @@ impl ExportModal {
                                                     })
                                                     .text_size(px(12.0))
                                                     .text_color(cx.theme().foreground)
-                                                    .on_click(cx.listener(|shell, _, _, cx| {
-                                                        shell.export_modal.export_mode =
-                                                            ExportMode::Original;
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.export_mode = ExportMode::Original;
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -438,10 +455,8 @@ impl ExportModal {
                                                         this.cursor_pointer()
                                                             .text_color(cx.theme().foreground)
                                                             .on_click(cx.listener(
-                                                                |shell, _, _, cx| {
-                                                                    shell
-                                                                        .export_modal
-                                                                        .export_mode =
+                                                                |this, _, _, cx| {
+                                                                    this.export_mode =
                                                                         ExportMode::Translation;
                                                                     cx.notify();
                                                                 },
@@ -478,10 +493,8 @@ impl ExportModal {
                                                         this.cursor_pointer()
                                                             .text_color(cx.theme().foreground)
                                                             .on_click(cx.listener(
-                                                                |shell, _, _, cx| {
-                                                                    shell
-                                                                        .export_modal
-                                                                        .export_mode =
+                                                                |this, _, _, cx| {
+                                                                    this.export_mode =
                                                                         ExportMode::Bilingual;
                                                                     cx.notify();
                                                                 },
@@ -531,10 +544,8 @@ impl ExportModal {
                                             } else {
                                                 "Copy to Clipboard"
                                             })
-                                            .on_click(cx.listener(|shell, _, _, cx| {
-                                                let segments =
-                                                    shell.workbench.base_segments.clone();
-                                                shell.export_modal.copy_to_clipboard(&segments, cx);
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.copy_to_clipboard(cx);
                                             })),
                                     )
                                     .child(
@@ -547,8 +558,8 @@ impl ExportModal {
                                                     .ghost()
                                                     .small()
                                                     .label("Cancel")
-                                                    .on_click(cx.listener(|shell, _, _, cx| {
-                                                        shell.export_modal.close();
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.close();
                                                         cx.notify();
                                                     })),
                                             )
@@ -562,12 +573,8 @@ impl ExportModal {
                                                         "Export"
                                                     })
                                                     .disabled(is_exporting)
-                                                    .on_click(cx.listener(|shell, _, _, cx| {
-                                                        let segments =
-                                                            shell.workbench.base_segments.clone();
-                                                        shell
-                                                            .export_modal
-                                                            .export_to_file(segments, cx);
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.export_to_file(cx);
                                                     })),
                                             ),
                                     ),

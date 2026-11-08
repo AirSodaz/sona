@@ -16,6 +16,15 @@ use sona_core::project::{
     ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput,
 };
 
+#[derive(Clone, Debug)]
+pub enum ProjectDialogEvent {
+    ProjectCreated(Box<ProjectRecord>),
+    ProjectUpdated(String),
+    ProjectDeleted(String),
+}
+
+impl EventEmitter<ProjectDialogEvent> for ProjectDialogs {}
+
 pub struct ProjectDialogs {
     pub is_create_open: bool,
     pub is_delete_open: bool,
@@ -47,7 +56,7 @@ pub struct ProjectDialogs {
 }
 
 impl ProjectDialogs {
-    pub fn new(window: &mut Window, cx: &mut Context<super::super::shell::MainShell>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             is_create_open: false,
             is_delete_open: false,
@@ -77,11 +86,7 @@ impl ProjectDialogs {
         }
     }
 
-    pub fn open_create(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<super::super::shell::MainShell>,
-    ) {
+    pub fn open_create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.is_create_open = true;
         self.is_delete_open = false;
         self.is_settings_open = false;
@@ -96,7 +101,7 @@ impl ProjectDialogs {
         project_id: String,
         project_name: String,
         item_count: usize,
-        cx: &mut Context<super::super::shell::MainShell>,
+        cx: &mut Context<Self>,
     ) {
         self.delete_project_id = Some(project_id);
         self.delete_project_name = project_name;
@@ -112,7 +117,7 @@ impl ProjectDialogs {
         &mut self,
         project: &ProjectRecord,
         window: &mut Window,
-        cx: &mut Context<super::super::shell::MainShell>,
+        cx: &mut Context<Self>,
     ) {
         self.settings_project_id = Some(project.id.clone());
         self.settings_color = project
@@ -151,11 +156,17 @@ impl ProjectDialogs {
         self.is_delete_open = false;
         self.is_settings_open = false;
     }
+    pub fn is_any_open(&self) -> bool {
+        self.is_create_open || self.is_settings_open || self.is_delete_open
+    }
+}
 
-    pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
-        if !self.is_create_open && !self.is_settings_open && !self.is_delete_open {
+impl Render for ProjectDialogs {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.is_any_open() {
             return div();
         }
+
         div()
             .when(self.is_create_open, |this| {
                 this.child(
@@ -168,7 +179,7 @@ impl ProjectDialogs {
                         .justify_center()
                         .bg(hsla(0.0, 0.0, 0.0, 0.5))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.project_dialogs.close();
+                            this.close();
                             cx.notify();
                         }))
                         .child(
@@ -204,7 +215,7 @@ impl ProjectDialogs {
                                                 .small()
                                                 .label("Cancel")
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.project_dialogs.close();
+                                                    this.close();
                                                     cx.notify();
                                                 })),
                                         )
@@ -220,7 +231,6 @@ impl ProjectDialogs {
                                                 .disabled(self.is_submitting)
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     let name = this
-                                                        .project_dialogs
                                                         .project_name_state
                                                         .read(cx)
                                                         .value()
@@ -232,28 +242,23 @@ impl ProjectDialogs {
                                                             .0
                                                             .projects
                                                             .clone();
-                                                        this.project_dialogs.is_submitting = true;
-                                                        cx.spawn(async move |shell, cx| {
+                                                        this.is_submitting = true;
+                                                        cx.spawn(async move |this, cx: &mut AsyncApp| {
                                                             let result = projects
                                                                 .create(ProjectCreateInput {
                                                                     name,
                                                                     ..Default::default()
                                                                 })
                                                                 .await;
-                                                            shell
-                                                                .update(cx, |shell, cx| {
-                                                                    shell
-                                                                        .project_dialogs
-                                                                        .is_submitting = false;
-                                                                    if result.is_ok() {
-                                                                        shell.project_dialogs.close();
-                                                                        shell
-                                                                            .project_selector
-                                                                            .load_data(cx);
-                                                                    }
-                                                                    cx.notify();
-                                                                })
-                                                                .ok();
+                                                            this.update(cx, |this, cx| {
+                                                                this.is_submitting = false;
+                                                                if let Ok(record) = result {
+                                                                    this.close();
+                                                                    cx.emit(ProjectDialogEvent::ProjectCreated(Box::new(record)));
+                                                                }
+                                                                cx.notify();
+                                                            })
+                                                            .ok();
                                                         })
                                                         .detach();
                                                     }
@@ -278,7 +283,7 @@ impl ProjectDialogs {
                         .justify_center()
                         .bg(hsla(0.0, 0.0, 0.0, 0.5))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.project_dialogs.close();
+                            this.close();
                             cx.notify();
                         }))
                         .child(
@@ -381,7 +386,7 @@ impl ProjectDialogs {
                                                     Switch::new("switch-project-pipeline")
                                                         .checked(self.settings_pipeline_enabled)
                                                         .on_click(cx.listener(|this, checked, _, cx| {
-                                                            this.project_dialogs.settings_pipeline_enabled = *checked;
+                                                            this.settings_pipeline_enabled = *checked;
                                                             cx.notify();
                                                         })),
                                                 ),
@@ -411,10 +416,10 @@ impl ProjectDialogs {
                                                                 .child(
                                                                     Switch::new("switch-auto-polish")
                                                                         .checked(self.settings_auto_polish)
-                                                                        .on_click(cx.listener(|this, checked, _, cx| {
-                                                                            this.project_dialogs.settings_auto_polish = *checked;
-                                                                            cx.notify();
-                                                                        })),
+                                                        .on_click(cx.listener(|this, checked, _, cx| {
+                                                            this.settings_auto_polish = *checked;
+                                                            cx.notify();
+                                                        })),
                                                                 ),
                                                         )
                                                         .child(
@@ -426,10 +431,10 @@ impl ProjectDialogs {
                                                                 .child(
                                                                     Switch::new("switch-auto-translate")
                                                                         .checked(self.settings_auto_translate)
-                                                                        .on_click(cx.listener(|this, checked, _, cx| {
-                                                                            this.project_dialogs.settings_auto_translate = *checked;
-                                                                            cx.notify();
-                                                                        })),
+                                                        .on_click(cx.listener(|this, checked, _, cx| {
+                                                            this.settings_auto_translate = *checked;
+                                                            cx.notify();
+                                                        })),
                                                                 ),
                                                         )
                                                         .child(
@@ -441,10 +446,10 @@ impl ProjectDialogs {
                                                                 .child(
                                                                     Switch::new("switch-auto-summary")
                                                                         .checked(self.settings_auto_summary)
-                                                                        .on_click(cx.listener(|this, checked, _, cx| {
-                                                                            this.project_dialogs.settings_auto_summary = *checked;
-                                                                            cx.notify();
-                                                                        })),
+                                                        .on_click(cx.listener(|this, checked, _, cx| {
+                                                            this.settings_auto_summary = *checked;
+                                                            cx.notify();
+                                                        })),
                                                                 ),
                                                         )
                                                         .child(
@@ -456,10 +461,10 @@ impl ProjectDialogs {
                                                                 .child(
                                                                     Switch::new("switch-auto-export")
                                                                         .checked(self.settings_auto_export)
-                                                                        .on_click(cx.listener(|this, checked, _, cx| {
-                                                                            this.project_dialogs.settings_auto_export = *checked;
-                                                                            cx.notify();
-                                                                        })),
+                                                        .on_click(cx.listener(|this, checked, _, cx| {
+                                                            this.settings_auto_export = *checked;
+                                                            cx.notify();
+                                                        })),
                                                                 ),
                                                         ),
                                                 )
@@ -480,8 +485,8 @@ impl ProjectDialogs {
                                                 .label("Delete Project")
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     if let Some(pid) = project_id_for_delete.clone() {
-                                                        this.project_dialogs.close();
-                                                        this.project_dialogs.open_delete(pid, project_name_for_delete.clone(), 0, cx);
+                                                        this.close();
+                                                        this.open_delete(pid, project_name_for_delete.clone(), 0, cx);
                                                     }
                                                 })),
                                         )
@@ -496,7 +501,7 @@ impl ProjectDialogs {
                                                         .small()
                                                         .label("Cancel")
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.project_dialogs.close();
+                                                            this.close();
                                                             cx.notify();
                                                         })),
                                                 )
@@ -507,23 +512,23 @@ impl ProjectDialogs {
                                                         .label(if is_submitting { "Saving…" } else { "Save" })
                                                         .disabled(is_submitting)
                                                         .on_click(cx.listener(|this, _, _, cx| {
-                                                            let Some(project_id) = this.project_dialogs.settings_project_id.clone() else {
+                                                            let Some(project_id) = this.settings_project_id.clone() else {
                                                                 return;
                                                             };
-                                                            let name = this.project_dialogs.settings_name_state.read(cx).value().trim().to_string();
+                                                            let name = this.settings_name_state.read(cx).value().trim().to_string();
                                                             if name.is_empty() {
                                                                 return;
                                                             }
-                                                            let description = this.project_dialogs.settings_description_state.read(cx).value().trim().to_string();
-                                                            let color = this.project_dialogs.settings_color.clone();
+                                                            let description = this.settings_description_state.read(cx).value().trim().to_string();
+                                                            let color = this.settings_color.clone();
                                                             let pipeline = ProjectPipelineConfig {
-                                                                enabled: this.project_dialogs.settings_pipeline_enabled,
-                                                                auto_polish: this.project_dialogs.settings_auto_polish,
-                                                                auto_translate: this.project_dialogs.settings_auto_translate,
-                                                                auto_summary: this.project_dialogs.settings_auto_summary,
-                                                                auto_export: this.project_dialogs.settings_auto_export,
-                                                                target_language: Some(this.project_dialogs.settings_target_language.clone()),
-                                                                export_format: Some(this.project_dialogs.settings_export_format.clone()),
+                                                                enabled: this.settings_pipeline_enabled,
+                                                                auto_polish: this.settings_auto_polish,
+                                                                auto_translate: this.settings_auto_translate,
+                                                                auto_summary: this.settings_auto_summary,
+                                                                auto_export: this.settings_auto_export,
+                                                                target_language: Some(this.settings_target_language.clone()),
+                                                                export_format: Some(this.settings_export_format.clone()),
                                                                 export_directory: None,
                                                                 ..Default::default()
                                                             };
@@ -534,16 +539,16 @@ impl ProjectDialogs {
                                                                 pipeline: Some(pipeline),
                                                                 ..Default::default()
                                                             };
-                                                            this.project_dialogs.is_submitting = true;
+                                                            this.is_submitting = true;
                                                             let projects = cx.global::<GlobalDesktopServices>().0.projects.clone();
-                                                            cx.spawn(async move |shell, cx| {
+                                                            let pid_for_event = project_id.clone();
+                                                            cx.spawn(async move |this, cx: &mut AsyncApp| {
                                                                 let result = projects.update(project_id, input).await;
-                                                                shell.update(cx, |shell, cx| {
-                                                                    shell.project_dialogs.is_submitting = false;
+                                                                this.update(cx, |this, cx| {
+                                                                    this.is_submitting = false;
                                                                     if result.is_ok() {
-                                                                        shell.project_dialogs.close();
-                                                                        shell.project_selector.load_data(cx);
-                                                                        shell.projects_results.load_data(cx);
+                                                                        this.close();
+                                                                        cx.emit(ProjectDialogEvent::ProjectUpdated(pid_for_event));
                                                                     }
                                                                     cx.notify();
                                                                 }).ok();
@@ -571,7 +576,7 @@ impl ProjectDialogs {
                         .justify_center()
                         .bg(hsla(0.0, 0.0, 0.0, 0.5))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.project_dialogs.close();
+                            this.close();
                             cx.notify();
                         }))
                         .child(
@@ -645,7 +650,7 @@ impl ProjectDialogs {
                                                     .id("del-opt-inbox")
                                                     .cursor_pointer()
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.project_dialogs.delete_cascade_to_inbox = true;
+                                                        this.delete_cascade_to_inbox = true;
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -697,7 +702,7 @@ impl ProjectDialogs {
                                                     .id("del-opt-trash")
                                                     .cursor_pointer()
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.project_dialogs.delete_cascade_to_inbox = false;
+                                                        this.delete_cascade_to_inbox = false;
                                                         cx.notify();
                                                     }))
                                                     .child(
@@ -756,7 +761,7 @@ impl ProjectDialogs {
                                                 .small()
                                                 .label("Cancel")
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.project_dialogs.close();
+                                                    this.close();
                                                     cx.notify();
                                                 })),
                                         )
@@ -772,59 +777,40 @@ impl ProjectDialogs {
                                                 .disabled(is_submitting)
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     let Some(project_id) =
-                                                        this.project_dialogs.delete_project_id.clone()
+                                                        this.delete_project_id.clone()
                                                     else {
                                                         return;
                                                     };
                                                     let cascade_action = if this
-                                                        .project_dialogs
                                                         .delete_cascade_to_inbox
                                                     {
                                                         "moveToInbox"
                                                     } else {
                                                         "deleteItems"
                                                     };
-                                                    this.project_dialogs.is_submitting = true;
+                                                    this.is_submitting = true;
                                                     let projects = cx
                                                         .global::<GlobalDesktopServices>()
                                                         .0
                                                         .projects
                                                         .clone();
-                                                    cx.spawn(async move |shell, cx| {
+                                                    let pid_for_event = project_id.clone();
+                                                    cx.spawn(async move |this, cx: &mut AsyncApp| {
                                                         let result = projects
                                                             .delete_with_cascade(
-                                                                project_id.clone(),
+                                                                project_id,
                                                                 cascade_action.to_string(),
                                                             )
                                                             .await;
-                                                        shell
-                                                            .update(cx, |shell, cx| {
-                                                                shell
-                                                                    .project_dialogs
-                                                                    .is_submitting = false;
-                                                                if result.is_ok() {
-                                                                    shell.project_dialogs.close();
-                                                                    if shell
-                                                                        .project_selector
-                                                                        .active_project_id
-                                                                        .as_deref()
-                                                                        == Some(&project_id)
-                                                                    {
-                                                                        shell
-                                                                            .project_selector
-                                                                            .active_project_id =
-                                                                            None;
-                                                                    }
-                                                                    shell
-                                                                        .project_selector
-                                                                        .load_data(cx);
-                                                                    shell
-                                                                        .projects_results
-                                                                        .load_data(cx);
-                                                                }
-                                                                cx.notify();
-                                                            })
-                                                            .ok();
+                                                        this.update(cx, |this, cx| {
+                                                            this.is_submitting = false;
+                                                            if result.is_ok() {
+                                                                this.close();
+                                                                cx.emit(ProjectDialogEvent::ProjectDeleted(pid_for_event));
+                                                            }
+                                                            cx.notify();
+                                                        })
+                                                        .ok();
                                                     })
                                                     .detach();
                                                 })),
