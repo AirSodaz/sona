@@ -367,3 +367,9 @@ impl DiagnosticsModal {
         })
     }
 }
+
+impl Default for DiagnosticsModal {
+    fn default() -> Self {
+        Self::new()
+    }
+}

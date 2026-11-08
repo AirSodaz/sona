@@ -70,6 +70,12 @@ impl SubtitlesToolPanel {
     }
 }
 
+impl Default for SubtitlesToolPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn section(
     title: &'static str,
     description: &'static str,

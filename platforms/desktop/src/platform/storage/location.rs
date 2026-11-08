@@ -339,10 +339,9 @@ pub async fn migrate_data_directory(
 
     let mut bootstrap = load_bootstrap_config(&default_dir);
     bootstrap.custom_data_dir = (target_dir != default_dir).then(|| target_dir.clone());
-    if copy_existing && source_dir.exists() {
-        if !bootstrap.pending_cleanup_dirs.contains(&source_dir) {
-            bootstrap.pending_cleanup_dirs.push(source_dir.clone());
-        }
+    if copy_existing && source_dir.exists() && !bootstrap.pending_cleanup_dirs.contains(&source_dir)
+    {
+        bootstrap.pending_cleanup_dirs.push(source_dir.clone());
     }
     save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
     if copy_existing && source_dir.exists() {
@@ -410,13 +409,14 @@ pub async fn set_models_directory(
     let default_models_dir = default_dir.join("models");
     bootstrap.custom_models_dir = (target_dir != default_models_dir).then(|| target_dir.clone());
     save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
-    if move_existing && source_dir.is_dir() {
-        if let Err(error) = safe_remove_dir_all(&source_dir) {
-            log::warn!(
-                "Failed to remove previous models directory {}: {error}",
-                source_dir.display()
-            );
-        }
+    if move_existing
+        && source_dir.is_dir()
+        && let Err(error) = safe_remove_dir_all(&source_dir)
+    {
+        log::warn!(
+            "Failed to remove previous models directory {}: {error}",
+            source_dir.display()
+        );
     }
     services.asr.clear_model_caches().await;
     get_storage_directories_info(&default_dir)

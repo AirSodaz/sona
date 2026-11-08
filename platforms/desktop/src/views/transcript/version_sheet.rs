@@ -120,3 +120,9 @@ impl VersionSheet {
         })
     }
 }
+
+impl Default for VersionSheet {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -144,7 +144,7 @@ fn test_audio_peak_normalization_extreme_values() {
             raw_input, expected, norm
         );
         assert!(
-            norm >= 0.0 && norm <= 1.0,
+            (0.0..=1.0).contains(&norm),
             "Normalized volume must be within [0.0, 1.0]"
         );
     }

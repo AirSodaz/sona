@@ -191,7 +191,7 @@ impl NotificationCenter {
             .filter(|task| !task.status.is_active())
             .count();
         let mut sorted_tasks = self.tasks.clone();
-        sorted_tasks.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        sorted_tasks.sort_by_key(|t| std::cmp::Reverse(t.updated_at));
 
         let action_tasks: Vec<_> = sorted_tasks.iter().filter(|t| is_actionable(t)).collect();
 

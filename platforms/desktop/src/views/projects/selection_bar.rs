@@ -404,6 +404,12 @@ impl SelectionBar {
     }
 }
 
+impl Default for SelectionBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn selection_button(
     id: &'static str,
     icon: LucideIcon,

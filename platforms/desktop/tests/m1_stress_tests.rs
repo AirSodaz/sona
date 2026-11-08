@@ -130,10 +130,11 @@ async fn test_app_event_bus_high_subscriber_fanout_500() {
     for mut rx in receivers {
         let counter = received_count.clone();
         sub_handles.push(tokio::spawn(async move {
-            if let Ok(event) = rx.recv().await {
-                if event.name == "fanout:broadcast" && event.payload["round"] == 42 {
-                    counter.fetch_add(1, Ordering::SeqCst);
-                }
+            if let Ok(event) = rx.recv().await
+                && event.name == "fanout:broadcast"
+                && event.payload["round"] == 42
+            {
+                counter.fetch_add(1, Ordering::SeqCst);
             }
         }));
     }
@@ -504,10 +505,9 @@ async fn test_decoupled_core_concurrent_multithreaded_services() {
     let er_clone = events_received.clone();
     let stream_handle = tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
-            if event.name == "stress:core_ping" {
-                if er_clone.fetch_add(1, Ordering::SeqCst) + 1 >= 5 {
-                    break;
-                }
+            if event.name == "stress:core_ping" && er_clone.fetch_add(1, Ordering::SeqCst) + 1 >= 5
+            {
+                break;
             }
         }
     });

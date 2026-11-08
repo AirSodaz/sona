@@ -181,17 +181,17 @@ pub async fn download_preset_model(
         notify,
         parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
         move |progress| {
-            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-                if let Some(ref em) = emitter_clone {
-                    let _ = em.emit(
-                        DOWNLOAD_PROGRESS_EVENT,
-                        serde_json::json!([
-                            progress.downloaded_bytes,
-                            progress.total_bytes,
-                            &event_download_id,
-                        ]),
-                    );
-                }
+            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading
+                && let Some(ref em) = emitter_clone
+            {
+                let _ = em.emit(
+                    DOWNLOAD_PROGRESS_EVENT,
+                    serde_json::json!([
+                        progress.downloaded_bytes,
+                        progress.total_bytes,
+                        &event_download_id,
+                    ]),
+                );
             }
         },
     )
@@ -240,6 +240,7 @@ pub async fn activate_cuda_addon(
     activate_cuda_addon_directory(&cuda_dir).map_err(|error| error.to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn download_and_install_cuda_addon(
     base_dir: &Path,
     emitter: Option<Arc<dyn EventEmitterPort>>,
@@ -285,17 +286,17 @@ pub async fn download_and_install_cuda_addon(
         parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
         notify,
         move |progress| {
-            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-                if let Some(ref em) = emitter_clone {
-                    let _ = em.emit(
-                        DOWNLOAD_PROGRESS_EVENT,
-                        serde_json::json!([
-                            progress.downloaded_bytes,
-                            progress.total_bytes,
-                            &event_download_id,
-                        ]),
-                    );
-                }
+            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading
+                && let Some(ref em) = emitter_clone
+            {
+                let _ = em.emit(
+                    DOWNLOAD_PROGRESS_EVENT,
+                    serde_json::json!([
+                        progress.downloaded_bytes,
+                        progress.total_bytes,
+                        &event_download_id,
+                    ]),
+                );
             }
         },
     )

@@ -148,3 +148,9 @@ impl ToolsSidebar {
             }))
     }
 }
+
+impl Default for ToolsSidebar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

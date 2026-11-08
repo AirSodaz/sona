@@ -11,6 +11,7 @@ use sona_core::history::mutation_repository::{
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 
+#[allow(dead_code)]
 pub(crate) async fn run_llm_db_task<T, F, E>(
     sqlite: &crate::platform::database::DesktopSqliteState,
     task: F,
@@ -26,6 +27,7 @@ where
     .await
 }
 
+#[allow(dead_code)]
 pub(crate) fn create_llm_transcript_snapshot_record(
     repository: &impl HistoryQueryRepository,
     mutation_service: &HistoryMutationService,
@@ -57,6 +59,7 @@ pub(crate) fn create_llm_transcript_snapshot_record(
         .map(Some)
 }
 
+#[allow(dead_code)]
 pub(crate) fn update_llm_transcript_segments_record(
     mutation_service: &HistoryMutationService,
     history_id: &str,
@@ -74,6 +77,7 @@ pub(crate) fn update_llm_transcript_segments_record(
         .map(Some)
 }
 
+#[allow(dead_code)]
 fn history_query_error_to_mutation(error: HistoryStoreError) -> HistoryMutationError {
     match error {
         HistoryStoreError::InvalidRequest(reason) => HistoryMutationError::InvalidRequest(reason),
@@ -85,6 +89,7 @@ fn history_query_error_to_mutation(error: HistoryStoreError) -> HistoryMutationE
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn save_llm_summary_payload(
     repository: &impl HistoryStore,
     history_id: &str,

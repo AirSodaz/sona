@@ -150,24 +150,24 @@ impl MediaServerToolPanel {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         if !self.processing_settings_loaded {
             self.processing_settings_loaded = true;
-            if let Ok(Some(config)) = services.config.load() {
-                if let Some(settings) = config.get("embyProcessingSettings") {
-                    if let Some(mode) = settings
-                        .get("defaultSubtitleMode")
-                        .and_then(|value| value.as_str())
-                    {
-                        self.subtitle_mode = match mode {
-                            "pure_translation" => MediaServerSubtitleMode::PureTranslation,
-                            "separate_tracks" => MediaServerSubtitleMode::SeparateTracks,
-                            _ => MediaServerSubtitleMode::Bilingual,
-                        };
-                    }
-                    if let Some(overwrite) = settings
-                        .get("overwriteExistingExternal")
-                        .and_then(|value| value.as_bool())
-                    {
-                        self.overwrite_existing_external = overwrite;
-                    }
+            if let Ok(Some(config)) = services.config.load()
+                && let Some(settings) = config.get("embyProcessingSettings")
+            {
+                if let Some(mode) = settings
+                    .get("defaultSubtitleMode")
+                    .and_then(|value| value.as_str())
+                {
+                    self.subtitle_mode = match mode {
+                        "pure_translation" => MediaServerSubtitleMode::PureTranslation,
+                        "separate_tracks" => MediaServerSubtitleMode::SeparateTracks,
+                        _ => MediaServerSubtitleMode::Bilingual,
+                    };
+                }
+                if let Some(overwrite) = settings
+                    .get("overwriteExistingExternal")
+                    .and_then(|value| value.as_bool())
+                {
+                    self.overwrite_existing_external = overwrite;
                 }
             }
         }
@@ -417,7 +417,7 @@ impl MediaServerToolPanel {
         }
 
         if !connected {
-            let server_type = self.server_type.clone();
+            let server_type = self.server_type;
             let mut form = div()
                 .flex()
                 .flex_col()
@@ -499,7 +499,7 @@ impl MediaServerToolPanel {
                             cx.notify();
                             return;
                         }
-                        let server_type = panel.server_type.clone();
+                        let server_type = panel.server_type;
                         let allow_invalid_certs = panel.allow_invalid_certs;
                         shell.media_server_tool.is_connecting = true;
                         shell.media_server_tool.connection_error = None;
@@ -509,7 +509,7 @@ impl MediaServerToolPanel {
                                 let auth = service
                                     .login(MediaServerLoginPayload {
                                         server_url: server_url.clone(),
-                                        server_type: server_type.clone(),
+                                        server_type,
                                         username,
                                         password: (!password.is_empty()).then_some(password),
                                         allow_invalid_certs,
@@ -607,7 +607,7 @@ impl MediaServerToolPanel {
                             } else {
                                 name
                             },
-                            server_type: shell.media_server_tool.server_type.clone(),
+                            server_type: shell.media_server_tool.server_type,
                             server_url,
                             api_key,
                             username: None,
@@ -1376,7 +1376,7 @@ fn shell_queued_media_items(cx: &Context<MainShell>) -> HashSet<String> {
             )
         })
         .filter_map(|item| item.media_server_context.as_ref())
-        .filter(|context| profile_id.map_or(true, |id| context.profile_id == id))
+        .filter(|context| profile_id.is_none_or(|id| context.profile_id == id))
         .map(|context| context.item_id.clone())
         .collect()
 }

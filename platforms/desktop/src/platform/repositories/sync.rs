@@ -422,6 +422,7 @@ impl DesktopSyncManager {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn webdav_provider_input(
     config: WebDavObjectStoreConfig,
 ) -> Result<SyncProviderInput, String> {

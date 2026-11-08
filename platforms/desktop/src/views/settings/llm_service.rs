@@ -417,10 +417,10 @@ pub(super) fn llm_service_panel(
                     ("releaseDate", "Release date"),
                     ("lastUpdated", "Last updated"),
                 ] {
-                    if let Some(value) = metadata.get(key).and_then(Value::as_str) {
-                        if !value.is_empty() {
-                            metadata_lines.push(format!("{label}: {value}"));
-                        }
+                    if let Some(value) = metadata.get(key).and_then(Value::as_str)
+                        && !value.is_empty()
+                    {
+                        metadata_lines.push(format!("{label}: {value}"));
                     }
                 }
                 for (key, label) in [

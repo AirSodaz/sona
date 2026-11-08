@@ -97,14 +97,13 @@ impl TranscriptWorkbench {
         self.base_segments = segments.clone();
         let mut speakers = Vec::new();
         for segment in &segments {
-            if let Some(speaker) = &segment.speaker {
-                if !speaker.label.trim().is_empty()
-                    && !speakers
-                        .iter()
-                        .any(|(id, _): &(String, String)| id == &speaker.id)
-                {
-                    speakers.push((speaker.id.clone(), speaker.label.clone()));
-                }
+            if let Some(speaker) = &segment.speaker
+                && !speaker.label.trim().is_empty()
+                && !speakers
+                    .iter()
+                    .any(|(id, _): &(String, String)| id == &speaker.id)
+            {
+                speakers.push((speaker.id.clone(), speaker.label.clone()));
             }
         }
         self.speaker_sheet.speakers = speakers;
@@ -576,7 +575,7 @@ impl TranscriptWorkbench {
             .into_iter()
             .map(|snapshot| {
                 (
-                    format!("{} ({})", snapshot.id, format!("{:?}", snapshot.reason)),
+                    format!("{} ({:?})", snapshot.id, snapshot.reason),
                     snapshot.created_at.to_string(),
                 )
             })
@@ -650,6 +649,49 @@ impl TranscriptWorkbench {
                 .ok();
         })
         .detach();
+    }
+
+    pub fn save_speaker_rename(&mut self, target_id: &str, cx: &mut Context<MainShell>) {
+        let Some(state) = &self.speaker_sheet.edit_name_state else {
+            return;
+        };
+        let new_name = state.read(cx).value().trim().to_string();
+        if new_name.is_empty() {
+            self.speaker_sheet.cancel_rename(cx);
+            return;
+        }
+
+        let old_label = self
+            .speaker_sheet
+            .speakers
+            .iter()
+            .find(|(id, _)| id == target_id)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| target_id.to_string());
+
+        for (id, name) in &mut self.speaker_sheet.speakers {
+            if id == target_id {
+                *name = new_name.clone();
+            }
+        }
+
+        for seg in &mut self.editor.segments {
+            if seg.speaker == old_label || seg.speaker == target_id {
+                seg.speaker = new_name.clone();
+            }
+        }
+
+        for seg in &mut self.base_segments {
+            if let Some(spk) = &mut seg.speaker
+                && (spk.id == target_id || spk.label == old_label)
+            {
+                spk.label = new_name.clone();
+            }
+        }
+
+        self.speaker_sheet.cancel_rename(cx);
+        self.persist_current(cx);
+        cx.notify();
     }
 
     pub fn refresh_summary(&mut self, cx: &mut Context<MainShell>) {
@@ -769,20 +811,19 @@ impl TranscriptWorkbench {
                     snapshot_id,
                 )
                 .await;
-            if result.is_ok() {
-                if let Ok(Some(segments)) = services
+            if result.is_ok()
+                && let Ok(Some(segments)) = services
                     .history
                     .query_db(move |query| query.load_transcript(&history_id))
                     .await
-                {
-                    shell
-                        .update(cx, |shell, cx| {
-                            shell.workbench.set_transcript(segments, duration);
-                            shell.workbench.version_sheet.is_open = false;
-                            cx.notify();
-                        })
-                        .ok();
-                }
+            {
+                shell
+                    .update(cx, |shell, cx| {
+                        shell.workbench.set_transcript(segments, duration);
+                        shell.workbench.version_sheet.is_open = false;
+                        cx.notify();
+                    })
+                    .ok();
             }
         })
         .detach();

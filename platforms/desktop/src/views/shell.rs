@@ -227,6 +227,12 @@ impl ProjectSelectorDropdown {
     }
 }
 
+impl Default for ProjectSelectorDropdown {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Dynamic cloud sync status pill and popover controller.
 pub struct SyncHeaderPill {
     pub is_open: bool,
@@ -279,7 +285,7 @@ impl SyncHeaderPill {
         let is_paused = self
             .status
             .as_ref()
-            .map_or(false, |s| s.state == SyncLifecycleState::Paused);
+            .is_some_and(|s| s.state == SyncLifecycleState::Paused);
         self.is_action_busy = true;
         cx.notify();
 
@@ -302,6 +308,12 @@ impl SyncHeaderPill {
             self.refresh_status(cx);
         }
         cx.notify();
+    }
+}
+
+impl Default for SyncHeaderPill {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1412,12 +1424,11 @@ impl MainShell {
                     let session_id = event.payload["sessionId"].as_str().map(str::to_owned);
                     let title = event.payload["title"].as_str().map(str::to_owned);
                     let _ = this.update(cx, |shell, cx| {
-                        if let Some(session_id) = session_id.as_deref() {
-                            if shell.workbench.history_id.as_deref() == Some(session_id) {
-                                if let Some(title) = title {
-                                    shell.workbench.session_title = title;
-                                }
-                            }
+                        if let Some(session_id) = session_id.as_deref()
+                            && shell.workbench.history_id.as_deref() == Some(session_id)
+                            && let Some(title) = title
+                        {
+                            shell.workbench.session_title = title;
                         }
                         shell.projects_results.load_data(cx);
                         cx.notify();
@@ -1578,7 +1589,7 @@ impl MainShell {
         let has_pipeline = active_proj
             .as_ref()
             .and_then(|p| p.pipeline.as_ref())
-            .map_or(false, |p| p.enabled);
+            .is_some_and(|p| p.enabled);
 
         let filtered: Vec<ProjectRecord> = self
             .project_selector
@@ -1773,7 +1784,7 @@ impl MainShell {
                                         .as_ref()
                                         .filter(|ic| !ic.is_empty() && !ic.starts_with("system:"));
                                     let p_has_zap =
-                                        proj.pipeline.as_ref().map_or(false, |p| p.enabled);
+                                        proj.pipeline.as_ref().is_some_and(|p| p.enabled);
                                     let pid = proj.id.clone();
 
                                     div()
@@ -1922,7 +1933,7 @@ impl MainShell {
                     .shadow_sm(),
             )
             // 3 Mode Tab Buttons
-            .children(modes.into_iter().enumerate().map(|(_i, (mode, label))| {
+            .children(modes.into_iter().map(|(mode, label)| {
                 let is_active = self.mode == mode;
 
                 div()

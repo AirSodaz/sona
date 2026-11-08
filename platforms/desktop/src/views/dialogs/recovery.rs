@@ -429,6 +429,12 @@ impl RecoveryModal {
     }
 }
 
+impl Default for RecoveryModal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn recovery_inputs(items: &[RecoveredQueueItem]) -> Result<Vec<RecoveryItemInput>, String> {
     serde_json::from_value(serde_json::to_value(items).map_err(|error| error.to_string())?)
         .map_err(|error| error.to_string())

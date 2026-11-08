@@ -532,3 +532,9 @@ impl OnboardingWizard {
         })
     }
 }
+
+impl Default for OnboardingWizard {
+    fn default() -> Self {
+        Self::new()
+    }
+}

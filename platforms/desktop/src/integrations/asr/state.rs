@@ -143,7 +143,9 @@ pub struct AsrState {
     pub(crate) metrics: AsrMetricsStore,
     pub(crate) live_coordinator: Arc<LiveTranscriptionCoordinator>,
     pub(crate) batch_cancel: Arc<BatchCancelRegistry>,
+    #[allow(dead_code)]
     external_sources: Arc<Mutex<HashMap<String, ExternalSourceState>>>,
+    #[allow(dead_code)]
     next_external_generation: Arc<AtomicU64>,
 }
 
@@ -156,6 +158,7 @@ pub struct ExternalLiveSource {
     pub source_cursor: u64,
 }
 
+#[allow(dead_code)]
 struct ExternalSourceState {
     source: sona_application::live_transcription::LiveSourceEpoch,
     sequence: u64,
@@ -197,6 +200,7 @@ impl AsrState {
         &self.live_coordinator
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn create_external_source(&self) -> ExternalLiveSource {
         let generation = self
             .next_external_generation
@@ -222,6 +226,7 @@ impl AsrState {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn external_source(
         &self,
         token: &str,
@@ -233,6 +238,7 @@ impl AsrState {
             .map(|source| (source.source.clone(), source.sample_cursor))
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn next_external_frame(
         &self,
         token: &str,
@@ -253,6 +259,7 @@ impl AsrState {
         Some((source.source.clone(), frame))
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn remove_external_source(
         &self,
         token: &str,

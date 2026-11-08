@@ -424,8 +424,7 @@ impl VoiceTypingIsland {
             .children(
                 heights
                     .iter()
-                    .enumerate()
-                    .map(|(_idx, &h)| div().w(px(3.0)).h(px(h)).rounded_full().bg(bar_color)),
+                    .map(|&h| div().w(px(3.0)).h(px(h)).rounded_full().bg(bar_color)),
             )
     }
 

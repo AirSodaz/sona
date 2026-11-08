@@ -66,7 +66,7 @@ pub fn is_valid_stream_url(url: &str) -> bool {
     };
 
     if rest.is_empty()
-        || rest.starts_with(|c: char| matches!(c, ' ' | '/' | '?' | '#'))
+        || rest.starts_with([' ', '/', '?', '#'])
         || rest.chars().any(|c| c.is_whitespace())
     {
         return false;
@@ -328,6 +328,7 @@ impl BatchImportPanel {
     /// Priority:
     /// 1. If `instance_id_opt` is Some, match strictly on `item.instance_id == instance_id_opt`.
     /// 2. If `instance_id_opt` is None, match on `item.file_path == path_opt` ONLY for items currently in `Processing`.
+    ///
     /// Returns true if any item was updated.
     pub fn apply_progress_event(
         queue: &mut [BatchQueueItem],
@@ -345,16 +346,14 @@ impl BatchImportPanel {
                 false
             };
 
-            if is_match {
-                if let Some(prog) = progress_opt {
-                    item.progress = prog.clamp(0.0, 100.0);
-                    if prog >= 100.0 && item.media_server_context.is_none() {
-                        item.status = BatchItemStatus::Complete;
-                    } else if item.status == BatchItemStatus::Pending {
-                        item.status = BatchItemStatus::Processing;
-                    }
-                    updated = true;
+            if is_match && let Some(prog) = progress_opt {
+                item.progress = prog.clamp(0.0, 100.0);
+                if prog >= 100.0 && item.media_server_context.is_none() {
+                    item.status = BatchItemStatus::Complete;
+                } else if item.status == BatchItemStatus::Pending {
+                    item.status = BatchItemStatus::Processing;
                 }
+                updated = true;
             }
         }
         updated
@@ -370,26 +369,25 @@ impl BatchImportPanel {
                 if event.name == "batch-progress" {
                     // payload: [path, progress, instance_id]
                     if let Ok(arr) = serde_json::from_value::<Vec<serde_json::Value>>(event.payload)
+                        && arr.len() >= 2
                     {
-                        if arr.len() >= 2 {
-                            let path_opt = arr[0].as_str().map(|s| s.to_string());
-                            let progress_opt = arr[1].as_f64().map(|p| p as f32);
-                            let instance_id_opt =
-                                arr.get(2).and_then(|v| v.as_str()).map(|s| s.to_string());
+                        let path_opt = arr[0].as_str().map(|s| s.to_string());
+                        let progress_opt = arr[1].as_f64().map(|p| p as f32);
+                        let instance_id_opt =
+                            arr.get(2).and_then(|v| v.as_str()).map(|s| s.to_string());
 
-                            this.update(cx, |view, cx| {
-                                if Self::apply_progress_event(
-                                    &mut view.queue,
-                                    path_opt.as_deref(),
-                                    progress_opt,
-                                    instance_id_opt.as_deref(),
-                                ) {
-                                    view.persist_recovery_snapshot(cx, Vec::new());
-                                    cx.notify();
-                                }
-                            })
-                            .ok();
-                        }
+                        this.update(cx, |view, cx| {
+                            if Self::apply_progress_event(
+                                &mut view.queue,
+                                path_opt.as_deref(),
+                                progress_opt,
+                                instance_id_opt.as_deref(),
+                            ) {
+                                view.persist_recovery_snapshot(cx, Vec::new());
+                                cx.notify();
+                            }
+                        })
+                        .ok();
                     }
                 }
             }
@@ -824,14 +822,13 @@ impl BatchImportPanel {
                         this.update(cx, |view, cx| {
                             if let Some(target) =
                                 view.queue.iter_mut().find(|item| item.id == item_id)
+                                && target.status == BatchItemStatus::Processing
                             {
-                                if target.status == BatchItemStatus::Processing {
-                                    target.progress = if media_context.is_some() {
-                                        progress.min(92.0)
-                                    } else {
-                                        progress
-                                    };
-                                }
+                                target.progress = if media_context.is_some() {
+                                    progress.min(92.0)
+                                } else {
+                                    progress
+                                };
                             }
                             cx.notify();
                         })
@@ -1023,17 +1020,17 @@ impl BatchImportPanel {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let resolved_ids = self.queue.iter().map(|item| item.id.clone()).collect();
         for item in &self.queue {
-            if item.status == BatchItemStatus::Processing {
-                if let Some(inst_id) = item.instance_id.clone() {
-                    let services = services.clone();
-                    cx.spawn(async move |_this, _cx: &mut AsyncApp| {
-                        let _ = crate::platform::agent_control::facade::batch::cancel_batch_task(
-                            &services, inst_id,
-                        )
-                        .await;
-                    })
-                    .detach();
-                }
+            if item.status == BatchItemStatus::Processing
+                && let Some(inst_id) = item.instance_id.clone()
+            {
+                let services = services.clone();
+                cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+                    let _ = crate::platform::agent_control::facade::batch::cancel_batch_task(
+                        &services, inst_id,
+                    )
+                    .await;
+                })
+                .detach();
             }
         }
         self.queue.clear();
@@ -1164,7 +1161,7 @@ fn safe_media_extension(container: &str) -> String {
 }
 
 fn clean_subtitle_text(text: &str) -> String {
-    text.replace('\0', "").replace('\r', "").trim().to_string()
+    text.replace(['\0', '\r'], "").trim().to_string()
 }
 
 async fn translate_media_server_segments(

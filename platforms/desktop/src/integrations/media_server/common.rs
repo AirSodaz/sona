@@ -756,9 +756,15 @@ mod tests {
         };
         let simplified = stream("简体中文");
         let traditional = stream("繁體中文");
-        assert!(has_target_subtitle(&[simplified.clone()], "zh-CN"));
+        assert!(has_target_subtitle(
+            std::slice::from_ref(&simplified),
+            "zh-CN"
+        ));
         assert!(!has_target_subtitle(&[simplified], "zh-TW"));
-        assert!(!has_target_subtitle(&[traditional.clone()], "zh-CN"));
+        assert!(!has_target_subtitle(
+            std::slice::from_ref(&traditional),
+            "zh-CN"
+        ));
         assert!(has_target_subtitle(&[traditional], "zh-TW"));
     }
 }

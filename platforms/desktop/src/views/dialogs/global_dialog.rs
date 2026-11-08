@@ -360,3 +360,9 @@ impl GlobalDialog {
         })
     }
 }
+
+impl Default for GlobalDialog {
+    fn default() -> Self {
+        Self::new()
+    }
+}

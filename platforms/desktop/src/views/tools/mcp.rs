@@ -169,3 +169,9 @@ impl McpToolPanel {
             )
     }
 }
+
+impl Default for McpToolPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}

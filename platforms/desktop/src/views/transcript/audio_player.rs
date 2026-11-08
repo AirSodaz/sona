@@ -278,6 +278,12 @@ impl AudioPlayerBar {
     }
 }
 
+impl Default for AudioPlayerBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::AudioPlayerBar;

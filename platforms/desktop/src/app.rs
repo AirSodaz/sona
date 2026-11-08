@@ -65,6 +65,7 @@ pub const MAIN_WINDOW_MIN_HEIGHT: f32 = 600.0;
 /// 2. Registers global accessors for backend domain services and event streaming.
 /// 3. Registers system tray and global hotkeys event loops.
 /// 4. Opens the primary application window hosting `MainShell`.
+#[allow(clippy::arc_with_non_send_sync)]
 pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<AppEventBus>) {
     // 1. Initialize GPUI Kit (theming, overlay managers, assets, default bindings)
     gpui_kit::init(cx);
@@ -108,13 +109,11 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
         .ok()
         .flatten()
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
-    {
-        if let Err(error) = hotkey_controller
+        && let Err(error) = hotkey_controller
             .write()
             .rebind_shortcut(HotkeyAction::VoiceTyping, &shortcut)
-        {
-            log::warn!("Failed to register configured voice typing shortcut: {error}");
-        }
+    {
+        log::warn!("Failed to register configured voice typing shortcut: {error}");
     }
     if let Some(shortcut) = services
         .config
@@ -122,13 +121,11 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
         .ok()
         .flatten()
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
-    {
-        if let Err(error) = hotkey_controller
+        && let Err(error) = hotkey_controller
             .write()
             .rebind_shortcut(HotkeyAction::VoiceTypingTranslate, &shortcut)
-        {
-            log::warn!("Failed to register configured voice typing translate shortcut: {error}");
-        }
+    {
+        log::warn!("Failed to register configured voice typing translate shortcut: {error}");
     }
     if let Some(shortcut) = services
         .config
@@ -136,13 +133,11 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
         .ok()
         .flatten()
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
-    {
-        if let Err(error) = hotkey_controller
+        && let Err(error) = hotkey_controller
             .write()
             .rebind_shortcut(HotkeyAction::QuickRecall, &shortcut)
-        {
-            log::warn!("Failed to register configured voice typing quick recall shortcut: {error}");
-        }
+    {
+        log::warn!("Failed to register configured voice typing quick recall shortcut: {error}");
     }
     let bus_clone2 = event_bus.clone();
     let action_map = hotkey_controller.read().action_map();

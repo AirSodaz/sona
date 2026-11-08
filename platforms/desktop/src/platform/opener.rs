@@ -56,14 +56,14 @@ pub fn open_path(path: impl AsRef<Path>) -> Result<(), std::io::Error> {
 pub async fn open_url_async(url: String) -> Result<(), std::io::Error> {
     tokio::task::spawn_blocking(move || open_url(url))
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+        .map_err(std::io::Error::other)?
 }
 
 /// Asynchronously opens a local path without blocking the GPUI UI thread.
 pub async fn open_path_async(path: PathBuf) -> Result<(), std::io::Error> {
     tokio::task::spawn_blocking(move || open_path(path))
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+        .map_err(std::io::Error::other)?
 }
 
 #[cfg(test)]

@@ -335,6 +335,12 @@ impl VoiceTypingToolPanel {
     }
 }
 
+impl Default for VoiceTypingToolPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn section(
     title: &'static str,
     description: &'static str,
@@ -393,16 +399,4 @@ fn row(title: &'static str, hint: &'static str, cx: &Context<MainShell>) -> gpui
                         .child(hint),
                 ),
         )
-}
-
-fn value_badge(value: String, cx: &Context<MainShell>) -> gpui_kit::Div {
-    div()
-        .px_3()
-        .py_1()
-        .rounded_md()
-        .border_1()
-        .border_color(cx.theme().border)
-        .bg(cx.theme().background)
-        .text_size(px(12.0))
-        .child(value)
 }

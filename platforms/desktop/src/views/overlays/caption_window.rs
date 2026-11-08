@@ -173,12 +173,12 @@ impl CaptionOverlayWindow {
             }
         } else if event.is("caption:lock-toggle") {
             self.toggle_lock(cx);
-        } else if event.is("realtime-translation-error") {
-            if let Ok(error_info) = event.decode::<serde_json::Value>() {
-                let msg = error_info["error"].as_str().unwrap_or("Translation error");
-                self.translation_error = Some(msg.to_string());
-                cx.notify();
-            }
+        } else if event.is("realtime-translation-error")
+            && let Ok(error_info) = event.decode::<serde_json::Value>()
+        {
+            let msg = error_info["error"].as_str().unwrap_or("Translation error");
+            self.translation_error = Some(msg.to_string());
+            cx.notify();
         }
     }
 
@@ -743,10 +743,10 @@ mod tests {
 
     #[test]
     fn test_caption_style_delay_sanitization_edge_cases() {
-        let mut style = CaptionStyle::default();
-
-        // Sub-minimum clamped to 0.5s
-        style.disappear_delay_secs = 0.1;
+        let mut style = CaptionStyle {
+            disappear_delay_secs: 0.1,
+            ..Default::default()
+        };
         assert_eq!(style.sanitized_disappear_delay_secs(), 0.5);
         assert_eq!(style.disappear_delay(), Duration::from_secs_f32(0.5));
 

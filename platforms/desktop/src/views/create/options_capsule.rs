@@ -140,20 +140,20 @@ impl TranscriptionOptionsModel {
             IngestionSurface::Batch => (&self.batch_model_id, &mut self.batch_language),
         };
 
-        if let Some(cat) = &self.catalog {
-            if let Some(m) = cat.models.iter().find(|m| &m.id == model_id) {
-                match m.language_mode {
-                    sona_core::models::preset_models::LanguageMode::Auto => {
-                        *lang_slot = "auto".to_string();
-                    }
-                    sona_core::models::preset_models::LanguageMode::Fixed => {
-                        if let Some(first_lang) = m.languages.first() {
-                            *lang_slot = first_lang.clone();
-                        }
-                    }
-                    sona_core::models::preset_models::LanguageMode::Selectable
-                    | sona_core::models::preset_models::LanguageMode::None => {}
+        if let Some(cat) = &self.catalog
+            && let Some(m) = cat.models.iter().find(|m| &m.id == model_id)
+        {
+            match m.language_mode {
+                sona_core::models::preset_models::LanguageMode::Auto => {
+                    *lang_slot = "auto".to_string();
                 }
+                sona_core::models::preset_models::LanguageMode::Fixed => {
+                    if let Some(first_lang) = m.languages.first() {
+                        *lang_slot = first_lang.clone();
+                    }
+                }
+                sona_core::models::preset_models::LanguageMode::Selectable
+                | sona_core::models::preset_models::LanguageMode::None => {}
             }
         }
     }
@@ -164,10 +164,10 @@ impl TranscriptionOptionsModel {
             IngestionSurface::Live => &self.live_model_id,
             IngestionSurface::Batch => &self.batch_model_id,
         };
-        if let Some(cat) = &self.catalog {
-            if let Some(m) = cat.models.iter().find(|m| &m.id == id) {
-                return m.name.clone();
-            }
+        if let Some(cat) = &self.catalog
+            && let Some(m) = cat.models.iter().find(|m| &m.id == id)
+        {
+            return m.name.clone();
         }
         if id.contains("sense-voice") {
             "SenseVoice Small".to_string()
@@ -214,17 +214,17 @@ impl TranscriptionOptionsModel {
             IngestionSurface::Live => &self.live_model_id,
             IngestionSurface::Batch => &self.batch_model_id,
         };
-        if let Some(cat) = &self.catalog {
-            if let Some(m) = cat.models.iter().find(|m| &m.id == id) {
-                match m.language_mode {
-                    sona_core::models::preset_models::LanguageMode::Auto => {
-                        return Some("Auto-detect only for this model");
-                    }
-                    sona_core::models::preset_models::LanguageMode::Fixed => {
-                        return Some("Fixed language model");
-                    }
-                    _ => {}
+        if let Some(cat) = &self.catalog
+            && let Some(m) = cat.models.iter().find(|m| &m.id == id)
+        {
+            match m.language_mode {
+                sona_core::models::preset_models::LanguageMode::Auto => {
+                    return Some("Auto-detect only for this model");
                 }
+                sona_core::models::preset_models::LanguageMode::Fixed => {
+                    return Some("Fixed language model");
+                }
+                _ => {}
             }
         }
         None

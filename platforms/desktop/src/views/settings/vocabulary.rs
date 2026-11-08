@@ -470,7 +470,7 @@ pub(super) fn vocabulary_panel(
                                                     .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Bias speech recognition accuracy for specific names, jargon, or keywords.")))
                                                     .child(div().text_size(px(10.0)).text_color(cx.theme().muted_foreground).child(hotword_entries.len().to_string())))
                                             .child(div().flex().flex_wrap().items_center().gap_2().px_4().pb_4()
-                                                .children(hotword_entries.iter().map(|entry| dictionary_hotword_chip(entry, &dictionary_scope, editing_line, cx)))
+                                                .children(hotword_entries.iter().map(|entry| dictionary_hotword_chip(entry, dictionary_scope, editing_line, cx)))
                                                 .child(div().w(px(200.0))
                                         .on_key_down(cx.listener(move |shell, event: &KeyDownEvent, window, cx| {
                                             if event.keystroke.key.eq_ignore_ascii_case("enter") {

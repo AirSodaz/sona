@@ -194,3 +194,9 @@ impl EditorToolbar {
             })
     }
 }
+
+impl Default for EditorToolbar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

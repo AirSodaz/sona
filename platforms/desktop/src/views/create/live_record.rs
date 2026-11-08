@@ -162,23 +162,23 @@ impl LiveRecordPanel {
                     }
                 }
                 // 2. Real-time ASR segment finalization & auto-polish ingestion
-                else if event.name.starts_with("recognizer-output-") {
-                    if let Ok(update) = serde_json::from_value::<TranscriptUpdate>(event.payload) {
-                        this.update(cx, |view, cx| {
-                            let matches_session = view
-                                .active_session_id
-                                .as_deref()
-                                .map(|id| event.name == format!("recognizer-output-{id}"))
-                                .unwrap_or(false);
+                else if event.name.starts_with("recognizer-output-")
+                    && let Ok(update) = serde_json::from_value::<TranscriptUpdate>(event.payload)
+                {
+                    this.update(cx, |view, cx| {
+                        let matches_session = view
+                            .active_session_id
+                            .as_deref()
+                            .map(|id| event.name == format!("recognizer-output-{id}"))
+                            .unwrap_or(false);
 
-                            if matches_session
-                                || (view.is_recording && view.active_session_id.is_none())
-                            {
-                                view.handle_transcript_update(update, cx);
-                            }
-                        })
-                        .ok();
-                    }
+                        if matches_session
+                            || (view.is_recording && view.active_session_id.is_none())
+                        {
+                            view.handle_transcript_update(update, cx);
+                        }
+                    })
+                    .ok();
                 }
             }
         })
@@ -577,13 +577,12 @@ impl LiveRecordPanel {
                         }
                     }
                     Ok(saved_path) => {
-                        if let Err(error) = tokio::fs::remove_file(&saved_path).await {
-                            if error.kind() != std::io::ErrorKind::NotFound {
+                        if let Err(error) = tokio::fs::remove_file(&saved_path).await
+                            && error.kind() != std::io::ErrorKind::NotFound {
                                 log::warn!(
                                     "[LiveRecord] failed to remove empty recording file {saved_path}: {error}"
                                 );
                             }
-                        }
                         let id = draft.item.id.clone();
                         let deleted_at = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
@@ -683,7 +682,7 @@ impl LiveRecordPanel {
             return;
         }
 
-        let to_polish: Vec<TranscriptSegment> = self.unpolished_segments.drain(..).collect();
+        let to_polish: Vec<TranscriptSegment> = std::mem::take(&mut self.unpolished_segments);
         for seg in &to_polish {
             self.polished_ids.insert(seg.id.clone());
         }

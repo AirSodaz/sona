@@ -128,6 +128,7 @@ pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrReg
         )))
 }
 
+#[allow(dead_code)]
 pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {
     local_asr_registry(RecognizerPool::default())
 }

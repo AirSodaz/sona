@@ -394,57 +394,6 @@ fn readiness(samples: &[SpeakerProfileSample]) -> (usize, String, String) {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{normalized_profiles, readiness};
-    use serde_json::json;
-    use sona_core::transcription::speaker::{SpeakerProfile, SpeakerProfileSample};
-
-    fn sample(id: &str, seconds: f32) -> SpeakerProfileSample {
-        SpeakerProfileSample {
-            id: id.to_string(),
-            file_path: format!("{id}.wav"),
-            source_name: format!("{id}.wav"),
-            duration_seconds: seconds,
-        }
-    }
-
-    #[test]
-    fn readiness_uses_only_usable_samples_and_matches_react_thresholds() {
-        assert_eq!(readiness(&[sample("short", 3.9)]).0, 0);
-        assert_eq!(
-            readiness(&[sample("one", 8.0)]).2,
-            "Can appear as a suggestion, but needs more usable samples before automatic matching."
-        );
-        assert_eq!(
-            readiness(&[sample("one", 20.0)]).2,
-            "Can appear as a suggestion, but needs more usable samples before automatic matching."
-        );
-        assert_eq!(
-            readiness(&[sample("one", 10.0), sample("two", 10.0)]).2,
-            "Ready for automatic matching"
-        );
-    }
-
-    #[test]
-    fn profile_json_round_trips_scope_and_samples() {
-        let profile = SpeakerProfile {
-            id: "profile-1".to_string(),
-            name: "Alice".to_string(),
-            enabled: true,
-            scope: "project".to_string(),
-            project_ids: vec!["project-1".to_string()],
-            samples: vec![sample("sample-1", 12.5)],
-        };
-        let config = json!({ "speakerProfiles": [profile] });
-        let restored = normalized_profiles(&config);
-        assert_eq!(restored.len(), 1);
-        assert_eq!(restored[0].scope, "project");
-        assert_eq!(restored[0].project_ids, vec!["project-1"]);
-        assert_eq!(restored[0].samples[0].duration_seconds, 12.5);
-    }
-}
-
 fn format_duration(seconds: f32) -> String {
     if seconds >= 60.0 {
         format!("{}m {:.1}s", (seconds / 60.0).floor(), seconds % 60.0)
@@ -520,4 +469,55 @@ fn sample_row(
                 );
             })),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalized_profiles, readiness};
+    use serde_json::json;
+    use sona_core::transcription::speaker::{SpeakerProfile, SpeakerProfileSample};
+
+    fn sample(id: &str, seconds: f32) -> SpeakerProfileSample {
+        SpeakerProfileSample {
+            id: id.to_string(),
+            file_path: format!("{id}.wav"),
+            source_name: format!("{id}.wav"),
+            duration_seconds: seconds,
+        }
+    }
+
+    #[test]
+    fn readiness_uses_only_usable_samples_and_matches_react_thresholds() {
+        assert_eq!(readiness(&[sample("short", 3.9)]).0, 0);
+        assert_eq!(
+            readiness(&[sample("one", 8.0)]).2,
+            "Can appear as a suggestion, but needs more usable samples before automatic matching."
+        );
+        assert_eq!(
+            readiness(&[sample("one", 20.0)]).2,
+            "Can appear as a suggestion, but needs more usable samples before automatic matching."
+        );
+        assert_eq!(
+            readiness(&[sample("one", 10.0), sample("two", 10.0)]).2,
+            "Ready for automatic matching"
+        );
+    }
+
+    #[test]
+    fn profile_json_round_trips_scope_and_samples() {
+        let profile = SpeakerProfile {
+            id: "profile-1".to_string(),
+            name: "Alice".to_string(),
+            enabled: true,
+            scope: "project".to_string(),
+            project_ids: vec!["project-1".to_string()],
+            samples: vec![sample("sample-1", 12.5)],
+        };
+        let config = json!({ "speakerProfiles": [profile] });
+        let restored = normalized_profiles(&config);
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].scope, "project");
+        assert_eq!(restored[0].project_ids, vec!["project-1"]);
+        assert_eq!(restored[0].samples[0].duration_seconds, 12.5);
+    }
 }

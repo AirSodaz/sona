@@ -186,10 +186,10 @@ fn remove_custom_provider_settings(settings: &mut Value, provider_id: &str) -> b
         .map(|models| {
             models
                 .iter()
-                .filter_map(|(id, model)| {
-                    (model.get("provider").and_then(Value::as_str) == Some(provider_id))
-                        .then(|| id.clone())
+                .filter(|&(_id, model)| {
+                    model.get("provider").and_then(Value::as_str) == Some(provider_id)
                 })
+                .map(|(id, _model)| id.clone())
                 .collect::<std::collections::HashSet<_>>()
         })
         .unwrap_or_default();
@@ -1521,7 +1521,7 @@ impl SettingsModal {
                 .map_err(|error| error.to_string())
                 .map(|context| {
                     crate::platform::models::downloads::get_cuda_addon_status(
-                        &context.app_data_dir().to_path_buf(),
+                        context.app_data_dir(),
                     )
                 })
                 .and_then(|result| result);
@@ -1914,15 +1914,14 @@ impl SettingsModal {
             .to_string();
         provider["name"] = Value::String(name);
         provider["strategy"] = Value::String(self.llm_edit_provider_strategy.clone());
-        if old_strategy != self.llm_edit_provider_strategy {
-            if let Some(setting) = self
+        if old_strategy != self.llm_edit_provider_strategy
+            && let Some(setting) = self
                 .model_config
                 .pointer_mut(&format!("/llmSettings/providers/{provider_id}"))
                 .and_then(Value::as_object_mut)
-            {
-                setting.remove("apiPath");
-                setting.remove("apiVersion");
-            }
+        {
+            setting.remove("apiPath");
+            setting.remove("apiVersion");
         }
         self.llm_custom_provider_name.clear();
         self.persist_llm_settings(cx);
@@ -2685,29 +2684,29 @@ impl SettingsModal {
             }
             config["streamingModelPath"] = selection["modelPath"].clone();
         }
-        if !model_id.is_empty() {
-            if let Some(modes) = modes {
-                for mode in modes.iter().filter_map(Value::as_str) {
-                    let field = match mode {
-                        "live" | "streaming" => {
-                            if batch {
-                                None
-                            } else {
-                                Some("streamingModelPath")
-                            }
+        if !model_id.is_empty()
+            && let Some(modes) = modes
+        {
+            for mode in modes.iter().filter_map(Value::as_str) {
+                let field = match mode {
+                    "live" | "streaming" => {
+                        if batch {
+                            None
+                        } else {
+                            Some("streamingModelPath")
                         }
-                        "batch" => {
-                            if batch {
-                                Some("batchModelPath")
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    };
-                    if let Some(field) = field {
-                        config[field] = Value::String(path.clone());
                     }
+                    "batch" => {
+                        if batch {
+                            Some("batchModelPath")
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                if let Some(field) = field {
+                    config[field] = Value::String(path.clone());
                 }
             }
         }
@@ -3060,7 +3059,7 @@ impl SettingsModal {
                 })
                 .unwrap_or(true);
             if should_stop {
-                for result in [
+                for path in [
                     crate::integrations::audio::stop_microphone_capture(
                         &services.audio,
                         "test_mic".to_string(),
@@ -3071,10 +3070,11 @@ impl SettingsModal {
                         "test_system".to_string(),
                     )
                     .await,
-                ] {
-                    if let Ok(path) = result {
-                        let _ = tokio::fs::remove_file(path).await;
-                    }
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    let _ = tokio::fs::remove_file(path).await;
                 }
             }
         })
@@ -3484,20 +3484,20 @@ impl SettingsModal {
                             })
                             .ok();
                         }
-                    } else if event.name == crate::integrations::audio::SYSTEM_PEAK_EVENT {
-                        if let Some(peak) = peak {
-                            this.update(cx, |shell, cx| {
-                                if !shell.settings_modal.is_open
-                                    || shell.settings_modal.current_tab != SettingsTab::Microphone
-                                {
-                                    return;
-                                }
-                                shell.settings_modal.system_audio_peak =
-                                    ((peak as f32).abs() / 32767.0).clamp(0.0, 1.0);
-                                cx.notify();
-                            })
-                            .ok();
-                        }
+                    } else if event.name == crate::integrations::audio::SYSTEM_PEAK_EVENT
+                        && let Some(peak) = peak
+                    {
+                        this.update(cx, |shell, cx| {
+                            if !shell.settings_modal.is_open
+                                || shell.settings_modal.current_tab != SettingsTab::Microphone
+                            {
+                                return;
+                            }
+                            shell.settings_modal.system_audio_peak =
+                                ((peak as f32).abs() / 32767.0).clamp(0.0, 1.0);
+                            cx.notify();
+                        })
+                        .ok();
                     }
                 }
             })
@@ -4741,303 +4741,9 @@ impl SettingsModal {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        SettingsModal, SettingsTab, apply_llm_model_metadata_inputs,
-        online_provider_added_model_ids, online_provider_default_name,
-        online_provider_is_flash_batch_mode, online_provider_languages_tooltip,
-        online_provider_logo_path, online_provider_model_options, remove_custom_provider_settings,
-        remove_llm_model_settings, update_online_provider_model_config,
-    };
-    use gpui_kit::AssetSource as _;
-    use serde_json::json;
-    use std::collections::HashMap;
-
-    #[test]
-    fn deleting_custom_provider_cleans_its_models_and_feature_selections() {
-        let mut settings = json!({
-            "activeProvider": "custom-acme",
-            "customProviders": {
-                "custom-acme": { "name": "Acme", "strategy": "openai_compatible" }
-            },
-            "providers": {
-                "custom-acme": { "apiHost": "https://acme.example", "apiKey": "secret" },
-                "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "key" }
-            },
-            "models": {
-                "acme-a": { "provider": "custom-acme", "model": "a" },
-                "openai-b": { "provider": "open_ai", "model": "b" }
-            },
-            "modelOrder": ["acme-a", "openai-b"],
-            "selections": {
-                "polishModelId": "acme-a",
-                "summaryModelId": "openai-b",
-                "polishTemperature": 0.4
-            }
-        });
-
-        assert!(remove_custom_provider_settings(
-            &mut settings,
-            "custom-acme"
-        ));
-        assert_eq!(settings["activeProvider"], "google_translate_free");
-        assert!(settings["customProviders"].get("custom-acme").is_none());
-        assert!(settings["providers"].get("custom-acme").is_none());
-        assert!(settings["models"].get("acme-a").is_none());
-        assert_eq!(settings["models"]["openai-b"]["model"], "b");
-        assert_eq!(settings["modelOrder"], json!(["openai-b"]));
-        assert!(settings["selections"].get("polishModelId").is_none());
-        assert_eq!(settings["selections"]["summaryModelId"], "openai-b");
-        assert_eq!(settings["selections"]["polishTemperature"], 0.4);
-        assert!(!remove_custom_provider_settings(
-            &mut settings,
-            "custom-acme"
-        ));
-    }
-
-    #[test]
-    fn deleting_llm_model_removes_only_its_feature_selections() {
-        let mut settings = json!({
-            "models": {
-                "model-a": { "provider": "open_ai", "model": "a" },
-                "model-b": { "provider": "anthropic", "model": "b" }
-            },
-            "modelOrder": ["model-a", "model-b"],
-            "selections": {
-                "polishModelId": "model-a",
-                "translationModelId": "model-a",
-                "summaryModelId": "model-b",
-                "polishTemperature": 0.8
-            }
-        });
-
-        assert!(remove_llm_model_settings(&mut settings, "model-a"));
-        assert!(settings["models"].get("model-a").is_none());
-        assert_eq!(settings["modelOrder"], json!(["model-b"]));
-        assert!(settings["selections"].get("polishModelId").is_none());
-        assert!(settings["selections"].get("translationModelId").is_none());
-        assert_eq!(settings["selections"]["summaryModelId"], "model-b");
-        assert_eq!(settings["selections"]["polishTemperature"], 0.8);
-        assert!(!remove_llm_model_settings(&mut settings, "missing"));
-    }
-
-    #[test]
-    fn llm_metadata_editor_validates_numbers_and_preserves_catalog_fields() {
-        let current = json!({
-            "supportsReasoning": true,
-            "reasoningMode": { "type": "effort", "levels": ["low", "high"] },
-            "metadataSources": ["provider"]
-        });
-        let valid = HashMap::from([
-            ("displayName".to_string(), "  Model X  ".to_string()),
-            ("contextWindow".to_string(), "128000".to_string()),
-            ("inputPrice".to_string(), "0.25".to_string()),
-        ]);
-        let updated = apply_llm_model_metadata_inputs(&current, &valid).unwrap();
-        assert_eq!(updated["displayName"], "Model X");
-        assert_eq!(updated["contextWindow"].as_f64(), Some(128000.0));
-        assert_eq!(updated["inputPrice"].as_f64(), Some(0.25));
-        assert_eq!(updated["supportsReasoning"], true);
-        assert_eq!(updated["reasoningMode"]["type"], "effort");
-        assert_eq!(updated["metadataSources"][0], "provider");
-
-        let invalid = HashMap::from([("outputPrice".to_string(), "-1".to_string())]);
-        assert!(apply_llm_model_metadata_inputs(&current, &invalid).is_err());
-    }
-
-    #[test]
-    fn settings_tab_navigation_wraps_in_both_directions() {
-        assert_eq!(
-            SettingsModal::next_tab(SettingsTab::General, true),
-            SettingsTab::Mcp
-        );
-        let cycle = [
-            SettingsTab::General,
-            SettingsTab::Dashboard,
-            SettingsTab::Shortcuts,
-            SettingsTab::About,
-            SettingsTab::Microphone,
-            SettingsTab::Models,
-            SettingsTab::Subtitle,
-            SettingsTab::Vocabulary,
-            SettingsTab::LlmService,
-            SettingsTab::Automation,
-            SettingsTab::Storage,
-            SettingsTab::Sync,
-            SettingsTab::ApiServer,
-            SettingsTab::Mcp,
-        ];
-        for (index, tab) in cycle.iter().enumerate() {
-            assert_eq!(
-                SettingsModal::next_tab(*tab, false),
-                cycle[(index + 1) % cycle.len()],
-            );
-        }
-    }
-
-    #[test]
-    fn every_online_provider_uses_its_original_brand_asset() {
-        let assets = crate::assets::AppAssets;
-        for provider in sona_core::ports::asr::online_asr_providers() {
-            let name = online_provider_default_name(&provider.id);
-            let path = online_provider_logo_path(&provider.id, name)
-                .unwrap_or_else(|| panic!("missing brand mapping for {}", provider.id));
-            assert!(
-                assets.load(path).unwrap().is_some(),
-                "missing embedded brand asset {path} for {}",
-                provider.id
-            );
-        }
-    }
-
-    #[test]
-    fn online_provider_language_tooltips_localize_and_summarize_languages() {
-        assert_eq!(
-            online_provider_languages_tooltip(&["en".into(), "zh".into()]),
-            "English, Chinese"
-        );
-        let long_list = (0..25).map(|_| "en".to_string()).collect::<Vec<_>>();
-        assert_eq!(
-            online_provider_languages_tooltip(&long_list),
-            format!(
-                "{} ... (25 languages in total)",
-                vec!["English"; 24].join(", ")
-            )
-        );
-    }
-
-    #[test]
-    fn online_provider_add_preserves_implicit_defaults() {
-        let provider = sona_core::ports::asr::find_online_asr_provider("groq-whisper").unwrap();
-        let provider_config = json!({ "apiKey": "test-key" });
-        let defaults = online_provider_added_model_ids(provider, Some(&provider_config));
-        assert!(!defaults.is_empty());
-        assert!(defaults.iter().all(|id| {
-            provider
-                .models
-                .iter()
-                .any(|model| model.id == *id && model.is_default == Some(true))
-        }));
-        let additional_model = provider
-            .models
-            .iter()
-            .find(|model| model.is_default != Some(true))
-            .expect("Groq exposes optional non-default models")
-            .id
-            .clone();
-        let mut config = json!({
-            "asr": { "providers": { "online": { "groq-whisper": { "apiKey": "test-key" } } } }
-        });
-
-        update_online_provider_model_config(
-            &mut config,
-            &provider.id,
-            &additional_model,
-            true,
-            false,
-        );
-
-        let added = online_provider_added_model_ids(
-            provider,
-            config.pointer("/asr/providers/online/groq-whisper"),
-        );
-        assert!(defaults.iter().all(|id| added.contains(id)));
-        assert!(added.contains(&additional_model));
-    }
-
-    #[test]
-    fn explicit_empty_online_model_list_stays_empty() {
-        let provider = sona_core::ports::asr::find_online_asr_provider("groq-whisper").unwrap();
-        let config = json!({ "apiKey": "test-key", "addedModels": [] });
-        assert!(online_provider_added_model_ids(provider, Some(&config)).is_empty());
-        assert!(
-            online_provider_model_options(
-                &json!({ "asr": { "providers": { "online": { "groq-whisper": config } } } }),
-                true,
-                None,
-            )
-            .is_empty()
-        );
-    }
-
-    #[test]
-    fn volcengine_batch_mode_uses_manifest_defaults_and_saved_configuration() {
-        let provider = sona_core::ports::asr::find_online_asr_provider("volcengine-doubao")
-            .expect("Volcengine provider is in the shared manifest");
-        assert!(online_provider_is_flash_batch_mode(provider, None));
-
-        let non_flash = json!({
-            "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit",
-            "batchResourceId": "volc.bigasr.auc"
-        });
-        assert!(!online_provider_is_flash_batch_mode(
-            provider,
-            Some(&non_flash)
-        ));
-
-        let flash = json!({
-            "batchEndpoint": provider.batch.local_file_mode.endpoint,
-            "batchResourceId": provider.batch.local_file_mode.resource_id
-        });
-        assert!(online_provider_is_flash_batch_mode(provider, Some(&flash)));
-    }
-
-    #[test]
-    fn removing_online_model_clears_only_its_active_selection() {
-        let provider = sona_core::ports::asr::online_asr_providers()
-            .iter()
-            .find(|provider| {
-                provider
-                    .models
-                    .iter()
-                    .any(|model| model.is_default == Some(true))
-                    && provider
-                        .models
-                        .iter()
-                        .any(|model| model.is_default != Some(true))
-            })
-            .expect("at least one online provider has optional models");
-        let default_model = provider
-            .models
-            .iter()
-            .find(|model| model.is_default == Some(true))
-            .unwrap();
-        let other_model = provider
-            .models
-            .iter()
-            .find(|model| model.is_default != Some(true))
-            .unwrap();
-        let mut config = json!({
-            "asr": {
-                "providers": { "online": { (provider.id.clone()): { "apiKey": "test-key", "addedModels": [default_model.id, other_model.id] } } },
-                "selections": {
-                    "live": { "engine": "online", "providerId": provider.id, "mode": "streaming", "modelId": null },
-                    "batch": { "engine": "online", "providerId": provider.id, "mode": "batch", "modelId": other_model.id }
-                }
-            }
-        });
-
-        update_online_provider_model_config(
-            &mut config,
-            &provider.id,
-            &default_model.id,
-            false,
-            true,
-        );
-
-        assert_eq!(
-            config
-                .pointer("/asr/selections/live/engine")
-                .and_then(serde_json::Value::as_str),
-            Some("local")
-        );
-        assert_eq!(
-            config
-                .pointer("/asr/selections/batch/modelId")
-                .and_then(serde_json::Value::as_str),
-            Some(other_model.id.as_str())
-        );
+impl Default for SettingsModal {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -5121,34 +4827,32 @@ fn update_online_provider_model_config(
         &["asr", "providers", "online", provider_id, "addedModels"],
         Value::Array(ids.into_iter().map(Value::String).collect()),
     );
-    if !added {
-        if let Some(selections) = config
+    if !added
+        && let Some(selections) = config
             .pointer_mut("/asr/selections")
             .and_then(Value::as_object_mut)
-        {
-            for slot in ["live", "caption", "voiceTyping", "batch"] {
-                let Some(selection) = selections.get_mut(slot).and_then(Value::as_object_mut)
-                else {
-                    continue;
-                };
-                if selection.get("engine").and_then(Value::as_str) != Some("online")
-                    || selection.get("providerId").and_then(Value::as_str) != Some(provider_id)
-                {
-                    continue;
-                }
-                let selected_model = selection.get("modelId").and_then(Value::as_str);
-                if selected_model == Some(model_id)
-                    || (selected_model.is_none() && is_default)
-                    || next_added.is_empty()
-                {
-                    let mode = selection.get("mode").cloned().unwrap_or(Value::Null);
-                    *selection = serde_json::Map::from_iter([
-                        ("engine".to_string(), Value::String("local".to_string())),
-                        ("mode".to_string(), mode),
-                        ("modelId".to_string(), Value::Null),
-                        ("modelPath".to_string(), Value::String(String::new())),
-                    ]);
-                }
+    {
+        for slot in ["live", "caption", "voiceTyping", "batch"] {
+            let Some(selection) = selections.get_mut(slot).and_then(Value::as_object_mut) else {
+                continue;
+            };
+            if selection.get("engine").and_then(Value::as_str) != Some("online")
+                || selection.get("providerId").and_then(Value::as_str) != Some(provider_id)
+            {
+                continue;
+            }
+            let selected_model = selection.get("modelId").and_then(Value::as_str);
+            if selected_model == Some(model_id)
+                || (selected_model.is_none() && is_default)
+                || next_added.is_empty()
+            {
+                let mode = selection.get("mode").cloned().unwrap_or(Value::Null);
+                *selection = serde_json::Map::from_iter([
+                    ("engine".to_string(), Value::String("local".to_string())),
+                    ("mode".to_string(), mode),
+                    ("modelId".to_string(), Value::Null),
+                    ("modelPath".to_string(), Value::String(String::new())),
+                ]);
             }
         }
     }
@@ -6643,4 +6347,304 @@ fn shortcut_section(
                     }),
                 ))
         }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SettingsModal, SettingsTab, apply_llm_model_metadata_inputs,
+        online_provider_added_model_ids, online_provider_default_name,
+        online_provider_is_flash_batch_mode, online_provider_languages_tooltip,
+        online_provider_logo_path, online_provider_model_options, remove_custom_provider_settings,
+        remove_llm_model_settings, update_online_provider_model_config,
+    };
+    use gpui_kit::AssetSource as _;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn deleting_custom_provider_cleans_its_models_and_feature_selections() {
+        let mut settings = json!({
+            "activeProvider": "custom-acme",
+            "customProviders": {
+                "custom-acme": { "name": "Acme", "strategy": "openai_compatible" }
+            },
+            "providers": {
+                "custom-acme": { "apiHost": "https://acme.example", "apiKey": "secret" },
+                "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "key" }
+            },
+            "models": {
+                "acme-a": { "provider": "custom-acme", "model": "a" },
+                "openai-b": { "provider": "open_ai", "model": "b" }
+            },
+            "modelOrder": ["acme-a", "openai-b"],
+            "selections": {
+                "polishModelId": "acme-a",
+                "summaryModelId": "openai-b",
+                "polishTemperature": 0.4
+            }
+        });
+
+        assert!(remove_custom_provider_settings(
+            &mut settings,
+            "custom-acme"
+        ));
+        assert_eq!(settings["activeProvider"], "google_translate_free");
+        assert!(settings["customProviders"].get("custom-acme").is_none());
+        assert!(settings["providers"].get("custom-acme").is_none());
+        assert!(settings["models"].get("acme-a").is_none());
+        assert_eq!(settings["models"]["openai-b"]["model"], "b");
+        assert_eq!(settings["modelOrder"], json!(["openai-b"]));
+        assert!(settings["selections"].get("polishModelId").is_none());
+        assert_eq!(settings["selections"]["summaryModelId"], "openai-b");
+        assert_eq!(settings["selections"]["polishTemperature"], 0.4);
+        assert!(!remove_custom_provider_settings(
+            &mut settings,
+            "custom-acme"
+        ));
+    }
+
+    #[test]
+    fn deleting_llm_model_removes_only_its_feature_selections() {
+        let mut settings = json!({
+            "models": {
+                "model-a": { "provider": "open_ai", "model": "a" },
+                "model-b": { "provider": "anthropic", "model": "b" }
+            },
+            "modelOrder": ["model-a", "model-b"],
+            "selections": {
+                "polishModelId": "model-a",
+                "translationModelId": "model-a",
+                "summaryModelId": "model-b",
+                "polishTemperature": 0.8
+            }
+        });
+
+        assert!(remove_llm_model_settings(&mut settings, "model-a"));
+        assert!(settings["models"].get("model-a").is_none());
+        assert_eq!(settings["modelOrder"], json!(["model-b"]));
+        assert!(settings["selections"].get("polishModelId").is_none());
+        assert!(settings["selections"].get("translationModelId").is_none());
+        assert_eq!(settings["selections"]["summaryModelId"], "model-b");
+        assert_eq!(settings["selections"]["polishTemperature"], 0.8);
+        assert!(!remove_llm_model_settings(&mut settings, "missing"));
+    }
+
+    #[test]
+    fn llm_metadata_editor_validates_numbers_and_preserves_catalog_fields() {
+        let current = json!({
+            "supportsReasoning": true,
+            "reasoningMode": { "type": "effort", "levels": ["low", "high"] },
+            "metadataSources": ["provider"]
+        });
+        let valid = HashMap::from([
+            ("displayName".to_string(), "  Model X  ".to_string()),
+            ("contextWindow".to_string(), "128000".to_string()),
+            ("inputPrice".to_string(), "0.25".to_string()),
+        ]);
+        let updated = apply_llm_model_metadata_inputs(&current, &valid).unwrap();
+        assert_eq!(updated["displayName"], "Model X");
+        assert_eq!(updated["contextWindow"].as_f64(), Some(128000.0));
+        assert_eq!(updated["inputPrice"].as_f64(), Some(0.25));
+        assert_eq!(updated["supportsReasoning"], true);
+        assert_eq!(updated["reasoningMode"]["type"], "effort");
+        assert_eq!(updated["metadataSources"][0], "provider");
+
+        let invalid = HashMap::from([("outputPrice".to_string(), "-1".to_string())]);
+        assert!(apply_llm_model_metadata_inputs(&current, &invalid).is_err());
+    }
+
+    #[test]
+    fn settings_tab_navigation_wraps_in_both_directions() {
+        assert_eq!(
+            SettingsModal::next_tab(SettingsTab::General, true),
+            SettingsTab::Mcp
+        );
+        let cycle = [
+            SettingsTab::General,
+            SettingsTab::Dashboard,
+            SettingsTab::Shortcuts,
+            SettingsTab::About,
+            SettingsTab::Microphone,
+            SettingsTab::Models,
+            SettingsTab::Subtitle,
+            SettingsTab::Vocabulary,
+            SettingsTab::LlmService,
+            SettingsTab::Automation,
+            SettingsTab::Storage,
+            SettingsTab::Sync,
+            SettingsTab::ApiServer,
+            SettingsTab::Mcp,
+        ];
+        for (index, tab) in cycle.iter().enumerate() {
+            assert_eq!(
+                SettingsModal::next_tab(*tab, false),
+                cycle[(index + 1) % cycle.len()],
+            );
+        }
+    }
+
+    #[test]
+    fn every_online_provider_uses_its_original_brand_asset() {
+        let assets = crate::assets::AppAssets;
+        for provider in sona_core::ports::asr::online_asr_providers() {
+            let name = online_provider_default_name(&provider.id);
+            let path = online_provider_logo_path(&provider.id, name)
+                .unwrap_or_else(|| panic!("missing brand mapping for {}", provider.id));
+            assert!(
+                assets.load(path).unwrap().is_some(),
+                "missing embedded brand asset {path} for {}",
+                provider.id
+            );
+        }
+    }
+
+    #[test]
+    fn online_provider_language_tooltips_localize_and_summarize_languages() {
+        assert_eq!(
+            online_provider_languages_tooltip(&["en".into(), "zh".into()]),
+            "English, Chinese"
+        );
+        let long_list = (0..25).map(|_| "en".to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            online_provider_languages_tooltip(&long_list),
+            format!(
+                "{} ... (25 languages in total)",
+                vec!["English"; 24].join(", ")
+            )
+        );
+    }
+
+    #[test]
+    fn online_provider_add_preserves_implicit_defaults() {
+        let provider = sona_core::ports::asr::find_online_asr_provider("groq-whisper").unwrap();
+        let provider_config = json!({ "apiKey": "test-key" });
+        let defaults = online_provider_added_model_ids(provider, Some(&provider_config));
+        assert!(!defaults.is_empty());
+        assert!(defaults.iter().all(|id| {
+            provider
+                .models
+                .iter()
+                .any(|model| model.id == *id && model.is_default == Some(true))
+        }));
+        let additional_model = provider
+            .models
+            .iter()
+            .find(|model| model.is_default != Some(true))
+            .expect("Groq exposes optional non-default models")
+            .id
+            .clone();
+        let mut config = json!({
+            "asr": { "providers": { "online": { "groq-whisper": { "apiKey": "test-key" } } } }
+        });
+
+        update_online_provider_model_config(
+            &mut config,
+            &provider.id,
+            &additional_model,
+            true,
+            false,
+        );
+
+        let added = online_provider_added_model_ids(
+            provider,
+            config.pointer("/asr/providers/online/groq-whisper"),
+        );
+        assert!(defaults.iter().all(|id| added.contains(id)));
+        assert!(added.contains(&additional_model));
+    }
+
+    #[test]
+    fn explicit_empty_online_model_list_stays_empty() {
+        let provider = sona_core::ports::asr::find_online_asr_provider("groq-whisper").unwrap();
+        let config = json!({ "apiKey": "test-key", "addedModels": [] });
+        assert!(online_provider_added_model_ids(provider, Some(&config)).is_empty());
+        assert!(
+            online_provider_model_options(
+                &json!({ "asr": { "providers": { "online": { "groq-whisper": config } } } }),
+                true,
+                None,
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn volcengine_batch_mode_uses_manifest_defaults_and_saved_configuration() {
+        let provider = sona_core::ports::asr::find_online_asr_provider("volcengine-doubao")
+            .expect("Volcengine provider is in the shared manifest");
+        assert!(online_provider_is_flash_batch_mode(provider, None));
+
+        let non_flash = json!({
+            "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit",
+            "batchResourceId": "volc.bigasr.auc"
+        });
+        assert!(!online_provider_is_flash_batch_mode(
+            provider,
+            Some(&non_flash)
+        ));
+
+        let flash = json!({
+            "batchEndpoint": provider.batch.local_file_mode.endpoint,
+            "batchResourceId": provider.batch.local_file_mode.resource_id
+        });
+        assert!(online_provider_is_flash_batch_mode(provider, Some(&flash)));
+    }
+
+    #[test]
+    fn removing_online_model_clears_only_its_active_selection() {
+        let provider = sona_core::ports::asr::online_asr_providers()
+            .iter()
+            .find(|provider| {
+                provider
+                    .models
+                    .iter()
+                    .any(|model| model.is_default == Some(true))
+                    && provider
+                        .models
+                        .iter()
+                        .any(|model| model.is_default != Some(true))
+            })
+            .expect("at least one online provider has optional models");
+        let default_model = provider
+            .models
+            .iter()
+            .find(|model| model.is_default == Some(true))
+            .unwrap();
+        let other_model = provider
+            .models
+            .iter()
+            .find(|model| model.is_default != Some(true))
+            .unwrap();
+        let mut config = json!({
+            "asr": {
+                "providers": { "online": { (provider.id.clone()): { "apiKey": "test-key", "addedModels": [default_model.id, other_model.id] } } },
+                "selections": {
+                    "live": { "engine": "online", "providerId": provider.id, "mode": "streaming", "modelId": null },
+                    "batch": { "engine": "online", "providerId": provider.id, "mode": "batch", "modelId": other_model.id }
+                }
+            }
+        });
+
+        update_online_provider_model_config(
+            &mut config,
+            &provider.id,
+            &default_model.id,
+            false,
+            true,
+        );
+
+        assert_eq!(
+            config
+                .pointer("/asr/selections/live/engine")
+                .and_then(serde_json::Value::as_str),
+            Some("local")
+        );
+        assert_eq!(
+            config
+                .pointer("/asr/selections/batch/modelId")
+                .and_then(serde_json::Value::as_str),
+            Some(other_model.id.as_str())
+        );
+    }
 }

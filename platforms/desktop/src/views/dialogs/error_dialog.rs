@@ -191,3 +191,9 @@ impl ErrorDialog {
         })
     }
 }
+
+impl Default for ErrorDialog {
+    fn default() -> Self {
+        Self::new()
+    }
+}

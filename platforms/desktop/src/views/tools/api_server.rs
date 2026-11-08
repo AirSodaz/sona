@@ -15,3 +15,9 @@ impl ApiServerToolPanel {
         crate::views::settings::api_server::api_server_settings_panel(&field_states, cx)
     }
 }
+
+impl Default for ApiServerToolPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -442,7 +442,7 @@ fn test_waveform_canvas_tessellation_extreme_audio_peaks() {
             "Raw amplitude {} expected {}, got {}",
             raw_input, expected_clamped, safe_amplitude
         );
-        assert!(safe_amplitude >= 0.02 && safe_amplitude <= 1.0);
+        assert!((0.02..=1.0).contains(&safe_amplitude));
 
         // Run GPUI PathBuilder dual-sine tessellation algorithm matching live_record.rs
         let width_f32 = 600.0_f32;
@@ -545,7 +545,7 @@ fn test_waveform_phase_progression_and_smooth_interpolation() {
             tick
         );
         assert!(
-            current_amp >= 0.05 && current_amp <= 0.85,
+            (0.05..=0.85).contains(&current_amp),
             "Amplitude must interpolate smoothly"
         );
     }
@@ -718,7 +718,7 @@ fn test_audio_peak_normalization_i16_min_no_overflow() {
         assert!(!safe_normalized.is_nan());
         assert!(!safe_normalized.is_infinite());
         assert!((safe_normalized - expected).abs() < 1e-4);
-        assert!(safe_normalized >= 0.02 && safe_normalized <= 1.0);
+        assert!((0.02..=1.0).contains(&safe_normalized));
     }
 }
 
@@ -826,7 +826,7 @@ fn test_live_record_auto_polish_segment_accumulation() {
 
     // 3. Frequency threshold reached -> flush batch
     assert!(unpolished_segments.len() >= frequency);
-    let to_polish: Vec<TranscriptSegment> = unpolished_segments.drain(..).collect();
+    let to_polish: Vec<TranscriptSegment> = std::mem::take(&mut unpolished_segments);
     for s in &to_polish {
         polished_ids.insert(s.id.clone());
     }
@@ -1059,7 +1059,7 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
 
 #[test]
 fn test_batch_queue_serial_execution_guard_logic() {
-    let mut items = vec![
+    let mut items = [
         make_item("1", BatchItemStatus::Complete, 100.0),
         make_item("2", BatchItemStatus::Pending, 0.0),
     ];

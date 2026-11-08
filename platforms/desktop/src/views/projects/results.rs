@@ -600,6 +600,12 @@ impl ProjectsResults {
     }
 }
 
+impl Default for ProjectsResults {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn render_table_header(
     selection_mode: bool,
     show_project_badge: bool,
@@ -1525,7 +1531,7 @@ fn history_item(item: HistoryItemRecord) -> HistoryRecordItem {
         .timestamp_millis_opt(item.timestamp as i64)
         .single()
         .map(|timestamp| timestamp.with_timezone(&chrono::Local))
-        .map(|timestamp| format_relative_date(timestamp))
+        .map(format_relative_date)
         .unwrap_or_default();
     HistoryRecordItem {
         record: item.clone(),
