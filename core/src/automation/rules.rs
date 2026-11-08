@@ -296,7 +296,7 @@ fn valid_validation() -> AutomationRuleValidationResult {
     }
 }
 
-fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool {
+pub fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool {
     let settings = match global_config.get("llmSettings") {
         Some(Value::Object(settings)) => settings,
         _ => return false,

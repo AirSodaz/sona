@@ -412,6 +412,8 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotwords: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dictionary_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_replacements: Option<Vec<TextReplacementRuleRecord>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_enabled: Option<bool>,

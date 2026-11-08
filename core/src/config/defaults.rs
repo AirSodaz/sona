@@ -110,6 +110,7 @@ pub fn default_config() -> Value {
         ),
         ("textReplacementSets", json!([])),
         ("hotwordSets", json!([])),
+        ("dictionaryContent", json!("")),
         ("polishKeywordSets", json!([])),
         ("speakerProfiles", json!([])),
         ("speakerDiarizationSensitivity", json!("balanced")),

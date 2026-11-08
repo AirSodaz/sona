@@ -123,6 +123,22 @@ impl HistoryService {
         run_history_db_task(&self.sqlite, task).await
     }
 
+    pub async fn preview_audio_cleanup(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, String> {
+        self.file_task(move |store| store.preview_audio_cleanup(request))
+            .await
+    }
+
+    pub async fn cleanup_audio(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, String> {
+        self.file_task(move |store| store.cleanup_audio(request))
+            .await
+    }
+
     pub async fn export_backup_archive(
         &self,
         request: ExportBackupArchiveRequest,

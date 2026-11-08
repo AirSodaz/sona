@@ -102,6 +102,17 @@ impl GlobalDialog {
                                                         if this.global_dialog.title == "Regenerate API Key" {
                                                             this.settings_modal.api_server_pending_key = None;
                                                         }
+                                                        if this.global_dialog.title == "Change Data Directory?"
+                                                            || this.global_dialog.title == "Change Models Directory?"
+                                                        {
+                                                            this.settings_modal.storage_pending_migration = None;
+                                                        }
+                                                        if this.global_dialog.title == "Clean History Audio?" {
+                                                            this.settings_modal.storage_cleanup_pending = None;
+                                                        }
+                                                        if matches!(this.global_dialog.title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?") {
+                                                            this.settings_modal.storage_pending_reset = None;
+                                                        }
                                                         this.global_dialog.close();
                                                         cx.notify();
                                                     })),
@@ -117,6 +128,12 @@ impl GlobalDialog {
                                                     "Delete"
                                                 } else if title == "Regenerate API Key" {
                                                     "Generate New Key"
+                                                } else if title == "Clean History Audio?" {
+                                                    "Clean Now"
+                                                } else if matches!(title.as_str(), "Change Data Directory?" | "Change Models Directory?") {
+                                                    "Confirm & Migrate"
+                                                } else if matches!(title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?") {
+                                                    "Restore Default"
                                                 } else {
                                                     "Download"
                                                 }
@@ -135,6 +152,18 @@ impl GlobalDialog {
                                                 let confirm_api_key_regeneration =
                                                     this.global_dialog.kind == DialogKind::Confirm
                                                         && this.global_dialog.title == "Regenerate API Key";
+                                                let confirm_storage_migration =
+                                                    this.global_dialog.kind == DialogKind::Confirm
+                                                        && matches!(this.global_dialog.title.as_str(), "Change Data Directory?" | "Change Models Directory?")
+                                                        && this.settings_modal.storage_pending_migration.is_some();
+                                                let confirm_storage_cleanup =
+                                                    this.global_dialog.kind == DialogKind::Confirm
+                                                        && this.global_dialog.title == "Clean History Audio?"
+                                                        && this.settings_modal.storage_cleanup_pending.is_some();
+                                                let confirm_storage_reset =
+                                                    this.global_dialog.kind == DialogKind::Confirm
+                                                        && matches!(this.global_dialog.title.as_str(), "Restore Default Data Directory?" | "Restore Default Models Directory?")
+                                                        && this.settings_modal.storage_pending_reset.is_some();
                                                 this.global_dialog.close();
                                                 if confirm_cuda {
                                                     this.settings_modal
@@ -156,6 +185,12 @@ impl GlobalDialog {
                                                         }
                                                     }
                                                     cx.notify();
+                                                } else if confirm_storage_migration {
+                                                    this.settings_modal.confirm_storage_migration(cx);
+                                                } else if confirm_storage_cleanup {
+                                                    this.settings_modal.confirm_storage_cleanup(cx);
+                                                } else if confirm_storage_reset {
+                                                    this.settings_modal.confirm_storage_directory_reset(cx);
                                                 } else {
                                                     cx.notify();
                                                 }

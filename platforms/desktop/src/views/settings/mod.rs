@@ -2,9 +2,15 @@
 
 mod about;
 pub(crate) mod api_server;
+mod automation;
 mod dashboard;
+mod languages;
 mod llm_service;
 mod mcp;
+mod speaker_profiles;
+mod storage;
+mod sync;
+pub(crate) mod vocabulary;
 
 use crate::theme::tokens::*;
 use gpui_kit::assets::IconName as LucideIcon;
@@ -18,9 +24,11 @@ use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{InteractiveElement as _, StatefulInteractiveElement as _, *};
 use serde_json::{Value, json};
+use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::dashboard::models::DashboardSnapshotDomainModel;
 use sona_core::runtime::app_update::{AppUpdateCheckResult, UpdateChannel};
-use std::collections::HashMap;
+use sona_core::sync::{SyncConflictResolution, SyncConflictSummary, SyncStatusSnapshot};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -29,9 +37,14 @@ use tokio::sync::{Notify, watch};
 use super::shell::MainShell;
 use about::about_panel;
 use api_server::api_server_settings_panel;
+use automation::automation_panel;
 use dashboard::{dashboard_panel, dashboard_snapshot_time};
+pub(crate) use languages::LANGUAGE_OPTIONS;
 use llm_service::llm_service_panel;
 use mcp::mcp_settings_panel;
+use storage::storage_panel;
+use sync::sync_panel;
+use vocabulary::vocabulary_panel;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SettingsTab {
@@ -49,6 +62,33 @@ pub enum SettingsTab {
     About,
     ApiServer,
     Mcp,
+}
+
+fn storage_cleanup_summary(report: &sona_core::history::HistoryAudioCleanupReport) -> String {
+    let mut parts = Vec::new();
+    if report.removed_count > 0 {
+        parts.push(format!("{} files removed", report.removed_count));
+    }
+    if report.removed_bytes > 0 {
+        parts.push(format!(
+            "{} freed",
+            crate::views::settings::storage::format_bytes(report.removed_bytes)
+        ));
+    }
+    if report.missing_marked_count > 0 {
+        parts.push(format!("{} missing", report.missing_marked_count));
+    }
+    if report.failed_count > 0 {
+        parts.push(format!("{} failed", report.failed_count));
+    }
+    if report.skipped_active_count > 0 {
+        parts.push(format!("{} active skipped", report.skipped_active_count));
+    }
+    if parts.is_empty() {
+        "No audio files need cleanup.".to_string()
+    } else {
+        parts.join(" · ")
+    }
 }
 
 fn safe_update_version(version: &str) -> String {
@@ -289,6 +329,14 @@ pub enum ShortcutTarget {
     VoiceTypingQuickRecall,
 }
 
+#[derive(Clone)]
+enum SyncAction {
+    Run,
+    Pause(bool),
+    Lock,
+    Resolve(String, SyncConflictResolution),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum OnlineProviderTestState {
     Loading,
@@ -317,6 +365,7 @@ pub struct SettingsModal {
     pub auto_check_updates: bool,
     pub selected_theme: String,
     pub selected_lang: String,
+    pub selected_font: String,
     pub selected_mic: String,
     pub selected_system_audio: String,
     pub microphone_devices: Vec<String>,
@@ -366,6 +415,26 @@ pub struct SettingsModal {
     dashboard_error: Option<String>,
     dashboard_load_attempted: bool,
     dashboard_request_generation: u64,
+    automation_state: Option<AutomationRepositoryState>,
+    automation_loading: bool,
+    automation_error: Option<String>,
+    sync_status: Option<SyncStatusSnapshot>,
+    sync_conflicts: Vec<SyncConflictSummary>,
+    sync_loading: bool,
+    sync_busy: bool,
+    sync_error: Option<String>,
+    storage_usage: Option<crate::platform::storage::usage::StorageUsageSnapshot>,
+    storage_directories: Option<crate::platform::storage::location::StorageDirectoriesInfo>,
+    storage_loading: bool,
+    storage_error: Option<String>,
+    pub(crate) storage_pending_migration: Option<(bool, String)>,
+    storage_migration_progress:
+        Option<crate::platform::storage::location::StorageMigrationProgress>,
+    storage_migration_busy: bool,
+    pub(crate) storage_cleanup_pending: Option<sona_core::history::HistoryAudioCleanupRequest>,
+    pub(crate) storage_pending_reset: Option<bool>,
+    storage_cleanup_busy: bool,
+    storage_cleanup_result: Option<String>,
     about_update_status: AboutUpdateStatus,
     about_update_result: Option<AppUpdateCheckResult>,
     about_update_progress: f32,
@@ -395,6 +464,28 @@ pub struct SettingsModal {
     pub(crate) mcp_log_query: String,
     mcp_selected_guide: String,
     subtitle_voice_typing_tab: bool,
+    vocabulary_tab: String,
+    vocabulary_prompt_tab: String,
+    vocabulary_dictionary_mode: String,
+    vocabulary_dictionary_scope: String,
+    pub(crate) vocabulary_dictionary_search_query: String,
+    pub(crate) vocabulary_dictionary_test_input: String,
+    pub(crate) vocabulary_dictionary_edit_line: Option<usize>,
+    pub(crate) vocabulary_dictionary_tutorial_open: bool,
+    pub(crate) vocabulary_dictionary_add_scope: String,
+    pub(crate) vocabulary_dictionary_scope_menu_open: bool,
+    pub(crate) vocabulary_dictionary_dialog_open: bool,
+    pub(crate) vocabulary_dictionary_dialog_type: String,
+    vocabulary_polish_edit_id: Option<String>,
+    vocabulary_summary_edit_id: Option<String>,
+    speaker_scope_filter: String,
+    speaker_new_scope: String,
+    speaker_new_scope_open: bool,
+    speaker_expanded_ids: HashSet<String>,
+    speaker_edit_scope: Option<String>,
+    speaker_scope_modal_type: String,
+    speaker_scope_project_ids: Vec<String>,
+    speaker_import_error: Option<String>,
 }
 
 impl SettingsModal {
@@ -407,7 +498,8 @@ impl SettingsModal {
             silent_start: false,
             auto_check_updates: true,
             selected_theme: "Dark (System)".to_string(),
-            selected_lang: "English (US)".to_string(),
+            selected_lang: "auto".to_string(),
+            selected_font: "system".to_string(),
             selected_mic: "default".to_string(),
             selected_system_audio: "default".to_string(),
             microphone_devices: Vec::new(),
@@ -457,6 +549,25 @@ impl SettingsModal {
             dashboard_error: None,
             dashboard_load_attempted: false,
             dashboard_request_generation: 0,
+            automation_state: None,
+            automation_loading: false,
+            automation_error: None,
+            sync_status: None,
+            sync_conflicts: Vec::new(),
+            sync_loading: false,
+            sync_busy: false,
+            sync_error: None,
+            storage_usage: None,
+            storage_directories: None,
+            storage_loading: false,
+            storage_error: None,
+            storage_pending_migration: None,
+            storage_migration_progress: None,
+            storage_migration_busy: false,
+            storage_cleanup_pending: None,
+            storage_pending_reset: None,
+            storage_cleanup_busy: false,
+            storage_cleanup_result: None,
             about_update_status: AboutUpdateStatus::Idle,
             about_update_result: None,
             about_update_progress: 0.0,
@@ -486,6 +597,28 @@ impl SettingsModal {
             mcp_log_query: String::new(),
             mcp_selected_guide: "claude-desktop".to_string(),
             subtitle_voice_typing_tab: true,
+            vocabulary_tab: "recognition".to_string(),
+            vocabulary_prompt_tab: "polish".to_string(),
+            vocabulary_dictionary_mode: "visual".to_string(),
+            vocabulary_dictionary_scope: "all".to_string(),
+            vocabulary_dictionary_search_query: String::new(),
+            vocabulary_dictionary_test_input: String::new(),
+            vocabulary_dictionary_edit_line: None,
+            vocabulary_dictionary_tutorial_open: false,
+            vocabulary_dictionary_add_scope: "global".to_string(),
+            vocabulary_dictionary_scope_menu_open: false,
+            vocabulary_dictionary_dialog_open: false,
+            vocabulary_dictionary_dialog_type: "hotword".to_string(),
+            vocabulary_polish_edit_id: None,
+            vocabulary_summary_edit_id: None,
+            speaker_scope_filter: "all".to_string(),
+            speaker_new_scope: "global".to_string(),
+            speaker_new_scope_open: false,
+            speaker_expanded_ids: HashSet::new(),
+            speaker_edit_scope: None,
+            speaker_scope_modal_type: "global".to_string(),
+            speaker_scope_project_ids: Vec::new(),
+            speaker_import_error: None,
         }
     }
 
@@ -509,6 +642,24 @@ impl SettingsModal {
             self.about_update_status = AboutUpdateStatus::Idle;
         }
         self.current_tab = tab;
+        if tab == SettingsTab::Vocabulary
+            && cx.entity().read(cx).project_selector.projects.is_empty()
+        {
+            let projects = cx
+                .global::<crate::app::GlobalDesktopServices>()
+                .0
+                .projects
+                .clone();
+            cx.spawn(async move |this, cx: &mut AsyncApp| {
+                let projects = projects.list().await.unwrap_or_default();
+                this.update(cx, |shell, cx| {
+                    shell.project_selector.projects = projects;
+                    cx.notify();
+                })
+                .ok();
+            })
+            .detach();
+        }
         if tab == SettingsTab::Microphone {
             self.load_audio_devices(cx);
             self.start_audio_preview(cx);
@@ -523,12 +674,526 @@ impl SettingsModal {
         if tab == SettingsTab::LlmService {
             self.load_model_config(cx);
         }
+        if tab == SettingsTab::Vocabulary {
+            self.load_model_config(cx);
+        }
         if tab == SettingsTab::Dashboard && !self.dashboard_load_attempted {
             self.load_dashboard(cx);
         }
         if tab == SettingsTab::Mcp && !self.mcp_logs_loaded {
             self.load_mcp_logs(cx);
         }
+        if tab == SettingsTab::Automation && self.automation_state.is_none() {
+            self.load_automation_state(cx);
+        }
+        if tab == SettingsTab::Sync && self.sync_status.is_none() {
+            self.load_sync_state(cx);
+        }
+        if tab == SettingsTab::Storage {
+            self.load_storage_state(cx);
+        }
+    }
+
+    fn load_storage_state(&mut self, cx: &mut Context<MainShell>) {
+        self.storage_loading = true;
+        self.storage_error = None;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = async {
+                let directories = crate::platform::storage::location::get_storage_directories_info(
+                    &crate::platform::storage::location::default_app_local_data_dir(),
+                )?;
+                let context = services.sqlite.current_context()?;
+                let usage = crate::platform::storage::usage::get_usage_snapshot(
+                    &context,
+                    Some(PathBuf::from(&directories.models_dir)),
+                )
+                .await?;
+                Ok::<_, String>((directories, usage))
+            }
+            .await;
+            let _ = this.update(cx, |shell, cx| {
+                shell.settings_modal.storage_loading = false;
+                match result {
+                    Ok((directories, usage)) => {
+                        shell.settings_modal.storage_directories = Some(directories);
+                        shell.settings_modal.storage_usage = Some(usage);
+                        shell.settings_modal.storage_error = None;
+                    }
+                    Err(error) => shell.settings_modal.storage_error = Some(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn set_storage_retention(&mut self, days: Option<u64>, cx: &mut Context<MainShell>) {
+        let value = days.map_or(Value::Null, Value::from);
+        let config = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .config
+            .clone();
+        if let Err(error) = config.set_setting("historyAudioRetentionDays", &value) {
+            self.storage_error = Some(error);
+        }
+        self.storage_cleanup_result = None;
+        cx.notify();
+    }
+
+    fn preview_storage_cleanup(
+        &mut self,
+        days: u64,
+        active_history_id: Option<String>,
+        cx: &mut Context<MainShell>,
+    ) {
+        if self.storage_cleanup_busy {
+            return;
+        }
+        self.storage_cleanup_busy = true;
+        self.storage_cleanup_result = None;
+        let history = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .history
+            .clone();
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            let request = sona_core::history::HistoryAudioCleanupRequest {
+                retention_days: Some(days),
+                exclude_history_id: active_history_id,
+            };
+            let result = history.preview_audio_cleanup(request.clone()).await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.storage_cleanup_busy = false;
+                match result {
+                    Ok(report) if report.eligible_count > 0 || report.removed_count > 0 || report.missing_marked_count > 0 => {
+                        shell.settings_modal.storage_cleanup_pending = Some(request);
+                        shell.global_dialog.show(
+                            "Clean History Audio?",
+                            format!("This removes managed history audio only. Transcript text and history records remain.\\n\\n{}", storage_cleanup_summary(&report)),
+                            crate::views::dialogs::global_dialog::DialogKind::Confirm,
+                        );
+                    }
+                    Ok(report) => shell.settings_modal.storage_cleanup_result = Some(storage_cleanup_summary(&report)),
+                    Err(error) => shell.global_dialog.show("Audio Cleanup Failed", error, crate::views::dialogs::global_dialog::DialogKind::Alert),
+                }
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_storage_cleanup(&mut self, cx: &mut Context<MainShell>) {
+        let Some(request) = self.storage_cleanup_pending.take() else {
+            return;
+        };
+        self.storage_cleanup_busy = true;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            let result = services.history.cleanup_audio(request).await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.storage_cleanup_busy = false;
+                match result {
+                    Ok(report) => {
+                        shell.settings_modal.storage_cleanup_result =
+                            Some(storage_cleanup_summary(&report));
+                        shell.settings_modal.load_storage_state(cx);
+                    }
+                    Err(error) => shell.global_dialog.show(
+                        "Audio Cleanup Failed",
+                        error,
+                        crate::views::dialogs::global_dialog::DialogKind::Alert,
+                    ),
+                }
+                cx.notify();
+            })
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn choose_storage_directory(&mut self, data_directory: bool, cx: &mut Context<MainShell>) {
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            let selected = rfd::AsyncFileDialog::new().pick_folder().await
+                .map(|handle| handle.path().to_path_buf());
+            let Some(path) = selected else { return };
+            if let Err(error) = crate::platform::storage::location::check_storage_can_migrate(&services).await {
+                this.update(cx, |shell, cx| {
+                    shell.global_dialog.show("Storage Migration Unavailable", error, crate::views::dialogs::global_dialog::DialogKind::Alert);
+                    cx.notify();
+                });
+                return;
+            }
+            this.update(cx, |shell, cx| {
+                let path = path.to_string_lossy().into_owned();
+                let title = if data_directory { "Change Data Directory?" } else { "Change Models Directory?" };
+                let body = if data_directory {
+                    format!("Switch data directory to:\n{path}\n\nSona will migrate files and reload its database connections.")
+                } else {
+                    format!("Switch model storage directory to:\n{path}\n\nSona will move model files and use the new directory for future downloads and recognition.")
+                };
+                shell.settings_modal.storage_pending_migration = Some((data_directory, path));
+                shell.global_dialog.show(title, body, crate::views::dialogs::global_dialog::DialogKind::Confirm);
+                cx.notify();
+            });
+        }).detach();
+    }
+
+    pub(crate) fn confirm_storage_migration(&mut self, cx: &mut Context<MainShell>) {
+        let Some((data_directory, path)) = self.storage_pending_migration.take() else {
+            return;
+        };
+        self.storage_migration_busy = true;
+        self.storage_migration_progress = None;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let mut events = cx.global::<crate::app::GlobalEventBus>().subscribe();
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            let target = PathBuf::from(path);
+            let migration = async {
+                if data_directory {
+                    crate::platform::storage::location::migrate_data_directory(&services, target, true).await
+                } else {
+                    crate::platform::storage::location::set_models_directory(&services, target, true).await
+                }
+            };
+            let mut migration = std::pin::pin!(migration);
+            let result = loop {
+                tokio::select! {
+                    result = &mut migration => break result,
+                    event = events.recv() => {
+                        if let Ok(event) = event
+                            && event.name == crate::platform::storage::location::STORAGE_MIGRATION_PROGRESS_EVENT
+                            && let Ok(progress) = serde_json::from_value::<crate::platform::storage::location::StorageMigrationProgress>(event.payload)
+                        {
+                            this.update(cx, |shell, cx| {
+                                shell.settings_modal.storage_migration_progress = Some(progress);
+                                cx.notify();
+                            });
+                        }
+                    }
+                }
+            };
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.storage_migration_busy = false;
+                match result {
+                    Ok(directories) => {
+                        shell.settings_modal.storage_directories = Some(directories);
+                        shell.settings_modal.storage_pending_migration = None;
+                        shell.settings_modal.load_storage_state(cx);
+                    }
+                    Err(error) => {
+                        shell.settings_modal.storage_error = Some(error.clone());
+                        shell.global_dialog.show("Storage Migration Failed", error, crate::views::dialogs::global_dialog::DialogKind::Alert);
+                    }
+                }
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+
+    fn reset_storage_directory(&mut self, data_directory: bool, cx: &mut Context<MainShell>) {
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let Some(directories) = self.storage_directories.as_ref() else {
+            return;
+        };
+        let target = if data_directory {
+            directories.default_data_dir.clone()
+        } else {
+            directories.default_models_dir.clone()
+        };
+        let title = if data_directory {
+            "Restore Default Data Directory?"
+        } else {
+            "Restore Default Models Directory?"
+        };
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            match crate::platform::storage::location::check_storage_can_migrate(&services).await {
+                Err(error) => {
+                    this.update(cx, |shell, cx| {
+                        shell.global_dialog.show(
+                            "Storage Migration Unavailable",
+                            error,
+                            crate::views::dialogs::global_dialog::DialogKind::Alert,
+                        );
+                        cx.notify();
+                    });
+                }
+                Ok(()) => this.update(cx, |shell, cx| {
+                    shell.settings_modal.storage_pending_reset = Some(data_directory);
+                    shell.global_dialog.show(
+                        title,
+                        format!("Restore the default storage location?\\n\\n{target}"),
+                        crate::views::dialogs::global_dialog::DialogKind::Confirm,
+                    );
+                    cx.notify();
+                }),
+            }
+        })
+        .detach();
+    }
+
+    pub(crate) fn confirm_storage_directory_reset(&mut self, cx: &mut Context<MainShell>) {
+        let Some(data_directory) = self.storage_pending_reset.take() else {
+            return;
+        };
+        self.storage_migration_busy = true;
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let this = cx.entity();
+        cx.spawn(async move |_, cx: &mut AsyncApp| {
+            let result = if data_directory {
+                crate::platform::storage::location::reset_data_directory(&services).await
+            } else {
+                crate::platform::storage::location::reset_models_directory(&services).await
+            };
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.storage_migration_busy = false;
+                match result {
+                    Ok(directories) => {
+                        shell.settings_modal.storage_directories = Some(directories);
+                        shell.settings_modal.load_storage_state(cx);
+                    }
+                    Err(error) => shell.global_dialog.show(
+                        "Storage Location Reset Failed",
+                        error,
+                        crate::views::dialogs::global_dialog::DialogKind::Alert,
+                    ),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn load_automation_state(&mut self, cx: &mut Context<MainShell>) {
+        self.automation_loading = true;
+        self.automation_error = None;
+        let sqlite = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sqlite
+            .clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result =
+                crate::platform::repositories::automation::load_repository_state(&sqlite).await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.automation_loading = false;
+                match result {
+                    Ok(state) => shell.settings_modal.automation_state = Some(state),
+                    Err(error) => shell.settings_modal.automation_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn set_automation_rule_enabled(
+        &mut self,
+        rule_id: String,
+        enabled: bool,
+        cx: &mut Context<MainShell>,
+    ) {
+        let Some(state) = self.automation_state.clone() else {
+            return;
+        };
+        let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+        let converted = state
+            .rules
+            .into_iter()
+            .map(|rule| {
+                let mut value = serde_json::to_value(rule).map_err(|error| error.to_string())?;
+                if value.get("id").and_then(Value::as_str) == Some(rule_id.as_str()) {
+                    value["enabled"] = Value::Bool(enabled);
+                }
+                serde_json::from_value(value).map_err(|error| error.to_string())
+            })
+            .collect::<Result<Vec<sona_core::automation::repository::AutomationRuleInput>, String>>(
+            );
+        let Ok(rules) = converted else {
+            return;
+        };
+        self.automation_loading = true;
+        self.automation_error = None;
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = async {
+                crate::platform::repositories::automation::persist_rules(&services.sqlite, rules)
+                    .await?;
+                crate::platform::repositories::automation::load_repository_state(&services.sqlite)
+                    .await
+            }
+            .await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.automation_loading = false;
+                match result {
+                    Ok(state) => shell.settings_modal.automation_state = Some(state),
+                    Err(error) => shell.settings_modal.automation_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn remove_automation_profile_dependency(
+        &mut self,
+        dependency: &'static str,
+        dependency_id: String,
+        cx: &mut Context<MainShell>,
+    ) {
+        let sqlite = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sqlite
+            .clone();
+        self.automation_loading = true;
+        self.automation_error = None;
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = async {
+                let state =
+                    crate::platform::repositories::automation::load_repository_state(&sqlite)
+                        .await?;
+                let profiles = state
+                    .profiles
+                    .into_iter()
+                    .map(|profile| {
+                        let mut input: sona_core::automation::repository::AutomationProfileInput =
+                            serde_json::from_value(
+                                serde_json::to_value(profile).map_err(|error| error.to_string())?,
+                            )
+                            .map_err(|error| error.to_string())?;
+                        let value = match dependency {
+                            "polishPreset" if input.polish_preset_id == dependency_id => {
+                                input.polish_preset_id =
+                                    sona_core::config::DEFAULT_POLISH_PRESET_ID.to_string();
+                                true
+                            }
+                            "summaryTemplate" if input.summary_template_id == dependency_id => {
+                                input.summary_template_id =
+                                    sona_core::config::DEFAULT_SUMMARY_TEMPLATE_ID.to_string();
+                                true
+                            }
+                            "speakerProfile"
+                                if input.enabled_speaker_profile_ids.contains(&dependency_id) =>
+                            {
+                                input
+                                    .enabled_speaker_profile_ids
+                                    .retain(|profile_id| profile_id != &dependency_id);
+                                true
+                            }
+                            _ => false,
+                        };
+                        Ok::<_, String>((input, value))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let changed = profiles.iter().any(|(_, changed)| *changed);
+                if changed {
+                    crate::platform::repositories::automation::persist_profiles(
+                        &sqlite,
+                        profiles.into_iter().map(|(profile, _)| profile).collect(),
+                    )
+                    .await?;
+                }
+                crate::platform::repositories::automation::load_repository_state(&sqlite).await
+            }
+            .await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.automation_loading = false;
+                match result {
+                    Ok(state) => shell.settings_modal.automation_state = Some(state),
+                    Err(error) => shell.settings_modal.automation_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn load_sync_state(&mut self, cx: &mut Context<MainShell>) {
+        self.sync_loading = true;
+        self.sync_error = None;
+        let sync = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sync
+            .clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = async {
+                let status = sync.get_status().await?;
+                let conflicts = sync.list_conflicts().await?;
+                Ok::<_, String>((status, conflicts))
+            }
+            .await;
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.sync_loading = false;
+                match result {
+                    Ok((status, conflicts)) => {
+                        shell.settings_modal.sync_status = Some(status);
+                        shell.settings_modal.sync_conflicts = conflicts;
+                    }
+                    Err(error) => shell.settings_modal.sync_error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn run_sync_action(&mut self, action: SyncAction, cx: &mut Context<MainShell>) {
+        if self.sync_busy {
+            return;
+        }
+        self.sync_busy = true;
+        self.sync_error = None;
+        let sync = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .sync
+            .clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = match action {
+                SyncAction::Run => sync.run_now().await.map(|_| ()),
+                SyncAction::Pause(paused) => sync.set_paused(paused).await.map(|_| ()),
+                SyncAction::Lock => sync.lock().await.map(|_| ()),
+                SyncAction::Resolve(conflict_id, resolution) => {
+                    sync.resolve_conflict(&conflict_id, resolution).await
+                }
+            };
+            let refreshed = if result.is_ok() {
+                Some((sync.get_status().await, sync.list_conflicts().await))
+            } else {
+                None
+            };
+            this.update(cx, |shell, cx| {
+                shell.settings_modal.sync_busy = false;
+                match (result, refreshed) {
+                    (Err(error), _) => shell.settings_modal.sync_error = Some(error),
+                    (Ok(()), Some((Ok(status), Ok(conflicts)))) => {
+                        shell.settings_modal.sync_status = Some(status);
+                        shell.settings_modal.sync_conflicts = conflicts;
+                    }
+                    (Ok(()), Some((Err(error), _))) | (Ok(()), Some((_, Err(error)))) => {
+                        shell.settings_modal.sync_error = Some(error);
+                    }
+                    _ => {}
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     fn load_mcp_logs(&mut self, cx: &mut Context<MainShell>) {
@@ -787,11 +1452,11 @@ impl SettingsModal {
                 return;
             }
 
-            this.update(cx, |shell, cx| {
+            let _ = this.update(cx, |shell, cx| {
                 shell.settings_modal.about_update_status = AboutUpdateStatus::Installing;
                 shell.settings_modal.about_update_progress = 100.0;
                 cx.notify();
-            }).ok();
+            });
 
             let install_package_path = package_path.clone();
             let install = tokio::task::spawn_blocking(move || {
@@ -980,7 +1645,12 @@ impl SettingsModal {
         .detach();
     }
 
-    fn persist_model_setting(&mut self, key: String, value: Value, cx: &mut Context<MainShell>) {
+    pub(super) fn persist_model_setting(
+        &mut self,
+        key: String,
+        value: Value,
+        cx: &mut Context<MainShell>,
+    ) {
         if !self.model_config.is_object() {
             self.model_config = json!({});
         }
@@ -996,6 +1666,36 @@ impl SettingsModal {
                 stored = json!({});
             }
             stored[key.as_str()] = value;
+            let _ = config.save(&stored);
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub(super) fn persist_model_settings(
+        &mut self,
+        settings: Vec<(String, Value)>,
+        cx: &mut Context<MainShell>,
+    ) {
+        if !self.model_config.is_object() {
+            self.model_config = json!({});
+        }
+        for (key, value) in &settings {
+            self.model_config[key] = value.clone();
+        }
+        let config = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .config
+            .clone();
+        cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+            let mut stored = config.load().ok().flatten().unwrap_or_else(|| json!({}));
+            if !stored.is_object() {
+                stored = json!({});
+            }
+            for (key, value) in settings {
+                stored[key] = value;
+            }
             let _ = config.save(&stored);
         })
         .detach();
@@ -2480,6 +3180,34 @@ impl SettingsModal {
                     .get("autoCheckUpdates")
                     .and_then(Value::as_bool)
                     .unwrap_or(true);
+                shell.settings_modal.selected_theme = loaded
+                    .get("theme")
+                    .and_then(Value::as_str)
+                    .unwrap_or("auto")
+                    .to_string();
+                shell.settings_modal.selected_lang = loaded
+                    .get("appLanguage")
+                    .and_then(Value::as_str)
+                    .unwrap_or("auto")
+                    .to_string();
+                shell.settings_modal.selected_font = loaded
+                    .get("font")
+                    .and_then(Value::as_str)
+                    .unwrap_or("system")
+                    .to_string();
+                match shell.settings_modal.selected_theme.as_str() {
+                    "light" => gpui_kit::component::theme::Theme::change(
+                        gpui_kit::component::theme::ThemeMode::Light,
+                        None,
+                        cx,
+                    ),
+                    "dark" => gpui_kit::component::theme::Theme::change(
+                        gpui_kit::component::theme::ThemeMode::Dark,
+                        None,
+                        cx,
+                    ),
+                    _ => {}
+                }
                 shell.settings_modal.selected_mic = loaded
                     .get("microphoneId")
                     .and_then(Value::as_str)
@@ -2635,6 +3363,28 @@ impl SettingsModal {
         .detach();
     }
 
+    pub(crate) fn persist_general_setting(
+        &mut self,
+        key: &'static str,
+        value: Value,
+        cx: &mut Context<MainShell>,
+    ) {
+        let config = cx
+            .global::<crate::app::GlobalDesktopServices>()
+            .0
+            .config
+            .clone();
+        cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+            let mut stored = config.load().ok().flatten().unwrap_or_else(|| json!({}));
+            if !stored.is_object() {
+                stored = json!({});
+            }
+            stored[key] = value;
+            let _ = config.save(&stored);
+        })
+        .detach();
+    }
+
     pub fn persist_shortcut(&mut self, value: String, cx: &mut Context<MainShell>) {
         let config = cx
             .global::<crate::app::GlobalDesktopServices>()
@@ -2701,7 +3451,17 @@ impl SettingsModal {
         llm_model_draft_state: &Entity<InputState>,
         llm_custom_provider_name_state: &Entity<InputState>,
         llm_model_metadata_field_states: &HashMap<String, Entity<InputState>>,
-        window: &Window,
+        dictionary_textarea_state: &Entity<gpui_kit::component::input::TextareaState>,
+        dictionary_quick_add_state: &Entity<InputState>,
+        dictionary_search_state: &Entity<InputState>,
+        dictionary_test_state: &Entity<InputState>,
+        vocabulary_name_state: &Entity<InputState>,
+        vocabulary_body_state: &Entity<gpui_kit::component::input::TextareaState>,
+        translation_language_select: &Entity<SelectState<Vec<&'static str>>>,
+        general_log_level_select: &Entity<SelectState<Vec<&'static str>>>,
+        general_language_select: &Entity<SelectState<Vec<&'static str>>>,
+        general_font_select: &Entity<SelectState<Vec<&'static str>>>,
+        window: &mut Window,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
         if !self.audio_peak_listener_started {
@@ -3088,22 +3848,84 @@ impl SettingsModal {
                                             div()
                                                 .flex()
                                                 .flex_col()
-                                                .gap_3()
+                                                .gap_4()
                                                 .child(
                                                     div()
-                                                        .text_size(px(13.0))
-                                                        .text_color(cx.theme().muted)
-                                                        .child("Application startup and update preferences."),
+                                                        .flex()
+                                                        .flex_col()
+                                                        .gap_1()
+                                                        .pb_3()
+                                                        .border_b_1()
+                                                        .border_color(cx.theme().border)
+                                                        .child(div().text_size(px(20.0)).font_weight(FontWeight::SEMIBOLD).child("General"))
+                                                        .child(div().text_size(px(13.0)).text_color(cx.theme().muted_foreground).child("Configure application startup, updates, and environment diagnostics.")),
+                                                )
+                                                .child(div().text_size(px(15.0)).font_weight(FontWeight::SEMIBOLD).child("Appearance"))
+                                                .child(
+                                                    div().flex().items_center().justify_between().gap_4().py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Language"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Choose the language used by Sona.")))
+                                                        .child(Select::new(general_language_select).w(px(200.0)).menu_width(px(200.0))),
+                                                )
+                                                .child(
+                                                    div().flex().flex_col().gap_2().py_2()
+                                                        .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Theme"))
+                                                        .child(div().flex().gap_2().children(["light", "dark", "auto"].into_iter().map(|theme| {
+                                                            let selected = self.selected_theme == theme;
+                                                            let label = match theme { "light" => "Light", "dark" => "Dark", _ => "Automatic" };
+                                                            Button::new(format!("settings-theme-{theme}"))
+                                                                .when(selected, |button| button.primary())
+                                                                .when(!selected, |button| button.outline())
+                                                                .small()
+                                                                .label(label)
+                                                                .on_click(cx.listener(move |this, _, window, cx| {
+                                                                    this.settings_modal.selected_theme = theme.to_string();
+                                                                    let mode = match theme {
+                                                                        "light" => gpui_kit::component::theme::ThemeMode::Light,
+                                                                        "dark" => gpui_kit::component::theme::ThemeMode::Dark,
+                                                                        _ => gpui_kit::component::theme::ThemeMode::from(window.appearance()),
+                                                                    };
+                                                                    gpui_kit::component::theme::Theme::change(mode, None, cx);
+                                                                    this.settings_modal.persist_general_setting(
+                                                                        "theme",
+                                                                        Value::String(theme.to_string()),
+                                                                        cx,
+                                                                    );
+                                                                    cx.notify();
+                                                                }))
+                                                        }))),
+                                                )
+                                                .child(
+                                                    div().flex().items_center().justify_between().gap_4().py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Font"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Choose the font used by Sona.")))
+                                                        .child(Select::new(general_font_select).w(px(240.0)).menu_width(px(240.0))),
+                                                )
+                                                .child(div().text_size(px(15.0)).font_weight(FontWeight::SEMIBOLD).child("Startup and updates"))
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_between()
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Log level"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Set the minimum level written to the application log.")))
+                                                        .child(Select::new(general_log_level_select).w(px(180.0)).menu_width(px(180.0))),
                                                 )
                                                 .child(
                                                     div()
                                                         .flex()
                                                         .items_center()
                                                         .justify_between()
-                                                        .p_3()
-                                                        .rounded_md()
-                                                        .bg(cx.theme().input)
-                                                        .child("Launch at Windows startup")
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Launch on startup"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Start Sona automatically when you sign in to Windows.")))
                                                         .child(Button::new("btn-toggle-autostart").outline().small().label(if self.autostart { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
                                                             let value = !this.settings_modal.autostart;
                                                             this.settings_modal.autostart = value;
@@ -3119,10 +3941,11 @@ impl SettingsModal {
                                                         .flex()
                                                         .items_center()
                                                         .justify_between()
-                                                        .p_3()
-                                                        .rounded_md()
-                                                        .bg(cx.theme().input)
-                                                        .child("Minimize to system tray on close")
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Minimize to tray on exit"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Keep Sona running in the system tray when the main window closes.")))
                                                         .child(Button::new("btn-toggle-tray").outline().small().label(if self.minimize_to_tray { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
                                                             let value = !this.settings_modal.minimize_to_tray;
                                                             this.settings_modal.minimize_to_tray = value;
@@ -3138,10 +3961,11 @@ impl SettingsModal {
                                                         .flex()
                                                         .items_center()
                                                         .justify_between()
-                                                        .p_3()
-                                                        .rounded_md()
-                                                        .bg(cx.theme().input)
-                                                        .child("Start minimized to tray")
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Start minimized"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child(if !self.autostart || !self.minimize_to_tray { "Requires Launch on startup and Minimize to tray on exit to be enabled." } else { "Open Sona directly in the system tray at sign-in." })))
                                                         .child(Button::new("btn-toggle-silent-start").outline().small().label(if self.silent_start { "On" } else { "Off" }).disabled(!self.autostart || !self.minimize_to_tray).on_click(cx.listener(|this, _, _, cx| {
                                                             if !this.settings_modal.autostart || !this.settings_modal.minimize_to_tray {
                                                                 return;
@@ -3157,10 +3981,11 @@ impl SettingsModal {
                                                         .flex()
                                                         .items_center()
                                                         .justify_between()
-                                                        .p_3()
-                                                        .rounded_md()
-                                                        .bg(cx.theme().input)
-                                                        .child("Check for updates automatically")
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Check for updates automatically"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Check for new Sona releases automatically.")))
                                                         .child(Button::new("btn-toggle-auto-check-updates").outline().small().label(if self.auto_check_updates { "On" } else { "Off" }).on_click(cx.listener(|this, _, _, cx| {
                                                             let value = !this.settings_modal.auto_check_updates;
                                                             this.settings_modal.auto_check_updates = value;
@@ -3168,15 +3993,19 @@ impl SettingsModal {
                                                             cx.notify();
                                                         }))),
                                                 )
+                                                .child(div().flex().flex_col().gap_1().pt_3().border_t_1().border_color(cx.theme().border)
+                                                    .child(div().text_size(px(15.0)).font_weight(FontWeight::SEMIBOLD).child("Model & Environment Diagnostics"))
+                                                    .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Inspect the local transcription path, runtime readiness, and packaged environment checks.")))
                                                 .child(
                                                     div()
                                                         .flex()
                                                         .items_center()
                                                         .justify_between()
-                                                        .p_3()
-                                                        .rounded_md()
-                                                        .bg(cx.theme().input)
-                                                        .child("Model & Environment Diagnostics")
+                                                        .gap_4()
+                                                        .py_2()
+                                                        .child(div().flex_1().flex().flex_col().gap_1()
+                                                            .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Diagnostics"))
+                                                            .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Review the current local setup and jump to the clearest fix when something is off.")))
                                                         .child(
                                                             Button::new("btn-open-diagnostics")
                                                                 .outline()
@@ -3203,6 +4032,66 @@ impl SettingsModal {
                                                 &self.about_update_status,
                                                 self.about_update_result.as_ref(),
                                                 self.about_update_progress,
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Automation, |this| {
+                                            this.child(automation_panel(
+                                                self.automation_state
+                                                    .as_ref()
+                                                    .map(|state| state.rules.as_slice())
+                                                    .unwrap_or_default(),
+                                                self.automation_loading,
+                                                self.automation_error.as_deref(),
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Sync, |this| {
+                                            let enabled = cx
+                                                .global::<crate::app::GlobalDesktopServices>()
+                                                .0
+                                                .config
+                                                .get_setting("enableCloudSync")
+                                                .ok()
+                                                .flatten()
+                                                .and_then(|value| value.as_bool())
+                                                .unwrap_or(false);
+                                            this.child(sync_panel(
+                                                enabled,
+                                                self.sync_status.as_ref(),
+                                                &self.sync_conflicts,
+                                                self.sync_loading,
+                                                self.sync_busy,
+                                                self.sync_error.as_deref(),
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Storage, |this| {
+                                            let retention_days = cx
+                                                .global::<crate::app::GlobalDesktopServices>()
+                                                .0
+                                                .config
+                                                .get_setting("historyAudioRetentionDays")
+                                                .ok()
+                                                .flatten()
+                                                .and_then(|value| value.as_u64());
+                                            let active_history_id = cx
+                                                .entity()
+                                                .read(cx)
+                                                .workbench
+                                                .history_id
+                                                .clone();
+                                            this.child(storage_panel(
+                                                self.storage_directories.as_ref(),
+                                                self.storage_usage.as_ref(),
+                                                self.storage_loading,
+                                                self.storage_migration_busy,
+                                                self.storage_migration_progress.as_ref(),
+                                                self.storage_error.as_deref(),
+                                                retention_days,
+                                                active_history_id.as_deref(),
+                                                self.storage_cleanup_busy,
+                                                self.storage_cleanup_result.as_deref(),
                                                 cx,
                                             ))
                                         })
@@ -3275,6 +4164,25 @@ impl SettingsModal {
                                                 llm_model_draft_state,
                                                 llm_custom_provider_name_state,
                                                 window,
+                                                cx,
+                                            ))
+                                        })
+                                        .when(self.current_tab == SettingsTab::Vocabulary, |this| {
+                                            this.child(vocabulary_panel(
+                                                &self.model_config,
+                                                &self.vocabulary_tab,
+                                                &self.vocabulary_prompt_tab,
+                                                self.vocabulary_polish_edit_id.as_deref(),
+                                                self.vocabulary_summary_edit_id.as_deref(),
+                                                &self.vocabulary_dictionary_mode,
+                                                &self.vocabulary_dictionary_scope,
+                                                dictionary_textarea_state,
+                                                dictionary_quick_add_state,
+                                                dictionary_search_state,
+                                                dictionary_test_state,
+                                                vocabulary_name_state,
+                                                vocabulary_body_state,
+                                                translation_language_select,
                                                 cx,
                                             ))
                                         })

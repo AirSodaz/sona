@@ -202,6 +202,266 @@ pub async fn check_storage_can_migrate(
     check_active_tasks_idle(services).await
 }
 
+pub async fn migrate_data_directory(
+    services: &crate::services::DesktopServices,
+    target_dir: PathBuf,
+    copy_existing: bool,
+) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(services).await?;
+    validate_target_directory(&target_dir)?;
+
+    let default_dir = default_app_local_data_dir();
+    let current_context = services.sqlite.current_context()?;
+    let source_dir = current_context.app_data_dir().to_path_buf();
+    if source_dir
+        .canonicalize()
+        .unwrap_or_else(|_| source_dir.clone())
+        == target_dir
+            .canonicalize()
+            .unwrap_or_else(|_| target_dir.clone())
+    {
+        return get_storage_directories_info(&default_dir);
+    }
+    check_path_overlap(&source_dir, &target_dir)?;
+
+    let bootstrap = load_bootstrap_config(&default_dir);
+    let copy_models = copy_existing && bootstrap.custom_models_dir.is_none();
+    if copy_models {
+        services.asr.clear_model_caches().await;
+    }
+
+    let current_db = current_context.database();
+    let _ = current_db.with_write_connection(|connection| {
+        connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let _ = connection.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
+        Ok(())
+    });
+    current_db.close();
+
+    let mut did_copy_models = false;
+    if copy_existing && source_dir.exists() {
+        let emitter = Arc::clone(&services.emitter);
+        let source = source_dir.clone();
+        let target = target_dir.clone();
+        let copied = tokio::task::spawn_blocking(move || -> Result<bool, String> {
+            std::fs::create_dir_all(&target).map_err(|error| error.to_string())?;
+            let mut total = DATA_MIGRATION_COPY_FILE_NAMES
+                .iter()
+                .filter_map(|name| std::fs::metadata(source.join(name)).ok())
+                .map(|metadata| metadata.len())
+                .sum::<u64>();
+            for name in DATA_MIGRATION_SUBDIRECTORIES {
+                total += calculate_directory_size(&source.join(name), 16);
+            }
+            if copy_models {
+                total += calculate_directory_size(&source.join("models"), 16);
+            }
+            let mut progress = MigrationProgressEmitter::new(Some(emitter), total);
+            progress.emit("preparing", "");
+            for name in DATA_MIGRATION_COPY_FILE_NAMES {
+                let from = source.join(name);
+                if from.is_file() {
+                    progress
+                        .copy_file_streaming(&from, &target.join(name))
+                        .map_err(|error| format!("Failed to copy {}: {error}", from.display()))?;
+                }
+            }
+            for name in DATA_MIGRATION_SUBDIRECTORIES {
+                let from = source.join(name);
+                if from.is_dir() {
+                    copy_directory_contents_with_progress(
+                        &from,
+                        &target.join(name),
+                        &mut progress,
+                        16,
+                    )
+                    .map_err(|error| format!("Failed to copy {}: {error}", from.display()))?;
+                }
+            }
+            let copied_models = copy_models && source.join("models").is_dir();
+            if copied_models {
+                copy_directory_contents_with_progress(
+                    &source.join("models"),
+                    &target.join("models"),
+                    &mut progress,
+                    16,
+                )
+                .map_err(|error| format!("Failed to copy models directory: {error}"))?;
+            }
+            Ok(copied_models)
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+        match copied {
+            Ok(value) => did_copy_models = value,
+            Err(error) => {
+                let restored = Arc::new(
+                    sona_sqlite::SqliteApplicationContext::open(&source_dir).map_err(
+                        |restore_error| {
+                            format!(
+                                "{error}; could not reopen previous data directory: {restore_error}"
+                            )
+                        },
+                    )?,
+                );
+                services.sqlite.reload(restored)?;
+                services.sync.reset().await;
+                services.sync.configure(
+                    source_dir.join(crate::platform::repositories::sync::SYNC_CONFIG_FILE),
+                    services.sqlite.clone(),
+                );
+                return Err(error);
+            }
+        }
+    }
+
+    let new_context = match sona_sqlite::SqliteApplicationContext::open(&target_dir) {
+        Ok(context) => Arc::new(context),
+        Err(error) => {
+            let restored = Arc::new(sona_sqlite::SqliteApplicationContext::open(&source_dir)
+                .map_err(|restore_error| format!("Failed to open database at new location: {error}; could not reopen previous data directory: {restore_error}"))?);
+            services.sqlite.reload(restored)?;
+            services.sync.reset().await;
+            services.sync.configure(
+                source_dir.join(crate::platform::repositories::sync::SYNC_CONFIG_FILE),
+                services.sqlite.clone(),
+            );
+            return Err(format!("Failed to open database at new location: {error}"));
+        }
+    };
+    services.sqlite.reload(new_context)?;
+    services.sync.reset().await;
+    services.sync.configure(
+        target_dir.join(crate::platform::repositories::sync::SYNC_CONFIG_FILE),
+        services.sqlite.clone(),
+    );
+
+    let mut bootstrap = load_bootstrap_config(&default_dir);
+    bootstrap.custom_data_dir = (target_dir != default_dir).then(|| target_dir.clone());
+    if copy_existing && source_dir.exists() {
+        if !bootstrap.pending_cleanup_dirs.contains(&source_dir) {
+            bootstrap.pending_cleanup_dirs.push(source_dir.clone());
+        }
+    }
+    save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
+    if copy_existing && source_dir.exists() {
+        let leftovers = cleanup_data_directory_contents(&source_dir, &default_dir, did_copy_models);
+        if leftovers.is_empty() {
+            bootstrap
+                .pending_cleanup_dirs
+                .retain(|path| path != &source_dir);
+            save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
+        }
+    }
+    let _ = services.emitter.emit(
+        STORAGE_MIGRATION_PROGRESS_EVENT,
+        serde_json::to_value(StorageMigrationProgress {
+            phase: "done".into(),
+            current_file: String::new(),
+            copied_bytes: 1,
+            total_bytes: 1,
+            percent: 100.0,
+        })
+        .unwrap_or_default(),
+    );
+    get_storage_directories_info(&default_dir)
+}
+
+pub async fn set_models_directory(
+    services: &crate::services::DesktopServices,
+    target_dir: PathBuf,
+    move_existing: bool,
+) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(services).await?;
+    validate_target_directory(&target_dir)?;
+    let default_dir = default_app_local_data_dir();
+    let active_data = resolve_active_data_dir(&default_dir);
+    let source_dir = resolve_active_models_dir(&default_dir, &active_data);
+    if source_dir
+        .canonicalize()
+        .unwrap_or_else(|_| source_dir.clone())
+        == target_dir
+            .canonicalize()
+            .unwrap_or_else(|_| target_dir.clone())
+    {
+        return get_storage_directories_info(&default_dir);
+    }
+    check_path_overlap(&source_dir, &target_dir)?;
+
+    services.asr.clear_model_caches().await;
+    if move_existing && source_dir.is_dir() {
+        let emitter = Arc::clone(&services.emitter);
+        let source = source_dir.clone();
+        let target = target_dir.clone();
+        tokio::task::spawn_blocking(move || {
+            let total = calculate_directory_size(&source, 16);
+            let mut progress = MigrationProgressEmitter::new(Some(emitter), total);
+            progress.emit("preparing", "");
+            copy_directory_contents_with_progress(&source, &target, &mut progress, 16)
+                .map_err(|error| format!("Failed to copy model files: {error}"))
+        })
+        .await
+        .map_err(|error| error.to_string())??;
+    }
+
+    let mut bootstrap = load_bootstrap_config(&default_dir);
+    let default_models_dir = default_dir.join("models");
+    bootstrap.custom_models_dir = (target_dir != default_models_dir).then(|| target_dir.clone());
+    save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
+    if move_existing && source_dir.is_dir() {
+        if let Err(error) = safe_remove_dir_all(&source_dir) {
+            log::warn!(
+                "Failed to remove previous models directory {}: {error}",
+                source_dir.display()
+            );
+        }
+    }
+    services.asr.clear_model_caches().await;
+    get_storage_directories_info(&default_dir)
+}
+
+pub async fn reset_data_directory(
+    services: &crate::services::DesktopServices,
+) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(services).await?;
+    let default_dir = default_app_local_data_dir();
+    let current = services.sqlite.current_context()?;
+    let source_dir = current.app_data_dir().to_path_buf();
+    let new_context = Arc::new(
+        sona_sqlite::SqliteApplicationContext::open(&default_dir)
+            .map_err(|error| format!("Failed to open database at default location: {error}"))?,
+    );
+    services.sqlite.reload(new_context)?;
+    services.sync.reset().await;
+    services.sync.configure(
+        default_dir.join(crate::platform::repositories::sync::SYNC_CONFIG_FILE),
+        services.sqlite.clone(),
+    );
+    let mut bootstrap = load_bootstrap_config(&default_dir);
+    bootstrap.custom_data_dir = None;
+    if source_dir != default_dir && !bootstrap.pending_cleanup_dirs.contains(&source_dir) {
+        bootstrap.pending_cleanup_dirs.push(source_dir);
+    }
+    save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
+    get_storage_directories_info(&default_dir)
+}
+
+pub async fn reset_models_directory(
+    services: &crate::services::DesktopServices,
+) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(services).await?;
+    services.asr.clear_model_caches().await;
+    let default_dir = default_app_local_data_dir();
+    let mut bootstrap = load_bootstrap_config(&default_dir);
+    bootstrap.custom_models_dir = None;
+    save_bootstrap_config(&default_dir, &bootstrap).map_err(|error| error.to_string())?;
+    get_storage_directories_info(&default_dir)
+}
+
 pub const STORAGE_MIGRATION_PROGRESS_EVENT: &str = "storage-migration-progress";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

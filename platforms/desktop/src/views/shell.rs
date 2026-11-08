@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use gpui_kit::assets::IconName as LucideIcon;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -337,6 +337,14 @@ pub struct MainShell {
     pub model_status_select: Entity<SelectState<Vec<&'static str>>>,
     pub model_label_select: Entity<SelectState<Vec<&'static str>>>,
     _model_filter_subscriptions: [Subscription; 3],
+    pub translation_language_select: Entity<SelectState<Vec<&'static str>>>,
+    _translation_language_subscription: Subscription,
+    pub general_log_level_select: Entity<SelectState<Vec<&'static str>>>,
+    _general_log_level_subscription: Subscription,
+    pub general_language_select: Entity<SelectState<Vec<&'static str>>>,
+    _general_language_subscription: Subscription,
+    pub general_font_select: Entity<SelectState<Vec<&'static str>>>,
+    _general_font_subscription: Subscription,
     pub online_provider_field_states: HashMap<String, Entity<InputState>>,
     _online_provider_field_subscriptions: Vec<Subscription>,
     pub llm_provider_api_host_state: Entity<InputState>,
@@ -350,6 +358,33 @@ pub struct MainShell {
     _api_server_field_subscriptions: Vec<Subscription>,
     pub shortcut_edit_state: Entity<InputState>,
     _shortcut_edit_subscription: Subscription,
+    pub dictionary_textarea_state: Entity<TextareaState>,
+    _dictionary_textarea_subscription: Subscription,
+    pub dictionary_quick_add_state: Entity<InputState>,
+    _dictionary_quick_add_subscription: Subscription,
+    pub dictionary_inline_hotword_state: Entity<InputState>,
+    _dictionary_inline_hotword_subscription: Subscription,
+    pub dictionary_word_state: Entity<InputState>,
+    _dictionary_word_subscription: Subscription,
+    pub dictionary_weight_state: Entity<InputState>,
+    _dictionary_weight_subscription: Subscription,
+    pub dictionary_from_state: Entity<InputState>,
+    _dictionary_from_subscription: Subscription,
+    pub dictionary_to_state: Entity<InputState>,
+    _dictionary_to_subscription: Subscription,
+    pub dictionary_search_state: Entity<InputState>,
+    _dictionary_search_subscription: Subscription,
+    pub dictionary_test_state: Entity<InputState>,
+    _dictionary_test_subscription: Subscription,
+    pub vocabulary_name_state: Entity<InputState>,
+    _vocabulary_name_subscription: Subscription,
+    pub vocabulary_body_state: Entity<TextareaState>,
+    _vocabulary_body_subscription: Subscription,
+    pub speaker_profile_name_state: Entity<InputState>,
+    _speaker_profile_name_subscription: Subscription,
+    pub speaker_profile_search_state: Entity<InputState>,
+    _speaker_profile_search_subscription: Subscription,
+    pub speaker_profile_name_states: HashMap<String, (Entity<InputState>, Subscription)>,
 
     pub tools_sidebar: ToolsSidebar,
     pub subtitles_tool: SubtitlesToolPanel,
@@ -463,6 +498,357 @@ impl MainShell {
             .ok()
             .flatten()
             .unwrap_or_else(|| serde_json::json!({}));
+        let configured_theme = initial_config
+            .get("theme")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("auto");
+        let theme_mode = match configured_theme {
+            "light" => gpui_kit::component::theme::ThemeMode::Light,
+            "dark" => gpui_kit::component::theme::ThemeMode::Dark,
+            _ => gpui_kit::component::theme::ThemeMode::from(window.appearance()),
+        };
+        gpui_kit::component::theme::Theme::change(theme_mode, None, cx);
+        let translation_language = initial_config
+            .get("translationLanguage")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("zh");
+        let translation_language_index = crate::views::settings::LANGUAGE_OPTIONS
+            .iter()
+            .position(|(code, _)| *code == translation_language)
+            .unwrap_or_else(|| {
+                crate::views::settings::LANGUAGE_OPTIONS
+                    .iter()
+                    .position(|(code, _)| *code == "zh")
+                    .unwrap_or(0)
+            });
+        let translation_language_select = cx.new(|cx| {
+            SelectState::new(
+                crate::views::settings::LANGUAGE_OPTIONS
+                    .iter()
+                    .map(|(_, name)| *name)
+                    .collect::<Vec<_>>(),
+                Some(IndexPath::new(translation_language_index)),
+                window,
+                cx,
+            )
+        });
+        let log_levels = ["trace", "debug", "info", "warn", "error"];
+        let configured_log_level = initial_config
+            .get("logLevel")
+            .and_then(serde_json::Value::as_str)
+            .filter(|level| log_levels.contains(level))
+            .unwrap_or("info");
+        log::set_max_level(match configured_log_level {
+            "trace" => log::LevelFilter::Trace,
+            "debug" => log::LevelFilter::Debug,
+            "warn" => log::LevelFilter::Warn,
+            "error" => log::LevelFilter::Error,
+            _ => log::LevelFilter::Info,
+        });
+        let log_level_index = log_levels
+            .iter()
+            .position(|level| *level == configured_log_level)
+            .unwrap_or(2);
+        let general_log_level_select = cx.new(|cx| {
+            SelectState::new(
+                log_levels.to_vec(),
+                Some(IndexPath::new(log_level_index)),
+                window,
+                cx,
+            )
+        });
+        let general_log_level_subscription = cx.subscribe(
+            &general_log_level_select,
+            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(level)) = event {
+                    log::set_max_level(match *level {
+                        "trace" => log::LevelFilter::Trace,
+                        "debug" => log::LevelFilter::Debug,
+                        "warn" => log::LevelFilter::Warn,
+                        "error" => log::LevelFilter::Error,
+                        _ => log::LevelFilter::Info,
+                    });
+                    shell.settings_modal.persist_general_setting(
+                        "logLevel",
+                        serde_json::Value::String((*level).to_string()),
+                        cx,
+                    );
+                }
+            },
+        );
+        let app_language_options = [
+            ("auto", "Automatic"),
+            ("en", "English"),
+            ("zh", "简体中文"),
+            ("zh-TW", "繁體中文"),
+            ("ja", "日本語"),
+            ("ko", "한국어"),
+        ];
+        let app_language = initial_config
+            .get("appLanguage")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| app_language_options.iter().any(|(code, _)| code == value))
+            .unwrap_or("auto");
+        let app_language_index = app_language_options
+            .iter()
+            .position(|(code, _)| *code == app_language)
+            .unwrap_or(0);
+        let general_language_select = cx.new(|cx| {
+            SelectState::new(
+                app_language_options
+                    .iter()
+                    .map(|(_, label)| *label)
+                    .collect::<Vec<_>>(),
+                Some(IndexPath::new(app_language_index)),
+                window,
+                cx,
+            )
+        });
+        let general_language_subscription = cx.subscribe(
+            &general_language_select,
+            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(label)) = event
+                    && let Some((language, _)) = app_language_options
+                        .iter()
+                        .find(|(_, option_label)| *option_label == *label)
+                {
+                    shell.settings_modal.selected_lang = (*language).to_string();
+                    shell.settings_modal.persist_general_setting(
+                        "appLanguage",
+                        serde_json::Value::String((*language).to_string()),
+                        cx,
+                    );
+                }
+            },
+        );
+        let font_options = [
+            ("system", "System"),
+            ("serif", "Serif"),
+            ("sans", "Sans-serif"),
+            ("mono", "Monospace"),
+            ("arial", "Arial"),
+            ("georgia", "Georgia"),
+        ];
+        let font = initial_config
+            .get("font")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| font_options.iter().any(|(code, _)| code == value))
+            .unwrap_or("system");
+        let font_index = font_options
+            .iter()
+            .position(|(code, _)| *code == font)
+            .unwrap_or(0);
+        let general_font_select = cx.new(|cx| {
+            SelectState::new(
+                font_options
+                    .iter()
+                    .map(|(_, label)| *label)
+                    .collect::<Vec<_>>(),
+                Some(IndexPath::new(font_index)),
+                window,
+                cx,
+            )
+        });
+        let general_font_subscription = cx.subscribe(
+            &general_font_select,
+            move |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(label)) = event
+                    && let Some((font, _)) = font_options
+                        .iter()
+                        .find(|(_, option_label)| *option_label == *label)
+                {
+                    shell.settings_modal.selected_font = (*font).to_string();
+                    shell.settings_modal.persist_general_setting(
+                        "font",
+                        serde_json::Value::String((*font).to_string()),
+                        cx,
+                    );
+                }
+            },
+        );
+        let dictionary_initial_content =
+            crate::views::settings::vocabulary::effective_dictionary_content(&initial_config);
+        let dictionary_textarea_state =
+            cx.new(|cx| TextareaState::new(window, cx).default_value(dictionary_initial_content));
+        let dictionary_textarea_subscription = cx.subscribe(
+            &dictionary_textarea_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let content = state.read(cx).value().to_string();
+                    let (hotword_sets, replacement_sets) =
+                        crate::views::settings::vocabulary::legacy_dictionary_sets(&content);
+                    shell.settings_modal.persist_model_settings(
+                        vec![
+                            (
+                                "dictionaryContent".to_string(),
+                                serde_json::Value::String(content),
+                            ),
+                            ("hotwordSets".to_string(), hotword_sets),
+                            ("textReplacementSets".to_string(), replacement_sets),
+                        ],
+                        cx,
+                    );
+                }
+            },
+        );
+        let dictionary_quick_add_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Term (e.g. Sona) or From -> To"));
+        let dictionary_quick_add_subscription = cx.subscribe(
+            &dictionary_quick_add_state,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            },
+        );
+        let dictionary_inline_hotword_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("+ Add hotword..."));
+        let dictionary_inline_hotword_subscription = cx.subscribe(
+            &dictionary_inline_hotword_state,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            },
+        );
+        let dictionary_word_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Sona or DeepSeek"));
+        let dictionary_word_subscription =
+            cx.subscribe(&dictionary_word_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let dictionary_weight_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. 2.0"));
+        let dictionary_weight_subscription =
+            cx.subscribe(&dictionary_weight_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let dictionary_from_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Misrecognized word"));
+        let dictionary_from_subscription =
+            cx.subscribe(&dictionary_from_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let dictionary_to_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Corrected word"));
+        let dictionary_to_subscription =
+            cx.subscribe(&dictionary_to_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let dictionary_search_state = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Search hotwords or replacements...")
+        });
+        let dictionary_search_subscription = cx.subscribe(
+            &dictionary_search_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.vocabulary_dictionary_search_query =
+                        state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            },
+        );
+        let dictionary_test_state = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Type or paste text to test replacement...")
+        });
+        let dictionary_test_subscription = cx.subscribe(
+            &dictionary_test_state,
+            |shell, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    shell.settings_modal.vocabulary_dictionary_test_input =
+                        state.read(cx).value().to_string();
+                    cx.notify();
+                }
+            },
+        );
+        let vocabulary_name_state = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
+        let vocabulary_name_subscription =
+            cx.subscribe(&vocabulary_name_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let vocabulary_body_state = cx.new(|cx| {
+            TextareaState::new(window, cx).placeholder("Enter context or instructions...")
+        });
+        let vocabulary_body_subscription =
+            cx.subscribe(&vocabulary_body_state, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let speaker_profile_name_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Alice"));
+        let speaker_profile_name_subscription = cx.subscribe(
+            &speaker_profile_name_state,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            },
+        );
+        let speaker_profile_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search speakers..."));
+        let speaker_profile_search_subscription = cx.subscribe(
+            &speaker_profile_search_state,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            },
+        );
+        let mut speaker_profile_name_states = HashMap::new();
+        if let Some(profiles) = initial_config
+            .get("speakerProfiles")
+            .and_then(serde_json::Value::as_array)
+        {
+            for value in profiles {
+                let Ok(profile) = serde_json::from_value::<
+                    sona_core::transcription::speaker::SpeakerProfile,
+                >(value.clone()) else {
+                    continue;
+                };
+                let profile_id = profile.id;
+                let subscription_profile_id = profile_id.clone();
+                let name_state =
+                    cx.new(|cx| InputState::new(window, cx).default_value(profile.name));
+                let subscription =
+                    cx.subscribe(&name_state, move |shell, state, event: &InputEvent, cx| {
+                        if !matches!(event, InputEvent::Change) {
+                            return;
+                        }
+                        let name = state.read(cx).value().to_string();
+                        let mut profiles = shell
+                            .settings_modal
+                            .model_config
+                            .get("speakerProfiles")
+                            .and_then(serde_json::Value::as_array)
+                            .cloned()
+                            .unwrap_or_default();
+                        for value in &mut profiles {
+                            if value.get("id").and_then(serde_json::Value::as_str)
+                                == Some(subscription_profile_id.as_str())
+                            {
+                                value["name"] = serde_json::Value::String(name.clone());
+                            }
+                        }
+                        shell.settings_modal.persist_model_setting(
+                            "speakerProfiles".to_string(),
+                            serde_json::Value::Array(profiles),
+                            cx,
+                        );
+                    });
+                speaker_profile_name_states.insert(profile_id, (name_state, subscription));
+            }
+        }
         let active_llm_provider = initial_config
             .pointer("/llmSettings/activeProvider")
             .and_then(serde_json::Value::as_str)
@@ -757,6 +1143,35 @@ impl MainShell {
                 }
             },
         );
+        let translation_language_subscription = cx.subscribe(
+            &translation_language_select,
+            |shell, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(value)) = event
+                    && let Some((code, _)) = crate::views::settings::LANGUAGE_OPTIONS
+                        .iter()
+                        .find(|(_, name)| *name == *value)
+                {
+                    shell.settings_modal.persist_model_setting(
+                        "translationLanguage".to_string(),
+                        serde_json::Value::String((*code).to_string()),
+                        cx,
+                    );
+                }
+            },
+        );
+
+        let mut settings_modal = SettingsModal::new();
+        settings_modal.selected_theme = configured_theme.to_string();
+        settings_modal.selected_lang = initial_config
+            .get("appLanguage")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("auto")
+            .to_string();
+        settings_modal.selected_font = initial_config
+            .get("font")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("system")
+            .to_string();
 
         let mut shell = Self {
             _voice_typing_event_task: None,
@@ -793,6 +1208,14 @@ impl MainShell {
                 status_subscription,
                 label_subscription,
             ],
+            translation_language_select,
+            _translation_language_subscription: translation_language_subscription,
+            general_log_level_select,
+            _general_log_level_subscription: general_log_level_subscription,
+            general_language_select,
+            _general_language_subscription: general_language_subscription,
+            general_font_select,
+            _general_font_subscription: general_font_subscription,
             online_provider_field_states,
             _online_provider_field_subscriptions: online_provider_field_subscriptions,
             llm_provider_api_host_state,
@@ -811,6 +1234,33 @@ impl MainShell {
             _api_server_field_subscriptions: api_server_field_subscriptions,
             shortcut_edit_state,
             _shortcut_edit_subscription: shortcut_edit_subscription,
+            dictionary_textarea_state,
+            _dictionary_textarea_subscription: dictionary_textarea_subscription,
+            dictionary_quick_add_state,
+            _dictionary_quick_add_subscription: dictionary_quick_add_subscription,
+            dictionary_inline_hotword_state,
+            _dictionary_inline_hotword_subscription: dictionary_inline_hotword_subscription,
+            dictionary_word_state,
+            _dictionary_word_subscription: dictionary_word_subscription,
+            dictionary_weight_state,
+            _dictionary_weight_subscription: dictionary_weight_subscription,
+            dictionary_from_state,
+            _dictionary_from_subscription: dictionary_from_subscription,
+            dictionary_to_state,
+            _dictionary_to_subscription: dictionary_to_subscription,
+            dictionary_search_state,
+            _dictionary_search_subscription: dictionary_search_subscription,
+            dictionary_test_state,
+            _dictionary_test_subscription: dictionary_test_subscription,
+            vocabulary_name_state,
+            _vocabulary_name_subscription: vocabulary_name_subscription,
+            vocabulary_body_state,
+            _vocabulary_body_subscription: vocabulary_body_subscription,
+            speaker_profile_name_state,
+            _speaker_profile_name_subscription: speaker_profile_name_subscription,
+            speaker_profile_search_state,
+            _speaker_profile_search_subscription: speaker_profile_search_subscription,
+            speaker_profile_name_states,
 
             tools_sidebar: ToolsSidebar::new(),
             subtitles_tool: SubtitlesToolPanel::new(),
@@ -821,7 +1271,7 @@ impl MainShell {
 
             workbench: TranscriptWorkbench::new(window, cx),
 
-            settings_modal: SettingsModal::new(),
+            settings_modal,
             diagnostics_modal: DiagnosticsModal::new(),
             recovery_modal: RecoveryModal::new(),
             global_dialog: GlobalDialog::new(),
@@ -1900,6 +2350,14 @@ impl Render for MainShell {
 
                 if this.settings_modal.is_open {
                     if event.keystroke.key.eq_ignore_ascii_case("escape") {
+                        if this.settings_modal.vocabulary_dictionary_dialog_open {
+                            this.settings_modal.vocabulary_dictionary_dialog_open = false;
+                            this.settings_modal.vocabulary_dictionary_edit_line = None;
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            cx.notify();
+                            return;
+                        }
                         this.settings_modal.close(cx);
                         window.prevent_default();
                         cx.stop_propagation();
@@ -2275,6 +2733,16 @@ impl Render for MainShell {
                 &self.llm_model_draft_state,
                 &self.llm_custom_provider_name_state,
                 &self.llm_model_metadata_field_states,
+                &self.dictionary_textarea_state,
+                &self.dictionary_quick_add_state,
+                &self.dictionary_search_state,
+                &self.dictionary_test_state,
+                &self.vocabulary_name_state,
+                &self.vocabulary_body_state,
+                &self.translation_language_select,
+                &self.general_log_level_select,
+                &self.general_language_select,
+                &self.general_font_select,
                 window,
                 cx,
             ))

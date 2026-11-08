@@ -1067,6 +1067,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "language",
         "summaryTemplateId",
         "translationLanguage",
+        "dictionaryContent",
         "polishKeywords",
         "polishPresetId",
         "polishContext",
@@ -1829,10 +1830,29 @@ fn normalize_speaker_profile(value: &Value) -> Option<Value> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    let scope = match object.get("scope").and_then(Value::as_str) {
+        Some("project") => "project",
+        _ => "global",
+    };
+    let project_ids = object
+        .get("projectIds")
+        .and_then(Value::as_array)
+        .map(|project_ids| {
+            let mut seen = std::collections::HashSet::new();
+            project_ids
+                .iter()
+                .filter_map(non_empty_str)
+                .filter(|project_id| seen.insert((*project_id).to_string()))
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     Some(json!({
         "id": id,
         "name": object.get("name").and_then(non_empty_str).unwrap_or("Speaker Profile"),
         "enabled": object.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+        "scope": scope,
+        "projectIds": project_ids,
         "samples": samples,
     }))
 }
@@ -2703,4 +2723,39 @@ fn merge_object_values(first: Value, second: Option<Value>) -> Option<Value> {
         }
     }
     Some(Value::Object(object))
+}
+
+#[cfg(test)]
+mod speaker_profile_normalization_tests {
+    use super::normalize_speaker_profiles;
+    use serde_json::json;
+
+    #[test]
+    fn preserves_speaker_profile_scope_and_project_ids() {
+        let normalized = normalize_speaker_profiles(Some(&json!([
+            {
+                "id": "profile-a",
+                "name": "Host",
+                "scope": "project",
+                "projectIds": ["project-a", "project-b", "project-a"],
+                "samples": []
+            }
+        ])));
+
+        assert_eq!(normalized[0]["scope"], "project");
+        assert_eq!(
+            normalized[0]["projectIds"],
+            json!(["project-a", "project-b"])
+        );
+    }
+
+    #[test]
+    fn defaults_legacy_speaker_profiles_to_global_scope() {
+        let normalized = normalize_speaker_profiles(Some(&json!([
+            { "id": "profile-a", "name": "Host", "samples": [] }
+        ])));
+
+        assert_eq!(normalized[0]["scope"], "global");
+        assert_eq!(normalized[0]["projectIds"], json!([]));
+    }
 }
