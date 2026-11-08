@@ -203,10 +203,12 @@ impl DiagnosticsModal {
     }
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         let checks = self.checks.clone();
         let is_loading = self.is_loading;
         let error_message = self.error_message.clone();
-
         div().when(self.is_open, |this| {
             this.child(
                 div()

@@ -46,6 +46,9 @@ impl OnboardingWizard {
     }
 
     pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         let step = self.step;
 
         div().when(self.is_open, |this| {

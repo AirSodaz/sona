@@ -12,9 +12,8 @@ use super::live_record::LiveRecordPanel;
 use super::options_capsule::{IngestionSurface, TranscriptionOptionsModel};
 use crate::theme::tokens::{
     COLOR_BG_ELEVATED_LIGHT, COLOR_BG_SECONDARY_LIGHT, COLOR_BG_TERTIARY_LIGHT,
-    COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, RADIUS_FULL,
+    COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_FULL,
 };
-
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
     Icon::default().path(name.path())
@@ -206,6 +205,11 @@ impl Render for CreateWorkspacePanel {
                                     } else {
                                         COLOR_TEXT_MUTED_LIGHT
                                     })
+                                    .when(!is_live_active, |this| {
+                                        this.hover(|style| {
+                                            style.text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                        })
+                                    })
                                     .child(icon(LucideIcon::Mic).size(px(16.0)))
                                     .child(div().child("Live Record"))
                                     .when(show_live_recording_badge, |this| {
@@ -258,6 +262,11 @@ impl Render for CreateWorkspacePanel {
                                         COLOR_TEXT_PRIMARY_LIGHT
                                     } else {
                                         COLOR_TEXT_MUTED_LIGHT
+                                    })
+                                    .when(!is_batch_active, |this| {
+                                        this.hover(|style| {
+                                            style.text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                        })
                                     })
                                     .child(icon(LucideIcon::Folder).size(px(16.0)))
                                     .child(div().child("Batch Import"))

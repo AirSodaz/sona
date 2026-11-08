@@ -5,14 +5,17 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Disableable as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, IconName};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerStatus};
 
 use crate::app::{GlobalDesktopServices, GlobalEventBus};
-use crate::theme::tokens::{COLOR_PROJECT_AMBER, RADIUS_LG, RADIUS_MD, RADIUS_SM};
-
+use crate::theme::tokens::{
+    COLOR_PROJECT_AMBER, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_LG,
+    RADIUS_MD, RADIUS_SM,
+};
 fn is_actionable(task: &TaskLedgerRecord) -> bool {
     matches!(
         task.status,
@@ -217,12 +220,15 @@ impl NotificationCenter {
                     .justify_center()
                     .size(px(36.0))
                     .rounded(RADIUS_MD)
+                    .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                     .bg(if self.is_open {
                         cx.theme().secondary
                     } else {
                         gpui_kit::transparent_black()
                     })
                     .cursor_pointer()
+                    .hover(|s| s.bg(cx.theme().secondary).text_color(COLOR_TEXT_PRIMARY_LIGHT))
+                    .tooltip(|window, cx| Tooltip::new("Notifications").build(window, cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle(cx);
                     }))

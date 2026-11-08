@@ -23,6 +23,7 @@ use super::version_sheet::VersionSheet;
 use crate::app::GlobalDesktopServices;
 use crate::theme::tokens::{
     COLOR_BG_PRIMARY_LIGHT, COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_LG,
+    RADIUS_MD, RADIUS_SM,
 };
 use sona_core::history::TranscriptSnapshotReason;
 use sona_core::history::mutation_repository::{
@@ -49,11 +50,31 @@ pub struct TranscriptWorkbench {
 
     pub is_rename_open: bool,
     pub rename_title_state: Entity<InputState>,
+    pub rename_icon: Option<String>,
     pub is_ai_renaming: bool,
+    pub session_icon: Option<String>,
+    pub is_batch_item: bool,
+
+    // Polish interactive state
     pub is_polishing: bool,
+    pub polish_menu_open: bool,
+    pub polish_preset: String,
     pub polish_error: Option<String>,
+    pub undo_segments: Option<Vec<super::segment_row::SegmentData>>,
+    pub redo_segments: Option<Vec<super::segment_row::SegmentData>>,
+
+    // Translate interactive state
     pub is_translating: bool,
+    pub translate_menu_open: bool,
+    pub show_translations: bool,
+    pub translation_source_lang: String,
+    pub translation_target_lang: String,
     pub translate_error: Option<String>,
+
+    // Media Server (Emby/Jellyfin) integration
+    pub media_server_context: Option<crate::views::create::batch_import::MediaServerTaskContext>,
+    pub is_syncing_media_server: bool,
+    pub media_server_sync_success: bool,
 }
 
 impl TranscriptWorkbench {
@@ -77,20 +98,120 @@ impl TranscriptWorkbench {
 
             is_rename_open: false,
             rename_title_state,
+            rename_icon: None,
             is_ai_renaming: false,
+            session_icon: None,
+            is_batch_item: false,
             is_polishing: false,
+            polish_menu_open: false,
+            polish_preset: "standard".to_string(),
             polish_error: None,
+            undo_segments: None,
+            redo_segments: None,
             is_translating: false,
+            translate_menu_open: false,
+            show_translations: true,
+            translation_source_lang: "auto".to_string(),
+            translation_target_lang: "en".to_string(),
             translate_error: None,
+            media_server_context: None,
+            is_syncing_media_server: false,
+            media_server_sync_success: false,
         }
     }
 
-    pub fn begin_loading(&mut self, history_id: String, title: String) {
+    pub fn begin_loading(
+        &mut self,
+        history_id: String,
+        title: String,
+        icon: Option<String>,
+        is_batch: bool,
+    ) {
         self.history_id = Some(history_id);
         self.session_title = title;
+        self.session_icon = icon.clone();
+        self.rename_icon = icon;
+        self.is_batch_item = is_batch;
         self.is_loading = true;
         self.load_error = false;
         self.has_session = false;
+        self.polish_menu_open = false;
+        self.translate_menu_open = false;
+        self.undo_segments = None;
+        self.redo_segments = None;
+    }
+
+    pub fn has_translation(&self) -> bool {
+        self.editor.segments.iter().any(|s| s.translation.is_some())
+    }
+
+    pub fn undo_polish(&mut self, cx: &mut Context<MainShell>) {
+        if let Some(undo) = self.undo_segments.take() {
+            self.redo_segments = Some(self.editor.segments.clone());
+            self.editor.segments = undo;
+            self.persist_current(cx);
+            self.polish_menu_open = false;
+            cx.notify();
+        }
+    }
+
+    pub fn redo_polish(&mut self, cx: &mut Context<MainShell>) {
+        if let Some(redo) = self.redo_segments.take() {
+            self.undo_segments = Some(self.editor.segments.clone());
+            self.editor.segments = redo;
+            self.persist_current(cx);
+            self.polish_menu_open = false;
+            cx.notify();
+        }
+    }
+
+    pub fn resync_media_server(&mut self, cx: &mut Context<MainShell>) {
+        let Some(ctx) = self.media_server_context.clone() else {
+            return;
+        };
+        let segments = self.current_segments();
+        if segments.is_empty() {
+            return;
+        }
+        let srt_text = match sona_core::export::export_segments_with_mode(
+            &segments,
+            sona_core::export::ExportFormat::Srt,
+            sona_core::export::ExportMode::Original,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("Failed to export SRT for media server resync: {e}");
+                return;
+            }
+        };
+
+        self.is_syncing_media_server = true;
+        self.media_server_sync_success = false;
+        cx.notify();
+
+        let services = cx.global::<GlobalDesktopServices>().0.clone();
+        let delete_index = ctx.existing_external_subtitle_index;
+        cx.spawn(async move |shell, cx| {
+            let payload = crate::integrations::media_server::MediaServerSubtitleUploadPayload {
+                item_id: ctx.item_id.clone(),
+                language: ctx.target_language.clone(),
+                format: "srt".to_string(),
+                is_forced: false,
+                content: srt_text,
+            };
+            let result = services
+                .media_server
+                .upload_subtitle(Some(&ctx.profile_id), payload, delete_index)
+                .await;
+            shell
+                .update(cx, |shell, cx| {
+                    shell.workbench.is_syncing_media_server = false;
+                    shell.workbench.media_server_sync_success = result.is_ok();
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
     }
 
     pub fn set_transcript(&mut self, segments: Vec<TranscriptSegment>, duration: f64) {
@@ -238,6 +359,7 @@ impl TranscriptWorkbench {
 
     pub fn open_rename(&mut self, window: &mut Window, cx: &mut Context<MainShell>) {
         let title = self.session_title.clone();
+        self.rename_icon = self.session_icon.clone();
         self.rename_title_state.update(cx, |input, cx| {
             input.set_value(&title, window, cx);
         });
@@ -251,9 +373,11 @@ impl TranscriptWorkbench {
             return;
         }
         self.session_title = new_title.clone();
+        self.session_icon = self.rename_icon.clone();
         self.is_rename_open = false;
         if let Some(history_id) = self.history_id.clone() {
             let services = cx.global::<GlobalDesktopServices>().0.clone();
+            let new_icon = self.rename_icon.clone();
             cx.spawn(async move |shell, cx| {
                 let _ = services
                     .history
@@ -262,6 +386,7 @@ impl TranscriptWorkbench {
                             history_id,
                             updates: HistoryItemMetaPatch {
                                 title: Some(new_title),
+                                icon: Some(new_icon),
                                 ..Default::default()
                             },
                         })
@@ -363,10 +488,11 @@ impl TranscriptWorkbench {
             return;
         }
         let services = cx.global::<GlobalDesktopServices>().0.clone();
+        self.undo_segments = Some(self.editor.segments.clone());
+        self.redo_segments = None;
         self.is_polishing = true;
         self.polish_error = None;
         cx.notify();
-
         cx.spawn(async move |shell, cx| {
             let result: Result<Vec<TranscriptSegment>, String> = async {
                 let config = services
@@ -953,17 +1079,77 @@ impl TranscriptWorkbench {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(
-                                Icon::new(LucideIcon::FileText)
-                                    .size(px(16.0))
-                                    .text_color(cx.theme().muted),
-                            )
+                            .child({
+                                let emoji_icon = self.session_icon.as_ref().filter(|ic| !ic.is_empty() && !ic.starts_with("system:"));
+                                let system_icon = self.session_icon.as_ref().and_then(|ic| ic.strip_prefix("system:"));
+                                if let Some(emoji) = emoji_icon {
+                                    div()
+                                        .text_size(px(16.0))
+                                        .child(emoji.clone())
+                                        .into_any_element()
+                                } else if let Some(sys) = system_icon {
+                                    let lucide = match sys {
+                                        "mic" => LucideIcon::Mic,
+                                        "file" => LucideIcon::FileText,
+                                        "folder" => LucideIcon::Folder,
+                                        "code" => LucideIcon::Code,
+                                        _ => LucideIcon::FileText,
+                                    };
+                                    Icon::new(lucide)
+                                        .size(px(16.0))
+                                        .text_color(cx.theme().muted)
+                                        .into_any_element()
+                                } else if self.is_batch_item {
+                                    Icon::new(LucideIcon::FileText)
+                                        .size(px(16.0))
+                                        .text_color(cx.theme().muted)
+                                        .into_any_element()
+                                } else {
+                                    Icon::new(LucideIcon::Mic)
+                                        .size(px(16.0))
+                                        .text_color(cx.theme().muted)
+                                        .into_any_element()
+                                }
+                            })
                             .child(
                                 div()
                                     .text_size(px(15.0))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(self.session_title.clone()),
                             )
+                            .when_some(self.media_server_context.as_ref(), |this, ctx| {
+                                let is_jellyfin = ctx.profile_id.to_lowercase().contains("jellyfin") || ctx.profile_id.starts_with("jf");
+                                let tag = if is_jellyfin { "Jellyfin" } else { "Emby" };
+                                this.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .px_2()
+                                        .py(px(2.0))
+                                        .rounded_full()
+                                        .bg(if is_jellyfin {
+                                            hsla(271.0 / 360.0, 0.91, 0.65, 0.12)
+                                        } else {
+                                            hsla(142.0 / 360.0, 0.71, 0.45, 0.12)
+                                        })
+                                        .border_1()
+                                        .border_color(if is_jellyfin {
+                                            hsla(271.0 / 360.0, 0.91, 0.65, 0.25)
+                                        } else {
+                                            hsla(142.0 / 360.0, 0.71, 0.45, 0.25)
+                                        })
+                                        .text_color(if is_jellyfin {
+                                            hsla(271.0 / 360.0, 0.91, 0.65, 1.0)
+                                        } else {
+                                            hsla(142.0 / 360.0, 0.71, 0.45, 1.0)
+                                        })
+                                        .text_size(px(11.0))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(Icon::new(LucideIcon::Tv).size(px(12.0)))
+                                        .child(tag),
+                                )
+                            })
                             .child(
                                 Button::new("btn-rename-workbench")
                                     .ghost()
@@ -1017,37 +1203,252 @@ impl TranscriptWorkbench {
                             .flex()
                             .items_center()
                             .gap_2()
+                            .when_some(self.media_server_context.as_ref(), |this, ctx| {
+                                let is_jellyfin = ctx.profile_id.to_lowercase().contains("jellyfin") || ctx.profile_id.starts_with("jf");
+                                let label = if self.is_syncing_media_server {
+                                    "Syncing...".to_string()
+                                } else if self.media_server_sync_success {
+                                    "Synced".to_string()
+                                } else {
+                                    format!("Re-sync to {}", if is_jellyfin { "Jellyfin" } else { "Emby" })
+                                };
+                                this.child(
+                                    Button::new("btn-resync-media-server")
+                                        .secondary()
+                                        .small()
+                                        .icon(LucideIcon::Tv)
+                                        .label(label)
+                                        .disabled(self.is_syncing_media_server || self.editor.segments.is_empty())
+                                        .tooltip("Re-sync subtitles to Media Server")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.workbench.resync_media_server(cx);
+                                        })),
+                                )
+                            })
                             .child(
-                                Button::new("btn-polish-workbench")
-                                    .ghost()
-                                    .small()
-                                    .icon(LucideIcon::Sparkles)
-                                    .label(if self.is_polishing {
-                                        "Polishing..."
-                                    } else {
-                                        "Polish"
-                                    })
-                                    .tooltip("Polish transcript with LLM")
-                                    .disabled(self.is_polishing)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.start_polish(cx);
-                                    })),
+                                div()
+                                    .relative()
+                                    .child(
+                                        Button::new("btn-polish-workbench")
+                                            .ghost()
+                                            .small()
+                                            .icon(LucideIcon::Sparkles)
+                                            .label(if self.is_polishing {
+                                                "Polishing..."
+                                            } else {
+                                                "Polish"
+                                            })
+                                            .tooltip("Polish transcript with LLM")
+                                            .disabled(self.is_polishing)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.workbench.polish_menu_open = !this.workbench.polish_menu_open;
+                                                this.workbench.translate_menu_open = false;
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .when(self.polish_menu_open, |this| {
+                                        this.child(
+                                            div()
+                                                .id("polish-menu-dropdown")
+                                                .absolute()
+                                                .top(px(36.0))
+                                                .right_0()
+                                                .w(px(240.0))
+                                                .p_2()
+                                                .rounded(RADIUS_MD)
+                                                .bg(cx.theme().background)
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .shadow_xl()
+                                                .flex()
+                                                .flex_col()
+                                                .gap_1()
+                                                .child(
+                                                    Button::new("btn-start-polish-action")
+                                                        .ghost()
+                                                        .small()
+                                                        .icon(LucideIcon::Sparkles)
+                                                        .label("LLM Polish")
+                                                        .disabled(self.is_polishing)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.workbench.polish_menu_open = false;
+                                                            this.workbench.start_polish(cx);
+                                                        })),
+                                                 )
+                                                .when(self.undo_segments.is_some(), |menu| {
+                                                    menu.child(
+                                                        Button::new("btn-undo-polish")
+                                                            .ghost()
+                                                            .small()
+                                                            .icon(LucideIcon::Undo2)
+                                                            .label("Undo Polish")
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.workbench.undo_polish(cx);
+                                                            })),
+                                                    )
+                                                })
+                                                .when(self.redo_segments.is_some(), |menu| {
+                                                    menu.child(
+                                                        Button::new("btn-redo-polish")
+                                                            .ghost()
+                                                            .small()
+                                                            .icon(LucideIcon::Redo2)
+                                                            .label("Redo Polish")
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.workbench.redo_polish(cx);
+                                                            })),
+                                                    )
+                                                })
+                                                .child(div().h(px(1.0)).bg(cx.theme().border).my_1())
+                                                .child(
+                                                    div()
+                                                        .px_2()
+                                                        .py_1()
+                                                        .text_size(px(11.0))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(cx.theme().muted)
+                                                        .child("POLISH PRESET"),
+                                                )
+                                                .children(["standard", "fluency", "concise", "meeting"].into_iter().map(|preset| {
+                                                    let is_active = self.polish_preset == preset;
+                                                    let label = match preset {
+                                                        "standard" => "Standard Accuracy",
+                                                        "fluency" => "Fluency & Natural",
+                                                        "concise" => "Concise Summary",
+                                                        "meeting" => "Meeting Cleanup",
+                                                        _ => preset,
+                                                    };
+                                                    let p = preset.to_string();
+                                                    Button::new(format!("btn-polish-preset-{}", preset))
+                                                        .ghost()
+                                                        .small()
+                                                        .icon(if is_active { LucideIcon::Check } else { LucideIcon::Sparkles })
+                                                        .label(label)
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            this.workbench.polish_preset = p.clone();
+                                                            this.workbench.polish_menu_open = false;
+                                                            cx.notify();
+                                                        }))
+                                                })),
+                                        )
+                                    }),
                             )
                             .child(
-                                Button::new("btn-translate-workbench")
-                                    .ghost()
-                                    .small()
-                                    .icon(LucideIcon::Languages)
-                                    .label(if self.is_translating {
-                                        "Translating..."
-                                    } else {
-                                        "Translate"
-                                    })
-                                    .tooltip("Translate transcript")
-                                    .disabled(self.is_translating)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.workbench.start_translate("en", cx);
-                                    })),
+                                div()
+                                    .relative()
+                                    .child(
+                                        Button::new("btn-translate-workbench")
+                                            .ghost()
+                                            .small()
+                                            .icon(LucideIcon::Languages)
+                                            .label(if self.is_translating {
+                                                "Translating..."
+                                            } else {
+                                                "Translate"
+                                            })
+                                            .tooltip("Translate transcript")
+                                            .disabled(self.is_translating)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.workbench.translate_menu_open = !this.workbench.translate_menu_open;
+                                                this.workbench.polish_menu_open = false;
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .when(self.translate_menu_open, |this| {
+                                        this.child(
+                                            div()
+                                                .id("translate-menu-dropdown")
+                                                .absolute()
+                                                .top(px(36.0))
+                                                .right_0()
+                                                .w(px(260.0))
+                                                .p_2()
+                                                .rounded(RADIUS_MD)
+                                                .bg(cx.theme().background)
+                                                .border_1()
+                                                .border_color(cx.theme().border)
+                                                .shadow_xl()
+                                                .flex()
+                                                .flex_col()
+                                                .gap_1()
+                                                .child(
+                                                    Button::new("btn-start-translate-action")
+                                                        .ghost()
+                                                        .small()
+                                                        .icon(LucideIcon::Languages)
+                                                        .label(if self.has_translation() { "Retranslate" } else { "Start Translation" })
+                                                        .disabled(self.is_translating)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            let target = this.workbench.translation_target_lang.clone();
+                                                            this.workbench.translate_menu_open = false;
+                                                            this.workbench.start_translate(&target, cx);
+                                                        })),
+                                                )
+                                                .child(
+                                                    Button::new("btn-toggle-translations-vis")
+                                                        .ghost()
+                                                        .small()
+                                                        .icon(if self.show_translations { LucideIcon::EyeOff } else { LucideIcon::Eye })
+                                                        .label(if self.show_translations { "Hide Translations" } else { "Show Translations" })
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.workbench.show_translations = !this.workbench.show_translations;
+                                                            this.workbench.editor.show_translations = this.workbench.show_translations;
+                                                            this.workbench.translate_menu_open = false;
+                                                            cx.notify();
+                                                        })),
+                                                )
+                                                .child(div().h(px(1.0)).bg(cx.theme().border).my_1())
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_between()
+                                                        .px_2()
+                                                        .py_1()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.0))
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                                .text_color(cx.theme().muted)
+                                                                .child("TARGET LANGUAGE"),
+                                                        )
+                                                        .child(
+                                                            Button::new("btn-swap-languages")
+                                                                .ghost()
+                                                                .xsmall()
+                                                                .icon(LucideIcon::ArrowLeftRight)
+                                                                .tooltip("Swap Source & Target")
+                                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                                    std::mem::swap(&mut this.workbench.translation_source_lang, &mut this.workbench.translation_target_lang);
+                                                                    cx.notify();
+                                                                })),
+                                                        ),
+                                                )
+                                                .children([
+                                                    ("zh", "Chinese (Simplified)"),
+                                                    ("en", "English"),
+                                                    ("ja", "Japanese"),
+                                                    ("ko", "Korean"),
+                                                    ("fr", "French"),
+                                                    ("de", "German"),
+                                                    ("es", "Spanish"),
+                                                    ("ru", "Russian"),
+                                                ].into_iter().map(|(code, name)| {
+                                                    let is_selected = self.translation_target_lang == code;
+                                                    let c = code.to_string();
+                                                    Button::new(format!("btn-lang-{}", code))
+                                                        .ghost()
+                                                        .small()
+                                                        .icon(if is_selected { LucideIcon::Check } else { LucideIcon::Languages })
+                                                        .label(name)
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            this.workbench.translation_target_lang = c.clone();
+                                                            this.workbench.translate_menu_open = false;
+                                                            cx.notify();
+                                                        }))
+                                                })),
+                                        )
+                                    }),
                             )
                             .child(
                                 Button::new("btn-export-workbench")
@@ -1156,6 +1557,52 @@ impl TranscriptWorkbench {
                                         .text_color(cx.theme().foreground)
                                         .child("Rename Transcript"),
                                 )
+                                .child({
+                                    let current_icon = self.rename_icon.clone().unwrap_or_else(|| {
+                                        if self.is_batch_item { "system:file".to_string() } else { "system:mic".to_string() }
+                                    });
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .items_center()
+                                        .gap_1()
+                                        .p_1()
+                                        .rounded(RADIUS_SM)
+                                        .bg(cx.theme().secondary)
+                                        .border_1()
+                                        .border_color(cx.theme().border)
+                                        .children(["system:mic", "system:file", "system:folder", "system:code", "📝", "🎙️", "💡", "🎬"].into_iter().map(|icon_val| {
+                                            let is_active = current_icon == icon_val;
+                                            let icon_str = icon_val.to_string();
+                                            div()
+                                                .id(ElementId::from(format!("btn-icon-pick-{}", icon_val)))
+                                                .size(px(26.0))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .rounded(px(4.0))
+                                                .cursor_pointer()
+                                                .border_1()
+                                                .border_color(if is_active { cx.theme().primary } else { gpui_kit::transparent_black() })
+                                                .child(if icon_val.starts_with("system:") {
+                                                    let sys = icon_val.strip_prefix("system:").unwrap_or("");
+                                                    let lucide = match sys {
+                                                        "mic" => LucideIcon::Mic,
+                                                        "file" => LucideIcon::FileText,
+                                                        "folder" => LucideIcon::Folder,
+                                                        "code" => LucideIcon::Code,
+                                                        _ => LucideIcon::FileText,
+                                                    };
+                                                    Icon::new(lucide).size(px(14.0)).text_color(if is_active { cx.theme().primary } else { cx.theme().muted }).into_any_element()
+                                                } else {
+                                                    div().text_size(px(12.0)).child(icon_val).into_any_element()
+                                                })
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.workbench.rename_icon = Some(icon_str.clone());
+                                                    cx.notify();
+                                                }))
+                                        }))
+                                })
                                 .child(
                                     div()
                                         .flex()

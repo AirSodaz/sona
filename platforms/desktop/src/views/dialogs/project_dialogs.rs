@@ -153,6 +153,9 @@ impl ProjectDialogs {
     }
 
     pub fn render(&mut self, cx: &mut Context<super::super::shell::MainShell>) -> impl IntoElement {
+        if !self.is_create_open && !self.is_settings_open && !self.is_delete_open {
+            return div();
+        }
         div()
             .when(self.is_create_open, |this| {
                 this.child(

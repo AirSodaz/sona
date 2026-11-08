@@ -113,6 +113,8 @@ impl SegmentRow {
                     ),
             )
     }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn render_interactive(
         data: SegmentData,
         is_active: bool,
@@ -120,6 +122,7 @@ impl SegmentRow {
         edit_state: Option<Entity<InputState>>,
         translation_editing: bool,
         translation_state: Option<Entity<InputState>>,
+        show_translations: bool,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement + use<> {
         let id = data.id.clone();
@@ -205,50 +208,52 @@ impl SegmentRow {
                                     .child(data.text.clone())
                                     .into_any_element()
                             })
-                            .when_some(data.translation.clone(), |content, translation| {
-                                if translation_editing {
-                                    if let Some(state) = translation_state.clone() {
+                            .when(show_translations, |this| {
+                                this.when_some(data.translation.clone(), |content, translation| {
+                                    if translation_editing {
+                                        if let Some(state) = translation_state.clone() {
+                                            content.child(
+                                                div()
+                                                    .mt(px(4.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .child(Input::new(&state).focus_ring(true))
+                                                    .child(
+                                                        Button::new(format!(
+                                                            "btn-save-translation-{}",
+                                                            id
+                                                        ))
+                                                        .primary()
+                                                        .xsmall()
+                                                        .label("Save")
+                                                        .on_click(cx.listener({
+                                                            let id = id.clone();
+                                                            move |this, _, _, cx| {
+                                                                this.workbench
+                                                                    .editor
+                                                                    .save_translation(&id, cx);
+                                                                this.workbench
+                                                                    .persist_editor_change(cx);
+                                                                cx.notify();
+                                                            }
+                                                        })),
+                                                    ),
+                                            )
+                                        } else {
+                                            content.child(div().mt(px(4.0)).child(translation))
+                                        }
+                                    } else {
                                         content.child(
                                             div()
                                                 .mt(px(4.0))
-                                                .flex()
-                                                .items_center()
-                                                .gap_2()
-                                                .child(Input::new(&state).focus_ring(true))
-                                                .child(
-                                                    Button::new(format!(
-                                                        "btn-save-translation-{}",
-                                                        id
-                                                    ))
-                                                    .primary()
-                                                    .xsmall()
-                                                    .label("Save")
-                                                    .on_click(cx.listener({
-                                                        let id = id.clone();
-                                                        move |this, _, _, cx| {
-                                                            this.workbench
-                                                                .editor
-                                                                .save_translation(&id, cx);
-                                                            this.workbench
-                                                                .persist_editor_change(cx);
-                                                            cx.notify();
-                                                        }
-                                                    })),
-                                                ),
+                                                .text_size(px(14.5))
+                                                .line_height(relative(1.5))
+                                                .text_color(COLOR_TEXT_SECONDARY_LIGHT)
+                                                .child(translation),
                                         )
-                                    } else {
-                                        content.child(div().mt(px(4.0)).child(translation))
                                     }
-                                } else {
-                                    content.child(
-                                        div()
-                                            .mt(px(4.0))
-                                            .text_size(px(14.5))
-                                            .line_height(relative(1.5))
-                                            .text_color(COLOR_TEXT_SECONDARY_LIGHT)
-                                            .child(translation),
-                                    )
-                                }
+                                })
                             }),
                     )
                     // Actions: buttons row with icons
@@ -300,7 +305,7 @@ impl SegmentRow {
                                             }
                                         })),
                                 )
-                                .when(data.translation.is_some(), |actions| {
+                                .when(show_translations && data.translation.is_some(), |actions| {
                                     actions.child(
                                         Button::new(format!("btn-edit-translation-{}", id))
                                             .ghost()

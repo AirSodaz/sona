@@ -217,6 +217,9 @@ impl RecoveryModal {
     }
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         let items = self.items.clone();
         let error = self.error.clone();
         let is_loading = self.is_loading;

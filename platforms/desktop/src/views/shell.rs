@@ -16,6 +16,7 @@ use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState, TextareaState};
 use gpui_kit::component::select::{SelectEvent, SelectState};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{StatefulInteractiveElement as _, *};
@@ -41,10 +42,10 @@ use super::transcript::TranscriptWorkbench;
 use crate::app::{GlobalDesktopServices, GlobalEventBus, GlobalHotkeyController};
 use crate::theme::tokens::{
     COLOR_BG_ELEVATED_LIGHT, COLOR_BG_PRIMARY_LIGHT, COLOR_BG_SECONDARY_LIGHT,
-    COLOR_BG_TERTIARY_LIGHT, COLOR_BORDER_LIGHT, COLOR_HEADER_BG_LIGHT, COLOR_PROJECT_AMBER,
-    COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, HEADER_HEIGHT,
-    PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_LG, RADIUS_MD, RADIUS_SM,
-    project_color_from_index,
+    COLOR_BG_TERTIARY_LIGHT, COLOR_BORDER_HOVER_LIGHT, COLOR_BORDER_LIGHT, COLOR_HEADER_BG_LIGHT,
+    COLOR_PROJECT_AMBER, COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT,
+    COLOR_TEXT_SECONDARY_LIGHT, HEADER_HEIGHT, PANEL_LEFT_WIDTH, PANEL_RIGHT_MIN_WIDTH, RADIUS_LG,
+    RADIUS_MD, RADIUS_SM, project_color_from_index,
 };
 
 #[inline]
@@ -1409,8 +1410,12 @@ impl MainShell {
                     let _ = this.update(cx, |shell, cx| {
                         shell.projects_results.selected_id = Some(session_id.clone());
                         shell.has_active_transcript = true;
-                        shell.workbench.begin_loading(session_id, title);
-                        shell.workbench.set_transcript(Vec::new(), 0.0);
+                        shell.workbench.begin_loading(
+                            session_id,
+                            title,
+                            Some("system:mic".to_string()),
+                            false,
+                        );
                         cx.notify();
                     });
                 } else if event.is("live-record:transcript-updated") {
@@ -1506,8 +1511,19 @@ impl MainShell {
 
         self.projects_results.selected_id = Some(id.clone());
         self.has_active_transcript = true;
-        self.workbench.begin_loading(id.clone(), record.title);
-        cx.notify();
+        let is_batch = matches!(record.kind, sona_core::history::HistoryItemKind::Batch);
+        let media_context = self
+            .create_workspace
+            .read(cx)
+            .batch_import
+            .read(cx)
+            .queue
+            .iter()
+            .find(|item| item.history_id.as_deref() == Some(&id))
+            .and_then(|item| item.media_server_context.clone());
+        self.workbench.media_server_context = media_context;
+        self.workbench
+            .begin_loading(id.clone(), record.title, record.icon.clone(), is_batch);
 
         let duration = record.duration;
         let selected_id = id.clone();
@@ -1634,7 +1650,19 @@ impl MainShell {
                     .text_size(px(13.0))
                     .text_color(cx.theme().foreground)
                     .cursor_pointer()
-                    .when(is_rec, |this| this.opacity(0.55).cursor_not_allowed())
+                    .hover(|style| {
+                        style
+                            .border_color(COLOR_BORDER_HOVER_LIGHT)
+                            .bg(COLOR_BG_SECONDARY_LIGHT)
+                    })
+                    .when(is_rec, |this| {
+                        this.opacity(0.55)
+                            .cursor_not_allowed()
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Cannot switch projects during recording")
+                                    .build(window, cx)
+                            })
+                    })
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.project_selector.toggle(cx);
                     }))
@@ -1753,6 +1781,7 @@ impl MainShell {
                                     gpui_kit::transparent_black()
                                 })
                                 .cursor_pointer()
+                                .hover(|style| style.bg(COLOR_BG_TERTIARY_LIGHT))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.project_dropdown_search_state.update(cx, |input, cx| {
                                         input.set_value("", window, cx);
@@ -1811,6 +1840,7 @@ impl MainShell {
                                             gpui_kit::transparent_black()
                                         })
                                         .cursor_pointer()
+                                        .hover(|style| style.bg(COLOR_BG_TERTIARY_LIGHT))
                                         .on_click(cx.listener(move |this, _, window, cx| {
                                             this.project_dropdown_search_state.update(
                                                 cx,
@@ -2035,9 +2065,8 @@ impl MainShell {
                     .bg(COLOR_BG_SECONDARY_LIGHT)
                     .text_size(px(12.8))
                     .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.sync_pill.toggle(cx);
-                    }))
+                    .hover(|style| style.border_color(COLOR_BORDER_HOVER_LIGHT).bg(COLOR_BG_TERTIARY_LIGHT))
+                    .tooltip(|window, cx| Tooltip::new("Cloud Sync").build(window, cx))
                     .child(if !is_loaded || lifecycle == SyncLifecycleState::Disabled {
                         // Real Unconfigured / Empty state: <CloudOff size={14} /> Cloud Sync
                         div()
@@ -2135,7 +2164,7 @@ impl MainShell {
                                         .text_size(px(12.8))
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(COLOR_TEXT_SECONDARY_LIGHT)
-                                        .child(time_label),
+                                        .child(time_label.clone()),
                                 )
                                 .into_any_element(),
                         }
@@ -2237,6 +2266,7 @@ impl MainShell {
                                         Button::new("btn-enable-sync")
                                             .primary()
                                             .small()
+                                            .icon(LucideIcon::ShieldCheck)
                                             .label("Enable Cloud Sync")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.sync_pill.is_open = false;
@@ -2248,7 +2278,108 @@ impl MainShell {
                                     )
                                 })
                                 .when(is_loaded && lifecycle != SyncLifecycleState::Disabled, |this| {
-                                    this.child(
+                                    let last_err_msg = self.sync_pill.status.as_ref().and_then(|s| s.last_error.as_ref()).map(|e| e.message.clone());
+                                    let preset_name = self.sync_pill.status.as_ref().and_then(|s| s.preset).map(|p| format!("{p:?}")).unwrap_or_else(|| "-".to_string());
+                                    this.when(conflict_count > 0, |card| {
+                                        card.child(
+                                            div()
+                                                .id("sync-popover-conflict-banner")
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .gap_2()
+                                                .p_2()
+                                                .rounded(RADIUS_SM)
+                                                .bg(hsla(45.0 / 360.0, 0.93, 0.47, 0.12))
+                                                .border_1()
+                                                .border_color(COLOR_PROJECT_AMBER)
+                                                .cursor_pointer()
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.sync_pill.is_open = false;
+                                                    this.settings_modal.set_tab(SettingsTab::Sync, cx);
+                                                    this.settings_modal.open(cx);
+                                                    this.settings_modal.load_preferences(cx);
+                                                    cx.notify();
+                                                }))
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap_2()
+                                                        .child(icon(LucideIcon::TriangleAlert).size(px(15.0)).text_color(COLOR_PROJECT_AMBER))
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(12.0))
+                                                                .font_weight(FontWeight::SEMIBOLD)
+                                                                .text_color(COLOR_PROJECT_AMBER)
+                                                                .child(format!("{conflict_count} content conflicts need review.")),
+                                                        ),
+                                                )
+                                                .child(icon(LucideIcon::ExternalLink).size(px(13.0)).text_color(COLOR_PROJECT_AMBER)),
+                                        )
+                                    })
+                                    .when_some(last_err_msg, |card, msg| {
+                                        card.child(
+                                            div()
+                                                .id("sync-popover-error-banner")
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .p_2()
+                                                .rounded(RADIUS_SM)
+                                                .bg(hsla(0.0, 0.84, 0.60, 0.10))
+                                                .border_1()
+                                                .border_color(cx.theme().danger)
+                                                .child(icon(LucideIcon::CircleAlert).size(px(14.0)).text_color(cx.theme().danger))
+                                                .child(
+                                                    div()
+                                                        .text_size(px(12.0))
+                                                        .text_color(cx.theme().danger)
+                                                        .child(msg),
+                                                ),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .id("sync-popover-metrics")
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .p_2()
+                                            .rounded(RADIUS_SM)
+                                            .bg(COLOR_BG_SECONDARY_LIGHT)
+                                            .border_1()
+                                            .border_color(COLOR_BORDER_LIGHT)
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .text_size(px(12.0))
+                                                    .child(div().text_color(COLOR_TEXT_MUTED_LIGHT).child("Last success:"))
+                                                    .child(
+                                                        div()
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .text_color(COLOR_TEXT_PRIMARY_LIGHT)
+                                                            .child(time_label.clone()),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .text_size(px(12.0))
+                                                    .child(div().text_color(COLOR_TEXT_MUTED_LIGHT).child("Preset scope:"))
+                                                    .child(
+                                                        div()
+                                                            .font_weight(FontWeight::SEMIBOLD)
+                                                            .text_color(COLOR_TEXT_PRIMARY_LIGHT)
+                                                            .child(preset_name),
+                                                    ),
+                                            ),
+                                    )
+                                    .child(
                                         div()
                                             .flex()
                                             .items_center()
@@ -2257,7 +2388,12 @@ impl MainShell {
                                                 Button::new("btn-sync-run-now")
                                                     .primary()
                                                     .small()
-                                                    .label("Sync now")
+                                                    .icon(LucideIcon::RefreshCw)
+                                                    .label(if lifecycle == SyncLifecycleState::Syncing {
+                                                        "Syncing..."
+                                                    } else {
+                                                        "Sync now"
+                                                    })
                                                     .disabled(
                                                         is_busy
                                                             || lifecycle == SyncLifecycleState::Syncing
@@ -2271,6 +2407,11 @@ impl MainShell {
                                                 Button::new("btn-sync-pause")
                                                     .ghost()
                                                     .small()
+                                                    .icon(if lifecycle == SyncLifecycleState::Paused {
+                                                        LucideIcon::Play
+                                                    } else {
+                                                        LucideIcon::Pause
+                                                    })
                                                     .label(if lifecycle == SyncLifecycleState::Paused {
                                                         "Resume"
                                                     } else {
@@ -2670,6 +2811,8 @@ impl Render for MainShell {
                     .w_full()
                     .px(px(24.0)) // padding: 8px 24px
                     .bg(COLOR_HEADER_BG_LIGHT)
+                    .border_b_1()
+                    .border_color(COLOR_BORDER_LIGHT)
                     // Column 1: Left Logo & ProjectSelectorDropdown (1fr)
                     .child(
                         div()
@@ -2718,7 +2861,11 @@ impl Render for MainShell {
                                     .justify_center()
                                     .size(px(36.0))
                                     .rounded(RADIUS_MD)
+                                    .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                                     .cursor_pointer()
+                                    .hover(|s| s.bg(COLOR_BG_TERTIARY_LIGHT).text_color(COLOR_TEXT_PRIMARY_LIGHT))
+                                    .active(|s| s.bg(COLOR_BG_SECONDARY_LIGHT))
+                                    .tooltip(|window, cx| Tooltip::new("Settings").build(window, cx))
                                     .child(icon(LucideIcon::Settings).size(px(18.0)))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.settings_modal.open(cx);
@@ -2980,52 +3127,71 @@ impl Render for MainShell {
                         },
                     ),
             )
-            // Modals & Dialogs
-            .child(self.settings_modal.render(
-                &self.shortcut_edit_state,
-                &self.model_search_state,
-                &self.mcp_search_state,
-                &mut self.voice_typing_tool,
-                &mut self.subtitles_tool,
-                &self.api_server_field_states,
-                &self.model_engine_select,
-                &self.model_status_select,
-                &self.model_label_select,
-                &self.online_provider_field_states,
-                &self.llm_provider_api_host_state,
-                &self.llm_provider_api_key_state,
-                &self.llm_model_draft_state,
-                &self.llm_custom_provider_name_state,
-                &self.llm_model_metadata_field_states,
-                &self.dictionary_textarea_state,
-                &self.dictionary_quick_add_state,
-                &self.dictionary_search_state,
-                &self.dictionary_test_state,
-                &self.vocabulary_name_state,
-                &self.vocabulary_body_state,
-                &self.translation_language_select,
-                &self.general_log_level_select,
-                &self.general_language_select,
-                &self.general_font_select,
-                &self.project_selector.projects,
-                self.workbench.history_id.as_deref(),
-                &self.dictionary_word_state,
-                &self.dictionary_weight_state,
-                &self.dictionary_from_state,
-                &self.dictionary_to_state,
-                &self.dictionary_inline_hotword_state,
-                &self.speaker_profile_name_state,
-                &self.speaker_profile_search_state,
-                &self.speaker_profile_name_states,
-                window,
-                cx,
-            ))
-            .child(self.diagnostics_modal.render(cx))
-            .child(self.recovery_modal.render(cx))
-            .child(self.global_dialog.render(cx))
-            .child(self.export_modal.render(cx))
-            .child(self.onboarding.render(cx))
-            .child(self.project_dialogs.render(cx))
-            .child(self.error_dialog.render(cx))
+            // Modals & Dialogs (conditionally mounted to prevent stack overflow and frame overhead)
+            .when(self.settings_modal.is_open, |this| {
+                this.child(self.settings_modal.render(
+                    &self.shortcut_edit_state,
+                    &self.model_search_state,
+                    &self.mcp_search_state,
+                    &mut self.voice_typing_tool,
+                    &mut self.subtitles_tool,
+                    &self.api_server_field_states,
+                    &self.model_engine_select,
+                    &self.model_status_select,
+                    &self.model_label_select,
+                    &self.online_provider_field_states,
+                    &self.llm_provider_api_host_state,
+                    &self.llm_provider_api_key_state,
+                    &self.llm_model_draft_state,
+                    &self.llm_custom_provider_name_state,
+                    &self.llm_model_metadata_field_states,
+                    &self.dictionary_textarea_state,
+                    &self.dictionary_quick_add_state,
+                    &self.dictionary_search_state,
+                    &self.dictionary_test_state,
+                    &self.vocabulary_name_state,
+                    &self.vocabulary_body_state,
+                    &self.translation_language_select,
+                    &self.general_log_level_select,
+                    &self.general_language_select,
+                    &self.general_font_select,
+                    &self.project_selector.projects,
+                    self.workbench.history_id.as_deref(),
+                    &self.dictionary_word_state,
+                    &self.dictionary_weight_state,
+                    &self.dictionary_from_state,
+                    &self.dictionary_to_state,
+                    &self.dictionary_inline_hotword_state,
+                    &self.speaker_profile_name_state,
+                    &self.speaker_profile_search_state,
+                    &self.speaker_profile_name_states,
+                    window,
+                    cx,
+                ))
+            })
+            .when(self.diagnostics_modal.is_open, |this| {
+                this.child(self.diagnostics_modal.render(cx))
+            })
+            .when(self.recovery_modal.is_open, |this| {
+                this.child(self.recovery_modal.render(cx))
+            })
+            .when(self.global_dialog.is_open, |this| {
+                this.child(self.global_dialog.render(cx))
+            })
+            .when(self.export_modal.is_open, |this| {
+                this.child(self.export_modal.render(cx))
+            })
+            .when(self.onboarding.is_open, |this| {
+                this.child(self.onboarding.render(cx))
+            })
+            .when(
+                self.project_dialogs.is_create_open
+                    || self.project_dialogs.is_settings_open
+                    || self.project_dialogs.is_delete_open,
+                |this| this.child(self.project_dialogs.render(cx)),
+            )
+            .when(self.error_dialog.is_open, |this| {
+                this.child(self.error_dialog.render(cx))
+            })
     }
 }

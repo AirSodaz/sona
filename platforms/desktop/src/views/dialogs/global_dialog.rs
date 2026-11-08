@@ -99,6 +99,9 @@ impl GlobalDialog {
     }
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         let kind = self.kind;
         let title = self.title.clone();
         div().when(self.is_open, |this| {

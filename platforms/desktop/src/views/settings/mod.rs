@@ -3474,6 +3474,9 @@ impl SettingsModal {
         window: &mut Window,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         if !self.audio_peak_listener_started {
             self.audio_peak_listener_started = true;
             let mut events = cx.global::<crate::app::GlobalEventBus>().0.subscribe();

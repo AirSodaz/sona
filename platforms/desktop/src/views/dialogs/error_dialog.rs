@@ -51,6 +51,9 @@ impl ErrorDialog {
     }
 
     pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+        if !self.is_open {
+            return div();
+        }
         let has_details = !self.stack_trace.trim().is_empty();
 
         div().when(self.is_open, |this| {

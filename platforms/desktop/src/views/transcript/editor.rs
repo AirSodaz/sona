@@ -18,8 +18,8 @@ pub struct TranscriptEditor {
     pub edit_states: HashMap<String, Entity<InputState>>,
     pub translation_editing_id: Option<String>,
     pub translation_states: HashMap<String, Entity<InputState>>,
+    pub show_translations: bool,
 }
-
 impl TranscriptEditor {
     pub fn new(_window: &mut Window, _cx: &mut Context<MainShell>) -> Self {
         Self {
@@ -29,6 +29,7 @@ impl TranscriptEditor {
             edit_states: HashMap::new(),
             translation_editing_id: None,
             translation_states: HashMap::new(),
+            show_translations: true,
         }
     }
 
@@ -237,6 +238,7 @@ impl TranscriptEditor {
                         state,
                         translation_editing,
                         translation_state,
+                        self.show_translations,
                         cx,
                     ));
                 }
