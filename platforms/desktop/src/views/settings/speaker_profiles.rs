@@ -16,50 +16,25 @@ use uuid::Uuid;
 
 pub(crate) fn speaker_profiles_panel(
     config: &Value,
+    settings: &super::SettingsModal,
+    projects: &[sona_core::project::ProjectRecord],
+    speaker_profile_name_states: &std::collections::HashMap<
+        String,
+        (Entity<InputState>, Subscription),
+    >,
     name_state: &Entity<InputState>,
     search_state: &Entity<InputState>,
     cx: &mut Context<MainShell>,
 ) -> AnyElement {
     let profiles = normalized_profiles(config);
-    let projects = cx.entity().read(cx).project_selector.projects.clone();
     let name = name_state.read(cx).value().trim().to_string();
     let query = search_state.read(cx).value().trim().to_lowercase();
-    let scope_filter = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_scope_filter
-        .clone();
-    let selected_scope = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_new_scope
-        .clone();
-    let expanded = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_expanded_ids
-        .clone();
-    let edit_scope = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_edit_scope
-        .clone();
-    let selected_project_ids = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_scope_project_ids
-        .clone();
-    let import_error = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .speaker_import_error
-        .clone();
+    let scope_filter = settings.speaker_scope_filter.clone();
+    let selected_scope = settings.speaker_new_scope.clone();
+    let expanded = settings.speaker_expanded_ids.clone();
+    let edit_scope = settings.speaker_edit_scope.clone();
+    let selected_project_ids = settings.speaker_scope_project_ids.clone();
+    let import_error = settings.speaker_import_error.clone();
     let mut filter_items = vec![("all".to_string(), "All Scopes".to_string(), profiles.len())];
     filter_items.push((
         "global".to_string(),
@@ -114,7 +89,7 @@ pub(crate) fn speaker_profiles_panel(
                 .child(Input::new(name_state).aria_label("Profile Name")))
             .child(div().w(px(200.0)).flex().flex_col().gap_1()
                 .child(label("Target Scope", cx))
-                .child(Button::new("speaker-new-scope").outline().small().label(scope_label(&selected_scope, &projects))
+                .child(Button::new("speaker-new-scope").outline().small().label(scope_label(&selected_scope, projects))
                     .on_click(cx.listener(|shell, _, _, cx| {
                         shell.settings_modal.speaker_new_scope_open = !shell.settings_modal.speaker_new_scope_open;
                         cx.notify();
@@ -148,7 +123,7 @@ pub(crate) fn speaker_profiles_panel(
                     shell.settings_modal.speaker_expanded_ids.insert(id);
                     cx.notify();
                 }))))
-        .when(cx.entity().read(cx).settings_modal.speaker_new_scope_open, |this| {
+        .when(settings.speaker_new_scope_open, |this| {
             let options = std::iter::once(("global".to_string(), "Global".to_string())).chain(projects.iter().map(|project| (project.id.clone(), project.name.clone())).collect::<Vec<_>>());
             this.child(div().flex().flex_wrap().gap_1().children(options.map(|(id, label)| {
                 let selected = selected_scope == id;
@@ -172,7 +147,7 @@ pub(crate) fn speaker_profiles_panel(
             let enabled_id = profile_id.clone();
             let delete_id = profile_id.clone();
             let delete_label = profile.name.clone();
-            let name_state = cx.entity().read(cx).speaker_profile_name_states.get(&profile.id).map(|(state, _)| state.clone());
+            let name_state = speaker_profile_name_states.get(&profile.id).map(|(state, _)| state.clone());
             let name_field = if let Some(name_state) = name_state {
                 Input::new(&name_state).aria_label("Speaker profile name").into_any_element()
             } else {
@@ -180,7 +155,6 @@ pub(crate) fn speaker_profiles_panel(
             };
             let is_expanded = expanded.contains(&profile_id);
             let readiness = readiness(&profile.samples);
-            let projects_for_profile = projects.clone();
             div().id(ElementId::Name(format!("speaker-profile-{}", profile.id).into()))
                 .flex().flex_col().gap_2().p_3().rounded_md().border_1().border_color(cx.theme().border)
                 .when(!profile.enabled, |this| this.bg(cx.theme().muted.opacity(0.08)))
@@ -195,7 +169,7 @@ pub(crate) fn speaker_profiles_panel(
                         })))
                     .child(div().flex_1().min_w_0().child(name_field))
                     .child(Button::new(ElementId::Name(format!("speaker-profile-scope-{}", profile.id).into())).outline().small()
-                        .label(scope_label_profile(&profile, &projects_for_profile))
+                        .label(scope_label_profile(&profile, projects))
                         .tooltip("Click to edit target scope")
                         .on_click(cx.listener(move |shell, _, _, cx| {
                             shell.settings_modal.speaker_edit_scope = Some(scope_id.clone());
@@ -263,11 +237,11 @@ pub(crate) fn speaker_profiles_panel(
             this.child(div().flex().flex_col().gap_2().p_3().rounded_md().border_1().border_color(cx.theme().border).bg(cx.theme().group_box)
                 .child(div().text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD).child("Edit target scope"))
                 .child(div().flex().gap_1().children([("global", "Global"), ("project", "Specific Projects")].into_iter().map(|(scope, label)| {
-                    let selected = cx.entity().read(cx).settings_modal.speaker_scope_modal_type == scope;
+                    let selected = settings.speaker_scope_modal_type == scope;
                     Button::new(ElementId::Name(format!("speaker-scope-modal-{scope}").into())).when(selected, |button| button.primary()).when(!selected, |button| button.outline()).small().label(label)
                         .on_click(cx.listener(move |_shell, _, _, cx| { _shell.settings_modal.speaker_scope_modal_type = scope.to_string(); cx.notify(); }))
                 })))
-                .when(cx.entity().read(cx).settings_modal.speaker_scope_modal_type == "project", |this| {
+                .when(settings.speaker_scope_modal_type == "project", |this| {
                     let this = this.when(projects.is_empty(), |this| this.child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("No projects created yet.")));
                     this.children(projects.iter().map(|project| {
                         let id = project.id.clone();

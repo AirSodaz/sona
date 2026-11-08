@@ -181,7 +181,7 @@ impl ProjectsRail {
                                             .on_click(move |_, _, cx| {
                                                 shell.update(cx, |shell, cx| {
                                                     shell.projects_toolbar.is_selection_active = true;
-                                                    shell.selection_bar.request_delete(cx);
+                                                    shell.selection_bar.request_delete(&shell.projects_results.selected_ids, cx);
                                                 });
                                             }),
                                     )

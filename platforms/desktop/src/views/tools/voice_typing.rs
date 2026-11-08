@@ -47,7 +47,12 @@ impl VoiceTypingToolPanel {
         Self
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(
+        &mut self,
+        is_recording_shortcut: bool,
+        shortcut_recording_target: Option<ShortcutTarget>,
+        cx: &mut Context<MainShell>,
+    ) -> impl IntoElement {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let enabled = setting_bool(&services, "voiceTypingEnabled", false);
         let shortcut = setting_string(&services, "voiceTypingShortcut", "Alt+V");
@@ -159,8 +164,8 @@ impl VoiceTypingToolPanel {
                                         Button::new("voice-typing-shortcut-capture")
                                             .outline()
                                             .small()
-                                            .label(if cx.entity().read(cx).settings_modal.is_recording_shortcut
-                                                && cx.entity().read(cx).settings_modal.shortcut_recording_target == Some(ShortcutTarget::VoiceTyping)
+                                            .label(if is_recording_shortcut
+                                                && shortcut_recording_target == Some(ShortcutTarget::VoiceTyping)
                                             { "Recording..." } else { shortcut.as_str() })
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.settings_modal.is_recording_shortcut = true;
@@ -173,8 +178,8 @@ impl VoiceTypingToolPanel {
                                         Button::new("voice-typing-quick-recall-shortcut-capture")
                                             .outline()
                                             .small()
-                                            .label(if cx.entity().read(cx).settings_modal.is_recording_shortcut
-                                                && cx.entity().read(cx).settings_modal.shortcut_recording_target == Some(ShortcutTarget::VoiceTypingQuickRecall)
+                                            .label(if is_recording_shortcut
+                                                && shortcut_recording_target == Some(ShortcutTarget::VoiceTypingQuickRecall)
                                             { "Recording..." } else { recall_shortcut.as_str() })
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.settings_modal.is_recording_shortcut = true;
@@ -187,8 +192,8 @@ impl VoiceTypingToolPanel {
                                         Button::new("voice-typing-translate-shortcut-capture")
                                             .outline()
                                             .small()
-                                            .label(if cx.entity().read(cx).settings_modal.is_recording_shortcut
-                                                && cx.entity().read(cx).settings_modal.shortcut_recording_target == Some(ShortcutTarget::VoiceTypingTranslate)
+                                            .label(if is_recording_shortcut
+                                                && shortcut_recording_target == Some(ShortcutTarget::VoiceTypingTranslate)
                                             { "Recording..." } else { translate_shortcut.as_str() })
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.settings_modal.is_recording_shortcut = true;

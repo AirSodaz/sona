@@ -14,7 +14,9 @@ fn escape_applescript_text(message: &str) -> String {
 }
 
 pub fn show_error_dialog(message: &str) {
-    #[cfg(target_os = "windows")]
+    if std::env::var("SONA_NO_ERROR_DIALOG").is_ok() {
+        return;
+    }
     {
         use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
         use windows::core::HSTRING;

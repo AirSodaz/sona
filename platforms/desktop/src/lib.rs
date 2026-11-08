@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 //! Sona Desktop Native Library
 //!
 //! Milestone 1: Desktop Foundation, Core Linking & Tauri Excision

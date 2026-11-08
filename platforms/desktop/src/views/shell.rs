@@ -1909,9 +1909,9 @@ impl MainShell {
 
     fn render_tab_navigation(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let modes = [
-            (AppMode::Create, "Create"),
-            (AppMode::Projects, "Projects"),
-            (AppMode::Tools, "Tools"),
+            (AppMode::Create, "Create", LucideIcon::SquarePen),
+            (AppMode::Projects, "Projects", LucideIcon::BookOpen),
+            (AppMode::Tools, "Tools", LucideIcon::Wrench),
         ];
 
         let active_index = match self.mode {
@@ -1942,8 +1942,8 @@ impl MainShell {
                     .bg(COLOR_BG_ELEVATED_LIGHT)
                     .shadow_sm(),
             )
-            // 3 Mode Tab Buttons
-            .children(modes.into_iter().map(|(mode, label)| {
+            // 3 Mode Tab Buttons with Lucide Icons (matching React TabNavigation.tsx 1:1)
+            .children(modes.into_iter().map(|(mode, label, icon_name)| {
                 let is_active = self.mode == mode;
 
                 div()
@@ -1952,6 +1952,7 @@ impl MainShell {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .gap(px(8.0))
                     .h(px(32.0))
                     .w(px(120.0))
                     .px(px(12.0))
@@ -1968,6 +1969,8 @@ impl MainShell {
                     } else {
                         COLOR_TEXT_MUTED_LIGHT
                     })
+                    .hover(|style| style.text_color(COLOR_TEXT_SECONDARY_LIGHT))
+                    .child(icon(icon_name).size(px(16.0)))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.set_mode(mode, cx);
@@ -2842,16 +2845,27 @@ impl Render for MainShell {
                                         cx,
                                     ))
                                     .child(
-                                        self.projects_toolbar
-                                            .render(&self.project_search_state, cx),
-                                    )
+                                        self.projects_toolbar.render(
+                                            &self.project_search_state,
+                                            self.projects_results.filter_type,
+                                            self.projects_results.date_filter,
+                                            self.projects_results.filtered_count,
+                                            self.projects_results.scoped_count,
+                                            cx,
+                                        ))
                                     .child(
                                         div()
                                             .relative()
                                             .flex_1()
                                             .min_h_0()
                                             .overflow_hidden()
-                                            .child(self.projects_results.render(cx))
+                                            .child(self.projects_results.render(
+                                                self.projects_toolbar.view_mode,
+                                                self.projects_toolbar.is_selection_active,
+                                                &self.project_selector.projects,
+                                                &self.history_rename_state,
+                                                cx,
+                                            ))
                                             .when(
                                                 self.projects_toolbar.is_selection_active,
                                                 |this| {
@@ -2878,19 +2892,43 @@ impl Render for MainShell {
                             })
                             .into_any_element(),
                         AppMode::Tools => {
+                            let media_server_name = self.media_server_tool.server_name();
+                            let is_recording_shortcut = self.settings_modal.is_recording_shortcut;
+                            let shortcut_target = self.settings_modal.shortcut_recording_target;
+                            let queued_media_ids = {
+                                let profile_id = self.media_server_tool.active_profile_id.as_deref();
+                                self.create_workspace
+                                    .read(cx)
+                                    .batch_import
+                                    .read(cx)
+                                    .queue
+                                    .iter()
+                                    .filter(|item| {
+                                        matches!(
+                                            item.status,
+                                            crate::views::create::BatchItemStatus::Pending
+                                                | crate::views::create::BatchItemStatus::Processing
+                                        )
+                                    })
+                                    .filter_map(|item| item.media_server_context.as_ref())
+                                    .filter(|context| profile_id.is_none_or(|id| context.profile_id == id))
+                                    .map(|context| context.item_id.clone())
+                                    .collect::<std::collections::HashSet<_>>()
+                            };
+
                             let tool_panel: AnyElement = match self.tools_sidebar.active_tool {
                                 ToolKind::Subtitles => {
                                     self.subtitles_tool.render(cx).into_any_element()
                                 }
                                 ToolKind::VoiceTyping => {
-                                    self.voice_typing_tool.render(cx).into_any_element()
+                                    self.voice_typing_tool.render(is_recording_shortcut, shortcut_target, cx).into_any_element()
                                 }
                                 ToolKind::ApiServer => {
-                                    self.api_server_tool.render(cx).into_any_element()
+                                    self.api_server_tool.render(&self.api_server_field_states, cx).into_any_element()
                                 }
                                 ToolKind::Mcp => self.mcp_tool.render(cx).into_any_element(),
                                 ToolKind::MediaServer => {
-                                    self.media_server_tool.render(cx).into_any_element()
+                                    self.media_server_tool.render(&queued_media_ids, cx).into_any_element()
                                 }
                             };
 
@@ -2899,7 +2937,7 @@ impl Render for MainShell {
                                 .flex()
                                 .size_full()
                                 .bg(cx.theme().secondary)
-                                .child(self.tools_sidebar.render(cx))
+                                .child(self.tools_sidebar.render(media_server_name.as_deref(), cx))
                                 .child(
                                     div()
                                         .id("tools-detail-pane")
@@ -2969,6 +3007,16 @@ impl Render for MainShell {
                 &self.general_log_level_select,
                 &self.general_language_select,
                 &self.general_font_select,
+                &self.project_selector.projects,
+                self.workbench.history_id.as_deref(),
+                &self.dictionary_word_state,
+                &self.dictionary_weight_state,
+                &self.dictionary_from_state,
+                &self.dictionary_to_state,
+                &self.dictionary_inline_hotword_state,
+                &self.speaker_profile_name_state,
+                &self.speaker_profile_search_state,
+                &self.speaker_profile_name_states,
                 window,
                 cx,
             ))

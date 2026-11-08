@@ -645,9 +645,7 @@ impl SettingsModal {
             self.about_update_status = AboutUpdateStatus::Idle;
         }
         self.current_tab = tab;
-        if tab == SettingsTab::Vocabulary
-            && cx.entity().read(cx).project_selector.projects.is_empty()
-        {
+        if tab == SettingsTab::Vocabulary {
             let projects = cx
                 .global::<crate::app::GlobalDesktopServices>()
                 .0
@@ -2729,6 +2727,7 @@ impl SettingsModal {
 
     fn choose_model_option(
         &mut self,
+        global_dialog: &mut crate::views::dialogs::global_dialog::GlobalDialog,
         field: &'static str,
         value: String,
         cx: &mut Context<MainShell>,
@@ -2741,15 +2740,13 @@ impl SettingsModal {
                     .as_ref()
                     .is_some_and(|status| status.is_installed)
             {
-                cx.entity().update(cx, |shell, cx| {
-                    shell.global_dialog.show(
-                        "Download CUDA Add-on",
-                        "CUDA acceleration requires an additional runtime package. Download and install it now?",
-                        crate::views::dialogs::global_dialog::DialogKind::Confirm,
-                    );
-                    shell.settings_modal.cuda_addon_error = None;
-                    cx.notify();
-                });
+                global_dialog.show(
+                    "Download CUDA Add-on",
+                    "CUDA acceleration requires an additional runtime package. Download and install it now?",
+                    crate::views::dialogs::global_dialog::DialogKind::Confirm,
+                );
+                self.cuda_addon_error = None;
+                cx.notify();
                 return;
             }
             self.persist_model_setting("gpuAcceleration".to_string(), Value::String(value), cx);
@@ -3464,6 +3461,16 @@ impl SettingsModal {
         general_log_level_select: &Entity<SelectState<Vec<&'static str>>>,
         general_language_select: &Entity<SelectState<Vec<&'static str>>>,
         general_font_select: &Entity<SelectState<Vec<&'static str>>>,
+        projects: &[sona_core::project::ProjectRecord],
+        active_history_id: Option<&str>,
+        dictionary_word_state: &Entity<InputState>,
+        dictionary_weight_state: &Entity<InputState>,
+        dictionary_from_state: &Entity<InputState>,
+        dictionary_to_state: &Entity<InputState>,
+        dictionary_inline_hotword_state: &Entity<InputState>,
+        speaker_profile_name_state: &Entity<InputState>,
+        speaker_profile_search_state: &Entity<InputState>,
+        speaker_profile_name_states: &HashMap<String, (Entity<InputState>, Subscription)>,
         window: &mut Window,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
@@ -4186,12 +4193,6 @@ impl SettingsModal {
                                                 .ok()
                                                 .flatten()
                                                 .and_then(|value| value.as_u64());
-                                            let active_history_id = cx
-                                                .entity()
-                                                .read(cx)
-                                                .workbench
-                                                .history_id
-                                                .clone();
                                             this.child(storage_panel(
                                                 self.storage_directories.as_ref(),
                                                 self.storage_usage.as_ref(),
@@ -4200,7 +4201,7 @@ impl SettingsModal {
                                                 self.storage_migration_progress.as_ref(),
                                                 self.storage_error.as_deref(),
                                                 retention_days,
-                                                active_history_id.as_deref(),
+                                                active_history_id,
                                                 self.storage_cleanup_busy,
                                                 self.storage_cleanup_result.as_deref(),
                                                 cx,
@@ -4226,7 +4227,7 @@ impl SettingsModal {
                                                             cx.notify();
                                                         }))))
                                                 .child(if self.subtitle_voice_typing_tab {
-                                                    voice_typing_tool.render(cx).into_any_element()
+                                                    voice_typing_tool.render(self.is_recording_shortcut, self.shortcut_recording_target, cx).into_any_element()
                                                 } else {
                                                     subtitles_tool.render(cx).into_any_element()
                                                 }))
@@ -4281,6 +4282,16 @@ impl SettingsModal {
                                         .when(self.current_tab == SettingsTab::Vocabulary, |this| {
                                             this.child(vocabulary_panel(
                                                 &self.model_config,
+                                                self,
+                                                projects,
+                                                dictionary_word_state,
+                                                dictionary_weight_state,
+                                                dictionary_from_state,
+                                                dictionary_to_state,
+                                                dictionary_inline_hotword_state,
+                                                speaker_profile_name_state,
+                                                speaker_profile_search_state,
+                                                speaker_profile_name_states,
                                                 &self.vocabulary_tab,
                                                 &self.vocabulary_prompt_tab,
                                                 self.vocabulary_polish_edit_id.as_deref(),
@@ -5513,6 +5524,7 @@ fn model_selector_row(
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
                                             this.settings_modal.choose_model_option(
+                                                &mut this.global_dialog,
                                                 field,
                                                 selected_value.clone(),
                                                 cx,

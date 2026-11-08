@@ -1,6 +1,7 @@
 //! Tool: HTTP API Server controller panel.
 
 use crate::views::shell::MainShell;
+use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 
 pub struct ApiServerToolPanel;
@@ -10,9 +11,12 @@ impl ApiServerToolPanel {
         Self
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
-        let field_states = cx.entity().read(cx).api_server_field_states.clone();
-        crate::views::settings::api_server::api_server_settings_panel(&field_states, cx)
+    pub fn render(
+        &mut self,
+        field_states: &std::collections::HashMap<String, Entity<InputState>>,
+        cx: &mut Context<MainShell>,
+    ) -> impl IntoElement {
+        crate::views::settings::api_server::api_server_settings_panel(field_states, cx)
     }
 }
 

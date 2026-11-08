@@ -230,7 +230,10 @@ impl ProjectsHeader {
                                         .disabled(trash_count == 0)
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.projects_toolbar.is_selection_active = true;
-                                            this.selection_bar.request_delete(cx);
+                                            this.selection_bar.request_delete(
+                                                &this.projects_results.selected_ids,
+                                                cx,
+                                            );
                                         })),
                                 )
                             }),

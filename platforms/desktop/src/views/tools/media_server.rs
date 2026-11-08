@@ -41,7 +41,7 @@ pub struct MediaServerToolPanel {
     is_connecting: bool,
     connection_error: Option<String>,
     server_info: Option<MediaServerInfo>,
-    active_profile_id: Option<String>,
+    pub active_profile_id: Option<String>,
     libraries: Vec<MediaServerLibrary>,
     selected_library_id: Option<String>,
     target_language: String,
@@ -145,8 +145,21 @@ impl MediaServerToolPanel {
             item_fetch_generation: 0,
         }
     }
+    pub fn server_name(&self) -> Option<String> {
+        self.server_info.as_ref().map(|info| {
+            if info.server_name.is_empty() {
+                "Connected".to_string()
+            } else {
+                info.server_name.clone()
+            }
+        })
+    }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
+    pub fn render(
+        &mut self,
+        queued_item_ids: &HashSet<String>,
+        cx: &mut Context<MainShell>,
+    ) -> impl IntoElement {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         if !self.processing_settings_loaded {
             self.processing_settings_loaded = true;
@@ -776,7 +789,6 @@ impl MediaServerToolPanel {
                             ))
                 })
                 .collect();
-            let queued_item_ids = shell_queued_media_items(cx);
             let selectable_ids: Vec<_> = filtered_items
                 .iter()
                 .filter(|item| !queued_item_ids.contains(&item.id))
@@ -1356,29 +1368,6 @@ fn media_item_row(
                 })),
             )
         })
-}
-
-fn shell_queued_media_items(cx: &Context<MainShell>) -> HashSet<String> {
-    let shell = cx.entity().read(cx);
-    let profile_id = shell.media_server_tool.active_profile_id.as_deref();
-    shell
-        .create_workspace
-        .read(cx)
-        .batch_import
-        .read(cx)
-        .queue
-        .iter()
-        .filter(|item| {
-            matches!(
-                item.status,
-                crate::views::create::BatchItemStatus::Pending
-                    | crate::views::create::BatchItemStatus::Processing
-            )
-        })
-        .filter_map(|item| item.media_server_context.as_ref())
-        .filter(|context| profile_id.is_none_or(|id| context.profile_id == id))
-        .map(|context| context.item_id.clone())
-        .collect()
 }
 
 fn persist_processing_settings(

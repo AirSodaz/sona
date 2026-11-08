@@ -144,8 +144,6 @@ impl ProjectsToolbar {
         self.sort_select.update(cx, |state, cx| {
             state.set_selected_value(&"Newest first", window, cx);
         });
-        cx.entity()
-            .update(cx, |shell, cx| shell.projects_results.reset_filters(cx));
     }
 
     pub fn set_view_mode(&mut self, mode: ViewMode, cx: &mut Context<MainShell>) {
@@ -200,20 +198,15 @@ impl ProjectsToolbar {
     pub fn render(
         &mut self,
         search_state: &Entity<InputState>,
+        filter_type: HistoryWorkspaceFilterType,
+        date_filter: HistoryWorkspaceDateFilter,
+        filtered_count: usize,
+        scoped_count: usize,
         cx: &mut Context<MainShell>,
     ) -> impl IntoElement {
         let mode = self.view_mode;
         let selection_active = self.is_selection_active;
         let filter_menu_open = self.is_filter_menu_open;
-        let filter_type = cx.entity().read(cx).projects_results.filter_type;
-        let date_filter = cx.entity().read(cx).projects_results.date_filter;
-        let (filtered_count, scoped_count) = {
-            let results = cx.entity().read(cx);
-            (
-                results.projects_results.filtered_count,
-                results.projects_results.scoped_count,
-            )
-        };
         let active_filter_count = usize::from(filter_type != HistoryWorkspaceFilterType::All)
             + usize::from(date_filter != HistoryWorkspaceDateFilter::All);
         let filter_hint = match (filter_type, date_filter) {
@@ -510,6 +503,7 @@ impl ProjectsToolbar {
                                         .disabled(active_filter_count == 0)
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.projects_toolbar.reset_filters(window, cx);
+                                            this.projects_results.reset_filters(cx);
                                         })),
                                 ),
                         )

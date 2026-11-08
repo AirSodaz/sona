@@ -7,7 +7,7 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::Icon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::prelude::FluentBuilder as _;
@@ -265,32 +265,29 @@ impl ProjectsResults {
         self.selected_ids.clear();
     }
 
-    fn begin_rename(&mut self, id: String, window: &mut Window, cx: &mut Context<MainShell>) {
+    fn begin_rename(
+        &mut self,
+        id: String,
+        rename_input: &Entity<InputState>,
+        window: &mut Window,
+        cx: &mut Context<MainShell>,
+    ) {
         let Some(item) = self.items.iter().find(|item| item.id == id) else {
             return;
         };
-        cx.entity().update(cx, |shell, cx| {
-            shell.history_rename_state.update(cx, |state, cx| {
-                state.set_value(item.title.clone(), window, cx);
-            });
-            shell.projects_results.rename_target = Some(id);
-            shell.projects_results.rename_error = None;
-            cx.notify();
+        rename_input.update(cx, |state, cx| {
+            state.set_value(item.title.clone(), window, cx);
         });
+        self.rename_target = Some(id);
+        self.rename_error = None;
+        cx.notify();
     }
 
-    fn save_rename(&mut self, cx: &mut Context<MainShell>) {
+    fn save_rename(&mut self, rename_input: &Entity<InputState>, cx: &mut Context<MainShell>) {
         let Some(id) = self.rename_target.clone() else {
             return;
         };
-        let title = cx
-            .entity()
-            .read(cx)
-            .history_rename_state
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
+        let title = rename_input.read(cx).value().trim().to_string();
         if title.is_empty() || self.rename_busy {
             return;
         }
@@ -336,15 +333,14 @@ impl ProjectsResults {
             .retain(|id| self.items.iter().any(|item| item.id == *id));
     }
 
-    pub fn render(&mut self, cx: &mut Context<MainShell>) -> impl IntoElement {
-        let (view_mode, selection_mode, projects) = {
-            let shell = cx.entity().read(cx);
-            (
-                shell.projects_toolbar.view_mode,
-                shell.projects_toolbar.is_selection_active,
-                shell.project_selector.projects.clone(),
-            )
-        };
+    pub fn render(
+        &mut self,
+        view_mode: ViewMode,
+        selection_mode: bool,
+        projects: &[ProjectRecord],
+        rename_input: &Entity<InputState>,
+        cx: &mut Context<MainShell>,
+    ) -> impl IntoElement {
         let selected_ids = self.selected_ids.clone();
         let selected_id = self.selected_id.clone();
         let show_project_badge = matches!(self.scope, HistoryWorkspaceScope::All);
@@ -463,7 +459,9 @@ impl ProjectsResults {
                         selection_mode,
                         is_selected,
                         show_project_badge,
-                        &projects,
+                        projects,
+                        &selected_ids,
+                        &self.items,
                         cx,
                     )
                 }))
@@ -515,7 +513,7 @@ impl ProjectsResults {
         let rename_target = self.rename_target.clone();
         let rename_busy = self.rename_busy;
         let rename_error = self.rename_error.clone();
-        let rename_input = cx.entity().read(cx).history_rename_state.clone();
+        let rename_input = rename_input.clone();
         div()
             .relative()
             .flex()
@@ -594,7 +592,10 @@ impl ProjectsResults {
                                                 })
                                                 .disabled(rename_busy)
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.projects_results.save_rename(cx);
+                                                    this.projects_results.save_rename(
+                                                        &this.history_rename_state,
+                                                        cx,
+                                                    );
                                                 })),
                                         ),
                                 ),
@@ -641,6 +642,7 @@ fn render_table_header(
         .into_any_element()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_history_item(
     item: &HistoryRecordItem,
     view_mode: ViewMode,
@@ -648,6 +650,8 @@ fn render_history_item(
     is_selected: bool,
     show_project_badge: bool,
     projects: &[ProjectRecord],
+    selected_ids: &[String],
+    all_items: &[HistoryRecordItem],
     cx: &mut Context<MainShell>,
 ) -> AnyElement {
     let title = item.title.clone();
@@ -910,8 +914,12 @@ fn render_history_item(
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 cx.stop_propagation();
-                                this.projects_results
-                                    .begin_rename(rename_id.clone(), window, cx);
+                                this.projects_results.begin_rename(
+                                    rename_id.clone(),
+                                    &this.history_rename_state,
+                                    window,
+                                    cx,
+                                );
                             },
                         )),
                     )
@@ -958,52 +966,38 @@ fn render_history_item(
     let item_title = item.title.clone();
     let item_excerpt = item.excerpt.clone();
     let shell = cx.entity().downgrade();
-    let selected_ids = cx.entity().read(cx).projects_results.selected_ids.clone();
-    let selected_live_drafts = {
-        let state = cx.entity().read(cx);
-        selected_ids.iter().any(|selected_id| {
-            state
-                .projects_results
-                .items
+    let selected_live_drafts = selected_ids.iter().any(|selected_id| {
+        all_items
+            .iter()
+            .find(|candidate| candidate.id == *selected_id)
+            .is_some_and(|candidate| {
+                candidate.record.status == HistoryItemStatus::Draft
+                    && candidate.record.draft_source
+                        == Some(sona_core::history::HistoryDraftSource::LiveRecord)
+            })
+    });
+    let selected_copy_items = selected_ids
+        .iter()
+        .filter_map(|selected_id| {
+            all_items
                 .iter()
                 .find(|candidate| candidate.id == *selected_id)
-                .is_some_and(|candidate| {
-                    candidate.record.status == HistoryItemStatus::Draft
-                        && candidate.record.draft_source
-                            == Some(sona_core::history::HistoryDraftSource::LiveRecord)
+                .map(|candidate| {
+                    (
+                        candidate.id.clone(),
+                        candidate.title.clone(),
+                        candidate.excerpt.clone(),
+                    )
                 })
         })
-    };
-    let selected_copy_items = {
-        let state = cx.entity().read(cx);
-        selected_ids
-            .iter()
-            .filter_map(|selected_id| {
-                state
-                    .projects_results
-                    .items
-                    .iter()
-                    .find(|candidate| candidate.id == *selected_id)
-                    .map(|candidate| {
-                        (
-                            candidate.id.clone(),
-                            candidate.title.clone(),
-                            candidate.excerpt.clone(),
-                        )
-                    })
-            })
-            .collect::<Vec<_>>()
-    };
+        .collect::<Vec<_>>();
     let is_batch = selected_ids.len() > 1 && selected_ids.contains(&item_id);
-    let all_visible_selected = {
-        let state = cx.entity().read(cx);
-        !state.projects_results.items.is_empty()
-            && selected_ids.len() == state.projects_results.items.len()
-    };
+    let all_visible_selected = !all_items.is_empty() && selected_ids.len() == all_items.len();
     let is_draft = item.record.status == HistoryItemStatus::Draft;
     let has_project = item.record.project_id.is_some();
     let is_live_draft = is_draft
         && item.record.draft_source == Some(sona_core::history::HistoryDraftSource::LiveRecord);
+    let selected_ids = selected_ids.to_vec();
     row.context_menu(move |menu, _, cx| {
         let mut menu = menu;
         if !is_batch && !selected_ids.is_empty() && !selected_ids.contains(&item_id) {
@@ -1071,7 +1065,7 @@ fn render_history_item(
                         purge_shell
                             .update(cx, |shell, cx| {
                                 shell.projects_toolbar.is_selection_active = true;
-                                shell.selection_bar.request_delete(cx);
+                                shell.selection_bar.request_delete(&shell.projects_results.selected_ids, cx);
                             })
                             .ok();
                     }),
@@ -1085,7 +1079,7 @@ fn render_history_item(
                     .disabled(selected_live_drafts)
                     .on_click(move |_, _, cx| {
                         let _ = assign_shell.update(cx, |shell, cx| {
-                            shell.projects_results.selected_ids = assign_ids.clone();
+                            shell.projects_results.selected_ids = assign_ids.to_vec();
                             shell.projects_toolbar.is_selection_active = true;
                             shell.selection_bar.open_assignment(cx);
                         });
@@ -1176,7 +1170,7 @@ fn render_history_item(
                         delete_shell
                             .update(cx, |shell, cx| {
                                 shell.projects_toolbar.is_selection_active = true;
-                                shell.selection_bar.request_delete(cx);
+                                shell.selection_bar.request_delete(&shell.projects_results.selected_ids, cx);
                             })
                             .ok();
                     }),
@@ -1286,7 +1280,7 @@ fn render_history_item(
                             .update(cx, |shell, cx| {
                                 shell
                                     .projects_results
-                                    .begin_rename(rename_id.clone(), window, cx);
+                                    .begin_rename(rename_id.clone(), &shell.history_rename_state, window, cx);
                             })
                             .ok();
                     }),

@@ -48,8 +48,8 @@ impl SelectionBar {
         cx.notify();
     }
 
-    fn confirm_assignment(&mut self, cx: &mut Context<MainShell>) {
-        let ids = cx.entity().read(cx).projects_results.selected_ids.clone();
+    fn confirm_assignment(&mut self, selected_ids: &[String], cx: &mut Context<MainShell>) {
+        let ids = selected_ids.to_vec();
         if ids.is_empty() || self.is_busy {
             return;
         }
@@ -90,13 +90,8 @@ impl SelectionBar {
         .detach();
     }
 
-    pub(crate) fn request_delete(&mut self, cx: &mut Context<MainShell>) {
-        let has_selection = !cx
-            .entity()
-            .read(cx)
-            .projects_results
-            .selected_ids
-            .is_empty();
+    pub(crate) fn request_delete(&mut self, selected_ids: &[String], cx: &mut Context<MainShell>) {
+        let has_selection = !selected_ids.is_empty();
         if !has_selection || self.is_busy {
             return;
         }
@@ -118,11 +113,16 @@ impl SelectionBar {
         cx.notify();
     }
 
-    fn confirm_delete(&mut self, is_trash_scope: bool, cx: &mut Context<MainShell>) {
+    fn confirm_delete(
+        &mut self,
+        is_trash_scope: bool,
+        selected_ids: &[String],
+        cx: &mut Context<MainShell>,
+    ) {
         let ids = self
             .pending_delete_ids
             .clone()
-            .unwrap_or_else(|| cx.entity().read(cx).projects_results.selected_ids.clone());
+            .unwrap_or_else(|| selected_ids.to_vec());
         if ids.is_empty() || self.is_busy {
             return;
         }
@@ -295,7 +295,10 @@ impl SelectionBar {
                                 .on_click(cx.listener(
                                     move |this, _, _, cx| {
                                         if is_trash_scope {
-                                            this.selection_bar.confirm_restore(cx);
+                                            this.selection_bar.confirm_restore(
+                                                &this.projects_results.selected_ids,
+                                                cx,
+                                            );
                                         } else {
                                             this.selection_bar.open_assignment(cx);
                                         }
@@ -312,7 +315,10 @@ impl SelectionBar {
                                     cx,
                                 )
                                 .on_click(cx.listener(
-                                    |this, _, _, cx| this.selection_bar.request_delete(cx),
+                                    |this, _, _, cx| {
+                                        this.selection_bar
+                                            .request_delete(&this.projects_results.selected_ids, cx)
+                                    },
                                 )),
                             )
                             .child(
@@ -367,8 +373,8 @@ impl SelectionBar {
             })
     }
 
-    fn confirm_restore(&mut self, cx: &mut Context<MainShell>) {
-        let ids = cx.entity().read(cx).projects_results.selected_ids.clone();
+    fn confirm_restore(&mut self, selected_ids: &[String], cx: &mut Context<MainShell>) {
+        let ids = selected_ids.to_vec();
         if ids.is_empty() || self.is_busy {
             return;
         }
@@ -540,7 +546,8 @@ fn render_assignment_dialog(
                         .label(if is_busy { "Saving…" } else { "Save" })
                         .disabled(is_busy || selected_count == 0)
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.selection_bar.confirm_assignment(cx);
+                            this.selection_bar
+                                .confirm_assignment(&this.projects_results.selected_ids, cx);
                         })),
                 ),
         )
@@ -652,7 +659,11 @@ fn render_delete_dialog(
                         })
                         .disabled(is_busy || selected_count == 0)
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.selection_bar.confirm_delete(is_trash_scope, cx);
+                            this.selection_bar.confirm_delete(
+                                is_trash_scope,
+                                &this.projects_results.selected_ids,
+                                cx,
+                            );
                         })),
                 ),
         )

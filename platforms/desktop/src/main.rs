@@ -21,11 +21,19 @@ fn setup_panic_hook() {
             .location()
             .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
             .unwrap_or_default();
-        let error_msg = format!("{}{}\n\nPlease report this issue.", message, location);
+        let backtrace = std::backtrace::Backtrace::capture();
+        let error_msg = format!(
+            "{}{}\n\n{}\n\nPlease report this issue.",
+            message, location, backtrace
+        );
 
         eprintln!("Application panicked: {error_msg}");
+        let _ = std::fs::write("panic.log", &error_msg);
 
-        show_error_dialog(&error_msg);
+        show_error_dialog(&format!(
+            "{}{}\n\nPlease report this issue.",
+            message, location
+        ));
     }));
 }
 

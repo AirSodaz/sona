@@ -15,6 +15,19 @@ use serde_json::{Value, json};
 
 pub(super) fn vocabulary_panel(
     config: &Value,
+    settings: &super::SettingsModal,
+    projects: &[sona_core::project::ProjectRecord],
+    word_state: &Entity<InputState>,
+    weight_state: &Entity<InputState>,
+    from_state: &Entity<InputState>,
+    to_state: &Entity<InputState>,
+    inline_hotword_state: &Entity<InputState>,
+    speaker_profile_name_state: &Entity<InputState>,
+    speaker_profile_search_state: &Entity<InputState>,
+    speaker_profile_name_states: &std::collections::HashMap<
+        String,
+        (Entity<InputState>, Subscription),
+    >,
     active_tab: &str,
     active_prompt_tab: &str,
     polish_edit_id: Option<&str>,
@@ -44,7 +57,7 @@ pub(super) fn vocabulary_panel(
         .unwrap_or(false);
     let dictionary_content = effective_dictionary_content(config);
     let dictionary_entries = parse_dictionary_entries(&dictionary_content);
-    let projects = cx.entity().read(cx).project_selector.projects.clone();
+    let projects = projects.to_vec();
     let project_refs = projects
         .iter()
         .map(|project| (project.id.clone(), project.name.clone()))
@@ -84,58 +97,18 @@ pub(super) fn vocabulary_panel(
             scopes.push((entry.scope_id.clone(), entry.scope_name.clone(), count));
         }
     }
-    let search_query = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_search_query
-        .clone();
-    let editing_line = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_edit_line;
-    let add_scope = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_add_scope
-        .clone();
-    let scope_menu_open = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_scope_menu_open;
+    let search_query = settings.vocabulary_dictionary_search_query.clone();
+    let editing_line = settings.vocabulary_dictionary_edit_line;
+    let add_scope = settings.vocabulary_dictionary_add_scope.clone();
+    let scope_menu_open = settings.vocabulary_dictionary_scope_menu_open;
     let add_scope_name = scopes
         .iter()
         .find(|(id, _, _)| id == &add_scope)
         .map(|(_, name, _)| name.clone())
         .unwrap_or_else(|| add_scope.clone());
-    let tutorial_open = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_tutorial_open;
-    let dialog_open = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_dialog_open;
-    let dialog_type = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_dialog_type
-        .clone();
-    let (word_state, weight_state, from_state, to_state) = {
-        let shell = cx.entity().read(cx);
-        (
-            shell.dictionary_word_state.clone(),
-            shell.dictionary_weight_state.clone(),
-            shell.dictionary_from_state.clone(),
-            shell.dictionary_to_state.clone(),
-        )
-    };
+    let tutorial_open = settings.vocabulary_dictionary_tutorial_open;
+    let dialog_open = settings.vocabulary_dictionary_dialog_open;
+    let dialog_type = settings.vocabulary_dictionary_dialog_type.clone();
     let dialog_word = word_state.read(cx).value().trim().to_string();
     let dialog_from = from_state.read(cx).value().trim().to_string();
     let dialog_to = to_state.read(cx).value().trim().to_string();
@@ -145,7 +118,7 @@ pub(super) fn vocabulary_panel(
         !dialog_from.is_empty() && !dialog_to.is_empty()
     };
     let quick_add_value = dictionary_quick_add.read(cx).value().to_string();
-    let inline_hotword_state = cx.entity().read(cx).dictionary_inline_hotword_state.clone();
+    let inline_hotword_state = inline_hotword_state.clone();
     let visible_entries = dictionary_entries
         .iter()
         .filter(|entry| dictionary_scope == "all" || entry.scope_id == dictionary_scope)
@@ -168,12 +141,7 @@ pub(super) fn vocabulary_panel(
         .filter(|entry| entry.raw.contains("->") || entry.raw.contains("=>"))
         .cloned()
         .collect::<Vec<_>>();
-    let test_input = cx
-        .entity()
-        .read(cx)
-        .settings_modal
-        .vocabulary_dictionary_test_input
-        .clone();
+    let test_input = settings.vocabulary_dictionary_test_input.clone();
     let test_output = visible_entries
         .iter()
         .filter_map(|entry| {
@@ -661,17 +629,13 @@ pub(super) fn vocabulary_panel(
                         })
                 })
                 .when(active_tab == "speakers", |panel| {
-                    let (name_state, search_state) = {
-                        let shell = cx.entity().read(cx);
-                        (
-                            shell.speaker_profile_name_state.clone(),
-                            shell.speaker_profile_search_state.clone(),
-                        )
-                    };
                     panel.child(super::speaker_profiles::speaker_profiles_panel(
                         config,
-                        &name_state,
-                        &search_state,
+                        settings,
+                        &projects,
+                        speaker_profile_name_states,
+                        speaker_profile_name_state,
+                        speaker_profile_search_state,
                         cx,
                     ))
                 }),
@@ -781,20 +745,20 @@ pub(super) fn vocabulary_panel(
                                 dialog
                                     .child(div().flex().flex_col().gap_2()
                                         .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Term / Hotword"))
-                                        .child(Input::new(&word_state).w_full().h(px(36.0)).aria_label("Term or hotword")))
+                                        .child(Input::new(word_state).w_full().h(px(36.0)).aria_label("Term or hotword")))
                                     .child(div().flex().flex_col().gap_2()
                                         .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Weight Boost (Optional)"))
-                                        .child(Input::new(&weight_state).w_full().h(px(36.0)).aria_label("Weight boost"))
+                                        .child(Input::new(weight_state).w_full().h(px(36.0)).aria_label("Weight boost"))
                                         .child(div().text_size(px(11.0)).text_color(cx.theme().muted_foreground).child("Weight suffixes are supported by sherpa-onnx transducer models.")))
                             })
                             .when(dialog_type == "replacement", |dialog| {
                                 dialog
                                     .child(div().flex().flex_col().gap_2()
                                         .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Original Text (From)"))
-                                        .child(Input::new(&from_state).w_full().h(px(36.0)).aria_label("Original text")))
+                                        .child(Input::new(from_state).w_full().h(px(36.0)).aria_label("Original text")))
                                     .child(div().flex().flex_col().gap_2()
                                         .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Target Replacement (To)"))
-                                        .child(Input::new(&to_state).w_full().h(px(36.0)).aria_label("Target replacement")))
+                                        .child(Input::new(to_state).w_full().h(px(36.0)).aria_label("Target replacement")))
                             })
                             .child(
                                 div().flex().justify_end().gap_2().pt_2().border_t_1().border_color(cx.theme().border)
