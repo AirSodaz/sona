@@ -389,8 +389,8 @@ impl GeneralSettingsTab {
                             .outline()
                             .small()
                             .label("Open Diagnostics")
-                            .on_click(cx.listener(|modal, _, _, cx| {
-                                modal.close(cx);
+                            .on_click(cx.listener(|modal, _, window, cx| {
+                                modal.close(window, cx);
                                 cx.emit(SettingsModalEvent::OpenDiagnostics);
                             })),
                     ),

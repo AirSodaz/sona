@@ -82,6 +82,7 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock", "s
 clap = { version = "4", features = ["derive", "wrap_help"] }
 clap_complete = "4"
 cpal = "0.18"
+rodio = { version = "0.23.0", default-features = false, features = ["playback", "flac", "mp3", "mp4", "vorbis", "wav"] }
 crossterm = "0.29"
 encoding_rs = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }

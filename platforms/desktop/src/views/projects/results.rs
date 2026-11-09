@@ -23,8 +23,9 @@ use sona_core::history::mutation_repository::{
 use sona_core::history::store::HistoryStore as _;
 use sona_core::history::{
     HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
+    HistoryWorkspaceFilterType, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    HistoryWorkspaceSummary,
 };
 use sona_core::project::ProjectRecord;
 
@@ -44,6 +45,7 @@ pub struct ProjectsResults {
     pub selected_ids: Vec<String>,
     pub scope: HistoryWorkspaceScope,
     pub search_query: String,
+    pub active_search_result_id: Option<String>,
     pub filter_type: HistoryWorkspaceFilterType,
     pub date_filter: HistoryWorkspaceDateFilter,
     pub sort_order: HistoryWorkspaceSortOrder,
@@ -57,6 +59,8 @@ pub struct ProjectsResults {
     pub load_error: bool,
     pub load_more_error: bool,
     pub rename_input_state: Entity<InputState>,
+    scroll_handle: ScrollHandle,
+    search_matches: std::collections::BTreeMap<String, Option<HistoryWorkspaceItemSearchMatch>>,
     rename_target: Option<String>,
     rename_error: Option<String>,
     rename_busy: bool,
@@ -73,6 +77,7 @@ impl ProjectsResults {
             selected_ids: Vec::new(),
             scope: HistoryWorkspaceScope::Inbox,
             search_query: String::new(),
+            active_search_result_id: None,
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
@@ -86,6 +91,8 @@ impl ProjectsResults {
             load_error: false,
             load_more_error: false,
             rename_input_state,
+            scroll_handle: ScrollHandle::new(),
+            search_matches: std::collections::BTreeMap::new(),
             rename_target: None,
             rename_error: None,
             rename_busy: false,
@@ -163,6 +170,7 @@ impl ProjectsResults {
                 }
                 match result {
                     Ok(page) => {
+                        results.search_matches.extend(page.search_match_by_item_id);
                         results.filtered_count = page.filtered_item_count;
                         results.scoped_count = page.summary.total_items;
                         results.has_more = page.has_more;
@@ -188,13 +196,22 @@ impl ProjectsResults {
         self.has_more = page.has_more;
         self.trash_count = page.item_counts.trash;
         self.summary = Some(page.summary);
+        self.search_matches = page.search_match_by_item_id;
         self.items = page.filtered_items.into_iter().map(history_item).collect();
         self.retain_visible_selection();
+        if !self
+            .active_search_result_id
+            .as_ref()
+            .is_some_and(|id| self.items.iter().any(|item| item.id == *id))
+        {
+            self.active_search_result_id = None;
+        }
     }
 
     pub fn set_scope(&mut self, scope: HistoryWorkspaceScope, cx: &mut Context<MainShell>) {
         self.scope = scope;
         self.search_query.clear();
+        self.active_search_result_id = None;
         self.filter_type = HistoryWorkspaceFilterType::All;
         self.date_filter = HistoryWorkspaceDateFilter::All;
         self.selected_id = None;
@@ -203,8 +220,36 @@ impl ProjectsResults {
     }
 
     pub fn set_search_query(&mut self, query: String, cx: &mut Context<MainShell>) {
+        if self.search_query == query {
+            return;
+        }
+        self.active_search_result_id = None;
         self.search_query = query;
         self.load_data(cx);
+    }
+
+    pub fn navigate_search_result(
+        &mut self,
+        direction: i32,
+        view_mode: ViewMode,
+        cx: &mut Context<MainShell>,
+    ) {
+        if self.items.is_empty() {
+            return;
+        }
+        let current_index = self
+            .active_search_result_id
+            .as_deref()
+            .and_then(|current| self.items.iter().position(|item| item.id == current));
+        let Some(next_index) =
+            next_search_index(self.items.len(), current_index, direction.signum())
+        else {
+            return;
+        };
+        self.active_search_result_id = Some(self.items[next_index].id.clone());
+        self.scroll_handle
+            .scroll_to_item(next_index + usize::from(view_mode == ViewMode::Table));
+        cx.notify();
     }
 
     pub fn set_filter_type(
@@ -213,6 +258,7 @@ impl ProjectsResults {
         cx: &mut Context<MainShell>,
     ) {
         self.filter_type = filter_type;
+        self.active_search_result_id = None;
         self.load_data(cx);
     }
 
@@ -222,6 +268,7 @@ impl ProjectsResults {
         cx: &mut Context<MainShell>,
     ) {
         self.date_filter = date_filter;
+        self.active_search_result_id = None;
         self.load_data(cx);
     }
 
@@ -231,6 +278,7 @@ impl ProjectsResults {
         cx: &mut Context<MainShell>,
     ) {
         self.sort_order = sort_order;
+        self.active_search_result_id = None;
         self.load_data(cx);
     }
 
@@ -238,6 +286,7 @@ impl ProjectsResults {
         self.filter_type = HistoryWorkspaceFilterType::All;
         self.date_filter = HistoryWorkspaceDateFilter::All;
         self.sort_order = HistoryWorkspaceSortOrder::Newest;
+        self.active_search_result_id = None;
         self.load_data(cx);
     }
 
@@ -340,6 +389,8 @@ impl ProjectsResults {
     ) -> impl IntoElement {
         let selected_ids = self.selected_ids.clone();
         let selected_id = self.selected_id.clone();
+        let active_search_result_id = self.active_search_result_id.clone();
+        let search_query = self.search_query.trim().to_string();
         let show_project_badge = matches!(self.scope, HistoryWorkspaceScope::All);
         let is_empty_scope = self.scoped_count == 0 && self.search_query.is_empty();
         let content = if self.is_loading {
@@ -431,10 +482,21 @@ impl ProjectsResults {
                 .into_any_element()
         } else {
             div()
+                .id("projects-results-scroll")
                 .flex()
                 .flex_col()
                 .size_full()
+                .track_scroll(&self.scroll_handle)
                 .overflow_y_scrollbar()
+                .on_scroll(cx.listener(|this, event: &gpui::ScrollEvent, window, cx| {
+                    let delta = event.delta.pixel_delta(window.line_height());
+                    let offset = this.projects_results.scroll_handle.offset();
+                    let max = this.projects_results.scroll_handle.max_offset().y;
+                    let next_y = (offset.y.as_f32() + delta.y.as_f32()).clamp(-max.as_f32(), 0.0);
+                    if should_load_more(max.as_f32(), next_y) {
+                        this.projects_results.load_more_data(cx);
+                    }
+                }))
                 .when(view_mode == ViewMode::Cards, |this| {
                     this.flex_wrap().content_start().gap_3().p_4()
                 })
@@ -457,51 +519,55 @@ impl ProjectsResults {
                         projects,
                         &selected_ids,
                         &self.items,
+                        self.search_matches.get(&item.id).and_then(Option::as_ref),
+                        !selection_mode && active_search_result_id.as_deref() == Some(&item.id),
+                        !search_query.is_empty(),
                         cx,
                     )
                 }))
-                .when(
-                    self.has_more || self.is_loading_more || self.load_more_error,
-                    |this| {
-                        this.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_2()
-                                .py_3()
-                                .when(self.load_more_error, |footer| {
-                                    footer.child(
-                                        div()
-                                            .text_size(px(12.0))
-                                            .text_color(cx.theme().danger)
-                                            .child("Could not load more items."),
-                                    )
-                                })
-                                .child(
+                .when(self.is_loading_more || self.load_more_error, |this| {
+                    this.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap_2()
+                            .py_3()
+                            .when(self.is_loading_more, |footer| {
+                                footer.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .text_size(px(12.0))
+                                        .text_color(cx.theme().muted)
+                                        .child(Icon::new(LucideIcon::LoaderCircle).size(px(14.0)))
+                                        .child("Loading more items…"),
+                                )
+                            })
+                            .when(self.load_more_error, |footer| {
+                                footer.child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(cx.theme().danger)
+                                        .child("Could not load more items."),
+                                )
+                            })
+                            .when(self.load_more_error, |footer| {
+                                footer.child(
                                     Button::new("load-more-history")
                                         .ghost()
                                         .small()
-                                        .icon(if self.load_more_error {
-                                            LucideIcon::RefreshCw
-                                        } else {
-                                            LucideIcon::LoaderCircle
-                                        })
-                                        .label(if self.is_loading_more {
-                                            "Loading…"
-                                        } else if self.load_more_error {
-                                            "Retry"
-                                        } else {
-                                            "Load more"
-                                        })
+                                        .icon(LucideIcon::RefreshCw)
+                                        .label("Retry")
                                         .disabled(self.is_loading_more)
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.projects_results.load_more_data(cx)
                                         })),
-                                ),
-                        )
-                    },
-                )
+                                )
+                            }),
+                    )
+                })
                 .into_any_element()
         };
 
@@ -597,6 +663,30 @@ impl ProjectsResults {
     }
 }
 
+const PROJECTS_LOAD_MORE_THRESHOLD_PX: f32 = 720.0;
+
+fn should_load_more(max_offset: f32, next_scroll_y: f32) -> bool {
+    max_offset > 0.0 && -next_scroll_y >= max_offset - PROJECTS_LOAD_MORE_THRESHOLD_PX
+}
+
+fn next_search_index(
+    item_count: usize,
+    current_index: Option<usize>,
+    direction: i32,
+) -> Option<usize> {
+    if item_count == 0 {
+        return None;
+    }
+
+    match (current_index.filter(|index| *index < item_count), direction) {
+        (None, 1) => Some(0),
+        (None, -1) => Some(item_count - 1),
+        (Some(index), 1) => Some((index + 1) % item_count),
+        (Some(index), -1) => Some((index + item_count - 1) % item_count),
+        _ => None,
+    }
+}
+
 fn render_table_header(
     selection_mode: bool,
     show_project_badge: bool,
@@ -638,10 +728,17 @@ fn render_history_item(
     projects: &[ProjectRecord],
     selected_ids: &[String],
     all_items: &[HistoryRecordItem],
+    search_match: Option<&HistoryWorkspaceItemSearchMatch>,
+    is_keyboard_active: bool,
+    is_searching: bool,
     cx: &mut Context<MainShell>,
 ) -> AnyElement {
     let title = item.title.clone();
-    let preview = if item.excerpt.trim().is_empty() {
+    let preview = if is_searching {
+        search_match
+            .map(|matched| matched.display_snippet.text.clone())
+            .unwrap_or_else(|| item.excerpt.clone())
+    } else if item.excerpt.trim().is_empty() {
         if item.record.status == HistoryItemStatus::Draft {
             "Interrupted live recording draft".to_string()
         } else {
@@ -657,11 +754,19 @@ fn render_history_item(
         .as_deref()
         .and_then(|project_id| projects.iter().find(|project| project.id == project_id));
     let type_icon = history_icon(&item.record, cx);
+    let title_text = search_match
+        .and_then(|matched| matched.title_match.as_ref())
+        .and_then(|range| utf16_range_to_bytes(&title, range.start, range.end))
+        .map(|range| highlighted_text(&title, Some(range), cx))
+        .unwrap_or_else(|| StyledText::new(title));
     let title_content = div()
         .flex()
         .items_center()
         .gap_2()
         .min_w_0()
+        .when(selection_mode && view_mode == ViewMode::Cards, |title| {
+            title.pl(px(28.0))
+        })
         .child(type_icon)
         .child(
             div()
@@ -670,17 +775,23 @@ fn render_history_item(
                 .text_size(px(14.0))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(cx.theme().foreground)
-                .child(title),
+                .when(view_mode == ViewMode::Cards, |title| {
+                    title.line_height(px(19.6)).line_clamp(2)
+                })
+                .when(view_mode != ViewMode::Cards, |title| title.truncate())
+                .child(title_text),
         )
         .when(item.record.status == HistoryItemStatus::Draft, |title| {
             title.child(
                 div()
                     .px_2()
-                    .py_1()
+                    .py(px(1.0))
+                    .min_h(px(20.0))
                     .rounded_full()
-                    .bg(cx.theme().secondary)
+                    .bg(cx.theme().warning.opacity(0.12))
                     .text_size(px(11.0))
-                    .text_color(cx.theme().muted_foreground)
+                    .line_height(px(12.0))
+                    .text_color(cx.theme().warning)
                     .child("Draft"),
             )
         });
@@ -734,8 +845,18 @@ fn render_history_item(
         .when(selection_mode, |row| {
             row.child(
                 div()
+                    .when(view_mode == ViewMode::Cards, |checkbox| {
+                        checkbox
+                            .absolute()
+                            .top(px(14.0))
+                            .left(px(14.0))
+                            .w(px(16.0))
+                            .h(px(16.0))
+                    })
                     .w(if view_mode == ViewMode::Table {
                         px(40.0)
+                    } else if view_mode == ViewMode::Cards {
+                        px(16.0)
                     } else {
                         px(24.0)
                     })
@@ -755,6 +876,9 @@ fn render_history_item(
                     ),
             )
         });
+    row = row.when(is_keyboard_active, |row| {
+        row.border_color(cx.theme().primary).shadow_md()
+    });
 
     if view_mode == ViewMode::Table {
         row = row.child(
@@ -770,16 +894,27 @@ fn render_history_item(
                         .gap_1()
                         .flex_1()
                         .min_w_0()
+                        .line_clamp(1)
                         .px_2()
                         .child(title_content)
-                        .when(!item.excerpt.trim().is_empty(), |title| {
-                            title.child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(item.excerpt.clone()),
-                            )
-                        }),
+                        .when(
+                            !preview.trim().is_empty()
+                                && (is_searching || !item.excerpt.trim().is_empty()),
+                            |title| {
+                                title.child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(cx.theme().muted_foreground)
+                                        .line_clamp(1)
+                                        .child(highlighted_preview(
+                                            &preview,
+                                            search_match,
+                                            is_searching,
+                                            cx,
+                                        )),
+                                )
+                            },
+                        ),
                 )
                 .when(show_project_badge, |row| {
                     row.child(div().w(px(160.0)).px_2().child(project_badge(project, cx)))
@@ -828,6 +963,12 @@ fn render_history_item(
                         .items_start()
                         .justify_between()
                         .gap_3()
+                        .when(view_mode == ViewMode::Cards, |header| {
+                            header
+                                .flex_col()
+                                .gap_2()
+                                .when(!selection_mode, |header| header.pr_6())
+                        })
                         .child(title_content)
                         .when(show_project_badge, |row| {
                             row.child(project_badge(project, cx))
@@ -838,7 +979,13 @@ fn render_history_item(
                         .text_size(px(14.0))
                         .text_color(cx.theme().muted_foreground)
                         .line_height(px(21.0))
-                        .child(preview),
+                        .line_clamp(if view_mode == ViewMode::Cards { 3 } else { 2 })
+                        .child(highlighted_preview(
+                            &preview,
+                            search_match,
+                            is_searching,
+                            cx,
+                        )),
                 )
                 .child(
                     div()
@@ -1483,24 +1630,108 @@ fn history_icon(record: &HistoryItemRecord, cx: &Context<MainShell>) -> AnyEleme
 }
 
 fn project_badge(project: Option<&ProjectRecord>, cx: &Context<MainShell>) -> AnyElement {
-    let (icon, name) = project
-        .map(|project| (project.icon.clone(), project.name.clone()))
-        .unwrap_or_else(|| (None, "Inbox".to_string()));
+    let inbox = project.is_none();
+    let (icon, name, color) = project
+        .map(|project| {
+            (
+                project.icon.as_deref(),
+                project.name.as_str(),
+                project_color(project.color.as_deref()),
+            )
+        })
+        .unwrap_or((None, "Inbox", rgb(0x64748b)));
+    let color_hsla = Hsla::from(color);
     div()
         .flex()
         .items_center()
-        .gap_1()
+        .gap(px(5.0))
         .max_w(px(180.0))
         .px_2()
-        .py_1()
+        .h(px(24.0))
         .rounded_full()
         .border_1()
-        .border_color(cx.theme().border)
-        .bg(cx.theme().secondary)
-        .text_size(px(12.0))
-        .text_color(cx.theme().muted_foreground)
-        .when_some(icon, |badge, icon| badge.child(div().child(icon)))
-        .child(div().overflow_hidden().child(name))
+        .border_color(if inbox {
+            cx.theme().border
+        } else {
+            color_hsla.opacity(0.28)
+        })
+        .bg(if inbox {
+            cx.theme().secondary
+        } else {
+            color_hsla.opacity(0.1)
+        })
+        .text_size(px(11.5))
+        .text_color(if inbox {
+            cx.theme().muted_foreground
+        } else {
+            cx.theme().foreground
+        })
+        .child(if inbox {
+            Icon::new(LucideIcon::Inbox)
+                .size(px(12.0))
+                .into_any_element()
+        } else {
+            project_icon(icon, color)
+        })
+        .child(div().flex_1().min_w_0().truncate().child(name.to_string()))
+        .into_any_element()
+}
+
+fn project_color(color: Option<&str>) -> Rgba {
+    let Some(hex) = color.and_then(parse_project_color) else {
+        return rgb(0x64748b);
+    };
+    rgb(hex)
+}
+
+fn parse_project_color(color: &str) -> Option<u32> {
+    let hex = color.trim().strip_prefix('#').unwrap_or(color.trim());
+    match hex.len() {
+        3 => {
+            let mut expanded = 0_u32;
+            for character in hex.chars() {
+                let nibble = character.to_digit(16)?;
+                expanded = (expanded << 8) | (nibble << 4) | nibble;
+            }
+            Some(expanded)
+        }
+        6 => u32::from_str_radix(hex, 16).ok(),
+        _ => None,
+    }
+}
+
+fn project_icon(icon: Option<&str>, color: Rgba) -> AnyElement {
+    let icon = if let Some(icon) = icon {
+        if let Some(system_icon) = icon.strip_prefix("system:") {
+            let icon = match system_icon {
+                "mic" => LucideIcon::Mic,
+                "file" => LucideIcon::FileText,
+                "code" => LucideIcon::Code,
+                _ => LucideIcon::Folder,
+            };
+            Icon::new(icon)
+                .size(px(12.0))
+                .text_color(color)
+                .into_any_element()
+        } else {
+            div()
+                .text_size(px(11.0))
+                .child(icon.to_string())
+                .into_any_element()
+        }
+    } else {
+        Icon::new(LucideIcon::Folder)
+            .size(px(12.0))
+            .text_color(color)
+            .into_any_element()
+    };
+    div()
+        .w(px(16.0))
+        .h(px(16.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(icon)
         .into_any_element()
 }
 
@@ -1557,4 +1788,108 @@ fn format_relative_date(timestamp: chrono::DateTime<chrono::Local>) -> String {
         };
     }
     timestamp.format("%b %-d").to_string()
+}
+
+fn highlighted_preview(
+    text: &str,
+    search_match: Option<&HistoryWorkspaceItemSearchMatch>,
+    is_searching: bool,
+    cx: &Context<MainShell>,
+) -> StyledText {
+    let range = search_match.filter(|_| is_searching).and_then(|matched| {
+        utf16_range_to_bytes(
+            text,
+            matched.display_snippet.highlight_start,
+            matched.display_snippet.highlight_end,
+        )
+    });
+    highlighted_text(text, range, cx)
+}
+
+fn highlighted_text(
+    text: &str,
+    range: Option<std::ops::Range<usize>>,
+    cx: &Context<MainShell>,
+) -> StyledText {
+    match range {
+        Some(range) => StyledText::new(text.to_string()).with_highlights([(
+            range,
+            HighlightStyle {
+                background_color: Some(cx.theme().warning.opacity(0.25)),
+                ..Default::default()
+            },
+        )]),
+        None => StyledText::new(text.to_string()),
+    }
+}
+
+fn utf16_range_to_bytes(text: &str, start: usize, end: usize) -> Option<std::ops::Range<usize>> {
+    if start >= end {
+        return None;
+    }
+
+    let mut utf16_offset = 0;
+    let mut byte_start = None;
+    let mut byte_end = None;
+    for (byte_index, character) in text.char_indices() {
+        if utf16_offset == start {
+            byte_start = Some(byte_index);
+        }
+        if utf16_offset == end {
+            byte_end = Some(byte_index);
+            break;
+        }
+        utf16_offset += character.len_utf16();
+    }
+    if byte_start.is_none() && utf16_offset == start {
+        byte_start = Some(text.len());
+    }
+    if byte_end.is_none() && utf16_offset == end {
+        byte_end = Some(text.len());
+    }
+
+    let range = byte_start?..byte_end?;
+    (range.end <= text.len()
+        && text.is_char_boundary(range.start)
+        && text.is_char_boundary(range.end))
+    .then_some(range)
+}
+
+#[cfg(test)]
+mod projects_results_tests {
+    use super::{next_search_index, parse_project_color, should_load_more, utf16_range_to_bytes};
+
+    #[test]
+    fn loads_next_page_inside_react_viewport_prefetch_range() {
+        assert!(should_load_more(2_000.0, -1_300.0));
+        assert!(!should_load_more(2_000.0, -1_200.0));
+    }
+
+    #[test]
+    fn does_not_load_when_content_cannot_scroll() {
+        assert!(!should_load_more(0.0, 0.0));
+    }
+
+    #[test]
+    fn search_navigation_wraps_in_both_directions() {
+        assert_eq!(next_search_index(3, None, 1), Some(0));
+        assert_eq!(next_search_index(3, Some(2), 1), Some(0));
+        assert_eq!(next_search_index(3, None, -1), Some(2));
+        assert_eq!(next_search_index(3, Some(0), -1), Some(2));
+        assert_eq!(next_search_index(0, None, 1), None);
+    }
+
+    #[test]
+    fn search_highlight_ranges_convert_utf16_offsets_to_utf8_bytes() {
+        assert_eq!(utf16_range_to_bytes("A中B", 1, 2), Some(1..4));
+        assert_eq!(utf16_range_to_bytes("a😀b", 1, 3), Some(1..5));
+        assert_eq!(utf16_range_to_bytes("a😀b", 2, 3), None);
+    }
+
+    #[test]
+    fn project_colors_accept_three_and_six_digit_hex_values() {
+        assert_eq!(parse_project_color("#abc"), Some(0xaabbcc));
+        assert_eq!(parse_project_color("#12aBcF"), Some(0x12abcf));
+        assert_eq!(parse_project_color("invalid"), None);
+    }
 }

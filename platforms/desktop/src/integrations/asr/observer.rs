@@ -3,6 +3,7 @@ use super::recognizer_output_event;
 use crate::platform::event::EventEmitterPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_core::transcription::transcript::TranscriptSegment;
 use std::sync::Arc;
 
 pub(crate) struct DesktopAsrRuntimeObserver {
@@ -39,14 +40,58 @@ impl AsrRuntimeObserver for DesktopAsrRuntimeObserver {
     }
 }
 
+pub(crate) struct CollectingAsrRuntimeObserver {
+    inner: DesktopAsrRuntimeObserver,
+    segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
+}
+
+impl CollectingAsrRuntimeObserver {
+    pub(crate) fn new(
+        emitter: Arc<dyn EventEmitterPort>,
+        metrics: AsrMetricsStore,
+        segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
+    ) -> Self {
+        Self {
+            inner: DesktopAsrRuntimeObserver::new(emitter, metrics),
+            segments,
+        }
+    }
+}
+
+impl AsrRuntimeObserver for CollectingAsrRuntimeObserver {
+    fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
+        self.inner.on_transcript_update(event);
+        if let Ok(mut segments) = self.segments.lock() {
+            if !event.update.remove_ids.is_empty() {
+                segments.retain(|segment| !event.update.remove_ids.contains(&segment.id));
+            }
+            for upsert in &event.update.upsert_segments {
+                if let Some(existing) = segments.iter_mut().find(|item| item.id == upsert.id) {
+                    *existing = upsert.clone();
+                } else {
+                    segments.push(upsert.clone());
+                }
+            }
+        }
+    }
+
+    fn on_model_load(&self, metric: &AsrModelLoadMetric) {
+        self.inner.on_model_load(metric);
+    }
+
+    fn on_live_inference(&self, metric: &AsrInferenceMetric) {
+        self.inner.on_live_inference(metric);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::DesktopAsrRuntimeObserver;
+    use super::{CollectingAsrRuntimeObserver, DesktopAsrRuntimeObserver};
     use crate::integrations::asr::metrics::{new_metrics_store, snapshot_metrics};
     use crate::platform::event::MockEventEmitter;
     use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
-    use sona_core::transcription::transcript::TranscriptUpdate;
+    use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
     use std::sync::Arc;
 
     fn model_load_metric() -> AsrModelLoadMetric {
@@ -120,5 +165,53 @@ mod tests {
         let snapshot = snapshot_metrics(&metrics);
         assert_eq!(snapshot.model_load, Some(model_load));
         assert_eq!(snapshot.live_inference, Some(live));
+    }
+
+    fn segment(id: &str, text: &str) -> TranscriptSegment {
+        TranscriptSegment {
+            id: id.to_string(),
+            text: text.to_string(),
+            start: 0.0,
+            end: 1.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }
+    }
+
+    #[test]
+    fn collecting_observer_applies_incremental_upserts_and_removals() {
+        let segments = Arc::new(std::sync::Mutex::new(vec![
+            segment("replace", "old"),
+            segment("remove", "gone"),
+        ]));
+        let observer = CollectingAsrRuntimeObserver::new(
+            Arc::new(MockEventEmitter::new()),
+            new_metrics_store(),
+            segments.clone(),
+        );
+        let event = AsrTranscriptUpdateEvent {
+            instance_id: "live-1".to_string(),
+            stage: "final".to_string(),
+            update: TranscriptUpdate {
+                remove_ids: vec!["remove".to_string()],
+                upsert_segments: vec![segment("replace", "updated"), segment("new", "added")],
+            },
+        };
+
+        observer.on_transcript_update(&event);
+
+        let collected = segments.lock().unwrap();
+        assert_eq!(collected.len(), 2);
+        assert_eq!(collected[0].id, "replace");
+        assert_eq!(collected[0].text, "updated");
+        assert_eq!(collected[1].id, "new");
+        assert_eq!(collected[1].text, "added");
     }
 }

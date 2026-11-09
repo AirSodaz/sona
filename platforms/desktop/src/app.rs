@@ -113,6 +113,7 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
             .write()
             .rebind_shortcut(HotkeyAction::VoiceTyping, &shortcut)
     {
+        services.voice_typing_readiness.write().shortcut_error = Some(error.clone());
         log::warn!("Failed to register configured voice typing shortcut: {error}");
     }
     if let Some(shortcut) = services
@@ -125,6 +126,7 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
             .write()
             .rebind_shortcut(HotkeyAction::VoiceTypingTranslate, &shortcut)
     {
+        services.voice_typing_readiness.write().shortcut_error = Some(error.clone());
         log::warn!("Failed to register configured voice typing translate shortcut: {error}");
     }
     if let Some(shortcut) = services

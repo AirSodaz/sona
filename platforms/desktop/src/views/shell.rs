@@ -168,6 +168,19 @@ impl ProjectSelectorDropdown {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let projects = services.projects.list().await.unwrap_or_default();
+            let stored_active_project_id = services
+                .projects
+                .get_active_project_id()
+                .await
+                .ok()
+                .flatten();
+            let active_project_id = stored_active_project_id
+                .as_ref()
+                .filter(|active_id| projects.iter().any(|project| project.id == **active_id))
+                .cloned();
+            if stored_active_project_id.is_some() && active_project_id.is_none() {
+                let _ = services.projects.set_active_project_id(None).await;
+            }
             let history_items = services
                 .history
                 .query_db(|repo| repo.list_items(sona_core::history::HistoryListOptions::default()))
@@ -188,7 +201,16 @@ impl ProjectSelectorDropdown {
             }
 
             this.update(cx, |view, cx| {
+                let active_project = projects
+                    .iter()
+                    .find(|project| Some(project.id.as_str()) == active_project_id.as_deref())
+                    .cloned();
                 view.project_selector.projects = projects;
+                view.project_selector.active_project_id = active_project_id;
+                let batch_import = view.create_workspace.read(cx).batch_import.clone();
+                batch_import.update(cx, |batch, _| {
+                    batch.set_active_project(active_project);
+                });
                 view.project_selector.count_inbox = inbox_count;
                 view.project_selector.project_counts = counts;
                 view.projects_rail.sync_projects(
@@ -204,10 +226,35 @@ impl ProjectSelectorDropdown {
     }
 
     pub fn select_project(&mut self, project_id: Option<String>, cx: &mut Context<MainShell>) {
-        self.active_project_id = project_id;
+        self.active_project_id = project_id.clone();
+        let active_project = project_id
+            .as_deref()
+            .and_then(|id| self.projects.iter().find(|project| project.id == id))
+            .cloned();
+        let batch_import = cx
+            .entity()
+            .read(cx)
+            .create_workspace
+            .read(cx)
+            .batch_import
+            .clone();
+        batch_import.update(cx, |batch, _| batch.set_active_project(active_project));
         self.is_open = false;
         self.query.clear();
         cx.notify();
+        let services = cx.global::<GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            if services
+                .projects
+                .set_active_project_id(project_id)
+                .await
+                .is_err()
+            {
+                this.update(cx, |shell, cx| shell.project_selector.load_data(cx))
+                    .ok();
+            }
+        })
+        .detach();
     }
 
     pub fn toggle(&mut self, cx: &mut Context<MainShell>) {
@@ -389,6 +436,46 @@ impl MainShell {
         });
         let options_capsule = OptionsCapsule::new(options_model.clone());
         let create_workspace = cx.new(|cx| CreateWorkspacePanel::new(options_model.clone(), cx));
+        let batch_import = create_workspace.read(cx).batch_import.clone();
+        cx.subscribe(
+            &batch_import,
+            |shell, _, event: &crate::views::create::BatchImportEvent, cx| match event {
+                crate::views::create::BatchImportEvent::AsrConfigurationRequired(
+                    crate::views::create::BatchAsrSetup::LocalModel,
+                ) => {
+                    shell.onboarding.update(cx, |wizard, cx| {
+                        wizard.step = 0;
+                        wizard.is_open = true;
+                        cx.notify();
+                    });
+                }
+                crate::views::create::BatchImportEvent::AsrConfigurationRequired(
+                    crate::views::create::BatchAsrSetup::OnlineProvider,
+                ) => {
+                    shell.global_dialog.update(cx, |dialog, cx| {
+                        dialog.show_with_variant(
+                            "Online ASR is not configured",
+                            "Please configure the selected provider's API key and required settings in Settings > Models, then retry.",
+                            super::dialogs::global_dialog::DialogKind::Alert,
+                            super::dialogs::global_dialog::DialogVariant::Error,
+                        );
+                        cx.notify();
+                    });
+                }
+                crate::views::create::BatchImportEvent::OpenHistoryItem(history_id) => {
+                    shell.mode = AppMode::Create;
+                    shell.create_workspace.update(cx, |workspace, cx| {
+                        workspace.set_tab(
+                            crate::views::create::CreateWorkspaceTab::BatchImport,
+                            cx,
+                        );
+                    });
+                    shell.open_batch_history_item(history_id.clone(), cx);
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
         let projects_toolbar = ProjectsToolbar::new(window, cx);
 
         let settings_modal = cx.new(|cx| SettingsModal::new(window, cx));
@@ -473,6 +560,17 @@ impl MainShell {
                             this.project_selector.load_data(cx);
                             this.projects_results.load_data(cx);
                             cx.notify();
+                        }
+                        WorkbenchEvent::SpeakerSampleEnrolled { profile_name } => {
+                            this.global_dialog.update(cx, |dialog, cx| {
+                                dialog.show_with_variant(
+                                    "Speaker sample enrolled",
+                                    format!("A voice sample was added to {profile_name}."),
+                                    super::dialogs::global_dialog::DialogKind::Alert,
+                                    super::dialogs::global_dialog::DialogVariant::Success,
+                                );
+                                cx.notify();
+                            });
                         }
                     },
                 )
@@ -613,11 +711,18 @@ impl MainShell {
                             center.set_tasks(tasks, cx);
                         });
                     });
+                } else if event.is("tray:toggle_recording") {
+                    let _ = this.update(cx, |shell, cx| {
+                        let live_record = shell.create_workspace.read(cx).live_record.clone();
+                        live_record.update(cx, |panel, cx| panel.toggle_recording(cx));
+                    });
                 } else if event.is("voice-typing:show") {
                     let initial_recall = event.payload["recall"].as_bool().unwrap_or(false);
                     let _ = this.update(cx, |_, cx| {
                         crate::app::open_voice_typing_island(cx, initial_recall);
                     });
+                } else if event.is("voice-typing:readiness") {
+                    let _ = this.update(cx, |_, cx| cx.notify());
                 } else if event.is("notification:open-recovery") {
                     let _ = this.update(cx, |shell, cx| {
                         shell.notification_center.update(cx, |center, cx| {
@@ -676,6 +781,84 @@ impl MainShell {
                             });
                         });
                     }
+                } else if event.name.starts_with("recognizer-output-batch-task-") {
+                    let instance_id = event
+                        .name
+                        .strip_prefix("recognizer-output-")
+                        .unwrap_or_default()
+                        .to_owned();
+                    let Ok(update) = serde_json::from_value::<
+                        sona_core::transcription::transcript::TranscriptUpdate,
+                    >(event.payload) else {
+                        continue;
+                    };
+                    let _ = this.update(cx, |shell, cx| {
+                        let batch = shell.create_workspace.read(cx).batch_import.clone();
+                        let snapshot = batch.update(cx, |batch, cx| {
+                            let snapshot =
+                                crate::views::create::BatchImportPanel::apply_transcript_update(
+                                    &mut batch.queue,
+                                    &instance_id,
+                                    &update,
+                                );
+                            if snapshot.is_some() {
+                                cx.notify();
+                            }
+                            snapshot
+                        });
+                        if let Some((history_id, segments, duration)) = snapshot {
+                            shell.workbench.update(cx, |workbench, cx| {
+                                if workbench.history_id.as_deref() == Some(&history_id) {
+                                    workbench.is_streaming_active = true;
+                                    workbench.editor.set_streaming_active(true);
+                                    workbench.set_transcript(segments, duration);
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    });
+                } else if event.name == "batch-progress" {
+                    let values = serde_json::from_value::<Vec<serde_json::Value>>(event.payload)
+                        .unwrap_or_default();
+                    let progress = values.get(1).and_then(serde_json::Value::as_f64);
+                    if progress.is_some_and(|progress| progress >= 100.0) {
+                        let instance_id = values
+                            .get(2)
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned);
+                        if let Some(instance_id) = instance_id {
+                            let file_path = values
+                                .first()
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_owned);
+                            let _ = this.update(cx, |shell, cx| {
+                                let batch = shell.create_workspace.read(cx).batch_import.clone();
+                                let queue = &batch.read(cx).queue;
+                                let matched = queue
+                                    .iter()
+                                    .find(|item| item.instance_id.as_deref() == Some(&instance_id))
+                                    .or_else(|| {
+                                        let mut path_matches = queue.iter().filter(|item| {
+                                            item.file_path
+                                                == file_path.as_deref().unwrap_or_default()
+                                                && item.history_id.is_some()
+                                        });
+                                        let first = path_matches.next()?;
+                                        path_matches.next().is_none().then_some(first)
+                                    });
+                                let history_id = matched.and_then(|item| item.history_id.clone());
+                                if let Some(history_id) = history_id {
+                                    shell.workbench.update(cx, |workbench, cx| {
+                                        if workbench.history_id.as_deref() == Some(&history_id) {
+                                            workbench.is_streaming_active = false;
+                                            workbench.editor.set_streaming_active(false);
+                                            cx.notify();
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    }
                 } else if event.is("live-record:started") {
                     let Some(session_id) = event.payload["sessionId"].as_str().map(str::to_owned)
                     else {
@@ -688,13 +871,17 @@ impl MainShell {
                     let _ = this.update(cx, |shell, cx| {
                         shell.projects_results.selected_id = Some(session_id.clone());
                         shell.has_active_transcript = true;
+                        let project_id = shell.project_selector.active_project_id.clone();
                         shell.workbench.update(cx, |w, cx| {
                             w.begin_loading(
                                 session_id,
                                 title,
                                 Some("system:mic".to_string()),
                                 false,
+                                project_id,
                             );
+                            w.is_streaming_active = true;
+                            w.editor.set_streaming_active(true);
                             cx.notify();
                         });
                         cx.notify();
@@ -724,6 +911,8 @@ impl MainShell {
                     let _ = this.update(cx, |shell, cx| {
                         if let Some(session_id) = session_id.as_deref() {
                             shell.workbench.update(cx, |w, cx| {
+                                w.is_streaming_active = false;
+                                w.editor.set_streaming_active(false);
                                 if w.history_id.as_deref() == Some(session_id)
                                     && let Some(title) = title
                                 {
@@ -800,6 +989,11 @@ impl MainShell {
 
         self.projects_results.selected_id = Some(id.clone());
         self.has_active_transcript = true;
+        let batch_import = self.create_workspace.read(cx).batch_import.clone();
+        batch_import.update(cx, |batch, cx| {
+            batch.active_history_id = Some(id.clone());
+            cx.notify();
+        });
         let is_batch = matches!(record.kind, sona_core::history::HistoryItemKind::Batch);
         let media_context = self
             .create_workspace
@@ -810,9 +1004,28 @@ impl MainShell {
             .iter()
             .find(|item| item.history_id.as_deref() == Some(&id))
             .and_then(|item| item.media_server_context.clone());
+        let is_batch_streaming = self
+            .create_workspace
+            .read(cx)
+            .batch_import
+            .read(cx)
+            .queue
+            .iter()
+            .any(|item| {
+                item.history_id.as_deref() == Some(&id)
+                    && item.status == crate::views::create::BatchItemStatus::Processing
+            });
         self.workbench.update(cx, |w, cx| {
             w.media_server_context = media_context;
-            w.begin_loading(id.clone(), record.title, record.icon.clone(), is_batch);
+            w.begin_loading(
+                id.clone(),
+                record.title,
+                record.icon.clone(),
+                is_batch,
+                record.project_id.clone(),
+            );
+            w.is_streaming_active = is_batch_streaming;
+            w.editor.set_streaming_active(is_batch_streaming);
             cx.notify();
         });
         let duration = record.duration;
@@ -837,6 +1050,14 @@ impl MainShell {
                 .await
                 .ok()
                 .flatten();
+            let audio_id = selected_id.clone();
+            let audio_path = services
+                .history
+                .file_task(move |store| store.resolve_audio_path(&audio_id))
+                .await
+                .ok()
+                .flatten()
+                .map(std::path::PathBuf::from);
             this.update(cx, |shell, cx| {
                 if shell.projects_results.selected_id.as_deref() != Some(&selected_id) {
                     return;
@@ -847,8 +1068,95 @@ impl MainShell {
                             w.set_transcript(segments, duration);
                             w.set_versions(snapshots);
                             w.set_summary(summary);
+                            if let Some(path) = audio_path {
+                                w.load_audio(path, cx);
+                            }
                         }
                         _ => w.set_load_error(),
+                    }
+                    cx.notify();
+                });
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn open_batch_history_item(&mut self, history_id: String, cx: &mut Context<Self>) {
+        let batch = self.create_workspace.read(cx).batch_import.clone();
+        let Some(item) = batch
+            .read(cx)
+            .queue
+            .iter()
+            .find(|item| item.history_id.as_deref() == Some(history_id.as_str()))
+            .cloned()
+        else {
+            return;
+        };
+
+        self.projects_results.selected_id = Some(history_id.clone());
+        self.has_active_transcript = true;
+        batch.update(cx, |batch, cx| {
+            batch.active_history_id = Some(history_id.clone());
+            cx.notify();
+        });
+
+        let is_streaming = item.status == crate::views::create::BatchItemStatus::Processing;
+        let duration = item.duration_seconds.unwrap_or_else(|| {
+            item.segments
+                .iter()
+                .map(|segment| segment.end)
+                .fold(0.0, f64::max)
+        });
+        self.workbench.update(cx, |workbench, cx| {
+            workbench.media_server_context = item.media_server_context.clone();
+            workbench.begin_loading(
+                history_id.clone(),
+                item.filename.clone(),
+                None,
+                true,
+                item.project_id.clone(),
+            );
+            workbench.is_streaming_active = is_streaming;
+            workbench.editor.set_streaming_active(is_streaming);
+            workbench.set_transcript(item.segments.clone(), duration);
+            cx.notify();
+        });
+
+        let services = cx.global::<GlobalDesktopServices>().0.clone();
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let snapshots_id = history_id.clone();
+            let snapshots = services
+                .history
+                .query_db(move |query| query.list_transcript_snapshots(&snapshots_id))
+                .await
+                .unwrap_or_default();
+            let summary_id = history_id.clone();
+            let summary = services
+                .history
+                .db_task(move |query| query.load_summary(&summary_id))
+                .await
+                .ok()
+                .flatten();
+            let audio_id = history_id.clone();
+            let audio_path = services
+                .history
+                .file_task(move |store| store.resolve_audio_path(&audio_id))
+                .await
+                .ok()
+                .flatten()
+                .map(std::path::PathBuf::from);
+
+            this.update(cx, |shell, cx| {
+                if shell.projects_results.selected_id.as_deref() != Some(&history_id) {
+                    return;
+                }
+                shell.workbench.update(cx, |workbench, cx| {
+                    workbench.set_versions(snapshots);
+                    workbench.set_summary(summary);
+                    if let Some(path) = audio_path {
+                        workbench.load_audio(path, cx);
                     }
                     cx.notify();
                 });
@@ -1762,6 +2070,26 @@ impl Render for MainShell {
                     let wb = this.workbench.read(cx);
                     (wb.search.is_visible, wb.has_session)
                 };
+                if this.settings_modal.read(cx).is_open() {
+                    if event.keystroke.key.eq_ignore_ascii_case("f")
+                        && (event.keystroke.modifiers.control || event.keystroke.modifiers.platform)
+                    {
+                        this.settings_modal
+                            .update(cx, |modal, cx| modal.focus_search(window, cx));
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if event.keystroke.key.eq_ignore_ascii_case("escape")
+                        && this.settings_modal.read(cx).has_search_query()
+                    {
+                        this.settings_modal
+                            .update(cx, |modal, cx| modal.clear_search(window, cx));
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
                 if event.keystroke.key.eq_ignore_ascii_case("escape") && search_visible {
                     this.workbench.update(cx, |w, cx| {
                         w.search.is_visible = false;
@@ -1860,6 +2188,10 @@ impl Render for MainShell {
                                     );
                                 match result {
                                     Ok(()) => {
+                                        cx.global::<GlobalDesktopServices>()
+                                            .voice_typing_readiness
+                                            .write()
+                                            .shortcut_error = None;
                                         let services = &cx.global::<GlobalDesktopServices>().0;
                                         if let Err(error) = crate::platform::agent_control::facade::settings::update_setting(
                                             services,
@@ -1873,11 +2205,17 @@ impl Render for MainShell {
                                             ));
                                         }
                                     }
-                                    Err(error) => this.global_dialog.update(cx, |d, _| d.show(
-                                        "Shortcut Registration Failed",
-                                        error,
-                                        crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                    )),
+                                    Err(error) => {
+                                        cx.global::<GlobalDesktopServices>()
+                                            .voice_typing_readiness
+                                            .write()
+                                            .shortcut_error = Some(error.clone());
+                                        this.global_dialog.update(cx, |d, _| d.show(
+                                            "Shortcut Registration Failed",
+                                            error,
+                                            crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                        ));
+                                    }
                                 }
                             }
                             ShortcutTarget::VoiceTypingTranslate => {
@@ -1888,6 +2226,10 @@ impl Render for MainShell {
                                 );
                                 match result {
                                     Ok(()) => {
+                                        cx.global::<GlobalDesktopServices>()
+                                            .voice_typing_readiness
+                                            .write()
+                                            .shortcut_error = None;
                                         let services = &cx.global::<GlobalDesktopServices>().0;
                                         if let Err(error) = crate::platform::agent_control::facade::settings::update_setting(
                                             services,
@@ -1901,11 +2243,17 @@ impl Render for MainShell {
                                             ));
                                         }
                                     }
-                                    Err(error) => this.global_dialog.update(cx, |d, _| d.show(
-                                        "Shortcut Registration Failed",
-                                        error,
-                                        crate::views::dialogs::global_dialog::DialogKind::Alert,
-                                    )),
+                                    Err(error) => {
+                                        cx.global::<GlobalDesktopServices>()
+                                            .voice_typing_readiness
+                                            .write()
+                                            .shortcut_error = Some(error.clone());
+                                        this.global_dialog.update(cx, |d, _| d.show(
+                                            "Shortcut Registration Failed",
+                                            error,
+                                            crate::views::dialogs::global_dialog::DialogKind::Alert,
+                                        ));
+                                    }
                                 }
                             }
                             ShortcutTarget::VoiceTypingQuickRecall => {
@@ -1978,7 +2326,7 @@ impl Render for MainShell {
 
                 if this.settings_modal.read(cx).is_open() {
                     if event.keystroke.key.eq_ignore_ascii_case("escape") {
-                        this.settings_modal.update(cx, |m, cx| m.close(cx));
+                        this.settings_modal.update(cx, |m, cx| m.close(window, cx));
                         window.prevent_default();
                         cx.stop_propagation();
                         cx.notify();
@@ -2043,13 +2391,7 @@ impl Render for MainShell {
 
                 if is_start_stop {
                     if !is_initializing {
-                        live_record.update(cx, |panel, cx| {
-                            if is_recording {
-                                panel.stop_recording(cx);
-                            } else {
-                                panel.start_recording(cx);
-                            }
-                        });
+                        live_record.update(cx, |panel, cx| panel.toggle_recording(cx));
                     }
                     window.prevent_default();
                     cx.stop_propagation();
@@ -2228,10 +2570,17 @@ impl Render for MainShell {
                             .flex()
                             .size_full()
                             .child(self.projects_rail.render(
-                                &self.projects_results.scope,
-                                project_inbox_count,
-                                project_all_count,
-                                project_trash_count,
+                                super::projects::rail::ProjectsRailState {
+                                    selected_scope: &self.projects_results.scope,
+                                    inbox_count: project_inbox_count,
+                                    all_count: project_all_count,
+                                    trash_count: project_trash_count,
+                                    is_inbox_active: self
+                                        .project_selector
+                                        .active_project_id
+                                        .is_none(),
+                                    is_recording: self.project_selector.is_recording,
+                                },
                                 cx,
                             ))
                             .child({

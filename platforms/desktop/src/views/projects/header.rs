@@ -49,14 +49,7 @@ impl ProjectsHeader {
                 "Restore items or delete them permanently.".to_string(),
             )
         } else if let Some(p) = project {
-            (
-                p.name.clone(),
-                if p.description.trim().is_empty() {
-                    "Workspace transcripts and pipeline settings.".to_string()
-                } else {
-                    p.description.clone()
-                },
-            )
+            (p.name.clone(), p.description.clone())
         } else {
             (
                 "Inbox".to_string(),
@@ -83,10 +76,40 @@ impl ProjectsHeader {
             let color = project
                 .and_then(|p| p.color.as_deref())
                 .unwrap_or("#64748b");
+            let color = color_from_hex_str(color);
+            let project_icon = project.and_then(|p| p.icon.as_deref());
+            let system_icon = project_icon
+                .and_then(|icon| icon.strip_prefix("system:"))
+                .and_then(|icon| match icon {
+                    "mic" => Some(LucideIcon::Mic),
+                    "file" => Some(LucideIcon::FileText),
+                    "folder" => Some(LucideIcon::Folder),
+                    "code" => Some(LucideIcon::Code),
+                    _ => None,
+                })
+                .unwrap_or(LucideIcon::Folder);
             div()
-                .size(px(14.0))
-                .rounded_full()
-                .bg(color_from_hex_str(color))
+                .size(px(34.0))
+                .rounded(px(8.0))
+                .bg(color.opacity(0.14))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    if let Some(emoji) =
+                        project_icon.filter(|icon| !icon.is_empty() && !icon.starts_with("system:"))
+                    {
+                        div()
+                            .text_size(px(21.0))
+                            .child(emoji.to_string())
+                            .into_any_element()
+                    } else {
+                        Icon::new(system_icon)
+                            .size(px(22.0))
+                            .text_color(color)
+                            .into_any_element()
+                    },
+                )
                 .into_any_element()
         };
 
@@ -229,12 +252,8 @@ impl ProjectsHeader {
                                         .tooltip("Empty Trash")
                                         .accessibility_label("Empty Trash")
                                         .disabled(trash_count == 0)
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.projects_toolbar.is_selection_active = true;
-                                            this.selection_bar.request_delete(
-                                                &this.projects_results.selected_ids,
-                                                cx,
-                                            );
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.selection_bar.request_empty_trash(trash_count, cx);
                                         })),
                                 )
                             }),

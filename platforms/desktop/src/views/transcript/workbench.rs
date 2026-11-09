@@ -7,6 +7,8 @@ use gpui_kit::component::Icon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::scroll::ScrollableElement as _;
+use gpui_kit::component::slider::SliderEvent;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use sona_core::ports::llm::LlmTextGeneratorPort;
@@ -24,9 +26,20 @@ pub enum WorkbenchEvent {
         id: String,
         title: String,
     },
+    SpeakerSampleEnrolled {
+        profile_name: String,
+    },
 }
 
 impl EventEmitter<WorkbenchEvent> for TranscriptWorkbench {}
+
+fn format_segment_time(seconds: f64) -> String {
+    let seconds = seconds.max(0.0);
+    let minutes = (seconds / 60.0).floor() as u64;
+    let whole_seconds = (seconds % 60.0).floor() as u64;
+    let tenths = ((seconds % 1.0) * 10.0).floor() as u64;
+    format!("{minutes:02}:{whole_seconds:02}.{tenths}")
+}
 use super::audio_player::AudioPlayerBar;
 use super::editor::TranscriptEditor;
 use super::search_overlay::SearchOverlay;
@@ -44,6 +57,11 @@ use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult, HistoryItemMetaPatch,
     HistoryUpdateItemMetaRequest,
 };
+use sona_core::transcription::speaker::SpeakerProfile;
+use sona_core::transcription::speaker_correction::{
+    ApplySpeakerProfileToGroupRequest, SpeakerGroupRequest, apply_speaker_profile_to_group_impl,
+    reset_speaker_group_to_anonymous_impl,
+};
 use sona_core::transcription::transcript::TranscriptSegment;
 use uuid::Uuid;
 
@@ -54,9 +72,23 @@ pub struct TranscriptWorkbench {
     pub has_session: bool,
     pub history_id: Option<String>,
     pub base_segments: Vec<TranscriptSegment>,
+    pub current_project_id: Option<String>,
+    pub speaker_correction_profiles: Vec<SpeakerProfile>,
+    pub speaker_menu_open_for: Option<String>,
+    pub speaker_menu_show_all: bool,
+    pub speaker_correction_busy: bool,
+    pub speaker_enroll_segment: Option<TranscriptSegment>,
+    pub speaker_enroll_mode_new: bool,
+    pub speaker_enroll_profile_id: Option<String>,
+    pub speaker_enroll_new_name_state: Entity<InputState>,
+    pub speaker_enroll_sample_name_state: Entity<InputState>,
+    pub speaker_enroll_busy: bool,
+    pub speaker_enroll_error: Option<String>,
+    pub current_audio_path: Option<std::path::PathBuf>,
     pub editor: TranscriptEditor,
     pub toolbar: EditorToolbar,
     pub player: AudioPlayerBar,
+    _player_subscriptions: Vec<Subscription>,
     pub search: SearchOverlay,
     pub summary_sheet: SummarySheet,
     pub speaker_sheet: SpeakerReviewSheet,
@@ -68,6 +100,9 @@ pub struct TranscriptWorkbench {
     pub is_ai_renaming: bool,
     pub session_icon: Option<String>,
     pub is_batch_item: bool,
+    pub is_streaming_active: bool,
+    window_handle: AnyWindowHandle,
+    audio_events_task_started: bool,
 
     // Polish interactive state
     pub is_polishing: bool,
@@ -95,6 +130,29 @@ impl TranscriptWorkbench {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let rename_title_state =
             cx.new(|cx| InputState::new(window, cx).placeholder("Transcript title"));
+        let speaker_enroll_new_name_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Speaker name"));
+        let speaker_enroll_sample_name_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("e.g. Clear speech segment"));
+        let player = AudioPlayerBar::new(cx);
+        let seek_slider = player.seek_slider().clone();
+        let volume_slider = player.volume_slider().clone();
+        let seek_subscription = cx.subscribe(&seek_slider, |this, _, event: &SliderEvent, cx| {
+            if let SliderEvent::Change(value) = event {
+                let position = this.player.total_duration * f64::from(value.end());
+                this.player.seek_to(position);
+                this.editor
+                    .update_playback(this.player.is_playing, true, position);
+                cx.notify();
+            }
+        });
+        let volume_subscription =
+            cx.subscribe(&volume_slider, |this, _, event: &SliderEvent, cx| {
+                if let SliderEvent::Change(value) = event {
+                    this.player.set_volume(value.end());
+                    cx.notify();
+                }
+            });
         Self {
             session_title: String::new(),
             is_loading: false,
@@ -102,9 +160,23 @@ impl TranscriptWorkbench {
             has_session: false,
             history_id: None,
             base_segments: Vec::new(),
+            current_project_id: None,
+            speaker_correction_profiles: Vec::new(),
+            speaker_menu_open_for: None,
+            speaker_menu_show_all: false,
+            speaker_correction_busy: false,
+            speaker_enroll_segment: None,
+            speaker_enroll_mode_new: false,
+            speaker_enroll_profile_id: None,
+            speaker_enroll_new_name_state,
+            speaker_enroll_sample_name_state,
+            speaker_enroll_busy: false,
+            speaker_enroll_error: None,
+            current_audio_path: None,
             editor: TranscriptEditor::new(window, cx),
             toolbar: EditorToolbar::new(),
-            player: AudioPlayerBar::new(),
+            player,
+            _player_subscriptions: vec![seek_subscription, volume_subscription],
             search: SearchOverlay::new(window, cx),
             summary_sheet: SummarySheet::new(window, cx),
             speaker_sheet: SpeakerReviewSheet::new(),
@@ -116,6 +188,9 @@ impl TranscriptWorkbench {
             is_ai_renaming: false,
             session_icon: None,
             is_batch_item: false,
+            is_streaming_active: false,
+            window_handle: window.window_handle(),
+            audio_events_task_started: false,
             is_polishing: false,
             polish_menu_open: false,
             polish_preset: "standard".to_string(),
@@ -140,8 +215,17 @@ impl TranscriptWorkbench {
         title: String,
         icon: Option<String>,
         is_batch: bool,
+        project_id: Option<String>,
     ) {
+        self.player.reset();
+        self.editor.reset_session();
+        self.is_streaming_active = false;
         self.history_id = Some(history_id);
+        self.current_project_id = project_id;
+        self.speaker_menu_open_for = None;
+        self.speaker_menu_show_all = false;
+        self.speaker_enroll_segment = None;
+        self.current_audio_path = None;
         self.session_title = title;
         self.session_icon = icon.clone();
         self.rename_icon = icon;
@@ -247,20 +331,71 @@ impl TranscriptWorkbench {
                 id: segment.id,
                 start_time: segment.start,
                 end_time: segment.end,
+                is_final: segment.is_final,
                 speaker: segment
                     .speaker
-                    .map(|speaker| speaker.label)
+                    .as_ref()
+                    .map(|speaker| speaker.label.clone())
                     .unwrap_or_default(),
+                speaker_tag: segment.speaker,
+                speaker_attribution: segment.speaker_attribution,
+                timing: segment.timing,
                 text: segment.text,
                 translation: segment.translation,
             })
             .collect();
+        self.search.invalidate_matches();
+        self.editor.set_streaming_active(self.is_streaming_active);
+        self.editor.follow_new_segments();
         self.player.current_time = 0.0;
         self.player.total_duration = duration.max(0.0);
         self.player.is_playing = false;
         self.is_loading = false;
         self.load_error = false;
         self.has_session = true;
+    }
+
+    pub fn load_audio(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        self.current_audio_path = Some(path.clone());
+        self.player.load(path);
+        if self.audio_events_task_started {
+            return;
+        }
+        self.audio_events_task_started = true;
+        let window_handle = self.window_handle;
+        let events = self.player.events();
+        cx.spawn(async move |this, cx| {
+            loop {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let mut pending = Vec::new();
+                while let Ok(event) = events.try_recv() {
+                    pending.push(event);
+                }
+                let keep_running = cx
+                    .update_window(window_handle, |_, window, app| {
+                        this.update(app, |this, app| {
+                            if pending.is_empty() {
+                                return true;
+                            }
+                            for event in pending {
+                                if let Some((playing, position)) = this.player.apply_event(event) {
+                                    this.player.sync_seek_slider(window, app);
+                                    this.editor.update_playback(playing, false, position);
+                                }
+                            }
+                            app.notify();
+                            true
+                        })
+                    })
+                    .ok()
+                    .and_then(Result::ok)
+                    .unwrap_or(false);
+                if !keep_running {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn current_segments(&self) -> Vec<TranscriptSegment> {
@@ -278,7 +413,7 @@ impl TranscriptWorkbench {
                         text: String::new(),
                         start: data.start_time,
                         end: data.end_time,
-                        is_final: true,
+                        is_final: data.is_final,
                         timing: None,
                         tokens: None,
                         timestamps: None,
@@ -291,13 +426,286 @@ impl TranscriptWorkbench {
                 segment.text = data.text.clone();
                 segment.start = data.start_time;
                 segment.end = data.end_time;
+                segment.timing = data.timing.clone();
+                if data.timing.is_none() {
+                    segment.tokens = None;
+                    segment.timestamps = None;
+                    segment.durations = None;
+                }
                 segment.translation = data.translation.clone();
+                segment.speaker = data.speaker_tag.clone();
+                segment.speaker_attribution = data.speaker_attribution.clone();
                 segment
             })
             .collect()
     }
 
+    pub fn apply_speaker_profile(
+        &mut self,
+        group_id: &str,
+        profile_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let profiles = self.speaker_correction_profiles.clone();
+        let enabled_ids = profiles
+            .iter()
+            .filter(|profile| profile.enabled)
+            .map(|profile| profile.id.clone())
+            .collect();
+        let Ok(response) = apply_speaker_profile_to_group_impl(ApplySpeakerProfileToGroupRequest {
+            segments: self.current_segments(),
+            group_id: group_id.to_string(),
+            target_profile_id: profile_id.to_string(),
+            speaker_profiles: profiles.clone(),
+            enabled_speaker_profile_ids: enabled_ids,
+        }) else {
+            return;
+        };
+        self.apply_speaker_correction_segments(response.segments);
+        if let Some(enabled_ids) = response.enabled_speaker_profile_ids {
+            let enabled = enabled_ids
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>();
+            for profile in &mut self.speaker_correction_profiles {
+                profile.enabled = enabled.contains(&profile.id);
+                if profile.id == profile_id
+                    && profile.scope == "project"
+                    && let Some(project_id) = &self.current_project_id
+                    && !profile.project_ids.contains(project_id)
+                {
+                    profile.project_ids.push(project_id.clone());
+                }
+            }
+            let services = cx.global::<GlobalDesktopServices>().0.clone();
+            if let Ok(value) = serde_json::to_value(&self.speaker_correction_profiles) {
+                let _ = services.config.set_setting("speakerProfiles", &value);
+            }
+        }
+        self.speaker_menu_open_for = None;
+        self.speaker_menu_show_all = false;
+        self.persist_current(cx);
+        cx.notify();
+    }
+
+    pub fn reset_speaker_group(&mut self, group_id: &str, cx: &mut Context<Self>) {
+        let Ok(response) = reset_speaker_group_to_anonymous_impl(SpeakerGroupRequest {
+            segments: self.current_segments(),
+            group_id: group_id.to_string(),
+        }) else {
+            return;
+        };
+        self.apply_speaker_correction_segments(response.segments);
+        self.speaker_menu_open_for = None;
+        self.speaker_menu_show_all = false;
+        self.persist_current(cx);
+        cx.notify();
+    }
+
+    pub fn open_speaker_enrollment(
+        &mut self,
+        segment_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(segment) = self
+            .current_segments()
+            .into_iter()
+            .find(|segment| segment.id == segment_id)
+        else {
+            return;
+        };
+        let matching_profile = self.speaker_correction_profiles.iter().find(|profile| {
+            profile.id
+                == segment
+                    .speaker
+                    .as_ref()
+                    .map(|speaker| speaker.id.as_str())
+                    .unwrap_or_default()
+                || profile.name.eq_ignore_ascii_case(
+                    segment
+                        .speaker
+                        .as_ref()
+                        .map(|speaker| speaker.label.as_str())
+                        .unwrap_or_default(),
+                )
+        });
+        let existing_profiles = !self.speaker_correction_profiles.is_empty();
+        self.speaker_enroll_mode_new = !existing_profiles;
+        self.speaker_enroll_profile_id = matching_profile
+            .map(|profile| profile.id.clone())
+            .or_else(|| {
+                self.speaker_correction_profiles
+                    .first()
+                    .map(|profile| profile.id.clone())
+            });
+        let speaker_name = segment
+            .speaker
+            .as_ref()
+            .map(|speaker| speaker.label.clone())
+            .unwrap_or_default();
+        self.speaker_enroll_new_name_state
+            .update(cx, |state, cx| state.set_value(speaker_name, window, cx));
+        let sample_name = format!(
+            "{} - {}",
+            format_segment_time(segment.start),
+            format_segment_time(segment.end)
+        );
+        self.speaker_enroll_sample_name_state
+            .update(cx, |state, cx| state.set_value(sample_name, window, cx));
+        self.speaker_enroll_error = None;
+        self.speaker_enroll_segment = Some(segment);
+        self.speaker_menu_open_for = None;
+        self.speaker_menu_show_all = false;
+        cx.notify();
+    }
+
+    pub fn close_speaker_enrollment(&mut self, cx: &mut Context<Self>) {
+        if self.speaker_enroll_busy {
+            return;
+        }
+        self.speaker_enroll_segment = None;
+        self.speaker_enroll_error = None;
+        cx.notify();
+    }
+
+    pub fn submit_speaker_enrollment(&mut self, cx: &mut Context<Self>) {
+        if self.speaker_enroll_busy {
+            return;
+        }
+        let Some(segment) = self.speaker_enroll_segment.clone() else {
+            return;
+        };
+        let Some(audio_path) = self.current_audio_path.clone() else {
+            self.speaker_enroll_error = Some("No audio file found for the current session.".into());
+            cx.notify();
+            return;
+        };
+        let is_new = self.speaker_enroll_mode_new;
+        let profile_name = self
+            .speaker_enroll_new_name_state
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if is_new && profile_name.is_empty() {
+            self.speaker_enroll_error = Some("Please enter a speaker name.".into());
+            cx.notify();
+            return;
+        }
+        let profile_id = if is_new {
+            Uuid::new_v4().to_string()
+        } else if let Some(profile_id) = &self.speaker_enroll_profile_id {
+            if self
+                .speaker_correction_profiles
+                .iter()
+                .any(|profile| profile.id == *profile_id)
+            {
+                profile_id.clone()
+            } else {
+                self.speaker_enroll_error = Some("Please select a target speaker profile.".into());
+                cx.notify();
+                return;
+            }
+        } else {
+            self.speaker_enroll_error = Some("Please select a target speaker profile.".into());
+            cx.notify();
+            return;
+        };
+        let sample_name = self
+            .speaker_enroll_sample_name_state
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let sample_name = (!sample_name.is_empty()).then_some(sample_name);
+        let start = segment.start;
+        let end = segment.end;
+        self.speaker_enroll_busy = true;
+        self.speaker_enroll_error = None;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let provider = crate::platform::system::paths::DesktopPathProvider::from_default();
+            let result = crate::platform::models::speaker_processing::enroll_speaker_profile_sample_from_audio(
+                &provider,
+                profile_id.clone(),
+                audio_path.to_string_lossy().into_owned(),
+                start,
+                end,
+                sample_name,
+            ).await;
+            this.update(cx, |this, cx| {
+                this.speaker_enroll_busy = false;
+                match result {
+                    Ok(sample) => {
+                        let mut profiles = this.speaker_correction_profiles.clone();
+                        if is_new {
+                            profiles.push(SpeakerProfile {
+                                id: profile_id.clone(),
+                                name: profile_name.clone(),
+                                enabled: true,
+                                scope: "global".to_string(),
+                                project_ids: Vec::new(),
+                                samples: vec![sample],
+                            });
+                        } else if let Some(profile) = profiles.iter_mut().find(|profile| profile.id == profile_id) {
+                            profile.samples.push(sample);
+                        }
+                        this.speaker_correction_profiles = profiles;
+                        let services = cx.global::<GlobalDesktopServices>().0.clone();
+                        if let Ok(value) = serde_json::to_value(&this.speaker_correction_profiles) {
+                            let _ = services.config.set_setting("speakerProfiles", &value);
+                        }
+                        let group_id = segment.speaker_attribution.as_ref().map(|attribution| attribution.group_id.clone())
+                            .filter(|group_id| !group_id.is_empty())
+                            .or_else(|| segment.speaker.as_ref().map(|speaker| speaker.id.clone()));
+                        this.speaker_enroll_segment = None;
+                        if let Some(group_id) = group_id {
+                            this.apply_speaker_profile(&group_id, &profile_id, cx);
+                        }
+                        let enrolled_name = if is_new {
+                            profile_name.clone()
+                        } else {
+                            this.speaker_correction_profiles
+                                .iter()
+                                .find(|profile| profile.id == profile_id)
+                                .map(|profile| profile.name.clone())
+                                .unwrap_or_default()
+                        };
+                        cx.emit(WorkbenchEvent::SpeakerSampleEnrolled {
+                            profile_name: enrolled_name,
+                        });
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        this.speaker_enroll_error = Some(error);
+                        cx.notify();
+                    }
+                }
+            }).ok();
+        }).detach();
+    }
+
+    fn apply_speaker_correction_segments(&mut self, segments: Vec<TranscriptSegment>) {
+        for segment in segments {
+            if let Some(data) = self
+                .editor
+                .segments
+                .iter_mut()
+                .find(|data| data.id == segment.id)
+            {
+                data.speaker = segment
+                    .speaker
+                    .as_ref()
+                    .map(|speaker| speaker.label.clone())
+                    .unwrap_or_default();
+                data.speaker_tag = segment.speaker;
+                data.speaker_attribution = segment.speaker_attribution;
+            }
+        }
+    }
+
     fn persist_current(&mut self, cx: &mut Context<Self>) {
+        self.search.invalidate_matches();
         let Some(history_id) = self.history_id.clone() else {
             return;
         };
@@ -337,6 +745,8 @@ impl TranscriptWorkbench {
 
     pub fn begin_edit(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.begin_edit(id, window, cx);
+        self.editor
+            .update_playback(self.player.is_playing, false, self.player.current_time);
     }
 
     pub fn save_edit(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -964,36 +1374,229 @@ impl TranscriptWorkbench {
         .detach();
     }
 
+    fn render_speaker_enrollment_dialog(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(segment) = self.speaker_enroll_segment.clone() else {
+            return div().into_any_element();
+        };
+        let duration = (segment.end - segment.start).max(0.0);
+        let profiles = self.speaker_correction_profiles.clone();
+        let new_name_state = self.speaker_enroll_new_name_state.clone();
+        let sample_name_state = self.speaker_enroll_sample_name_state.clone();
+        let selected_profile_id = self.speaker_enroll_profile_id.clone();
+        let is_new = self.speaker_enroll_mode_new;
+        let busy = self.speaker_enroll_busy;
+        let audio_available = self.current_audio_path.is_some();
+        let error = self.speaker_enroll_error.clone();
+
+        div()
+            .id("speaker-enrollment-backdrop")
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(hsla(0.0, 0.0, 0.0, 0.5))
+            .on_click(cx.listener(|this, _, _, cx| this.close_speaker_enrollment(cx)))
+            .child(
+                div()
+                    .id("speaker-enrollment-dialog")
+                    .w(px(480.0))
+                    .max_w_full()
+                    .max_h(px(720.0))
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .p_5()
+                    .rounded(RADIUS_LG)
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .shadow_2xl()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(Icon::new(LucideIcon::Mic).size(px(18.0)))
+                                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Enroll Speaker Voice Sample")),
+                            )
+                            .child(
+                                Button::new("speaker-enrollment-close")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(LucideIcon::X)
+                                    .accessibility_label("Close enrollment dialog")
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| this.close_speaker_enrollment(cx))),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .p_3()
+                            .rounded_md()
+                            .bg(cx.theme().secondary)
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .text_size(px(12.0))
+                                    .child(format!("{} - {}", format_segment_time(segment.start), format_segment_time(segment.end)))
+                                    .child(format!("{duration:.1}s")),
+                            )
+                            .child(div().text_size(px(13.0)).child(segment.text.clone())),
+                    )
+                    .when(duration < 4.0, |dialog| {
+                        dialog.child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .gap_2()
+                                .rounded_md()
+                                .p_3()
+                                .bg(cx.theme().warning.opacity(0.12))
+                                .text_size(px(12.0))
+                                .child(Icon::new(LucideIcon::TriangleAlert).size(px(15.0)))
+                                .child("This segment is under 4 seconds. The speaker engine ignores shorter samples; choose a longer segment when possible."),
+                        )
+                    })
+                    .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Target Speaker"))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                Button::new("speaker-enrollment-existing-mode")
+                                    .when(!is_new, |button| button.primary())
+                                    .when(is_new, |button| button.outline())
+                                    .small()
+                                    .icon(LucideIcon::User)
+                                    .label("Existing Profile")
+                                    .disabled(profiles.is_empty() || busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.speaker_enroll_mode_new = false;
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                Button::new("speaker-enrollment-new-mode")
+                                    .when(is_new, |button| button.primary())
+                                    .when(!is_new, |button| button.outline())
+                                    .small()
+                                    .icon(LucideIcon::Plus)
+                                    .label("New Speaker")
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.speaker_enroll_mode_new = true;
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .when(is_new, |dialog| {
+                        dialog.child(Input::new(&new_name_state).focus_ring(true))
+                    })
+                    .when(!is_new, |dialog| {
+                        dialog.child(
+                            div()
+                                .max_h(px(150.0))
+                                .overflow_y_scrollbar()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .children(profiles.into_iter().map(|profile| {
+                                    let profile_id = profile.id.clone();
+                                    Button::new(format!("enroll-profile-{}", profile.id))
+                                        .when(selected_profile_id.as_deref() == Some(profile.id.as_str()), |button| button.secondary())
+                                        .ghost()
+                                        .small()
+                                        .justify_start()
+                                        .label(format!("{} ({} samples)", profile.name, profile.samples.len()))
+                                        .disabled(busy)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.speaker_enroll_profile_id = Some(profile_id.clone());
+                                            cx.notify();
+                                        }))
+                                })),
+                        )
+                    })
+                    .child(div().text_size(px(12.0)).font_weight(FontWeight::MEDIUM).child("Sample Label (optional)"))
+                    .child(Input::new(&sample_name_state).focus_ring(true))
+                    .when(!audio_available || error.is_some(), |dialog| {
+                        let message = error.clone().unwrap_or_else(|| {
+                            "No audio file found for the current session.".to_string()
+                        });
+                        dialog.child(div().text_size(px(12.0)).text_color(cx.theme().danger).child(message))
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .gap_2()
+                            .child(
+                                Button::new("speaker-enrollment-cancel")
+                                    .ghost()
+                                    .small()
+                                    .label("Cancel")
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| this.close_speaker_enrollment(cx))),
+                            )
+                            .child(
+                                Button::new("speaker-enrollment-submit")
+                                    .primary()
+                                    .small()
+                                    .icon(if busy { LucideIcon::Loader } else { LucideIcon::Mic })
+                                    .label("Enroll Voice Sample")
+                                    .disabled(busy || !audio_available)
+                                    .on_click(cx.listener(|this, _, _, cx| this.submit_speaker_enrollment(cx))),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     pub fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let query = self
-            .search
-            .query_state
-            .read(cx)
-            .value()
-            .trim()
-            .to_lowercase();
-        if query.is_empty() {
-            self.search.match_count = 0;
+        let query = self.search.query_state.read(cx).value().to_string();
+        if query != self.search.query {
+            self.search.query = query.clone();
             self.search.current_match = 0;
-            self.editor.search_match_id = None;
-        } else {
-            let matches = self
-                .editor
-                .segments
-                .iter()
-                .filter(|segment| segment.text.to_lowercase().contains(&query))
-                .map(|segment| segment.id.clone())
-                .collect::<Vec<_>>();
-            self.search.match_count = matches.len();
-            if self.search.match_count == 0 {
+            self.search.invalidate_matches();
+        }
+        if self.search.matches_dirty {
+            self.search.matches =
+                super::search_overlay::find_transcript_matches(&self.editor.segments, &query);
+            self.search.match_count = self.search.matches.len();
+            if self.search.matches.is_empty() {
                 self.search.current_match = 0;
-                self.editor.search_match_id = None;
+                self.editor.search_highlights.clear();
             } else {
                 self.search.current_match =
-                    self.search.current_match.min(self.search.match_count - 1);
-                self.editor.search_match_id = matches.get(self.search.current_match).cloned();
+                    self.search.current_match.min(self.search.matches.len() - 1);
+                let mut highlights = std::collections::HashMap::new();
+                for (global_index, matched) in self.search.matches.iter().enumerate() {
+                    highlights
+                        .entry(matched.segment_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(super::segment_row::SegmentSearchHighlight {
+                            range: matched.range.clone(),
+                            global_index,
+                        });
+                }
+                self.editor.search_highlights = highlights;
             }
+            self.search.matches_dirty = false;
         }
+        self.editor.active_search_match =
+            (self.search.match_count > 0).then_some(self.search.current_match);
         if !self.has_session {
             if self.is_loading {
                 return div()
@@ -1665,6 +2268,7 @@ impl TranscriptWorkbench {
                         ),
                 )
             })
+            .child(self.render_speaker_enrollment_dialog(cx))
     }
 }
 impl Render for TranscriptWorkbench {

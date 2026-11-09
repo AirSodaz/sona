@@ -13,6 +13,7 @@ use super::options_capsule::{IngestionSurface, TranscriptionOptionsModel};
 use crate::theme::tokens::{
     COLOR_BG_ELEVATED_LIGHT, COLOR_BG_SECONDARY_LIGHT, COLOR_BG_TERTIARY_LIGHT,
     COLOR_TEXT_MUTED_LIGHT, COLOR_TEXT_PRIMARY_LIGHT, COLOR_TEXT_SECONDARY_LIGHT, RADIUS_FULL,
+    RADIUS_SM,
 };
 #[inline]
 fn icon(name: LucideIcon) -> Icon {
@@ -86,7 +87,7 @@ impl CreateWorkspacePanel {
 }
 
 impl Render for CreateWorkspacePanel {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_live_active = self.active_tab == CreateWorkspaceTab::LiveRecord;
         let is_batch_active = self.active_tab == CreateWorkspaceTab::BatchImport;
 
@@ -97,6 +98,20 @@ impl Render for CreateWorkspacePanel {
         let batch_item_count = self.batch_import.read(cx).queue.len();
         let show_batch_count_badge =
             batch_item_count > 0 && !is_batch_processing && !is_batch_active;
+        let slider_progress = gpui_kit::base::motion::transition(
+            "create-workspace-tab-slider",
+            if is_batch_active { 1.0_f32 } else { 0.0_f32 },
+            gpui_kit::base::motion::Transition::new(std::time::Duration::from_millis(220)).easing(
+                gpui_kit::base::motion::Easing::CubicBezier {
+                    x1: 0.4,
+                    y1: 0.0,
+                    x2: 0.2,
+                    y2: 1.0,
+                },
+            ),
+            window,
+            cx,
+        );
 
         div()
             .id("create-workspace-panel")
@@ -129,6 +144,28 @@ impl Render for CreateWorkspacePanel {
                             .role(Role::TabList)
                             .aria_label("Workspace Input Selection")
                             .aria_orientation(Orientation::Horizontal)
+                            .child(
+                                div()
+                                    .id("create-tab-slider-track")
+                                    .absolute()
+                                    .top(px(4.0))
+                                    .left(px(4.0))
+                                    .right(px(8.0))
+                                    .h(px(32.0))
+                                    .child(
+                                        div()
+                                            .id("create-tab-slider")
+                                            .absolute()
+                                            .top(px(0.0))
+                                            .left(relative(slider_progress * 0.5))
+                                            .ml(px(slider_progress * 4.0))
+                                            .w(relative(0.5))
+                                            .h_full()
+                                            .rounded(RADIUS_SM)
+                                            .bg(COLOR_BG_ELEVATED_LIGHT)
+                                            .shadow_sm(),
+                                    ),
+                            )
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                                 if event.keystroke.modifiers.alt
                                     || event.keystroke.modifiers.control
@@ -183,14 +220,8 @@ impl Render for CreateWorkspacePanel {
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(px(6.0))
+                                    .rounded(RADIUS_SM)
                                     .cursor_pointer()
-                                    .bg(if is_live_active {
-                                        COLOR_BG_ELEVATED_LIGHT
-                                    } else {
-                                        gpui_kit::transparent_black()
-                                    })
-                                    .when(is_live_active, |this| this.shadow_sm())
                                     .focus_visible(|style| {
                                         style.border_1().border_color(cx.theme().primary)
                                     })
@@ -241,14 +272,8 @@ impl Render for CreateWorkspacePanel {
                                     .items_center()
                                     .justify_center()
                                     .gap(px(8.0))
-                                    .rounded(px(6.0))
+                                    .rounded(RADIUS_SM)
                                     .cursor_pointer()
-                                    .bg(if is_batch_active {
-                                        COLOR_BG_ELEVATED_LIGHT
-                                    } else {
-                                        gpui_kit::transparent_black()
-                                    })
-                                    .when(is_batch_active, |this| this.shadow_sm())
                                     .focus_visible(|style| {
                                         style.border_1().border_color(cx.theme().primary)
                                     })

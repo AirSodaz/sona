@@ -3,10 +3,7 @@ use tokio::sync::Mutex;
 
 use crate::services::DesktopServices;
 use sona_application::live_transcription::{LiveInputTransform, LiveSourceEpoch};
-use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
-};
-use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptionRequest};
 use sona_core::transcription::transcript::TranscriptSegment;
 
 use super::asr_config::resolve_live_asr_request_from_config;
@@ -14,47 +11,6 @@ use super::types::{
     AudioDevicesResult, StartRecordingRequest, StartRecordingResult, StopRecordingRequest,
     StopRecordingResult,
 };
-
-pub(crate) struct AgentAsrRuntimeObserver {
-    inner: crate::integrations::asr::DesktopAsrRuntimeObserver,
-    segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
-}
-
-impl AgentAsrRuntimeObserver {
-    pub(crate) fn new(
-        inner: crate::integrations::asr::DesktopAsrRuntimeObserver,
-        segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
-    ) -> Self {
-        Self { inner, segments }
-    }
-}
-
-impl AsrRuntimeObserver for AgentAsrRuntimeObserver {
-    fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
-        self.inner.on_transcript_update(event);
-
-        if let Ok(mut segs) = self.segments.lock() {
-            if !event.update.remove_ids.is_empty() {
-                segs.retain(|s| !event.update.remove_ids.contains(&s.id));
-            }
-            for upsert in &event.update.upsert_segments {
-                if let Some(pos) = segs.iter().position(|s| s.id == upsert.id) {
-                    segs[pos] = upsert.clone();
-                } else {
-                    segs.push(upsert.clone());
-                }
-            }
-        }
-    }
-
-    fn on_model_load(&self, metric: &AsrModelLoadMetric) {
-        self.inner.on_model_load(metric);
-    }
-
-    fn on_live_inference(&self, metric: &AsrInferenceMetric) {
-        self.inner.on_live_inference(metric);
-    }
-}
 
 #[derive(Clone)]
 pub struct ActiveRecordingSession {
@@ -186,14 +142,12 @@ pub async fn start_recording(
     };
 
     let segments = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let inner_observer = crate::integrations::asr::DesktopAsrRuntimeObserver::new(
+    let observer = crate::integrations::asr::CollectingAsrRuntimeObserver::new(
         services.emitter.clone(),
         services.asr.metrics_store(),
-    );
-    let observer = Arc::new(AgentAsrRuntimeObserver::new(
-        inner_observer,
         segments.clone(),
-    )) as Arc<dyn AsrRuntimeObserver>;
+    );
+    let observer = Arc::new(observer) as Arc<dyn AsrRuntimeObserver>;
 
     let mut has_coordinator_consumer = false;
     if let Some(asr_req) = resolved_asr_req.clone() {
@@ -750,12 +704,12 @@ pub async fn resume_recording(
 
     let mut coordinator_acquired = false;
     if let Some(asr_req) = asr_request {
-        let inner_observer = crate::integrations::asr::DesktopAsrRuntimeObserver::new(
+        let observer = crate::integrations::asr::CollectingAsrRuntimeObserver::new(
             services.emitter.clone(),
             services.asr.metrics_store(),
+            segments,
         );
-        let observer = Arc::new(AgentAsrRuntimeObserver::new(inner_observer, segments))
-            as Arc<dyn AsrRuntimeObserver>;
+        let observer = Arc::new(observer) as Arc<dyn AsrRuntimeObserver>;
 
         if let Err(e) = services
             .asr

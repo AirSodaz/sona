@@ -81,7 +81,7 @@ impl AsrRuntimeObserver for VoiceTypingObserver {
         }
         let text = self.transcript(false);
         let text = if self.cjk_spacing {
-            format_cjk_typography(&text)
+            crate::services::text_format::format_cjk_typography(&text)
         } else {
             text
         };
@@ -120,30 +120,14 @@ pub fn spawn_voice_typing_event_loop(services: Arc<DesktopServices>, event_bus: 
         let warmup_consumer = "voice-typing-warmup".to_string();
         let mut warmup_active = false;
         let initial_config = load_config(&services);
-        if setting_bool(&services, &initial_config, "voiceTypingEnabled", false)
-            && setting_bool(&services, &initial_config, "keepMicrophoneActive", false)
-        {
-            let app_data_dir = services
-                .sqlite
-                .current_context()
-                .map(|context| context.app_data_dir().to_path_buf())
-                .unwrap_or_else(|_| std::env::temp_dir());
-            let microphone_id =
-                setting_string(&services, &initial_config, "microphoneId", "default");
-            let device_name = (microphone_id != "default").then_some(microphone_id);
-            warmup_active = crate::integrations::audio::start_native_live_capture(
-                services.audio.clone(),
-                services.asr.clone(),
-                Arc::new(event_bus.clone()),
-                app_data_dir,
-                "microphone",
-                device_name,
-                warmup_consumer.clone(),
-                None,
-            )
-            .await
-            .is_ok();
-        }
+        sync_voice_typing_warmup(
+            &services,
+            &event_bus,
+            &initial_config,
+            &warmup_consumer,
+            &mut warmup_active,
+        )
+        .await;
         let mut active: Option<ActiveVoiceTypingSession> = None;
         loop {
             let event = match receiver.recv().await {
@@ -165,11 +149,14 @@ pub fn spawn_voice_typing_event_loop(services: Arc<DesktopServices>, event_bus: 
                 match shortcut_transition(&mode, pressed, active.is_some()) {
                     Some(true) => {
                         let _ = event_bus.emit("voice-typing:show", serde_json::json!({}));
-                        if let Err(error) =
-                            start_session(&services, &event_bus, &config, &mut active, false).await
-                        {
-                            emit_error(event_bus.as_ref(), &error);
-                        }
+                        start_voice_typing_session(
+                            &services,
+                            &event_bus,
+                            &config,
+                            &mut active,
+                            false,
+                        )
+                        .await;
                     }
                     Some(false) => {
                         finish_session(&services, &event_bus, &mut active, false).await;
@@ -186,11 +173,14 @@ pub fn spawn_voice_typing_event_loop(services: Arc<DesktopServices>, event_bus: 
                 match shortcut_transition(&mode, pressed, active.is_some()) {
                     Some(true) => {
                         let _ = event_bus.emit("voice-typing:show", serde_json::json!({}));
-                        if let Err(error) =
-                            start_session(&services, &event_bus, &config, &mut active, true).await
-                        {
-                            emit_error(event_bus.as_ref(), &error);
-                        }
+                        start_voice_typing_session(
+                            &services,
+                            &event_bus,
+                            &config,
+                            &mut active,
+                            true,
+                        )
+                        .await;
                     }
                     Some(false) => {
                         finish_session(&services, &event_bus, &mut active, false).await;
@@ -211,6 +201,31 @@ pub fn spawn_voice_typing_event_loop(services: Arc<DesktopServices>, event_bus: 
                 }
             } else if event.is("hotkey:toggle_quick_recall") {
                 let _ = event_bus.emit("voice-typing:show", serde_json::json!({"recall": true}));
+            } else if event.is("app-setting-updated") {
+                let key = event.payload["key"].as_str().unwrap_or_default();
+                if is_voice_typing_setting(key) {
+                    let config = load_config(&services);
+                    if key == "microphoneId" && warmup_active {
+                        let _ = crate::integrations::audio::stop_native_live_capture(
+                            &services.audio,
+                            "microphone",
+                            warmup_consumer.clone(),
+                        )
+                        .await;
+                        warmup_active = false;
+                    }
+                    if key == "voiceTypingShortcut" || key == "voiceTypingTranslateShortcut" {
+                        services.voice_typing_readiness.write().shortcut_error = None;
+                    }
+                    sync_voice_typing_warmup(
+                        &services,
+                        &event_bus,
+                        &config,
+                        &warmup_consumer,
+                        &mut warmup_active,
+                    )
+                    .await;
+                }
             }
         }
         if warmup_active {
@@ -222,6 +237,127 @@ pub fn spawn_voice_typing_event_loop(services: Arc<DesktopServices>, event_bus: 
             .await;
         }
     });
+}
+
+fn is_voice_typing_setting(key: &str) -> bool {
+    matches!(
+        key,
+        "voiceTypingEnabled"
+            | "keepMicrophoneActive"
+            | "microphoneId"
+            | "voiceTypingShortcut"
+            | "voiceTypingTranslateShortcut"
+    ) || key.starts_with("asr")
+}
+
+async fn sync_voice_typing_warmup(
+    services: &DesktopServices,
+    event_bus: &AppEventBus,
+    config: &serde_json::Value,
+    consumer_id: &str,
+    warmup_active: &mut bool,
+) {
+    let enabled = setting_bool(services, config, "voiceTypingEnabled", false);
+    let asr_request = if enabled {
+        crate::platform::agent_control::facade::resolve_voice_typing_asr_request_from_config(config)
+            .ok()
+    } else {
+        None
+    };
+    let keep_microphone_active = setting_bool(services, config, "keepMicrophoneActive", false);
+    let Some(asr_request) = asr_request else {
+        if *warmup_active {
+            let _ = crate::integrations::audio::stop_native_live_capture(
+                &services.audio,
+                "microphone",
+                consumer_id.to_string(),
+            )
+            .await;
+            *warmup_active = false;
+        }
+        let mut readiness = services.voice_typing_readiness.write();
+        readiness.preparing = false;
+        readiness.warmup_ready = false;
+        readiness.warmup_error = None;
+        drop(readiness);
+        let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
+        return;
+    };
+    let should_warmup = keep_microphone_active;
+
+    {
+        let mut readiness = services.voice_typing_readiness.write();
+        readiness.preparing = true;
+        readiness.warmup_ready = false;
+        readiness.warmup_error = None;
+    }
+    let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
+
+    let prepare_result = services
+        .asr
+        .live_coordinator()
+        .prepare(&asr_request)
+        .await
+        .map_err(|error| error.to_string());
+    if let Err(error) = prepare_result {
+        if *warmup_active {
+            let _ = crate::integrations::audio::stop_native_live_capture(
+                &services.audio,
+                "microphone",
+                consumer_id.to_string(),
+            )
+            .await;
+            *warmup_active = false;
+        }
+        let mut readiness = services.voice_typing_readiness.write();
+        readiness.preparing = false;
+        readiness.warmup_ready = false;
+        readiness.warmup_error = Some(error);
+        drop(readiness);
+        let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
+        return;
+    }
+
+    if should_warmup && !*warmup_active {
+        let app_data_dir = services
+            .sqlite
+            .current_context()
+            .map(|context| context.app_data_dir().to_path_buf())
+            .unwrap_or_else(|_| std::env::temp_dir());
+        let microphone_id = setting_string(services, config, "microphoneId", "default");
+        let device_name = (microphone_id != "default").then_some(microphone_id);
+        let result = crate::integrations::audio::start_native_live_capture(
+            services.audio.clone(),
+            services.asr.clone(),
+            Arc::new(event_bus.clone()),
+            app_data_dir,
+            "microphone",
+            device_name,
+            consumer_id.to_string(),
+            None,
+        )
+        .await;
+        *warmup_active = result.is_ok();
+        let mut readiness = services.voice_typing_readiness.write();
+        readiness.preparing = false;
+        readiness.warmup_ready = *warmup_active;
+        readiness.warmup_error = result.err();
+    } else {
+        if !should_warmup && *warmup_active {
+            let _ = crate::integrations::audio::stop_native_live_capture(
+                &services.audio,
+                "microphone",
+                consumer_id.to_string(),
+            )
+            .await;
+            *warmup_active = false;
+        }
+        let mut readiness = services.voice_typing_readiness.write();
+        readiness.preparing = false;
+        readiness.warmup_ready = !keep_microphone_active || *warmup_active;
+        readiness.warmup_error = None;
+    }
+    let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
 }
 
 fn shortcut_transition(mode: &str, pressed: bool, active: bool) -> Option<bool> {
@@ -323,6 +459,22 @@ async fn start_session(
         }),
     );
     Ok(())
+}
+
+async fn start_voice_typing_session(
+    services: &DesktopServices,
+    event_bus: &AppEventBus,
+    config: &serde_json::Value,
+    active: &mut Option<ActiveVoiceTypingSession>,
+    is_translate: bool,
+) {
+    services.voice_typing_readiness.write().warmup_error = None;
+    let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
+    if let Err(error) = start_session(services, event_bus, config, active, is_translate).await {
+        services.voice_typing_readiness.write().warmup_error = Some(error.clone());
+        emit_error(event_bus, &error);
+        let _ = event_bus.emit("voice-typing:readiness", serde_json::json!({}));
+    }
 }
 
 async fn finish_session(
@@ -731,7 +883,7 @@ fn format_final_text(
 ) -> String {
     let cjk_spacing = setting_bool(services, config, "voiceTypingCjkSpacingEnabled", true);
     let mut formatted = if cjk_spacing {
-        format_cjk_typography(text.trim())
+        crate::services::text_format::format_cjk_typography(text.trim())
     } else {
         text.trim().to_string()
     };
@@ -779,105 +931,6 @@ fn format_final_text(
         }
     }
     formatted
-}
-
-fn format_cjk_typography(text: &str) -> String {
-    if text.is_empty() {
-        return text.to_string();
-    }
-    let chars = text.chars().collect::<Vec<_>>();
-    let mut spaced = Vec::with_capacity(chars.len() + 8);
-    for (index, current) in chars.iter().copied().enumerate() {
-        if index > 0 {
-            let previous = chars[index - 1];
-            let needs_space = (is_cjk(previous) && is_latin_or_number(current))
-                || (is_latin_or_number(previous) && is_cjk(current));
-            if needs_space && !previous.is_whitespace() && !current.is_whitespace() {
-                spaced.push(' ');
-            }
-        }
-        let previous = spaced.iter().rev().copied().find(|ch| !ch.is_whitespace());
-        let next = chars.get(index + 1).copied();
-        let converted = if previous.is_some_and(is_chinese_or_japanese) {
-            match current {
-                ',' => '，',
-                '?' => '？',
-                '!' => '！',
-                ':' if !next.is_some_and(|ch| ch.is_ascii_digit() || ch == '/') => '：',
-                '.' if next.is_none_or(char::is_whitespace) => '。',
-                other => other,
-            }
-        } else {
-            current
-        };
-        spaced.push(converted);
-    }
-
-    let mut cleaned = Vec::with_capacity(spaced.len());
-    for current in spaced {
-        if is_cjk_closing_punctuation(current) {
-            while cleaned.last().is_some_and(|ch: &char| ch.is_whitespace()) {
-                cleaned.pop();
-            }
-        }
-        if is_cjk_opening_punctuation(cleaned.last().copied().unwrap_or('\0'))
-            && current.is_whitespace()
-        {
-            continue;
-        }
-        if current.is_whitespace()
-            && cleaned
-                .last()
-                .is_some_and(|ch| is_cjk_closing_punctuation(*ch))
-        {
-            continue;
-        }
-        if is_cjk_duplicate_punctuation(current) && cleaned.last() == Some(&current) {
-            continue;
-        }
-        cleaned.push(current);
-    }
-    cleaned.into_iter().collect::<String>().trim().to_string()
-}
-
-fn is_cjk(ch: char) -> bool {
-    is_chinese_or_japanese(ch)
-        || matches!(ch as u32, 0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F)
-}
-
-fn is_chinese_or_japanese(ch: char) -> bool {
-    matches!(ch as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FA5 | 0xF900..=0xFAFF | 0xFF66..=0xFF9F)
-}
-
-fn is_latin_or_number(ch: char) -> bool {
-    ch.is_ascii_alphanumeric()
-}
-
-fn is_cjk_closing_punctuation(ch: char) -> bool {
-    matches!(
-        ch,
-        '，' | '。'
-            | '！'
-            | '？'
-            | '；'
-            | '：'
-            | '、'
-            | '）'
-            | '】'
-            | '》'
-            | '」'
-            | '』'
-            | '”'
-            | '’'
-    )
-}
-
-fn is_cjk_opening_punctuation(ch: char) -> bool {
-    matches!(ch, '（' | '【' | '《' | '「' | '『' | '“' | '‘')
-}
-
-fn is_cjk_duplicate_punctuation(ch: char) -> bool {
-    matches!(ch, '，' | '。' | '！' | '？' | '；' | '：' | '、')
 }
 
 fn shortcut_modifiers(shortcut: &str) -> Vec<crate::platform::system::host::ShortcutModifier> {
@@ -974,7 +1027,16 @@ fn emit_error(event_bus: &AppEventBus, message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::shortcut_transition;
+    use super::{is_voice_typing_setting, shortcut_transition};
+
+    #[test]
+    fn voice_typing_runtime_tracks_related_settings() {
+        assert!(is_voice_typing_setting("voiceTypingEnabled"));
+        assert!(is_voice_typing_setting("keepMicrophoneActive"));
+        assert!(is_voice_typing_setting("microphoneId"));
+        assert!(is_voice_typing_setting("asr.selections.voiceTyping"));
+        assert!(!is_voice_typing_setting("httpServerPort"));
+    }
 
     #[test]
     fn hold_shortcut_starts_on_press_and_stops_on_release() {
@@ -1033,13 +1095,25 @@ mod tests {
     #[test]
     fn cjk_final_text_spacing_and_punctuation_match_frontend_rules() {
         assert_eq!(
-            super::format_cjk_typography("识别到PR请求"),
+            crate::services::text_format::format_cjk_typography("识别到PR请求"),
             "识别到 PR 请求"
         );
-        assert_eq!(super::format_cjk_typography("第1阶段完成"), "第 1 阶段完成");
-        assert_eq!(super::format_cjk_typography("hello世界"), "hello 世界");
-        assert_eq!(super::format_cjk_typography("测试 ,完成."), "测试，完成。");
-        assert_eq!(super::format_cjk_typography("时间12:30"), "时间 12:30");
+        assert_eq!(
+            crate::services::text_format::format_cjk_typography("第1阶段完成"),
+            "第 1 阶段完成"
+        );
+        assert_eq!(
+            crate::services::text_format::format_cjk_typography("hello世界"),
+            "hello 世界"
+        );
+        assert_eq!(
+            crate::services::text_format::format_cjk_typography("测试 ,完成."),
+            "测试，完成。"
+        );
+        assert_eq!(
+            crate::services::text_format::format_cjk_typography("时间12:30"),
+            "时间 12:30"
+        );
     }
 
     #[test]
@@ -1055,6 +1129,9 @@ mod tests {
             super::append_context_directive("Base prompt".to_string(), Some(&context)),
             "Base prompt\n\nDeveloper mode"
         );
-        assert_eq!(super::format_cjk_typography("ship it。"), "ship it。");
+        assert_eq!(
+            crate::services::text_format::format_cjk_typography("ship it。"),
+            "ship it。"
+        );
     }
 }

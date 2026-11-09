@@ -10,6 +10,7 @@ pub(crate) mod llm_service;
 pub(crate) mod mcp;
 pub(crate) mod microphone;
 pub(crate) mod models;
+mod search;
 pub(crate) mod shortcuts;
 pub(crate) mod speaker_profiles;
 pub(crate) mod storage;
@@ -46,8 +47,11 @@ pub use vocabulary::{
 };
 
 use gpui_kit::assets::IconName as LucideIcon;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
-use gpui_kit::component::{ActiveTheme as _, Icon};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use serde_json::{Value, json};
 
@@ -82,6 +86,10 @@ pub struct SettingsModal {
     pub mcp: McpSettingsTab,
     pub vocabulary: VocabularySettingsTab,
     pub llm_service: LlmServiceSettingsTab,
+    settings_search_state: Entity<InputState>,
+    settings_search_query: String,
+    settings_search_active_index: usize,
+    _settings_search_subscription: Subscription,
 }
 
 impl SettingsModal {
@@ -108,6 +116,18 @@ impl SettingsModal {
         let mcp = McpSettingsTab::new(window, cx);
         let vocabulary = VocabularySettingsTab::new(&initial_config, window, cx);
         let llm_service = LlmServiceSettingsTab::new(window, cx);
+        let settings_search_state =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search settings..."));
+        let _settings_search_subscription = cx.subscribe(
+            &settings_search_state,
+            |modal, state, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    modal.settings_search_query = state.read(cx).value().to_string();
+                    modal.settings_search_active_index = 0;
+                    cx.notify();
+                }
+            },
+        );
 
         Self {
             is_open: false,
@@ -127,6 +147,10 @@ impl SettingsModal {
             mcp,
             vocabulary,
             llm_service,
+            settings_search_state,
+            settings_search_query: String::new(),
+            settings_search_active_index: 0,
+            _settings_search_subscription,
         }
     }
 
@@ -135,10 +159,55 @@ impl SettingsModal {
         self.set_tab(tab, cx);
     }
 
-    pub fn close(&mut self, cx: &mut Context<Self>) {
+    pub fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.is_open = false;
+        self.clear_search(window, cx);
         self.microphone.on_deactivate(cx);
         cx.notify();
+    }
+
+    pub fn clear_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_search_query.clear();
+        self.settings_search_active_index = 0;
+        self.settings_search_state
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
+    }
+
+    fn select_search_hit(
+        &mut self,
+        hit_id: &'static str,
+        tab: SettingsTab,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_tab(tab, cx);
+        match search::subsection_for_hit(hit_id) {
+            Some(search::SearchSubsection::ModelScenarioBatch(batch)) => {
+                self.models.model_scenario_batch = batch;
+            }
+            Some(search::SearchSubsection::VoiceTyping(voice_typing)) => {
+                self.subtitles.subtitle_voice_typing_tab = voice_typing;
+            }
+            Some(search::SearchSubsection::Vocabulary(subsection)) => {
+                if matches!(subsection, "recognition" | "speakers") {
+                    self.vocabulary.active_tab = subsection.to_string();
+                } else {
+                    self.vocabulary.active_tab = "prompts".to_string();
+                    self.vocabulary.active_prompt_tab = subsection.to_string();
+                }
+            }
+            None => {}
+        }
+        cx.notify();
+    }
+
+    pub fn focus_search(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_search_state
+            .update(cx, |state, cx| state.focus(window, cx));
+    }
+
+    pub fn has_search_query(&self) -> bool {
+        !self.settings_search_query.is_empty()
     }
 
     pub fn is_open(&self) -> bool {
@@ -565,8 +634,8 @@ impl Render for SettingsModal {
             .items_center()
             .justify_center()
             .bg(hsla(0.0, 0.0, 0.0, 0.5))
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.close(cx);
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.close(window, cx);
             }))
             .child(
                 div()
@@ -595,6 +664,39 @@ impl Render for SettingsModal {
                             .bg(cx.theme().secondary)
                             .overflow_y_scrollbar()
                             .gap_2()
+                            .on_key_down(cx.listener(|modal, event: &KeyDownEvent, window, cx| {
+                                if modal.settings_search_query.trim().is_empty() || event.is_held {
+                                    return;
+                                }
+                                let hits = search::search_settings(&modal.settings_search_query);
+                                if hits.is_empty() {
+                                    return;
+                                }
+                                match event.keystroke.key.to_ascii_lowercase().as_str() {
+                                    "arrowdown" | "down" => {
+                                        modal.settings_search_active_index =
+                                            (modal.settings_search_active_index + 1) % hits.len();
+                                    }
+                                    "arrowup" | "up" => {
+                                        modal.settings_search_active_index =
+                                            (modal.settings_search_active_index + hits.len() - 1)
+                                                % hits.len();
+                                    }
+                                    "enter" => {
+                                        let hit = hits[modal
+                                            .settings_search_active_index
+                                            .min(hits.len() - 1)];
+                                        modal.select_search_hit(hit.id, hit.tab, cx);
+                                        window.prevent_default();
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                    _ => return,
+                                }
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                cx.notify();
+                            }))
                             .child(
                                 div()
                                     .px_3()
@@ -604,82 +706,164 @@ impl Render for SettingsModal {
                                     .text_color(cx.theme().foreground)
                                     .child("Settings"),
                             )
-                            .children(tab_groups.iter().map(|(group_name, group_tabs)| {
+                            .child(
                                 div()
                                     .flex()
-                                    .flex_col()
+                                    .items_center()
                                     .gap_1()
-                                    .child(
+                                    .px_2()
+                                    .child(Input::new(&self.settings_search_state))
+                                    .when(!self.settings_search_query.is_empty(), |row| {
+                                        row.child(
+                                            Button::new("settings-search-clear")
+                                                .ghost()
+                                                .small()
+                                                .icon(LucideIcon::X)
+                                                .on_click(cx.listener(|modal, _, window, cx| {
+                                                    modal.clear_search(window, cx);
+                                                })),
+                                        )
+                                    }),
+                            )
+                            .when(self.settings_search_query.trim().is_empty(), |sidebar| {
+                                sidebar.children(tab_groups.iter().map(
+                                    |(group_name, group_tabs)| {
                                         div()
-                                            .px_3()
-                                            .pt_2()
-                                            .pb_1()
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(cx.theme().muted)
-                                            .child(*group_name),
-                                    )
-                                    .children(group_tabs.iter().map(|(tab, label, icon_name)| {
-                                        let is_selected = self.current_tab == *tab;
-                                        let tab_val = *tab;
-                                        div()
-                                            .id(ElementId::from(format!("tab-btn-{:?}", tab)))
                                             .flex()
-                                            .items_center()
-                                            .h(px(40.0))
-                                            .px_3()
-                                            .py_2()
-                                            .gap(px(12.0))
-                                            .rounded(RADIUS_MD)
-                                            .bg(if is_selected {
-                                                cx.theme().background
-                                            } else {
-                                                gpui_kit::transparent_black()
-                                            })
-                                            .border_1()
-                                            .border_color(if is_selected {
-                                                cx.theme().border
-                                            } else {
-                                                gpui_kit::transparent_black()
-                                            })
-                                            .cursor_pointer()
-                                            .hover(|style| {
-                                                style.bg(if is_selected {
-                                                    cx.theme().background
-                                                } else {
-                                                    cx.theme().accent
-                                                })
-                                            })
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.set_tab(tab_val, cx);
-                                            }))
-                                            .child(Icon::new(*icon_name).size(px(18.0)).text_color(
-                                                if is_selected {
-                                                    cx.theme().primary
-                                                } else {
-                                                    cx.theme().muted
-                                                },
-                                            ))
+                                            .flex_col()
+                                            .gap_1()
                                             .child(
                                                 div()
-                                                    .flex_1()
-                                                    .text_size(px(14.0))
-                                                    .font_weight(if is_selected {
-                                                        FontWeight::SEMIBOLD
-                                                    } else {
-                                                        FontWeight::MEDIUM
-                                                    })
-                                                    .text_color(if is_selected {
-                                                        cx.theme().foreground
-                                                    } else {
-                                                        cx.theme().muted_foreground
-                                                    })
-                                                    .overflow_hidden()
-                                                    .whitespace_nowrap()
-                                                    .child(*label),
+                                                    .px_3()
+                                                    .pt_2()
+                                                    .pb_1()
+                                                    .text_size(px(11.0))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(cx.theme().muted)
+                                                    .child(*group_name),
                                             )
-                                    }))
-                            })),
+                                            .children(group_tabs.iter().map(
+                                                |(tab, label, icon_name)| {
+                                                    let is_selected = self.current_tab == *tab;
+                                                    let tab_val = *tab;
+                                                    div()
+                                                        .id(ElementId::from(format!(
+                                                            "tab-btn-{:?}",
+                                                            tab
+                                                        )))
+                                                        .flex()
+                                                        .items_center()
+                                                        .h(px(40.0))
+                                                        .px_3()
+                                                        .py_2()
+                                                        .gap(px(12.0))
+                                                        .rounded(RADIUS_MD)
+                                                        .bg(if is_selected {
+                                                            cx.theme().background
+                                                        } else {
+                                                            gpui_kit::transparent_black()
+                                                        })
+                                                        .border_1()
+                                                        .border_color(if is_selected {
+                                                            cx.theme().border
+                                                        } else {
+                                                            gpui_kit::transparent_black()
+                                                        })
+                                                        .cursor_pointer()
+                                                        .hover(|style| {
+                                                            style.bg(if is_selected {
+                                                                cx.theme().background
+                                                            } else {
+                                                                cx.theme().accent
+                                                            })
+                                                        })
+                                                        .on_click(cx.listener(
+                                                            move |this, _, _, cx| {
+                                                                this.set_tab(tab_val, cx);
+                                                            },
+                                                        ))
+                                                        .child(
+                                                            Icon::new(*icon_name)
+                                                                .size(px(18.0))
+                                                                .text_color(if is_selected {
+                                                                    cx.theme().primary
+                                                                } else {
+                                                                    cx.theme().muted
+                                                                }),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .text_size(px(14.0))
+                                                                .font_weight(if is_selected {
+                                                                    FontWeight::SEMIBOLD
+                                                                } else {
+                                                                    FontWeight::MEDIUM
+                                                                })
+                                                                .text_color(if is_selected {
+                                                                    cx.theme().foreground
+                                                                } else {
+                                                                    cx.theme().muted_foreground
+                                                                })
+                                                                .overflow_hidden()
+                                                                .whitespace_nowrap()
+                                                                .child(*label),
+                                                        )
+                                                },
+                                            ))
+                                    },
+                                ))
+                            })
+                            .when(!self.settings_search_query.trim().is_empty(), |sidebar| {
+                                let hits = search::search_settings(&self.settings_search_query);
+                                if hits.is_empty() {
+                                    sidebar.child(
+                                        div()
+                                            .id("settings-search-empty")
+                                            .px_3()
+                                            .py_2()
+                                            .text_size(px(12.0))
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child("No matching settings"),
+                                    )
+                                } else {
+                                    sidebar.child(
+                                        div()
+                                            .id("settings-search-results")
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .overflow_y_scrollbar()
+                                            .children(hits.into_iter().map(|hit| {
+                                                let tab = hit.tab;
+                                                let hit_id = hit.id;
+                                                let is_active = self.settings_search_active_index
+                                                    < search::search_settings(
+                                                        &self.settings_search_query,
+                                                    )
+                                                    .len()
+                                                    && search::search_settings(
+                                                        &self.settings_search_query,
+                                                    )[self.settings_search_active_index]
+                                                        .id
+                                                        == hit.id;
+                                                Button::new(ElementId::from(format!(
+                                                    "settings-search-{}",
+                                                    hit.id
+                                                )))
+                                                .when(is_active, |button| button.secondary())
+                                                .when(!is_active, |button| button.ghost())
+                                                .w_full()
+                                                .justify_start()
+                                                .label(hit.title)
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.select_search_hit(hit_id, tab, cx);
+                                                }))
+                                                .into_any_element()
+                                            })),
+                                    )
+                                }
+                            }),
                     )
                     .child(
                         // Right content area
@@ -717,8 +901,8 @@ impl Render for SettingsModal {
                                             .cursor_pointer()
                                             .hover(|s| s.bg(cx.theme().accent))
                                             .child(Icon::new(LucideIcon::X).size(px(18.0)))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.close(cx);
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.close(window, cx);
                                             })),
                                     ),
                             )

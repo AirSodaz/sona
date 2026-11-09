@@ -4,8 +4,9 @@ pub mod options_capsule;
 pub mod workspace;
 
 pub use batch_import::{
-    BatchImportPanel, BatchItemStatus, BatchQueueGroupKind, BatchQueueItem, BatchSourceType,
-    SUPPORTED_EXTENSIONS, is_supported_audio_extension, is_valid_stream_url,
+    BatchAsrSetup, BatchImportEvent, BatchImportPanel, BatchItemStatus, BatchQueueGroupKind,
+    BatchQueueItem, BatchSourceType, SUPPORTED_EXTENSIONS, is_supported_audio_extension,
+    is_valid_stream_url,
 };
 pub use live_record::{AudioSourceKind, LiveRecordPanel, format_duration_mmss};
 pub use options_capsule::{

@@ -6,8 +6,11 @@ pub use hotwords::*;
 pub use tester::*;
 pub use words::*;
 
+use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::select::{Select, SelectEvent, SelectState};
+use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{InteractiveElement as _, StatefulInteractiveElement as _, *};
@@ -15,6 +18,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 use super::SettingsModal;
+use super::languages::LANGUAGE_OPTIONS;
 
 pub struct VocabularySettingsTab {
     pub dictionary_textarea: Entity<TextareaState>,
@@ -30,9 +34,11 @@ pub struct VocabularySettingsTab {
     pub vocabulary_body_state: Entity<TextareaState>,
     pub speaker_profile_name_state: Entity<InputState>,
     pub speaker_profile_search_state: Entity<InputState>,
+    pub translation_language_select: Entity<SelectState<Vec<&'static str>>>,
     pub speaker_profile_name_states: HashMap<String, (Entity<InputState>, Subscription)>,
     pub active_tab: String,
     pub active_prompt_tab: String,
+    pub auto_translate: bool,
     pub dictionary_mode: String,
     pub dictionary_scope: String,
     pub search_query: String,
@@ -83,8 +89,44 @@ impl VocabularySettingsTab {
             cx.new(|cx| InputState::new(window, cx).placeholder("Speaker profile name"));
         let speaker_profile_search_state =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search speakers..."));
-
         let mut subscriptions = Vec::new();
+        let translation_language = initial_config
+            .get("translationLanguage")
+            .and_then(Value::as_str)
+            .unwrap_or("zh");
+        let translation_language_index = LANGUAGE_OPTIONS
+            .iter()
+            .position(|(code, _)| *code == translation_language)
+            .unwrap_or(0);
+        let translation_language_select = cx.new(|cx| {
+            SelectState::new(
+                LANGUAGE_OPTIONS.iter().map(|(_, label)| *label).collect(),
+                Some(IndexPath::new(translation_language_index)),
+                window,
+                cx,
+            )
+        });
+
+        subscriptions.push(cx.subscribe(
+            &translation_language_select,
+            |_modal, _, event: &SelectEvent<Vec<&'static str>>, cx| {
+                if let SelectEvent::Confirm(Some(label)) = event
+                    && let Some((code, _)) = LANGUAGE_OPTIONS
+                        .iter()
+                        .find(|(_, option_label)| *option_label == *label)
+                {
+                    let code = (*code).to_string();
+                    let services = cx.global::<crate::app::GlobalDesktopServices>().0.clone();
+                    cx.spawn(async move |_this, _cx: &mut AsyncApp| {
+                        let _ = services
+                            .config
+                            .set_setting("translationLanguage", &Value::String(code));
+                    })
+                    .detach();
+                    cx.notify();
+                }
+            },
+        ));
 
         subscriptions.push(cx.subscribe(
             &dictionary_search,
@@ -138,9 +180,14 @@ impl VocabularySettingsTab {
             vocabulary_body_state,
             speaker_profile_name_state,
             speaker_profile_search_state,
+            translation_language_select,
             speaker_profile_name_states: HashMap::new(),
             active_tab: "recognition".to_string(),
             active_prompt_tab: "polish".to_string(),
+            auto_translate: initial_config
+                .get("autoTranslate")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             dictionary_mode: "visual".to_string(),
             dictionary_scope: "all".to_string(),
             search_query: String::new(),
@@ -268,6 +315,8 @@ impl VocabularySettingsTab {
             .count();
         let project_scope_count = parse_dictionary_scopes(&dictionary_content).len();
         let active_tab = self.active_tab.clone();
+        let active_prompt_tab = self.active_prompt_tab.clone();
+        let auto_translate = self.auto_translate;
         let dictionary_mode = self.dictionary_mode.clone();
         let dictionary_scope = self.dictionary_scope.clone();
 
@@ -503,13 +552,24 @@ impl VocabularySettingsTab {
                     .when(active_tab == "prompts", |panel| {
                         panel.child(
                             div().flex().flex_col().gap_4()
-                                .child(
-                                    toggle_row("Auto Polish", "Automatically polish transcripts with LLM when completed.", config.get("autoPolish").and_then(Value::as_bool).unwrap_or(false), "toggle-auto-polish", "autoPolish", cx),
-                                )
-                                .child(
-                                    toggle_row("Auto Summary", "Automatically generate summary after transcription.", config.get("autoSummary").and_then(Value::as_bool).unwrap_or(false), "toggle-auto-summary", "autoSummary", cx),
-                                )
-                                .child(
+                                .child(div().flex().gap_2().children([
+                                    ("polish", "Polish"),
+                                    ("translation", "Translation"),
+                                    ("summary", "Summary"),
+                                ].into_iter().map(|(tab, label)| {
+                                    let selected = active_prompt_tab == tab;
+                                    Button::new(ElementId::Name(format!("settings-vocabulary-prompt-{tab}").into()))
+                                        .when(selected, |button| button.primary())
+                                        .when(!selected, |button| button.outline())
+                                        .small().label(label)
+                                        .on_click(cx.listener(move |modal, _, _, cx| {
+                                            modal.vocabulary.active_prompt_tab = tab.to_string();
+                                            cx.notify();
+                                        }))
+                                })))
+                                .when(active_prompt_tab == "polish", |content| content
+                                    .child(toggle_row("Auto Polish", "Automatically polish transcripts with LLM when completed.", config.get("autoPolish").and_then(Value::as_bool).unwrap_or(false), "toggle-auto-polish", "autoPolish", cx))
+                                    .child(
                                     custom_records_section(
                                         config,
                                         "Polish Presets",
@@ -525,9 +585,29 @@ impl VocabularySettingsTab {
                                         &self.vocabulary_body_state,
                                         cx,
                                     ),
-                                )
-                                .child(
-                                    custom_records_section(
+                                ))
+                                .when(active_prompt_tab == "translation", |content| content
+                                    .child(section("Translation Automation", "Configure automatic translation and the default target language for transcripts.", cx)
+                                        .child(div().flex().items_center().justify_between().gap_4().py_2()
+                                            .child(div().flex_1().flex().flex_col().gap_1()
+                                                .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Auto Translate"))
+                                                .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Automatically translate transcripts after transcription completes.")))
+                                            .child(Switch::new("settings-translation-auto")
+                                                .checked(auto_translate)
+                                                .on_change(cx.listener(|modal, checked, _, cx| {
+                                                    let value = *checked;
+                                                    modal.vocabulary.auto_translate = value;
+                                                    modal.persist_preference("autoTranslate", value, cx);
+                                                    cx.notify();
+                                                }))))
+                                        .child(div().flex().items_center().justify_between().gap_4().py_2()
+                                            .child(div().flex_1().flex().flex_col().gap_1()
+                                                .child(div().text_size(px(13.0)).font_weight(FontWeight::MEDIUM).child("Default Target Language"))
+                                                .child(div().text_size(px(12.0)).text_color(cx.theme().muted_foreground).child("Default language used when starting transcript translation.")))
+                                            .child(Select::new(&self.translation_language_select).w(px(280.0)).max_w_full()))))
+                                .when(active_prompt_tab == "summary", |content| content
+                                    .child(toggle_row("Auto Summary", "Automatically generate summary after transcription.", config.get("autoSummary").and_then(Value::as_bool).unwrap_or(false), "toggle-auto-summary", "autoSummary", cx))
+                                    .child(custom_records_section(
                                         config,
                                         "Summary Templates",
                                         "Custom templates and instructions for transcript summaries.",
@@ -541,8 +621,7 @@ impl VocabularySettingsTab {
                                         &self.vocabulary_name_state,
                                         &self.vocabulary_body_state,
                                         cx,
-                                    ),
-                                ),
+                                    )))
                         )
                     })
                     .when(active_tab == "speakers", |panel| {

@@ -303,12 +303,96 @@ impl ProjectsToolbar {
                                             .text_color(cx.theme().muted),
                                     )
                                     .child(
-                                        div().flex_1().min_w(px(0.0)).child(
-                                            Input::new(&self.search_state)
-                                                .cleanable(true)
-                                                .focus_ring(true)
-                                                .small(),
-                                        ),
+                                        div()
+                                            .flex_1()
+                                            .min_w(px(0.0))
+                                            .on_key_down(cx.listener(
+                                                |this, event: &KeyDownEvent, window, cx| {
+                                                    if event.is_held
+                                                        || this.projects_toolbar.is_selection_active
+                                                    {
+                                                        return;
+                                                    }
+
+                                                    match event
+                                                        .keystroke
+                                                        .key
+                                                        .to_ascii_lowercase()
+                                                        .as_str()
+                                                    {
+                                                        "arrowdown" | "down" => {
+                                                            this.projects_results
+                                                                .navigate_search_result(
+                                                                    1,
+                                                                    this.projects_toolbar.view_mode,
+                                                                    cx,
+                                                                );
+                                                            window.prevent_default();
+                                                            cx.stop_propagation();
+                                                        }
+                                                        "arrowup" | "up" => {
+                                                            this.projects_results
+                                                                .navigate_search_result(
+                                                                    -1,
+                                                                    this.projects_toolbar.view_mode,
+                                                                    cx,
+                                                                );
+                                                            window.prevent_default();
+                                                            cx.stop_propagation();
+                                                        }
+                                                        "enter" => {
+                                                            if let Some(id) = this
+                                                                .projects_results
+                                                                .active_search_result_id
+                                                                .clone()
+                                                            {
+                                                                this.projects_results
+                                                                    .active_search_result_id = None;
+                                                                this.open_history_item(id, cx);
+                                                                window.prevent_default();
+                                                                cx.stop_propagation();
+                                                            }
+                                                        }
+                                                        "escape" => {
+                                                            if !this
+                                                                .projects_toolbar
+                                                                .search_query
+                                                                .trim()
+                                                                .is_empty()
+                                                            {
+                                                                this.projects_toolbar
+                                                                    .search_state
+                                                                    .update(cx, |state, cx| {
+                                                                        state.set_value(
+                                                                            "", window, cx,
+                                                                        );
+                                                                    });
+                                                                this.projects_toolbar
+                                                                    .search_query
+                                                                    .clear();
+                                                                this.projects_results
+                                                                    .set_search_query(
+                                                                        String::new(),
+                                                                        cx,
+                                                                    );
+                                                            } else {
+                                                                this.projects_results
+                                                                    .active_search_result_id = None;
+                                                                cx.notify();
+                                                            }
+                                                            window.prevent_default();
+                                                            cx.stop_propagation();
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                },
+                                            ))
+                                            .child(
+                                                Input::new(&self.search_state)
+                                                    .cleanable(true)
+                                                    .focus_ring(true)
+                                                    .small(),
+                                            ),
                                     ),
                             )
                             .child(

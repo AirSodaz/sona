@@ -42,5 +42,6 @@ mod tests {
         assert!(assets.load("icons/square-pen.svg").unwrap().is_some());
         assert!(assets.load("icons/wrench.svg").unwrap().is_some());
         assert!(assets.load("icons/circle-plus.svg").unwrap().is_some());
+        assert!(assets.load("icons/upload-cloud.svg").unwrap().is_some());
     }
 }

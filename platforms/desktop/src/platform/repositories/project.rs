@@ -177,5 +177,16 @@ mod tests {
         let listed = project_service.list().await.unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, created.id);
+
+        project_service
+            .set_active_project_id(Some(created.id.clone()))
+            .await
+            .unwrap();
+        assert_eq!(
+            project_service.get_active_project_id().await.unwrap(),
+            Some(created.id.clone())
+        );
+        project_service.set_active_project_id(None).await.unwrap();
+        assert_eq!(project_service.get_active_project_id().await.unwrap(), None);
     }
 }

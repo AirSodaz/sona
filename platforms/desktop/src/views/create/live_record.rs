@@ -11,6 +11,7 @@
 //! - Auto-polish trigger loop on segment finalization (Gap G09)
 
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName as LucideIcon;
@@ -19,6 +20,8 @@ use gpui_kit::component::Icon;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use sona_application::live_transcription::{LiveInputTransform, LiveSourceEpoch};
+use sona_core::ports::asr::AsrRuntimeObserver;
 use sona_core::ports::event::EventEmitterPort;
 use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 
@@ -75,6 +78,7 @@ pub struct LiveRecordPanel {
     pub target_amplitude: f32,
     pub current_amplitude: f32,
     pub phase: f32,
+    pub pulse_phase: f32,
 
     // Audio source dropdown state (Gap G09)
     pub audio_source: AudioSourceKind,
@@ -89,6 +93,68 @@ pub struct LiveRecordPanel {
     pub recording_draft: Option<sona_core::history::LiveRecordingDraftResult>,
     pub transcript_segments: Vec<TranscriptSegment>,
     pub active_project_id: Option<String>,
+    asr_request: Option<sona_core::ports::asr::AsrTranscriptionRequest>,
+    asr_segments: Option<Arc<Mutex<Vec<TranscriptSegment>>>>,
+    asr_gain: f32,
+    coordinator_active: bool,
+}
+
+fn live_asr_observer(
+    services: &crate::services::DesktopServices,
+    segments: Arc<Mutex<Vec<TranscriptSegment>>>,
+) -> Arc<dyn AsrRuntimeObserver> {
+    let observer = crate::integrations::asr::CollectingAsrRuntimeObserver::new(
+        services.emitter.clone(),
+        services.asr.metrics_store(),
+        segments,
+    );
+    Arc::new(observer)
+}
+
+async fn acquire_live_asr(
+    services: &crate::services::DesktopServices,
+    session_id: &str,
+    source: &crate::integrations::audio::LiveCaptureLease,
+    gain: f32,
+    request: &sona_core::ports::asr::AsrTranscriptionRequest,
+    segments: Arc<Mutex<Vec<TranscriptSegment>>>,
+) -> Result<(), String> {
+    services
+        .asr
+        .live_coordinator()
+        .acquire(
+            session_id.to_string(),
+            LiveSourceEpoch::new(source.source_id.clone(), source.source_generation),
+            source.source_cursor,
+            LiveInputTransform { gain },
+            request.clone(),
+            live_asr_observer(services, segments),
+        )
+        .await
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+async fn discard_live_draft(services: &crate::services::DesktopServices, history_id: String) {
+    let deleted_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or_default();
+    let _ = services
+        .history
+        .mutation_file(move |store| {
+            let ids = vec![history_id];
+            store.trash_items(
+                sona_core::history::mutation_repository::HistoryTrashItemsRequest {
+                    ids: ids.clone(),
+                    deleted_at,
+                },
+            )?;
+            store.purge_items(
+                sona_core::history::mutation_repository::HistoryPurgeItemsRequest { ids },
+            )
+        })
+        .await;
 }
 
 /// Formats an elapsed duration in seconds as MM:SS with 2-digit padding.
@@ -115,6 +181,7 @@ impl LiveRecordPanel {
             target_amplitude: 0.05,
             current_amplitude: 0.05,
             phase: 0.0,
+            pulse_phase: 0.0,
 
             audio_source: AudioSourceKind::Microphone,
             is_source_dropdown_open: false,
@@ -127,6 +194,10 @@ impl LiveRecordPanel {
             recording_draft: None,
             transcript_segments: Vec::new(),
             active_project_id: None,
+            asr_request: None,
+            asr_segments: None,
+            asr_gain: 1.0,
+            coordinator_active: false,
         }
     }
 
@@ -272,7 +343,11 @@ impl LiveRecordPanel {
     }
 
     pub fn start_recording(&mut self, cx: &mut Context<Self>) {
-        if self.is_recording || self.is_initializing || self.is_agent_recording {
+        if self.is_recording
+            || self.is_initializing
+            || self.is_transitioning
+            || self.is_agent_recording
+        {
             return;
         }
 
@@ -304,48 +379,110 @@ impl LiveRecordPanel {
 
         // Create the history draft first so native capture writes directly to its managed WAV path.
         cx.spawn(async move |this, cx: &mut AsyncApp| {
-            let context = match services.sqlite.current_context() {
-                Ok(context) => context,
-                Err(error) => {
-                    log::error!("[LiveRecord] failed to resolve app data directory: {error}");
-                    let _ = services.emitter.emit(
-                        "live-record:error",
-                        serde_json::json!({ "message": error.to_string() }),
-                    );
-                    this.update(cx, |view, cx| {
-                        view.is_initializing = false;
-                        view.is_transitioning = false;
-                        view.active_session_id = None;
-                        view.target_amplitude = 0.05;
-                        cx.notify();
-                    })
-                    .ok();
-                    return;
-                }
-            };
-            let app_data_dir = context.app_data_dir().to_path_buf();
-            let draft_request = sona_core::history::HistoryCreateLiveDraftRequest {
-                id: Some(session_id.clone()),
-                audio_extension: "wav".to_string(),
-                tag_ids: project_id.clone().into_iter().collect(),
-                project_id,
-                icon: Some("system:mic".to_string()),
-            };
-            let draft = match services
-                .history
-                .mutation_file(move |store| store.create_live_draft(draft_request))
+            let startup = async {
+                let config = services
+                    .config
+                    .load()
+                    .map_err(|error| error.to_string())?
+                    .unwrap_or(serde_json::Value::Null);
+                let request =
+                    crate::platform::agent_control::facade::resolve_live_asr_request_from_config(
+                        &config,
+                    )?;
+                services
+                    .asr
+                    .live_coordinator()
+                    .prepare(&request)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let context = services
+                    .sqlite
+                    .current_context()
+                    .map_err(|error| error.to_string())?;
+                let app_data_dir = context.app_data_dir().to_path_buf();
+                let draft_request = sona_core::history::HistoryCreateLiveDraftRequest {
+                    id: Some(session_id.clone()),
+                    audio_extension: "wav".to_string(),
+                    tag_ids: project_id.clone().into_iter().collect(),
+                    project_id,
+                    icon: Some("system:mic".to_string()),
+                };
+                let draft = services
+                    .history
+                    .mutation_file(move |store| store.create_live_draft(draft_request))
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let source_kind_name = match source_kind {
+                    AudioSourceKind::Microphone => "microphone",
+                    AudioSourceKind::SystemAudio => "system",
+                };
+                let gain = if source_kind == AudioSourceKind::Microphone {
+                    config
+                        .get("microphoneBoost")
+                        .or_else(|| config.get("microphone_boost"))
+                        .and_then(serde_json::Value::as_f64)
+                        .unwrap_or(1.0) as f32
+                } else {
+                    1.0
+                };
+                let lease = match crate::integrations::audio::start_native_live_capture(
+                    services.audio.clone(),
+                    services.asr.clone(),
+                    services.emitter.clone(),
+                    app_data_dir,
+                    source_kind_name,
+                    None,
+                    session_id.clone(),
+                    Some(draft.audio_absolute_path.clone()),
+                )
                 .await
-            {
-                Ok(draft) => draft,
+                {
+                    Ok(lease) => lease,
+                    Err(error) => {
+                        discard_live_draft(&services, draft.item.id.clone()).await;
+                        return Err(error);
+                    }
+                };
+                let segments = Arc::new(Mutex::new(Vec::new()));
+                if let Err(error) = acquire_live_asr(
+                    &services,
+                    &session_id,
+                    &lease,
+                    gain,
+                    &request,
+                    Arc::clone(&segments),
+                )
+                .await
+                {
+                    let _ = crate::integrations::audio::stop_native_live_capture(
+                        &services.audio,
+                        source_kind_name,
+                        session_id.clone(),
+                    )
+                    .await;
+                    discard_live_draft(&services, draft.item.id.clone()).await;
+                    return Err(error);
+                }
+                Ok((draft, request, segments, gain))
+            }
+            .await;
+
+            let (draft, request, asr_segments, gain) = match startup {
+                Ok(started) => started,
                 Err(error) => {
-                    log::error!("[LiveRecord] failed to create recording draft: {error}");
+                    log::error!("[LiveRecord] failed to start live transcription: {error}");
                     let _ = services
                         .emitter
                         .emit("live-record:error", serde_json::json!({ "message": error }));
                     this.update(cx, |view, cx| {
                         view.is_initializing = false;
                         view.is_transitioning = false;
+                        view.is_paused = false;
                         view.active_session_id = None;
+                        view.recording_draft = None;
+                        view.asr_request = None;
+                        view.asr_segments = None;
+                        view.coordinator_active = false;
                         view.target_amplitude = 0.05;
                         cx.notify();
                     })
@@ -353,83 +490,16 @@ impl LiveRecordPanel {
                     return;
                 }
             };
-            let output_path = draft.audio_absolute_path.clone();
-
-            let result = match source_kind {
-                AudioSourceKind::Microphone => {
-                    crate::integrations::audio::start_microphone_capture(
-                        services.audio.clone(),
-                        services.asr.clone(),
-                        services.emitter.clone(),
-                        app_data_dir,
-                        None,
-                        session_id.clone(),
-                        Some(output_path),
-                    )
-                    .await
-                }
-                AudioSourceKind::SystemAudio => {
-                    crate::integrations::audio::start_system_audio_capture(
-                        services.audio.clone(),
-                        services.asr.clone(),
-                        services.emitter.clone(),
-                        app_data_dir,
-                        None,
-                        session_id.clone(),
-                        Some(output_path),
-                    )
-                    .await
-                }
-            };
-
-            if let Err(err) = result {
-                log::error!("[LiveRecord] failed to start audio capture: {err}");
-                let _ = services
-                    .emitter
-                    .emit("live-record:error", serde_json::json!({ "message": err }));
-                let history_id = draft.item.id.clone();
-                let deleted_at = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|duration| duration.as_millis() as u64)
-                    .unwrap_or_default();
-                let _ = services
-                    .history
-                    .mutation_file(move |store| {
-                        let ids = vec![history_id];
-                        store.trash_items(
-                            sona_core::history::mutation_repository::HistoryTrashItemsRequest {
-                                ids: ids.clone(),
-                                deleted_at,
-                            },
-                        )?;
-                        store.purge_items(
-                            sona_core::history::mutation_repository::HistoryPurgeItemsRequest {
-                                ids,
-                            },
-                        )
-                    })
-                    .await;
-                this.update(cx, |view, cx| {
-                    view.is_initializing = false;
-                    view.is_transitioning = false;
-                    view.is_paused = false;
-                    view.active_session_id = None;
-                    view.recording_draft = None;
-                    view.transcript_segments.clear();
-                    view.unpolished_segments.clear();
-                    view.polished_ids.clear();
-                    view.target_amplitude = 0.05;
-                    cx.notify();
-                })
-                .ok();
-                return;
-            }
 
             this.update(cx, |view, cx| {
                 if view.active_session_id.as_deref() != Some(&session_id) {
                     return;
                 }
                 view.recording_draft = Some(draft);
+                view.asr_request = Some(request);
+                view.asr_segments = Some(asr_segments);
+                view.asr_gain = gain;
+                view.coordinator_active = true;
                 view.is_recording = true;
                 view.is_initializing = false;
                 view.is_transitioning = false;
@@ -457,7 +527,7 @@ impl LiveRecordPanel {
                             return false;
                         }
                         if !view.is_paused {
-                            view.elapsed_seconds += 1;
+                            view.elapsed_seconds = view.elapsed_duration().as_secs();
                             cx.notify();
                         }
                         true
@@ -478,7 +548,15 @@ impl LiveRecordPanel {
                         if !view.is_recording && view.current_amplitude <= 0.05 {
                             return false;
                         }
+                        if view.is_paused {
+                            view.pulse_phase =
+                                (view.pulse_phase + 0.094_247_78) % std::f32::consts::TAU;
+                            cx.notify();
+                            return true;
+                        }
                         view.phase = (view.phase + 0.06) % (2.0 * std::f32::consts::PI);
+                        view.pulse_phase =
+                            (view.pulse_phase + 0.094_247_78) % std::f32::consts::TAU;
                         view.current_amplitude +=
                             (view.target_amplitude - view.current_amplitude) * 0.08;
                         cx.notify();
@@ -494,7 +572,7 @@ impl LiveRecordPanel {
     }
 
     pub fn stop_recording(&mut self, cx: &mut Context<Self>) {
-        if !self.is_recording {
+        if !self.is_recording || self.is_transitioning {
             return;
         }
 
@@ -504,6 +582,8 @@ impl LiveRecordPanel {
             return;
         };
         let draft = self.recording_draft.clone();
+        let asr_segments = self.asr_segments.clone();
+        let coordinator_active = self.coordinator_active;
         let started_at = self.started_at;
         let paused_duration = self.paused_duration
             + self
@@ -549,9 +629,40 @@ impl LiveRecordPanel {
                 }
             };
 
-            let segments = this
-                .update(cx, |view, _cx| view.transcript_segments.clone())
+            let release = if coordinator_active {
+                services.asr.live_coordinator().release(&session_id).await
+            } else {
+                Ok(())
+            };
+            if let Err(error) = &release {
+                log::error!("[LiveRecord] failed to flush live transcription: {error}");
+                let _ = event_bus.emit(
+                    "live-record:error",
+                    serde_json::json!({ "message": error.to_string() }),
+                );
+            }
+            let mut segments = asr_segments
+                .as_ref()
+                .and_then(|segments| segments.lock().ok().map(|segments| segments.clone()))
                 .unwrap_or_default();
+            segments.sort_by(|left, right| {
+                left.start
+                    .total_cmp(&right.start)
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            this.update(cx, |view, cx| {
+                if view.active_session_id.as_deref() == Some(&session_id) {
+                    view.handle_transcript_update(
+                        TranscriptUpdate {
+                            remove_ids: Vec::new(),
+                            upsert_segments: segments.clone(),
+                        },
+                        cx,
+                    );
+                    view.flush_auto_polish(cx);
+                }
+            })
+            .ok();
             let mut completed_title = None;
             if let Some(draft) = draft {
                 match stopped {
@@ -618,6 +729,9 @@ impl LiveRecordPanel {
                     view.transcript_segments.clear();
                     view.unpolished_segments.clear();
                     view.polished_ids.clear();
+                    view.asr_request = None;
+                    view.asr_segments = None;
+                    view.coordinator_active = false;
                 }
                 view.is_transitioning = false;
                 cx.notify();
@@ -635,6 +749,14 @@ impl LiveRecordPanel {
         .detach();
     }
 
+    pub fn toggle_recording(&mut self, cx: &mut Context<Self>) {
+        if self.is_recording {
+            self.stop_recording(cx);
+        } else {
+            self.start_recording(cx);
+        }
+    }
+
     pub fn toggle_pause(&mut self, cx: &mut Context<Self>) {
         if !self.is_recording || self.is_transitioning {
             return;
@@ -642,38 +764,110 @@ impl LiveRecordPanel {
 
         let services = cx.global::<GlobalDesktopServices>().0.clone();
         let source_kind = self.audio_source;
-        let session_id = self.active_session_id.clone().unwrap_or_default();
-        let target_paused = !self.is_paused;
-
-        let result = match source_kind {
-            AudioSourceKind::Microphone => {
-                crate::integrations::audio::set_microphone_capture_paused(
-                    &services.audio,
-                    session_id,
-                    target_paused,
-                )
-            }
-            AudioSourceKind::SystemAudio => {
-                crate::integrations::audio::set_system_audio_capture_paused(
-                    &services.audio,
-                    session_id,
-                    target_paused,
-                )
-            }
-        };
-        if let Err(error) = result {
-            log::error!("[LiveRecord] failed to change capture pause state: {error}");
+        let Some(session_id) = self.active_session_id.clone() else {
             return;
-        }
-
-        self.is_paused = target_paused;
-        if target_paused {
-            self.paused_at = Some(Instant::now());
-            self.target_amplitude = 0.02;
-        } else if let Some(paused_at) = self.paused_at.take() {
-            self.paused_duration += paused_at.elapsed();
-        }
+        };
+        let target_paused = !self.is_paused;
+        let source_kind_name = match source_kind {
+            AudioSourceKind::Microphone => "microphone",
+            AudioSourceKind::SystemAudio => "system",
+        };
+        let Some(request) = self.asr_request.clone() else {
+            return;
+        };
+        let Some(segments) = self.asr_segments.clone() else {
+            return;
+        };
+        let gain = self.asr_gain;
+        self.is_transitioning = true;
         cx.notify();
+
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = if target_paused {
+                match crate::integrations::audio::set_native_live_capture_paused(
+                    &services.audio,
+                    source_kind_name,
+                    &session_id,
+                    true,
+                ) {
+                    Ok(lease) => match services.asr.live_coordinator().release(&session_id).await {
+                        Ok(()) => Ok(lease),
+                        Err(error) => {
+                            let _ = crate::integrations::audio::set_native_live_capture_paused(
+                                &services.audio,
+                                source_kind_name,
+                                &session_id,
+                                false,
+                            );
+                            Err(error.to_string())
+                        }
+                    },
+                    Err(error) => Err(error.to_string()),
+                }
+            } else {
+                match crate::integrations::audio::set_native_live_capture_paused(
+                    &services.audio,
+                    source_kind_name,
+                    &session_id,
+                    false,
+                ) {
+                    Ok(lease) => match acquire_live_asr(
+                        &services,
+                        &session_id,
+                        &lease,
+                        gain,
+                        &request,
+                        Arc::clone(&segments),
+                    )
+                    .await
+                    {
+                        Ok(()) => Ok(lease),
+                        Err(error) => {
+                            let _ = crate::integrations::audio::set_native_live_capture_paused(
+                                &services.audio,
+                                source_kind_name,
+                                &session_id,
+                                true,
+                            );
+                            Err(error)
+                        }
+                    },
+                    Err(error) => Err(error.to_string()),
+                }
+            };
+
+            if let Err(error) = &result {
+                log::error!("[LiveRecord] failed to change capture pause state: {error}");
+                let _ = services
+                    .emitter
+                    .emit("live-record:error", serde_json::json!({ "message": error }));
+            }
+            this.update(cx, |view, cx| {
+                view.is_transitioning = false;
+                if result.is_ok() {
+                    view.is_paused = target_paused;
+                    view.coordinator_active = !target_paused;
+                    if target_paused {
+                        view.paused_at = Some(Instant::now());
+                        view.target_amplitude = 0.02;
+                        if let Ok(final_segments) = segments.lock() {
+                            view.handle_transcript_update(
+                                TranscriptUpdate {
+                                    remove_ids: Vec::new(),
+                                    upsert_segments: final_segments.clone(),
+                                },
+                                cx,
+                            );
+                        }
+                    } else if let Some(paused_at) = view.paused_at.take() {
+                        view.paused_duration += paused_at.elapsed();
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Dispatches unpolished segment batch to the LLM polish pipeline over AppEventBus.
@@ -736,6 +930,7 @@ impl Render for LiveRecordPanel {
         let is_agent_recording = self.is_agent_recording;
         let amplitude = self.current_amplitude;
         let phase = self.phase;
+        let pulse = 0.5 - self.pulse_phase.cos() * 0.5;
         let is_source_open = self.is_source_dropdown_open;
         let current_source = self.audio_source;
 
@@ -767,6 +962,10 @@ impl Render for LiveRecordPanel {
                             .id("visualizer-wrapper")
                             .w_full()
                             .h(px(160.0))
+                            .rounded(crate::theme::tokens::RADIUS_LG)
+                            .border_1()
+                            .border_color(crate::theme::tokens::COLOR_BORDER_LIGHT)
+                            .bg(crate::theme::tokens::COLOR_BG_SECONDARY_LIGHT)
                             .overflow_hidden()
                             .child(
                                 canvas(
@@ -779,6 +978,9 @@ impl Render for LiveRecordPanel {
 
                                         // Early return guard: prevent division by zero / NaN when unmeasured or collapsed
                                         if width_f32 <= 1.0 || height_f32 <= 1.0 {
+                                            return;
+                                        }
+                                        if !is_recording {
                                             return;
                                         }
 
@@ -829,9 +1031,7 @@ impl Render for LiveRecordPanel {
                                         fill_builder.close();
 
                                         if let Ok(fill_path) = fill_builder.build() {
-                                            let fill_color = if (is_recording || is_agent_recording)
-                                                && !is_paused
-                                            {
+                                            let fill_color = if is_recording {
                                                 hsla(0.0, 0.84, 0.60, 0.55) // Crimson Red (#ef4444)
                                             } else {
                                                 hsla(0.0, 0.0, 0.50, 0.15) // Quiescent wave
@@ -884,10 +1084,7 @@ impl Render for LiveRecordPanel {
                                             x_f32 += step_f32;
                                         }
                                         if let Ok(stroke_path) = stroke_builder.build() {
-                                            let stroke_color = if (is_recording
-                                                || is_agent_recording)
-                                                && !is_paused
-                                            {
+                                            let stroke_color = if is_recording {
                                                 hsla(0.0, 0.84, 0.60, 0.95)
                                             } else {
                                                 hsla(0.0, 0.0, 0.50, 0.40)
@@ -1010,13 +1207,22 @@ impl Render for LiveRecordPanel {
                                     .size(px(64.0))
                                     .rounded_full()
                                     .bg(COLOR_RECORDING_RED)
-                                    .shadow(vec![BoxShadow {
-                                        color: hsla(0.0, 0.73, 0.56, 0.25),
-                                        offset: point(px(0.0), px(4.0)),
-                                        blur_radius: px(12.0),
-                                        spread_radius: px(0.0),
-                                        inset: false,
-                                    }])
+                                    .shadow(vec![
+                                        BoxShadow {
+                                            color: hsla(0.0, 0.73, 0.56, 0.25),
+                                            offset: point(px(0.0), px(4.0)),
+                                            blur_radius: px(12.0 + pulse * 8.0),
+                                            spread_radius: px(pulse * 2.0),
+                                            inset: false,
+                                        },
+                                        BoxShadow {
+                                            color: hsla(0.0, 0.84, 0.60, pulse * 0.12),
+                                            offset: point(px(0.0), px(0.0)),
+                                            blur_radius: px(pulse * 8.0),
+                                            spread_radius: px(pulse * 6.0),
+                                            inset: false,
+                                        },
+                                    ])
                                     .flex()
                                     .items_center()
                                     .justify_center()

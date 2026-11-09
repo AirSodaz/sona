@@ -8,6 +8,72 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use std::ops::Range;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TranscriptSearchMatch {
+    pub segment_id: String,
+    pub range: Range<usize>,
+}
+
+pub fn find_transcript_matches(
+    segments: &[super::segment_row::SegmentData],
+    query: &str,
+) -> Vec<TranscriptSearchMatch> {
+    if query.trim().is_empty() {
+        return Vec::new();
+    }
+
+    segments
+        .iter()
+        .flat_map(|segment| {
+            find_occurrences(&segment.text, query)
+                .into_iter()
+                .map(|range| TranscriptSearchMatch {
+                    segment_id: segment.id.clone(),
+                    range,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn find_occurrences(text: &str, query: &str) -> Vec<Range<usize>> {
+    let lower_query = query.to_lowercase();
+    if lower_query.is_empty() {
+        return Vec::new();
+    }
+
+    let mut lowered_text = String::new();
+    let mut source_ranges = Vec::new();
+    for (source_start, character) in text.char_indices() {
+        let source_range = source_start..source_start + character.len_utf8();
+        for lowered in character.to_lowercase() {
+            let lowered_start = lowered_text.len();
+            lowered_text.push(lowered);
+            source_ranges.push((lowered_start..lowered_text.len(), source_range.clone()));
+        }
+    }
+
+    lowered_text
+        .char_indices()
+        .filter_map(|(lowered_start, _)| {
+            if !lowered_text[lowered_start..].starts_with(&lower_query) {
+                return None;
+            }
+            let lowered_end = lowered_start + lower_query.len();
+            let source_start = source_ranges
+                .binary_search_by_key(&lowered_start, |(range, _)| range.start)
+                .ok()
+                .map(|index| source_ranges[index].1.start)?;
+            let source_end = source_ranges
+                .binary_search_by_key(&lowered_end, |(range, _)| range.end)
+                .ok()
+                .map(|index| source_ranges[index].1.end)?;
+            Some(source_start..source_end)
+        })
+        .collect()
+}
 
 pub struct SearchOverlay {
     pub query_state: Entity<InputState>,
@@ -15,6 +81,8 @@ pub struct SearchOverlay {
     pub match_count: usize,
     pub current_match: usize,
     pub is_visible: bool,
+    pub matches: Vec<TranscriptSearchMatch>,
+    pub matches_dirty: bool,
 }
 
 impl SearchOverlay {
@@ -26,7 +94,13 @@ impl SearchOverlay {
             match_count: 0,
             current_match: 0,
             is_visible: false,
+            matches: Vec::new(),
+            matches_dirty: true,
         }
+    }
+
+    pub fn invalidate_matches(&mut self) {
+        self.matches_dirty = true;
     }
 
     pub fn open(&mut self, window: &mut Window, cx: &mut Context<TranscriptWorkbench>) {
@@ -134,5 +208,64 @@ impl SearchOverlay {
                     ),
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::{find_occurrences, find_transcript_matches};
+    use crate::views::transcript::segment_row::SegmentData;
+
+    #[test]
+    fn finds_case_insensitive_overlapping_occurrences() {
+        assert_eq!(find_occurrences("Banana", "ANA"), vec![1..4, 3..6]);
+    }
+
+    #[test]
+    fn maps_unicode_matches_to_utf8_byte_ranges() {
+        assert_eq!(find_occurrences("A😀中a", "😀中"), vec![1..8]);
+    }
+
+    #[test]
+    fn ignores_whitespace_only_queries() {
+        assert!(find_occurrences("transcript", "  ").is_empty());
+    }
+
+    #[test]
+    fn counts_every_match_in_transcript_order() {
+        let segments = vec![
+            SegmentData {
+                id: "first".to_string(),
+                start_time: 0.0,
+                end_time: 1.0,
+                speaker: String::new(),
+                is_final: true,
+                speaker_tag: None,
+                speaker_attribution: None,
+                timing: None,
+                text: "one one".to_string(),
+                translation: None,
+            },
+            SegmentData {
+                id: "second".to_string(),
+                start_time: 1.0,
+                end_time: 2.0,
+                speaker: String::new(),
+                is_final: true,
+                speaker_tag: None,
+                speaker_attribution: None,
+                timing: None,
+                text: "ONE".to_string(),
+                translation: None,
+            },
+        ];
+        let matches = find_transcript_matches(&segments, "one");
+
+        assert_eq!(matches.len(), 3);
+        assert_eq!(matches[0].segment_id, "first");
+        assert_eq!(matches[0].range, 0..3);
+        assert_eq!(matches[1].range, 4..7);
+        assert_eq!(matches[2].segment_id, "second");
+        assert_eq!(matches[2].range, 0..3);
     }
 }

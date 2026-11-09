@@ -10,18 +10,31 @@ pub async fn transcribe_file(
     services: &DesktopServices,
     req: TranscribeFileRequest,
 ) -> Result<TranscribeFileResult, String> {
+    transcribe_file_with_asr_request(services, req, None).await
+}
+
+pub async fn transcribe_file_with_asr_request(
+    services: &DesktopServices,
+    req: TranscribeFileRequest,
+    asr_request: Option<sona_core::ports::asr::AsrTranscriptionRequest>,
+) -> Result<TranscribeFileResult, String> {
     let is_stream = sona_core::history::is_network_url(&req.file_path);
     let path = std::path::PathBuf::from(&req.file_path);
     if !is_stream && !path.exists() {
         return Err(format!("File not found: {}", req.file_path));
     }
 
-    let cfg_val = services
-        .config
-        .load()
-        .map_err(|e| format!("Failed to load config: {e}"))?
-        .unwrap_or_else(|| serde_json::json!({}));
-    let asr_req = resolve_batch_asr_request_from_config(&cfg_val, req.language.as_deref())?;
+    let asr_req = match asr_request {
+        Some(request) => request,
+        None => {
+            let cfg_val = services
+                .config
+                .load()
+                .map_err(|e| format!("Failed to load config: {e}"))?
+                .unwrap_or_else(|| serde_json::json!({}));
+            resolve_batch_asr_request_from_config(&cfg_val, req.language.as_deref())?
+        }
+    };
 
     let save_to = req.save_to_path.as_ref().map(std::path::PathBuf::from);
     let instance_id = req

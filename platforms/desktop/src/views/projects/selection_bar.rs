@@ -13,6 +13,10 @@ use sona_core::history::mutation_repository::{
     HistoryPurgeItemsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
     HistoryUpdateProjectAssignmentsRequest,
 };
+use sona_core::history::{
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+};
 use sona_core::project::ProjectRecord;
 
 use super::super::shell::MainShell;
@@ -24,6 +28,7 @@ pub struct SelectionBar {
     delete_confirmation_open: bool,
     permanently_delete: bool,
     pending_delete_ids: Option<Vec<String>>,
+    empty_trash_count: Option<usize>,
     is_busy: bool,
     error: Option<String>,
 }
@@ -36,6 +41,7 @@ impl SelectionBar {
             delete_confirmation_open: false,
             permanently_delete: false,
             pending_delete_ids: None,
+            empty_trash_count: None,
             is_busy: false,
             error: None,
         }
@@ -96,6 +102,7 @@ impl SelectionBar {
             return;
         }
         self.pending_delete_ids = None;
+        self.empty_trash_count = None;
         self.delete_confirmation_open = true;
         self.permanently_delete = false;
         self.error = None;
@@ -107,8 +114,21 @@ impl SelectionBar {
             return;
         }
         self.pending_delete_ids = Some(vec![id]);
+        self.empty_trash_count = None;
         self.delete_confirmation_open = true;
         self.permanently_delete = false;
+        self.error = None;
+        cx.notify();
+    }
+
+    pub(crate) fn request_empty_trash(&mut self, trash_count: usize, cx: &mut Context<MainShell>) {
+        if trash_count == 0 || self.is_busy {
+            return;
+        }
+        self.pending_delete_ids = None;
+        self.empty_trash_count = Some(trash_count);
+        self.delete_confirmation_open = true;
+        self.permanently_delete = true;
         self.error = None;
         cx.notify();
     }
@@ -119,21 +139,64 @@ impl SelectionBar {
         selected_ids: &[String],
         cx: &mut Context<MainShell>,
     ) {
+        let empty_trash_count = self.empty_trash_count;
+        let empty_trash = empty_trash_count.is_some();
         let ids = self
             .pending_delete_ids
             .clone()
             .unwrap_or_else(|| selected_ids.to_vec());
-        if ids.is_empty() || self.is_busy {
+        if (!empty_trash && ids.is_empty()) || self.is_busy {
             return;
         }
-        let permanently_delete = is_trash_scope || self.permanently_delete;
+        let permanently_delete = empty_trash || is_trash_scope || self.permanently_delete;
         let history = cx.global::<GlobalDesktopServices>().0.history.clone();
         self.is_busy = true;
         self.error = None;
         cx.notify();
 
         cx.spawn(async move |this, cx: &mut AsyncApp| {
-            let result = if permanently_delete {
+            let result = if empty_trash {
+                let mut ids = Vec::new();
+                let mut offset = 0;
+                let mut result = Ok(());
+                loop {
+                    let request = HistoryWorkspaceQueryRequest {
+                        scope: HistoryWorkspaceScope::Trash,
+                        query: String::new(),
+                        filter_type: HistoryWorkspaceFilterType::All,
+                        date_filter: HistoryWorkspaceDateFilter::All,
+                        sort_order: HistoryWorkspaceSortOrder::Newest,
+                        limit: 200,
+                        offset,
+                    };
+                    match history
+                        .query_db(move |query| query.query_workspace(request))
+                        .await
+                    {
+                        Ok(page) => {
+                            let page_len = page.filtered_items.len();
+                            ids.extend(page.filtered_items.into_iter().map(|item| item.id));
+                            if !page.has_more || page_len == 0 {
+                                break;
+                            }
+                            offset += page_len;
+                        }
+                        Err(error) => {
+                            result = Err(error);
+                            break;
+                        }
+                    }
+                }
+                if result.is_ok() && !ids.is_empty() {
+                    history
+                        .mutation_file(move |service| {
+                            service.purge_items(HistoryPurgeItemsRequest { ids })
+                        })
+                        .await
+                } else {
+                    result
+                }
+            } else if permanently_delete {
                 history
                     .mutation_file(move |service| {
                         service.purge_items(HistoryPurgeItemsRequest { ids })
@@ -162,13 +225,18 @@ impl SelectionBar {
                     Ok(()) => {
                         bar.delete_confirmation_open = false;
                         bar.pending_delete_ids = None;
+                        bar.empty_trash_count = None;
                         shell.projects_results.clear_selection();
                         shell.projects_toolbar.is_selection_active = false;
                         shell.projects_results.load_data(cx);
                         shell.project_selector.load_data(cx);
                     }
                     Err(error) => {
-                        bar.error = Some(format!("Could not delete selected items: {error}"))
+                        bar.error = Some(if empty_trash {
+                            format!("Could not empty Trash: {error}")
+                        } else {
+                            format!("Could not delete selected items: {error}")
+                        })
                     }
                 }
                 cx.notify();
@@ -195,9 +263,9 @@ impl SelectionBar {
         let is_busy = self.is_busy;
         let error = self.error.clone();
         let delete_count = self
-            .pending_delete_ids
-            .as_ref()
-            .map_or(selected_count, Vec::len);
+            .empty_trash_count
+            .or_else(|| self.pending_delete_ids.as_ref().map(Vec::len))
+            .unwrap_or(selected_count);
 
         div()
             .absolute()
@@ -364,6 +432,7 @@ impl SelectionBar {
                                 delete_count,
                                 is_trash_scope,
                                 permanently_delete,
+                                self.empty_trash_count.is_some(),
                                 error.clone(),
                                 is_busy,
                                 cx,
@@ -558,6 +627,7 @@ fn render_delete_dialog(
     selected_count: usize,
     is_trash_scope: bool,
     permanently_delete: bool,
+    empty_trash: bool,
     error: Option<String>,
     is_busy: bool,
     cx: &mut Context<MainShell>,
@@ -579,7 +649,9 @@ fn render_delete_dialog(
             div()
                 .text_size(px(16.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(if permanent {
+                .child(if empty_trash {
+                    "Empty Trash"
+                } else if permanent {
                     "Delete Permanently"
                 } else {
                     "Move to Trash"
@@ -589,7 +661,12 @@ fn render_delete_dialog(
             div()
                 .text_size(px(14.0))
                 .text_color(cx.theme().muted_foreground)
-                .child(if permanent {
+                .child(if empty_trash {
+                    format!(
+                        "Permanently delete all {selected_count} {} in Trash? This cannot be undone.",
+                        if selected_count == 1 { "item" } else { "items" }
+                    )
+                } else if permanent {
                     format!(
                         "Permanently delete {selected_count} {}? This cannot be undone.",
                         if selected_count == 1 { "item" } else { "items" }
@@ -642,6 +719,7 @@ fn render_delete_dialog(
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.selection_bar.delete_confirmation_open = false;
                             this.selection_bar.pending_delete_ids = None;
+                            this.selection_bar.empty_trash_count = None;
                             this.selection_bar.error = None;
                             cx.notify();
                         })),

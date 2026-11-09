@@ -285,6 +285,7 @@ fn test_options_capsule_diarization_and_label_resolution() {
 fn test_batch_queue_item_construction_and_retry() {
     let mut item = BatchQueueItem {
         id: "batch-item-1".to_string(),
+        attempt_id: None,
         instance_id: Some("task-instance-123".to_string()),
         filename: "interview.mp3".to_string(),
         file_path: "/data/interview.mp3".to_string(),
@@ -296,6 +297,9 @@ fn test_batch_queue_item_construction_and_retry() {
         project_id: None,
         project_name: None,
         project_color_index: None,
+        asr_request: None,
+        pipeline_snapshot: None,
+        export_path: None,
         error_message: Some("Corrupt audio frame".to_string()),
         history_id: None,
         error_stage: None,
@@ -355,6 +359,7 @@ fn test_batch_queue_overall_progress_calculation() {
 fn make_item(id: &str, status: BatchItemStatus, progress: f32) -> BatchQueueItem {
     BatchQueueItem {
         id: id.to_string(),
+        attempt_id: None,
         instance_id: None,
         filename: format!("file_{}.wav", id),
         file_path: format!("/path/file_{}.wav", id),
@@ -366,6 +371,9 @@ fn make_item(id: &str, status: BatchItemStatus, progress: f32) -> BatchQueueItem
         project_id: None,
         project_name: None,
         project_color_index: None,
+        asr_request: None,
+        pipeline_snapshot: None,
+        export_path: None,
         error_message: None,
         history_id: None,
         error_stage: None,
@@ -872,6 +880,7 @@ fn test_batch_queue_group_kind_partitioning() {
     let make_item_with_flags =
         |id: &str, status: BatchItemStatus, is_media_server: bool| BatchQueueItem {
             id: id.to_string(),
+            attempt_id: None,
             instance_id: None,
             filename: format!("file_{}.mp3", id),
             file_path: format!("/path/file_{}.mp3", id),
@@ -883,6 +892,9 @@ fn test_batch_queue_group_kind_partitioning() {
             project_id: None,
             project_name: None,
             project_color_index: None,
+            asr_request: None,
+            pipeline_snapshot: None,
+            export_path: None,
             error_message: None,
             history_id: None,
             error_stage: None,
@@ -924,6 +936,7 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
     let mut queue = vec![
         BatchQueueItem {
             id: "item-1".to_string(),
+            attempt_id: None,
             instance_id: Some("batch-task-active-1".to_string()),
             filename: "duplicate.mp3".to_string(),
             file_path: "/data/duplicate.mp3".to_string(),
@@ -935,6 +948,9 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
             project_id: None,
             project_name: None,
             project_color_index: None,
+            asr_request: None,
+            pipeline_snapshot: None,
+            export_path: None,
             error_message: None,
             history_id: None,
             error_stage: None,
@@ -945,6 +961,7 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
         },
         BatchQueueItem {
             id: "item-2".to_string(),
+            attempt_id: None,
             instance_id: None,
             filename: "duplicate.mp3".to_string(),
             file_path: "/data/duplicate.mp3".to_string(),
@@ -956,6 +973,9 @@ fn test_batch_queue_progress_event_instance_id_disambiguation() {
             project_id: None,
             project_name: None,
             project_color_index: None,
+            asr_request: None,
+            pipeline_snapshot: None,
+            export_path: None,
             error_message: None,
             history_id: None,
             error_stage: None,
@@ -993,6 +1013,7 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
     let mut queue = vec![
         BatchQueueItem {
             id: "item-1".to_string(),
+            attempt_id: None,
             instance_id: None,
             filename: "song.wav".to_string(),
             file_path: "/data/song.wav".to_string(),
@@ -1004,6 +1025,9 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
             project_id: None,
             project_name: None,
             project_color_index: None,
+            asr_request: None,
+            pipeline_snapshot: None,
+            export_path: None,
             error_message: None,
             history_id: None,
             error_stage: None,
@@ -1014,6 +1038,7 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
         },
         BatchQueueItem {
             id: "item-2".to_string(),
+            attempt_id: None,
             instance_id: None,
             filename: "song.wav".to_string(),
             file_path: "/data/song.wav".to_string(),
@@ -1025,6 +1050,9 @@ fn test_batch_queue_progress_event_fallback_without_instance_id() {
             project_id: None,
             project_name: None,
             project_color_index: None,
+            asr_request: None,
+            pipeline_snapshot: None,
+            export_path: None,
             error_message: None,
             history_id: None,
             error_stage: None,

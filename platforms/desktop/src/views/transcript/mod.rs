@@ -1,5 +1,6 @@
 pub mod audio_player;
 pub mod editor;
+pub mod scroll_follow;
 pub mod search_overlay;
 pub mod segment_row;
 pub mod speaker_review_sheet;

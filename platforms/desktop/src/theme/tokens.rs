@@ -43,6 +43,7 @@ pub const COLOR_TEXT_PRIMARY_LIGHT: Hsla = hsla(40.0 / 360.0, 0.08, 0.20, 1.0); 
 pub const COLOR_TEXT_SECONDARY_LIGHT: Hsla = hsla(40.0 / 360.0, 0.02, 0.46, 1.0); // #787774
 pub const COLOR_TEXT_MUTED_LIGHT: Hsla = hsla(40.0 / 360.0, 0.02, 0.60, 1.0); // #9b9a97
 pub const COLOR_RECORDING_RED: Hsla = hsla(0.0, 0.73, 0.56, 1.0); // #e03e3e
+pub const COLOR_TRANSCRIPT_HIGHLIGHT: Hsla = hsla(46.0 / 360.0, 0.99, 0.44, 1.0); // #dfab01
 
 // Colors for project tags and badges
 pub const COLOR_PROJECT_BLUE: Hsla = hsla(217.0 / 360.0, 0.91, 0.60, 1.0);

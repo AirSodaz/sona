@@ -19,11 +19,32 @@ use crate::platform::project_repository::ProjectService;
 use crate::platform::sync::DesktopSyncManager;
 use crate::platform::task_ledger_repository::TaskLedgerService;
 
+pub mod batch_pipeline;
 pub mod db_runner;
 pub mod media_server;
+pub mod text_format;
 pub mod voice_typing_runtime;
 
 pub use db_runner::*;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VoiceTypingRuntimeReadiness {
+    pub shortcut_error: Option<String>,
+    pub warmup_error: Option<String>,
+    pub preparing: bool,
+    pub warmup_ready: bool,
+}
+
+impl Default for VoiceTypingRuntimeReadiness {
+    fn default() -> Self {
+        Self {
+            shortcut_error: None,
+            warmup_error: None,
+            preparing: false,
+            warmup_ready: true,
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct DesktopRecordingSessionTracker {
@@ -112,6 +133,7 @@ pub struct DesktopServices {
     pub recording_session: DesktopRecordingSessionTracker,
     pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
     pub agent_control: crate::platform::agent_control::server::AgentControlServerController,
+    pub voice_typing_readiness: Arc<parking_lot::RwLock<VoiceTypingRuntimeReadiness>>,
 }
 
 #[derive(Default)]
@@ -234,6 +256,9 @@ impl DesktopServicesBuilder {
             recording_session,
             translation_pool,
             agent_control,
+            voice_typing_readiness: Arc::new(parking_lot::RwLock::new(
+                VoiceTypingRuntimeReadiness::default(),
+            )),
         })
     }
 }
