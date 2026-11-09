@@ -53,7 +53,9 @@ pub fn run_app() -> Result<(), Box<dyn std::error::Error>> {
             log::warn!(
                 "Another instance of Sona is already running. Restoring window and exiting cleanly."
             );
-            platform::single_instance::focus_existing_window("Sona");
+            if !platform::single_instance::focus_existing_window("Sona - Transcript Editor") {
+                platform::single_instance::focus_existing_window("Sona");
+            }
             return Ok(());
         }
     };

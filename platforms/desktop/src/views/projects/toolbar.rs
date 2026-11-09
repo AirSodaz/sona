@@ -1,8 +1,8 @@
 //! Projects Toolbar with search, filters, and view mode switcher.
 
 use crate::app::GlobalDesktopServices;
+use crate::theme::tokens::*;
 use gpui_kit::assets::IconName as LucideIcon;
-use gpui_kit::base::FocusableExt as _;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -12,9 +12,11 @@ use gpui_kit::component::{ActiveTheme as _, Disableable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use serde_json::{Value, json};
+use sona_core::history::HistoryWorkspaceScope;
 use sona_core::history::{
     HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceSortOrder,
 };
+use sona_core::project::ProjectRecord;
 
 use super::super::shell::MainShell;
 
@@ -30,6 +32,7 @@ pub struct ProjectsToolbar {
     pub view_mode: ViewMode,
     pub is_selection_active: bool,
     pub is_filter_menu_open: bool,
+    pub current_placeholder: String,
     pub search_state: Entity<InputState>,
     _search_subscription: Subscription,
     sort_select: Entity<SelectState<Vec<&'static str>>>,
@@ -47,8 +50,7 @@ impl ProjectsToolbar {
                 .ok()
                 .flatten(),
         );
-        let search_state =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search transcripts"));
+        let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search Inbox..."));
         let search_subscription =
             cx.subscribe(&search_state, |shell, state, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -134,12 +136,40 @@ impl ProjectsToolbar {
             view_mode,
             is_selection_active: false,
             is_filter_menu_open: false,
+            current_placeholder: "Search Inbox...".to_string(),
             search_state,
             _search_subscription: search_subscription,
             sort_select,
             type_select,
             date_select,
             _filter_subscriptions: [sort_subscription, type_subscription, date_subscription],
+        }
+    }
+
+    pub fn update_scope(
+        &mut self,
+        scope: &HistoryWorkspaceScope,
+        browse_project: Option<&ProjectRecord>,
+        window: &mut Window,
+        cx: &mut Context<MainShell>,
+    ) {
+        let formatted = match scope {
+            HistoryWorkspaceScope::Inbox => "Search Inbox...".to_string(),
+            HistoryWorkspaceScope::All => "Search All Items...".to_string(),
+            HistoryWorkspaceScope::Trash => "Search Trash...".to_string(),
+            HistoryWorkspaceScope::Project { .. } => {
+                if let Some(p) = browse_project {
+                    format!("Search in {}...", p.name)
+                } else {
+                    "Search project...".to_string()
+                }
+            }
+        };
+        if self.current_placeholder != formatted {
+            self.current_placeholder = formatted.clone();
+            self.search_state.update(cx, |state, cx| {
+                state.set_placeholder(formatted, window, cx);
+            });
         }
     }
 
@@ -266,12 +296,11 @@ impl ProjectsToolbar {
             .flex()
             .items_center()
             .justify_between()
-            .flex_wrap()
             .gap(px(16.0))
             .w_full()
             .border_b_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
+            .border_color(COLOR_BORDER_LIGHT)
+            .bg(COLOR_BG_PRIMARY_LIGHT)
             .px(px(24.0))
             .py(px(10.0))
             .child(
@@ -294,13 +323,15 @@ impl ProjectsToolbar {
                                     .px_3()
                                     .w(px(260.0))
                                     .h(px(36.0))
-                                    .rounded(px(12.0))
-                                    .bg(cx.theme().foreground.opacity(0.06))
-                                    .hover(|style| style.bg(cx.theme().foreground.opacity(0.08)))
+                                    .rounded(RADIUS_MD)
+                                    .bg(COLOR_BG_SECONDARY_LIGHT)
+                                    .border_1()
+                                    .border_color(COLOR_BORDER_LIGHT)
+                                    .hover(|style| style.border_color(COLOR_BORDER_HOVER_LIGHT))
                                     .child(
                                         gpui_kit::component::Icon::new(LucideIcon::Search)
                                             .size(px(16.0))
-                                            .text_color(cx.theme().muted),
+                                            .text_color(COLOR_TEXT_MUTED_LIGHT),
                                     )
                                     .child(
                                         div()
@@ -389,8 +420,8 @@ impl ProjectsToolbar {
                                             ))
                                             .child(
                                                 Input::new(&self.search_state)
+                                                    .appearance(false)
                                                     .cleanable(true)
-                                                    .focus_ring(true)
                                                     .small(),
                                             ),
                                     ),
@@ -405,7 +436,18 @@ impl ProjectsToolbar {
                                             .w(px(36.0))
                                             .h(px(36.0))
                                             .icon(LucideIcon::SlidersHorizontal)
-                                            .when(filter_menu_open, |button| button.outline())
+                                            .border_1()
+                                            .border_color(if filter_menu_open {
+                                                COLOR_BORDER_HOVER_LIGHT
+                                            } else {
+                                                COLOR_BORDER_LIGHT
+                                            })
+                                            .bg(if filter_menu_open {
+                                                COLOR_BG_HOVER_LIGHT
+                                            } else {
+                                                COLOR_BG_SECONDARY_LIGHT
+                                            })
+                                            .rounded(RADIUS_MD)
                                             .tooltip("Filter & Sort")
                                             .accessibility_label("Filter & Sort")
                                             .on_click(cx.listener(|this, _, _, cx| {
@@ -441,10 +483,10 @@ impl ProjectsToolbar {
                             .gap(px(1.0))
                             .px(px(2.0))
                             .py(px(2.0))
-                            .rounded(px(12.0))
+                            .rounded(RADIUS_MD)
                             .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(cx.theme().secondary)
+                            .border_color(COLOR_BORDER_LIGHT)
+                            .bg(COLOR_BG_SECONDARY_LIGHT)
                             .child(
                                 Button::new("btn-view-list")
                                     .ghost()
@@ -453,7 +495,7 @@ impl ProjectsToolbar {
                                     .h(px(32.0))
                                     .icon(LucideIcon::List)
                                     .when(mode == ViewMode::List, |button| {
-                                        button.bg(cx.theme().background).shadow_sm()
+                                        button.bg(COLOR_BG_ELEVATED_LIGHT).shadow_sm()
                                     })
                                     .tooltip("List View")
                                     .accessibility_label("List View")
@@ -470,7 +512,7 @@ impl ProjectsToolbar {
                                     .h(px(32.0))
                                     .icon(LucideIcon::LayoutGrid)
                                     .when(mode == ViewMode::Cards, |button| {
-                                        button.bg(cx.theme().background).shadow_sm()
+                                        button.bg(COLOR_BG_ELEVATED_LIGHT).shadow_sm()
                                     })
                                     .tooltip("Grid View")
                                     .accessibility_label("Grid View")
@@ -485,9 +527,9 @@ impl ProjectsToolbar {
                                     .small()
                                     .w(px(32.0))
                                     .h(px(32.0))
-                                    .icon(LucideIcon::LayoutList)
+                                    .icon(LucideIcon::Columns3)
                                     .when(mode == ViewMode::Table, |button| {
-                                        button.bg(cx.theme().background).shadow_sm()
+                                        button.bg(COLOR_BG_ELEVATED_LIGHT).shadow_sm()
                                     })
                                     .tooltip("Table View")
                                     .accessibility_label("Table View")
@@ -501,7 +543,7 @@ impl ProjectsToolbar {
                                     .mx(px(4.0))
                                     .w(px(1.0))
                                     .h(px(18.0))
-                                    .bg(cx.theme().border),
+                                    .bg(COLOR_BORDER_LIGHT),
                             )
                             .child(
                                 Button::new("btn-open-history-folder")
@@ -524,7 +566,7 @@ impl ProjectsToolbar {
                                     .h(px(32.0))
                                     .icon(LucideIcon::SquareCheck)
                                     .when(selection_active, |button| {
-                                        button.bg(cx.theme().background).shadow_sm()
+                                        button.bg(COLOR_BG_ELEVATED_LIGHT).shadow_sm()
                                     })
                                     .tooltip(if selection_active {
                                         "Cancel Select"

@@ -16,6 +16,7 @@ use gpui_kit::*;
 use super::super::shell::MainShell;
 use super::toolbar::ViewMode;
 use crate::app::GlobalDesktopServices;
+use crate::theme::tokens::*;
 use sona_core::history::mutation_repository::{HistoryItemMetaPatch, HistoryUpdateItemMetaRequest};
 use sona_core::history::mutation_repository::{
     HistoryRestoreItemsRequest, HistoryUpdateProjectAssignmentsRequest,
@@ -500,9 +501,15 @@ impl ProjectsResults {
                 .when(view_mode == ViewMode::Cards, |this| {
                     this.flex_wrap().content_start().gap_3().p_4()
                 })
-                .when(view_mode != ViewMode::Cards, |this| this.flex_col())
+                .when(view_mode == ViewMode::List, |this| {
+                    this.flex_col().gap(px(16.0)).p(px(24.0))
+                })
                 .when(view_mode == ViewMode::Table, |this| {
-                    this.child(render_table_header(selection_mode, show_project_badge, cx))
+                    this.flex_col().child(render_table_header(
+                        selection_mode,
+                        show_project_badge,
+                        cx,
+                    ))
                 })
                 .children(self.items.iter().map(|item| {
                     let is_selected = if selection_mode {
@@ -772,9 +779,9 @@ fn render_history_item(
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(14.0))
+                .text_size(px(15.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(cx.theme().foreground)
+                .text_color(COLOR_TEXT_PRIMARY_LIGHT)
                 .when(view_mode == ViewMode::Cards, |title| {
                     title.line_height(px(19.6)).line_clamp(2)
                 })
@@ -799,48 +806,68 @@ fn render_history_item(
     let mut row = div()
         .group("history-item-row")
         .id(ElementId::from(format!("history-item-{}", item.id)))
-        .flex()
-        .items_start()
-        .gap_4()
+        .relative()
         .when(view_mode == ViewMode::Cards, |row| {
-            row.w(px(280.0))
+            row.flex()
+                .items_start()
+                .gap_4()
+                .w(px(280.0))
                 .flex_1()
                 .h(px(220.0))
                 .flex_col()
                 .p_4()
                 .gap_3()
-                .rounded_md()
+                .rounded(RADIUS_MD)
+                .bg(if is_selected {
+                    COLOR_BG_PRIMARY_LIGHT
+                } else {
+                    COLOR_BG_ELEVATED_LIGHT
+                })
+                .border_1()
+                .border_color(if is_selected {
+                    COLOR_TEXT_PRIMARY_LIGHT
+                } else {
+                    COLOR_BORDER_LIGHT
+                })
+                .hover(|style| style.border_color(COLOR_BORDER_HOVER_LIGHT).shadow_md())
         })
         .when(view_mode == ViewMode::List, |row| {
-            row.w_full().px_4().py(px(14.0)).border_b_1()
+            row.flex()
+                .flex_col()
+                .w_full()
+                .px(px(16.0))
+                .py(px(14.0))
+                .rounded(RADIUS_MD)
+                .bg(if is_selected {
+                    COLOR_BG_PRIMARY_LIGHT
+                } else {
+                    COLOR_BG_ELEVATED_LIGHT
+                })
+                .border_1()
+                .border_color(if is_selected {
+                    COLOR_TEXT_PRIMARY_LIGHT
+                } else {
+                    COLOR_BORDER_LIGHT
+                })
+                .hover(|style| style.border_color(COLOR_BORDER_HOVER_LIGHT).shadow_md())
         })
         .when(view_mode == ViewMode::Table, |row| {
-            row.w_full().items_center().px_4().py(px(10.0)).border_b_1()
-        })
-        .bg(if is_selected {
-            cx.theme().primary.opacity(0.1)
-        } else {
-            cx.theme().popover
-        })
-        .border_1()
-        .border_color(if is_selected {
-            cx.theme().primary
-        } else {
-            cx.theme().border
-        })
-        .when(view_mode != ViewMode::Table, |row| row.rounded_md())
-        .when(view_mode == ViewMode::Table, |row| {
-            row.gap_0()
+            row.flex()
+                .w_full()
+                .items_center()
+                .px_4()
+                .py(px(10.0))
+                .gap_0()
                 .border_0()
                 .border_b_1()
                 .rounded_none()
-                .border_color(cx.theme().border)
-        })
-        .hover(|style| {
-            style
-                .bg(cx.theme().secondary)
-                .border_color(cx.theme().muted)
-                .shadow_md()
+                .border_color(COLOR_BORDER_LIGHT)
+                .bg(if is_selected {
+                    COLOR_BG_PRIMARY_LIGHT
+                } else {
+                    COLOR_BG_ELEVATED_LIGHT
+                })
+                .hover(|style| style.bg(COLOR_BG_SECONDARY_LIGHT))
         })
         .when(selection_mode, |row| {
             row.child(
@@ -956,19 +983,13 @@ fn render_history_item(
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .gap_2()
                 .child(
                     div()
                         .flex()
                         .items_start()
                         .justify_between()
                         .gap_3()
-                        .when(view_mode == ViewMode::Cards, |header| {
-                            header
-                                .flex_col()
-                                .gap_2()
-                                .when(!selection_mode, |header| header.pr_6())
-                        })
+                        .when(!selection_mode, |header| header.pr(px(60.0)))
                         .child(title_content)
                         .when(show_project_badge, |row| {
                             row.child(project_badge(project, cx))
@@ -976,8 +997,10 @@ fn render_history_item(
                 )
                 .child(
                     div()
-                        .text_size(px(14.0))
-                        .text_color(cx.theme().muted_foreground)
+                        .mt(px(8.0))
+                        .mb(px(12.0))
+                        .text_size(px(13.5))
+                        .text_color(COLOR_TEXT_SECONDARY_LIGHT)
                         .line_height(px(21.0))
                         .line_clamp(if view_mode == ViewMode::Cards { 3 } else { 2 })
                         .child(highlighted_preview(
@@ -991,44 +1014,56 @@ fn render_history_item(
                     div()
                         .flex()
                         .items_center()
-                        .gap_3()
+                        .gap(px(16.0))
                         .mt_auto()
-                        .text_size(px(12.6))
-                        .text_color(cx.theme().muted)
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_1()
-                                .child(Icon::new(LucideIcon::CalendarDays).size(px(12.0)))
-                                .child(item.date.clone()),
+                                .gap(px(5.0))
+                                .child(
+                                    Icon::new(LucideIcon::CalendarDays)
+                                        .size(px(12.0))
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT)
+                                        .child(item.date.clone()),
+                                ),
                         )
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_1()
-                                .child(Icon::new(LucideIcon::Clock3).size(px(12.0)))
-                                .child(item.duration.clone()),
+                                .gap(px(5.0))
+                                .child(
+                                    Icon::new(LucideIcon::Clock3)
+                                        .size(px(12.0))
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(COLOR_TEXT_MUTED_LIGHT)
+                                        .child(item.duration.clone()),
+                                ),
                         ),
                 ),
         );
     }
-
     if !selection_mode {
         let rename_id = item.id.clone();
         let delete_id = item.id.clone();
         row = row.child(
             div()
+                .absolute()
+                .top(px(12.0))
+                .right(px(14.0))
                 .flex()
                 .items_center()
                 .gap_1()
-                .when(view_mode == ViewMode::Cards, |actions| {
-                    actions.absolute().top_3().right_3()
-                })
-                .when(view_mode != ViewMode::Cards, |actions| {
-                    actions.ml_auto().flex_shrink_0()
-                })
                 .when(!is_deleted, |actions| {
                     actions.child(
                         Button::new(ElementId::Name(
@@ -1036,14 +1071,15 @@ fn render_history_item(
                         ))
                         .ghost()
                         .small()
-                        .icon(LucideIcon::Pencil)
+                        .w(px(28.0))
+                        .h(px(28.0))
+                        .icon(
+                            Icon::new(LucideIcon::Pencil)
+                                .size(px(14.0))
+                                .text_color(COLOR_TEXT_MUTED_LIGHT),
+                        )
                         .tooltip("Rename")
                         .accessibility_label(format!("Rename {}", item.title))
-                        .when(!is_selected, |button| {
-                            button
-                                .invisible()
-                                .group_hover("history-item-row", |button| button.visible())
-                        })
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 cx.stop_propagation();
@@ -1059,14 +1095,15 @@ fn render_history_item(
                     ))
                     .ghost()
                     .small()
-                    .icon(LucideIcon::Trash)
+                    .w(px(28.0))
+                    .h(px(28.0))
+                    .icon(
+                        Icon::new(LucideIcon::Trash)
+                            .size(px(14.0))
+                            .text_color(COLOR_TEXT_MUTED_LIGHT),
+                    )
                     .tooltip("Delete")
                     .accessibility_label(format!("Delete {}", item.title))
-                    .when(!is_selected, |button| {
-                        button
-                            .invisible()
-                            .group_hover("history-item-row", |button| button.visible())
-                    })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.selection_bar
@@ -1596,7 +1633,7 @@ fn copy_history_transcripts(
     });
 }
 
-fn history_icon(record: &HistoryItemRecord, cx: &Context<MainShell>) -> AnyElement {
+fn history_icon(record: &HistoryItemRecord, _cx: &Context<MainShell>) -> AnyElement {
     if let Some(icon) = record.icon.as_deref() {
         if let Some(system_icon) = icon.strip_prefix("system:") {
             let icon = match system_icon {
@@ -1609,7 +1646,7 @@ fn history_icon(record: &HistoryItemRecord, cx: &Context<MainShell>) -> AnyEleme
             if let Some(icon) = icon {
                 return Icon::new(icon)
                     .size(px(16.0))
-                    .text_color(cx.theme().muted)
+                    .text_color(COLOR_TEXT_TERTIARY_LIGHT)
                     .into_any_element();
             }
         } else {
@@ -1625,7 +1662,7 @@ fn history_icon(record: &HistoryItemRecord, cx: &Context<MainShell>) -> AnyEleme
     };
     Icon::new(icon)
         .size(px(16.0))
-        .text_color(cx.theme().muted)
+        .text_color(COLOR_TEXT_TERTIARY_LIGHT)
         .into_any_element()
 }
 

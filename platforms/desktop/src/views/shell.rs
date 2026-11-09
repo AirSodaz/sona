@@ -292,6 +292,7 @@ pub struct SyncHeaderPill {
     pub is_open: bool,
     pub is_action_busy: bool,
     pub status: Option<SyncStatusSnapshot>,
+    pub enabled: bool,
 }
 
 impl SyncHeaderPill {
@@ -300,11 +301,24 @@ impl SyncHeaderPill {
             is_open: false,
             is_action_busy: false,
             status: None,
+            enabled: false,
         }
     }
 
     pub fn refresh_status(&mut self, cx: &mut Context<MainShell>) {
         let services = cx.global::<GlobalDesktopServices>().0.clone();
+        let enabled = services
+            .config
+            .get_setting("enableCloudSync")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        self.enabled = enabled;
+        if !enabled {
+            self.status = None;
+            return;
+        }
         cx.spawn(async move |this, cx: &mut AsyncApp| {
             let status = services.sync.get_status().await.ok();
             this.update(cx, |view, cx| {
@@ -522,7 +536,17 @@ impl MainShell {
             has_active_transcript: false,
 
             project_selector: ProjectSelectorDropdown::new(window, cx),
-            sync_pill: SyncHeaderPill::new(),
+            sync_pill: {
+                let mut pill = SyncHeaderPill::new();
+                pill.enabled = services
+                    .config
+                    .get_setting("enableCloudSync")
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                pill
+            },
             notification_center,
 
             options_model,
@@ -2452,7 +2476,7 @@ impl Render for MainShell {
                             .items_center()
                             .justify_end()
                             .gap(px(8.0))
-                            .child(self.render_sync_pill(cx))
+                            .when(self.sync_pill.enabled, |header| header.child(self.render_sync_pill(cx)))
                             .child(self.notification_center.clone())
                             .child(
                                 // Icon-only Settings button (36x36px)
@@ -2569,6 +2593,7 @@ impl Render for MainShell {
                             .id("projects-mode-shell")
                             .flex()
                             .size_full()
+                            .bg(COLOR_BG_SECONDARY_LIGHT)
                             .child(self.projects_rail.render(
                                 super::projects::rail::ProjectsRailState {
                                     selected_scope: &self.projects_results.scope,
@@ -2581,6 +2606,7 @@ impl Render for MainShell {
                                         .is_none(),
                                     is_recording: self.project_selector.is_recording,
                                 },
+                                window,
                                 cx,
                             ))
                             .child({
@@ -2595,6 +2621,12 @@ impl Render for MainShell {
                                     .flex_col()
                                     .flex_1()
                                     .h_full()
+                                    .bg(COLOR_BG_PRIMARY_LIGHT)
+                                    .border_t_1()
+                                    .border_l_1()
+                                    .border_color(COLOR_BORDER_LIGHT)
+                                    .rounded_tl(px(16.0))
+                                    .overflow_hidden()
                                     .child(self.projects_header.render(
                                         &self.projects_results.scope,
                                         browse_project,
@@ -2602,14 +2634,21 @@ impl Render for MainShell {
                                         project_trash_count,
                                         cx,
                                     ))
-                                    .child(
+                                    .child({
+                                        self.projects_toolbar.update_scope(
+                                            &self.projects_results.scope,
+                                            browse_project,
+                                            window,
+                                            cx,
+                                        );
                                         self.projects_toolbar.render(
                                             self.projects_results.filter_type,
                                             self.projects_results.date_filter,
                                             self.projects_results.filtered_count,
                                             self.projects_results.scoped_count,
                                             cx,
-                                        ))
+                                        )
+                                    })
                                     .child(
                                         div()
                                             .relative()

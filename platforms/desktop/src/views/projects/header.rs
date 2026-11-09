@@ -41,7 +41,7 @@ impl ProjectsHeader {
         } else if is_inbox_scope {
             (
                 "Inbox".to_string(),
-                "Inbox collects recordings and imports without a project.".to_string(),
+                "Inbox collects unassigned recordings and imports.".to_string(),
             )
         } else if is_trash_scope {
             (
@@ -53,7 +53,7 @@ impl ProjectsHeader {
         } else {
             (
                 "Inbox".to_string(),
-                "Inbox collects recordings and imports without a project.".to_string(),
+                "Inbox collects unassigned recordings and imports.".to_string(),
             )
         };
 
@@ -117,7 +117,7 @@ impl ProjectsHeader {
             if let Some(s) = summary {
                 let dur = format_summary_duration(s.total_duration);
                 let latest = if let Some(ts) = s.latest_timestamp {
-                    format_relative_timestamp(ts)
+                    format_activity_timestamp(ts)
                 } else {
                     "No activity yet".to_string()
                 };
@@ -281,7 +281,7 @@ impl Default for ProjectsHeader {
     }
 }
 
-fn stat_pill(label: &str, value: &str, cx: &Context<MainShell>) -> impl IntoElement {
+fn stat_pill(label: &str, value: &str, _cx: &Context<MainShell>) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -290,20 +290,20 @@ fn stat_pill(label: &str, value: &str, cx: &Context<MainShell>) -> impl IntoElem
         .py(px(4.0))
         .rounded_full()
         .border_1()
-        .border_color(cx.theme().border)
-        .bg(cx.theme().secondary)
+        .border_color(COLOR_BORDER_LIGHT)
+        .bg(COLOR_BG_SECONDARY_LIGHT)
         .child(
             div()
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(cx.theme().muted)
+                .text_color(COLOR_TEXT_MUTED_LIGHT)
                 .child(label.to_string()),
         )
         .child(
             div()
                 .text_size(px(13.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(cx.theme().foreground)
+                .text_color(COLOR_TEXT_PRIMARY_LIGHT)
                 .child(value.to_string()),
         )
 }
@@ -319,28 +319,24 @@ fn format_summary_duration(seconds: f64) -> String {
     }
 }
 
-fn format_relative_timestamp(timestamp_ms: u64) -> String {
-    let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
-    let diff_secs = if now > timestamp_ms {
-        (now - timestamp_ms) / 1000
-    } else {
-        0
-    };
-    if diff_secs < 60 {
-        "Just now".to_string()
-    } else if diff_secs < 3600 {
-        format!("{}m ago", diff_secs / 60)
-    } else if diff_secs < 86400 {
-        format!("{}h ago", diff_secs / 3600)
-    } else if diff_secs < 604800 {
-        format!("{}d ago", diff_secs / 86400)
-    } else {
-        if let Some(dt) = chrono::DateTime::from_timestamp_millis(timestamp_ms as i64) {
-            dt.format("%b %d, %Y").to_string()
-        } else {
-            "Recently".to_string()
-        }
-    }
+fn format_activity_timestamp(timestamp_ms: u64) -> String {
+    use chrono::{Datelike as _, TimeZone as _, Timelike as _};
+    chrono::Utc
+        .timestamp_millis_opt(timestamp_ms as i64)
+        .single()
+        .map(|dt| {
+            let local = dt.with_timezone(&chrono::Local);
+            format!(
+                "{}/{}/{} {:02}:{:02}:{:02}",
+                local.year(),
+                local.month(),
+                local.day(),
+                local.hour(),
+                local.minute(),
+                local.second()
+            )
+        })
+        .unwrap_or_else(|| "No activity yet".to_string())
 }
 
 fn color_from_hex_str(hex: &str) -> Hsla {

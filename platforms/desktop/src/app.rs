@@ -156,7 +156,7 @@ pub fn bootstrap(cx: &mut App, services: Arc<DesktopServices>, event_bus: Arc<Ap
         ))),
         window_min_size: Some(size(px(MAIN_WINDOW_MIN_WIDTH), px(MAIN_WINDOW_MIN_HEIGHT))),
         titlebar: Some(TitlebarOptions {
-            title: Some("Sona".into()),
+            title: Some("Sona - Transcript Editor".into()),
             appears_transparent: false,
             traffic_light_position: None,
         }),
