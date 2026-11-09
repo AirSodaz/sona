@@ -545,7 +545,7 @@
     "empty_trash": "Empty Trash",
     "empty_trash_confirm": "Permanently delete all {{count}} items in Trash? This cannot be undone.",
     "draft_badge": "Draft",
-    "live_record_draft_description": "Interrupted live recording draft",
+    "live_record_draft_description": "Draft recording",
     "no_transcript": "No transcript",
     "delete_tooltip": "Delete",
     "search_placeholder": "Search history...",

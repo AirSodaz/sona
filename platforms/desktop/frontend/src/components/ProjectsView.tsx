@@ -14,9 +14,10 @@ import {
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { EmbyTaskContext } from '../types/batchQueue';
 import type { HistoryItem as HistoryItemType } from '../types/history';
-import { isLiveRecordDraftHistoryItem } from '../types/history';
+import { isHistoryItemDraft, isLiveRecordDraftHistoryItem } from '../types/history';
 import type { ProjectRecord } from '../types/project';
 import { logger } from '../utils/logger';
 import { useContextMenu } from './context-menu/useContextMenu';
@@ -37,6 +38,7 @@ import { ProjectsResults } from './projects/ProjectsResults';
 import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
 import { ProjectsToolbar } from './projects/ProjectsToolbar';
 import type { RenameTarget } from './projects/types';
+import { TranscriptWorkbench } from './transcript/TranscriptWorkbench';
 
 interface ProjectsViewProps {
   isActive?: boolean;
@@ -102,8 +104,18 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const loadHistoryItems = useHistoryStore((state) => state.loadItems);
   const refreshHistory = useHistoryStore((state) => state.refresh);
 
-  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-  const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
+  const sourceHistoryId = useTranscriptStore(
+    (state) =>
+      state.sessions[state.activeSessionId]?.sourceHistoryId ??
+      ('sourceHistoryId' in state && typeof state.sourceHistoryId === 'string'
+        ? state.sourceHistoryId
+        : null)
+  );
+  const segmentsLength = useTranscriptStore(
+    (state) =>
+      state.sessions[state.activeSessionId]?.segments?.length ??
+      ('segments' in state && Array.isArray(state.segments) ? state.segments.length : 0)
+  );
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
 
@@ -121,7 +133,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [newProjectColor, setNewProjectColor] = useState('#64748b');
   const [newProjectIcon, setNewProjectIcon] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
   const [projectAssignmentIds, setProjectAssignmentIds] = useState<string[]>([]);
@@ -151,14 +163,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       if (item.deletedAt != null) {
         return;
       }
+      if (isHistoryItemDraft(item)) {
+        const isBatch = item.type === 'batch';
+        useTranscriptRuntimeStore.getState().setMode('create', isBatch ? 'batch' : 'live');
+        return;
+      }
       const initialItem = useHistoryStore
         .getState()
         .items.find((candidate) => candidate.id === item.id);
-      const initialLockState = getLiveDraftLockState();
-      if (
-        !initialItem ||
-        (initialLockState.isLocked && item.id !== initialLockState.sourceHistoryId)
-      ) {
+      if (!initialItem) {
         return;
       }
 
@@ -169,14 +182,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         const latestItem = useHistoryStore
           .getState()
           .items.find((candidate) => candidate.id === item.id);
-        const latestLockState = getLiveDraftLockState();
-        if (
-          !latestItem ||
-          (latestLockState.isLocked && item.id !== latestLockState.sourceHistoryId)
-        ) {
+        if (!latestItem) {
           return;
         }
-
         if (!segments && !url) {
           await showError({
             code: 'history.missing_files_deleted',
@@ -334,21 +342,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     ]
   );
 
-  const scopedSourceHistoryId = useMemo(() => {
-    if (!sourceHistoryId) {
-      return null;
-    }
-    const sourceItem = historyItems.find((item) => item.id === sourceHistoryId);
-    return sourceItem && itemMatchesBrowseScope(sourceItem) ? sourceHistoryId : null;
-  }, [historyItems, itemMatchesBrowseScope, sourceHistoryId]);
-
   const effectiveSelectedHistoryId = useMemo(() => {
-    if (isLiveDraftSessionLocked && sourceHistoryId) {
-      return sourceHistoryId;
-    }
-
     if (!selectedHistoryId) {
-      return scopedSourceHistoryId;
+      return null;
     }
 
     const selectedItemStillVisible = historyItems.some(
@@ -363,15 +359,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     return selectedHistoryId;
-  }, [
-    historyItems,
-    isLiveDraftSessionLocked,
-    itemMatchesBrowseScope,
-    scopedSourceHistoryId,
-    segmentsLength,
-    selectedHistoryId,
-    sourceHistoryId,
-  ]);
+  }, [historyItems, itemMatchesBrowseScope, segmentsLength, selectedHistoryId, sourceHistoryId]);
 
   const selectedItem = useMemo(
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
@@ -398,16 +386,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         setSelectedHistoryId(null);
         clearActiveTranscriptSession({ clearAudio: true });
       });
-      return;
     }
-
-    if (effectiveSelectedHistoryId === null) {
-      const sessionState = useTranscriptSessionStore.getState();
-      if (!isRecording && sessionState.sourceHistoryId) {
-        clearActiveTranscriptSession({ clearAudio: true });
-      }
-    }
-  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive, isRecording]);
+  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {
@@ -739,10 +719,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       const lockState = getLiveDraftLockState();
       return lockState.isLocked && id === lockState.sourceHistoryId;
     },
-    isOpenDisabled: (id) => {
-      const lockState = getLiveDraftLockState();
-      return lockState.isLocked && id !== lockState.sourceHistoryId;
-    },
+    isOpenDisabled: () => false,
     isTrashScope: browseState.isTrashScope,
     onAssignProject: (ids) => {
       setProjectAssignmentIds(ids);
@@ -902,7 +879,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             isSelectionMode={selectionState.isSelectionMode}
             isTrashScope={browseState.isTrashScope}
             loadMoreError={browseState.loadMoreError}
-            lockedHistoryId={isLiveDraftSessionLocked ? sourceHistoryId : null}
+            lockedHistoryId={null}
             onDeleteHistoryItem={handleDeleteHistoryItem}
             onLoadMore={browseState.loadMore}
             onRenameHistoryItem={handleRenameHistoryItem}
@@ -924,11 +901,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       )}
 
       {selectedItem && (
-        <aside
-          className="projects-detail-pane"
-          data-projects-detail-placeholder="true"
-          aria-hidden="true"
-        />
+        <aside className="projects-detail-pane">
+          <TranscriptWorkbench
+            onClose={clearOpenedItem}
+            title={selectedItem.title}
+            defaultIconType={selectedItem.type}
+          />
+        </aside>
       )}
 
       <ProjectsModals

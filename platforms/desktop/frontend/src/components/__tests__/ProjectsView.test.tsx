@@ -12,6 +12,8 @@ import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import { DEFAULT_SESSION_DATA } from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { ContextMenuProvider } from '../context-menu/ContextMenuProvider';
 import { ProjectsView } from '../ProjectsView';
@@ -147,7 +149,7 @@ vi.mock('../../services/tauri/history', () => {
   };
 });
 
-vi.mock('../TranscriptWorkbench', () => ({
+vi.mock('../transcript/TranscriptWorkbench', () => ({
   TranscriptWorkbench: ({ title, onClose }: any) => (
     <div>
       <div>TranscriptEditor</div>
@@ -310,8 +312,7 @@ describe('ProjectsView', () => {
 
   const getMainTitleIcon = () => document.querySelector('.projects-main-title-icon');
 
-  const getDetailPlaceholder = () =>
-    document.querySelector('.projects-detail-pane[data-projects-detail-placeholder="true"]');
+  const getDetailPlaceholder = () => document.querySelector('.projects-detail-pane');
 
   const selectDropdownOption = (ariaLabel: string, optionLabel: string) => {
     fireEvent.click(screen.getByRole('button', { name: ariaLabel }));
@@ -1496,16 +1497,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    await act(async () => {
-      useTranscriptStore
-        .getState()
-        .loadTranscript(
-          [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
-          'hist-1',
-          'Project Item'
-        );
-      useTranscriptStore.getState().setAudioUrl('asset:///audio.wav');
-    });
+    await clickAsync(screen.getByRole('button', { name: 'Project Item' }));
 
     await waitFor(() => {
       expect(getDetailPlaceholder()).not.toBeNull();
@@ -2307,6 +2299,124 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => {
       screen.getByRole('button', { name: 'Project Item' });
+    });
+  });
+
+  it('navigates to create mode when clicking a draft item without opening detail pane in projects', async () => {
+    const setModeSpy = vi.fn();
+    useTranscriptRuntimeStore.setState({ setMode: setModeSpy });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Live Recording Draft',
+          timestamp: Date.now(),
+          duration: 30,
+          audioPath: 'draft.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Draft recording',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'batch-draft-1',
+          title: 'Batch Draft',
+          timestamp: Date.now() - 1000,
+          duration: 45,
+          audioPath: 'batch.wav',
+          transcriptPath: 'batch-draft-1.json',
+          previewText: 'Draft import',
+          type: 'batch',
+          projectId: null,
+          status: 'draft',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    // Click live draft -> switches to create mode with live focus
+    await clickAsync(screen.getByRole('button', { name: 'Live Recording Draft' }));
+    expect(setModeSpy).toHaveBeenCalledWith('create', 'live');
+    expect(getDetailPlaceholder()).toBeNull();
+
+    // Click batch draft -> switches to create mode with batch focus
+    await clickAsync(screen.getByRole('button', { name: 'Batch Draft' }));
+    expect(setModeSpy).toHaveBeenCalledWith('create', 'batch');
+    expect(getDetailPlaceholder()).toBeNull();
+  });
+
+  it('keeps projects-main visible during background recording and allows opening completed records', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Live Recording Draft',
+          timestamp: Date.now(),
+          duration: 15,
+          audioPath: 'live.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Draft recording',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'hist-completed',
+          title: 'Completed Call',
+          timestamp: Date.now() - 5000,
+          duration: 120,
+          audioPath: 'completed.wav',
+          transcriptPath: 'hist-completed.json',
+          previewText: 'Meeting notes',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'live-draft-1',
+      sourceHistoryId: 'live-draft-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-draft-1',
+          segments: [
+            { id: 'seg-1', text: 'Live transcription...', start: 0, end: 1, isFinal: false },
+          ],
+        },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    // 1. Verify projects-main list is visible, NOT detail pane
+    expect(document.querySelector('.projects-main')).not.toBeNull();
+    expect(getDetailPlaceholder()).toBeNull();
+
+    // 2. Open completed record in projects
+    await clickAsync(screen.getByRole('button', { name: 'Completed Call' }));
+
+    // 3. Verify detail pane renders for the completed item
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).not.toBeNull();
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-completed');
+    });
+
+    // 4. Close completed record -> returns to projects-main
+    await clickAsync(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).toBeNull();
+      expect(document.querySelector('.projects-main')).not.toBeNull();
     });
   });
 });

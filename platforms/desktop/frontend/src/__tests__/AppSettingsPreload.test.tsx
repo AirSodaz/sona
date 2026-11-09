@@ -288,7 +288,7 @@ describe('App settings preload', () => {
     expect(transcriptWorkbenchUnmountMock).not.toHaveBeenCalled();
   });
 
-  it('keeps the shared editor mounted but hidden when projects mode has no active transcript', () => {
+  it('renders transcript workbench inside create workspace and keeps it separate from projects shell', () => {
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
       selector({
         mode: 'projects',
@@ -298,17 +298,22 @@ describe('App settings preload', () => {
 
     const { container } = render(<App />);
 
-    expect(screen.getByTestId('transcript-workbench')).toBeDefined();
     expect(
-      container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
-    ).toBe(true);
+      container.querySelector(
+        '#workspace-mode-shell .panel-right [data-testid="transcript-workbench"]'
+      )
+    ).not.toBeNull();
+    const workspaceShell = container.querySelector('#workspace-mode-shell');
+    expect((workspaceShell as HTMLElement).style.display).toBe('none');
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
+    expect(container.querySelector('.persistent-transcript-host')).toBeNull();
   });
 
-  it('closes the shared transcript session and hides the projects detail host', async () => {
+  it('closes the transcript session from the create tab workbench', async () => {
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
       selector({
-        mode: 'projects',
+        mode: 'create',
+        ingestionFocus: 'live',
         setMode: vi.fn(),
       })
     );
@@ -323,17 +328,16 @@ describe('App settings preload', () => {
     const { container } = render(<App />);
 
     expect(
-      container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
-    ).toBe(false);
+      container.querySelector(
+        '#workspace-mode-shell .panel-right [data-testid="transcript-workbench"]'
+      )
+    ).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Transcript' }));
 
     await waitFor(() => {
-      expect(
-        container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
-      ).toBe(true);
+      expect(useTranscriptSessionStore.getState().sourceHistoryId).toBeNull();
     });
-    expect(useTranscriptSessionStore.getState().sourceHistoryId).toBeNull();
     expect(useTranscriptSessionStore.getState().segments).toHaveLength(0);
     expect(useTranscriptPlaybackStore.getState().audioUrl).toBeNull();
   });

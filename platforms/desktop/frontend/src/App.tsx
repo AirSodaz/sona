@@ -32,9 +32,7 @@ import { useConfigStore, useLlmAssistantConfig, useSetConfig } from './stores/co
 import { useOnboardingStore } from './stores/onboardingStore';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
-import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
 import { useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
 import type { LlmProvider } from './types/transcript';
@@ -88,9 +86,6 @@ function App(): React.JSX.Element | null {
   const isProjectsMode = mode === 'projects';
   const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
-  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-  const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
-  const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
   const { t } = useTranslation();
@@ -241,14 +236,11 @@ function App(): React.JSX.Element | null {
   }
 
   const isToolsMode = mode === 'tools';
-  const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
-  const shouldShowTranscriptHost = isProjectsMode ? hasActiveTranscript : !isToolsMode;
+
   const appMainClassName = [
     'app-main',
     isProjectsMode ? 'app-main--projects' : isToolsMode ? 'app-main--tools' : 'app-main--workspace',
-    shouldShowTranscriptHost ? 'app-main--with-transcript' : 'app-main--without-transcript',
   ].join(' ');
-
   return (
     <div className="app">
       <a href="#main-content" className="skip-link">
@@ -323,14 +315,10 @@ function App(): React.JSX.Element | null {
             </div>
 
             {/* Right Panel - Editor */}
-            <div className="panel panel-right" aria-hidden="true" />
+            <div className="panel panel-right">
+              <TranscriptWorkbench onClose={closeTranscriptSession} />
+            </div>
           </div>
-        </div>
-        <div
-          className={`persistent-transcript-host projects-detail-pane ${shouldShowTranscriptHost ? '' : 'is-hidden'}`}
-          aria-hidden={shouldShowTranscriptHost ? undefined : true}
-        >
-          <TranscriptWorkbench onClose={closeTranscriptSession} />
         </div>
       </main>
 

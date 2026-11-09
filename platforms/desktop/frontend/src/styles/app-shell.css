@@ -470,27 +470,6 @@
   overflow: hidden;
 }
 
-.persistent-transcript-host {
-  position: absolute;
-  inset: 0 0 0 350px;
-  z-index: 2;
-  border-top: 1px solid var(--color-border);
-  border-left: 1px solid var(--color-border);
-  border-top-left-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--color-bg-primary);
-}
-
-.persistent-transcript-host.is-hidden {
-  display: none;
-}
-
-@media (max-width: 899px) {
-  .app-main--projects .persistent-transcript-host {
-    inset: 320px 0 0 0;
-  }
-}
-
 /* ===========================
    Tab Navigation
    =========================== */
