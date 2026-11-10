@@ -241,9 +241,18 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
   const {
     isOpen: isSearchOpen,
     open: openSearch,
+    close: closeSearch,
     matches: searchMatches,
     currentMatchIndex: searchMatchIndex,
   } = useSearchStore();
+  const prevIsActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    if (prevIsActiveRef.current && !isActive && isSearchOpen) {
+      closeSearch();
+    }
+    prevIsActiveRef.current = isActive;
+  }, [isActive, isSearchOpen, closeSearch]);
 
   useEffect(() => {
     if (!isActive) return;

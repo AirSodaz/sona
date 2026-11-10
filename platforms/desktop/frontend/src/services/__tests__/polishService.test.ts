@@ -395,4 +395,49 @@ describe('PolishService', () => {
       'create tab'
     );
   });
+
+  it('targets the originating unsaved session even if user switches to another unsaved session mid-job', async () => {
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'unsaved-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'unsaved-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '1', start: 0, end: 1, text: 'raw a', isFinal: true }],
+        },
+        'unsaved-b': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '2', start: 0, end: 1, text: 'raw b', isFinal: true }],
+        },
+      },
+    });
+
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      useCanonicalTranscriptStore.getState().activateSession('unsaved-b');
+      await onUpdate({
+        taskId: 'polish-task-id',
+        taskType: 'polish',
+        jobHistoryId: null,
+        segments: [{ id: '1', start: 0, end: 1, text: 'Polished A', isFinal: true }],
+      });
+      return vi.fn();
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      jobHistoryId: null,
+      segments: [{ id: '1', start: 0, end: 1, text: 'Polished A', isFinal: true }],
+    });
+
+    await polishService.polishTranscript();
+
+    expect(useCanonicalTranscriptStore.getState().sessions['unsaved-a'].segments[0].text).toBe(
+      'Polished A'
+    );
+    expect(useCanonicalTranscriptStore.getState().sessions['unsaved-b'].segments[0].text).toBe(
+      'raw b'
+    );
+  });
 });

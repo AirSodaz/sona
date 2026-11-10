@@ -219,9 +219,9 @@ export function createRecordController({
         }
       }
       setRecordingSessionId(null);
-      // Clear only the failed session's partial segments; the active session may
-      // already belong to a Projects detail if the user switched tabs mid-start.
-      useTranscriptStore.getState().setSegmentsForSession(sessionId, []);
+      // Evict only the failed session; the active session may already belong to
+      // a Projects detail if the user switched tabs mid-start.
+      useTranscriptStore.getState().evictSession(sessionId);
       session.resetRecordSession(sessionId, 'start_failed');
 
       if (session.canMutateActiveRecordResources(sessionId)) {
@@ -273,6 +273,7 @@ export function createRecordController({
       `[useAudioRecorder] Stopping recording session. session=${sessionId} input=${activeInputSourceRef.current}`
     );
     const duration = timing.finalizeRecordedDurationSeconds();
+    let shouldEvictDiscardedSession = false;
     try {
       const savedWavPath = await capture.stopCaptureForSession(sessionId);
 
@@ -286,6 +287,7 @@ export function createRecordController({
       }
 
       if (!liveDraft || latestSegments.length === 0 || options?.discard) {
+        shouldEvictDiscardedSession = true;
         liveDraftRef.current = null;
         await capture.stopFileRecording();
         await capture.teardownWebCaptureResources();
@@ -340,6 +342,9 @@ export function createRecordController({
     } finally {
       session.resetRecordSession(sessionId, 'stop_completed');
       setRecordingSessionId(null);
+      if (shouldEvictDiscardedSession) {
+        useTranscriptStore.getState().evictSession(sessionId);
+      }
     }
   }
 

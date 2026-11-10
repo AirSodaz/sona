@@ -67,7 +67,7 @@ export function useProjectRailContextMenu({
             id: 'set_active',
             label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
-            disabled: activeProjectId === project.id,
+            disabled: activeProjectId === project.id || isLockedLiveDraft,
             onSelect: () => {
               onSetActiveProjectId(project.id);
             },
@@ -127,7 +127,7 @@ export function useProjectRailContextMenu({
             id: 'set_active_inbox',
             label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
-            disabled: activeProjectId === null,
+            disabled: activeProjectId === null || isLockedLiveDraft,
             onSelect: () => {
               onSetActiveProjectId(null);
             },

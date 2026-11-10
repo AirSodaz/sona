@@ -28,6 +28,7 @@ describe('useTranscriptScrollFollow', () => {
 
     useTranscriptStore.setState({
       activeSessionId: 'session-1',
+      recordingSessionId: null,
       sourceHistoryId: 'session-1',
       isRecording: false,
       isPaused: false,
@@ -64,7 +65,7 @@ describe('useTranscriptScrollFollow', () => {
       expect(result.current.detachMode).toBeNull();
 
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
       rerender({ segments: initialSegments });
 
@@ -77,7 +78,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('follows newly added segments when streaming', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const { rerender } = renderHook(
@@ -115,7 +116,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('follows when the last segment translation or finalization state changes', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const streamingSegments: TranscriptSegment[] = [
@@ -181,7 +182,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('detaches follow when user scrolls away from bottom and stops auto-scrolling', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const { result, rerender } = renderHook(
@@ -223,7 +224,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('re-engages follow and smoothly scrolls to bottom when resumeFollow is called', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const { result } = renderHook(() =>
@@ -254,7 +255,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('re-engages follow when user scrolls back to bottom', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const { result } = renderHook(() =>
@@ -326,7 +327,7 @@ describe('useTranscriptScrollFollow', () => {
 
     it('resets follow state when switching active session during streaming', () => {
       act(() => {
-        useTranscriptStore.setState({ isRecording: true });
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
       });
 
       const { result, rerender } = renderHook(() =>
@@ -350,6 +351,47 @@ describe('useTranscriptScrollFollow', () => {
 
       // Follow should be cleanly reset to true (detachMode is null)
       expect(result.current.detachMode).toBeNull();
+    });
+
+    it('does not treat background live recording as streaming for an inspected completed record', () => {
+      act(() => {
+        useTranscriptStore.setState({
+          activeSessionId: 'completed-1',
+          recordingSessionId: 'rec-live-1',
+          sourceHistoryId: 'completed-1',
+          isRecording: true,
+          isPaused: false,
+        });
+      });
+
+      const { result, rerender } = renderHook(
+        ({ segments }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments,
+          }),
+        { initialProps: { segments: initialSegments } }
+      );
+
+      expect(result.current.isStreamingActive).toBe(false);
+      mockScrollToIndex.mockClear();
+
+      rerender({
+        segments: [
+          ...initialSegments,
+          {
+            id: 'seg-3',
+            start: 2,
+            end: 3,
+            text: 'Appended',
+            isFinal: true,
+            tokens: [],
+            timestamps: [],
+          },
+        ],
+      });
+
+      expect(mockScrollToIndex).not.toHaveBeenCalled();
     });
   });
 

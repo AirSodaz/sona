@@ -2,7 +2,10 @@ import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
-import { patchSegmentTranslationsForHistory } from '../stores/transcriptCoordinator';
+import {
+  patchSegmentTranslationsForHistory,
+  patchSegmentTranslationsForSession,
+} from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -58,6 +61,9 @@ export interface TranslationServicePorts {
   getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
   getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
   getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  getActiveSessionSnapshot?: () => { sessionId: string; sourceHistoryId: string | null };
+  getSessionSnapshot?: (sessionId: string) => { sourceHistoryId: string | null } | null;
+  patchSegmentTranslationsForSession?: typeof patchSegmentTranslationsForSession;
   patchSegmentTranslationsForHistory: typeof patchSegmentTranslationsForHistory;
   runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
@@ -197,6 +203,10 @@ export class TranslationService {
           .updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
+        const originSessionId =
+          jobHistoryId === 'current'
+            ? (this.ports.getActiveSessionSnapshot?.().sessionId ?? null)
+            : null;
         const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
           taskId,
           'translate',
@@ -204,7 +214,7 @@ export class TranslationService {
             if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
               return;
             }
-            this.applyTranscriptJobUpdate(payload);
+            this.applyTranscriptJobUpdate(payload, originSessionId);
           }
         );
         try {
@@ -257,7 +267,7 @@ export class TranslationService {
               };
             });
           }
-          this.applyTranscriptJobUpdate(result);
+          this.applyTranscriptJobUpdate(result, originSessionId);
           if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
             this.ports.rebaselineTranscriptAutoSave?.(jobHistoryId, result.segments);
           }
@@ -310,7 +320,10 @@ export class TranslationService {
     };
   }
 
-  private applyTranscriptJobUpdate(payload: TranscriptLlmJobResult) {
+  private applyTranscriptJobUpdate(
+    payload: TranscriptLlmJobResult,
+    originSessionId: string | null = null
+  ) {
     if (!payload.segments) {
       return;
     }
@@ -321,6 +334,24 @@ export class TranslationService {
       .map((seg) => ({ id: seg.id, translation: seg.translation }));
 
     if (payloadHistoryId === 'current') {
+      if (
+        originSessionId &&
+        this.ports.getSessionSnapshot &&
+        this.ports.patchSegmentTranslationsForSession
+      ) {
+        const originSession = this.ports.getSessionSnapshot(originSessionId);
+        if (!originSession || originSession.sourceHistoryId) {
+          return;
+        }
+        if (updates.length > 0) {
+          this.ports.patchSegmentTranslationsForSession(originSessionId, updates);
+        }
+        this.ports
+          .getTranscriptSidecarStore()
+          .updateLlmState({ isTranslationVisible: true }, 'current');
+        return;
+      }
+
       const sessionStore = this.ports.getTranscriptSessionStore();
       if (sessionStore.sourceHistoryId) {
         return;
@@ -351,6 +382,18 @@ export const translationService = createTranslationService({
   getEffectiveConfigSnapshot,
   getTranscriptSessionStore: useTranscriptSessionStore.getState,
   getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  getActiveSessionSnapshot: () => {
+    const state = useTranscriptStore.getState();
+    return {
+      sessionId: state.activeSessionId,
+      sourceHistoryId: state.sessions[state.activeSessionId]?.sourceHistoryId ?? null,
+    };
+  },
+  getSessionSnapshot: (sessionId) => {
+    const session = useTranscriptStore.getState().sessions[sessionId];
+    return session ? { sourceHistoryId: session.sourceHistoryId ?? null } : null;
+  },
+  patchSegmentTranslationsForSession,
   patchSegmentTranslationsForHistory,
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,

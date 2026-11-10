@@ -405,4 +405,57 @@ describe('transcriptAutoSaveRuntime', () => {
       );
     });
   });
+
+  it('flushes pending edits when sessionId differs from sourceHistoryId on completed batch sessions', async () => {
+    vi.mocked(historyService.commitTranscriptEdit).mockResolvedValue({
+      status: 'unchanged',
+    });
+
+    useTranscriptStore.setState({
+      activeSessionId: 'batch-queue-item-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'batch-queue-item-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-batch-1',
+          segments: [{ id: 'b-1', text: 'Original batch', start: 0, end: 1, isFinal: true }],
+        },
+      },
+    });
+    transcriptAutoSaveRuntime.rebaseline('hist-batch-1', [
+      { id: 'b-1', text: 'Original batch', start: 0, end: 1, isFinal: true },
+    ]);
+    transcriptAutoSaveRuntime.start();
+
+    updateTranscriptSegment('b-1', { text: 'Edited batch while viewing' });
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-batch-1')).toBe(true);
+
+    // Explicitly flush by historyId (even when activeSessionId differs)
+    useTranscriptStore.getState().activateSession('default');
+    await transcriptAutoSaveRuntime.flushPending('hist-batch-1');
+
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'hist-batch-1',
+      expect.any(String),
+      expect.any(Array),
+      [expect.objectContaining({ text: 'Edited batch while viewing' })]
+    );
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-batch-1')).toBe(false);
+  });
+
+  it('updates baseline quietly with resetBaselineIfTracked without setting saved toast status', () => {
+    const initialSegments = [{ id: 's1', text: 'One', start: 0, end: 1, isFinal: true }];
+    const reloadedSegments = [{ id: 's1', text: 'Two', start: 0, end: 1, isFinal: true }];
+
+    transcriptAutoSaveRuntime.rebaseline('hist-quiet-1', initialSegments);
+    useTranscriptStore.getState().clearAutoSaveState('hist-quiet-1');
+    expect(useTranscriptSidecarStore.getState().autoSaveStates['hist-quiet-1']).toBeUndefined();
+
+    transcriptAutoSaveRuntime.resetBaselineIfTracked('hist-quiet-1', reloadedSegments);
+    transcriptAutoSaveRuntime.resetBaselineIfTracked('untracked-id', reloadedSegments);
+
+    expect(useTranscriptSidecarStore.getState().autoSaveStates['hist-quiet-1']).toBeUndefined();
+    expect(useTranscriptSidecarStore.getState().autoSaveStates['untracked-id']).toBeUndefined();
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-quiet-1')).toBe(false);
+  });
 });

@@ -98,4 +98,43 @@ describe('ProjectSelectorDropdown', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
     expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('does not call setActiveProjectId when creating a project from the modal after recording starts', async () => {
+    const createdProject = {
+      id: 'proj-created',
+      name: 'Beta',
+      description: '',
+      color: '#64748b',
+      createdAt: 2000,
+      updatedAt: 2000,
+    };
+    const createProjectMock = vi.fn().mockResolvedValue(createdProject);
+    const setActiveProjectIdMock = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.setState({
+      createProject: createProjectMock,
+      setActiveProjectId: setActiveProjectIdMock,
+    });
+
+    render(<ProjectSelectorDropdown onOpenProjects={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { name: /New Project/i }));
+
+    act(() => {
+      useTranscriptStore.setState({
+        isRecording: true,
+        recordingSessionId: 'rec-draft-1',
+      });
+    });
+
+    const nameInput = screen.getByLabelText(/Project name/i);
+    fireEvent.change(nameInput, { target: { value: 'Beta' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Tag/i }));
+    });
+
+    expect(createProjectMock).toHaveBeenCalledTimes(1);
+    expect(setActiveProjectIdMock).not.toHaveBeenCalled();
+  });
 });

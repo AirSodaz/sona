@@ -16,6 +16,8 @@ import { MuteIcon, PauseIcon, PlayFilledIcon, VolumeIcon } from './Icons';
 interface AudioPlayerProps {
   /** Optional CSS class name. */
   className?: string;
+  /** Whether this audio player's host shell is currently active. Defaults to true. */
+  isActive?: boolean;
 }
 
 /**
@@ -25,7 +27,10 @@ interface AudioPlayerProps {
  * @param props - Component props.
  * @return The rendered audio player or null if no audio is loaded.
  */
-export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Element | null {
+export function AudioPlayer({
+  className = '',
+  isActive = true,
+}: AudioPlayerProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const showError = useDialogStore((state) => state.showError);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -38,6 +43,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
   const setIsPlaying = useTranscriptPlaybackStore((state) => state.setIsPlaying);
   const seekRequest = useTranscriptPlaybackStore((state) => state.seekRequest);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
+  const lastAppliedSeekTimestampRef = useRef<number | null>(seekRequest?.timestamp ?? null);
 
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -58,7 +64,11 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
 
   // Handle seek request from store
   useEffect(() => {
-    if (seekRequest && audioRef.current) {
+    if (!seekRequest || seekRequest.timestamp === lastAppliedSeekTimestampRef.current) {
+      return;
+    }
+    lastAppliedSeekTimestampRef.current = seekRequest.timestamp;
+    if (audioRef.current) {
       // Only update if difference is significant to avoid stutter
       if (Math.abs(audioRef.current.currentTime - seekRequest.time) > 0.001) {
         audioRef.current.currentTime = seekRequest.time;
@@ -75,6 +85,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     volume,
     setVolume,
     toggleMute,
+    enabled: isActive,
   });
 
   function handlePlayPause() {

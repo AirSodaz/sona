@@ -330,7 +330,16 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
             color: createColor,
             icon: createIcon,
           });
-          if (project) await setActiveProjectId(project.id);
+          const runtimeState = useTranscriptStore.getState();
+          const isCurrentlyLocked =
+            runtimeState.isRecording &&
+            Boolean(
+              runtimeState.recordingSessionId ||
+                runtimeState.sessions[runtimeState.activeSessionId]?.sourceHistoryId
+            );
+          if (project && !isCurrentlyLocked) {
+            await setActiveProjectId(project.id);
+          }
           setCreateIcon('');
           setCreateOpen(false);
         }}

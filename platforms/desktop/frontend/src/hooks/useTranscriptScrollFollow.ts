@@ -46,7 +46,15 @@ export function useTranscriptScrollFollow({
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
   const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+
+  // Follow live streaming only when this editor is bound to the active recording session.
+  const isCurrentSessionRecording =
+    isRecording &&
+    (recordingSessionId
+      ? activeSessionId === recordingSessionId
+      : sourceHistoryId === 'current' || !sourceHistoryId);
 
   // Check if the current session is undergoing streaming batch transcription
   const isBatchStreaming = useBatchQueueStore((state) =>
@@ -57,7 +65,7 @@ export function useTranscriptScrollFollow({
     )
   );
 
-  const isStreamingActive = (isRecording && !isPaused) || isBatchStreaming;
+  const isStreamingActive = (isCurrentSessionRecording && !isPaused) || isBatchStreaming;
 
   // Playback state
   const isPlaying = useTranscriptPlaybackStore((state) => state.isPlaying);

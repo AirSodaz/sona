@@ -1287,5 +1287,67 @@ describe('batchQueueStore', () => {
         projectSeg,
       ]);
     });
+
+    it('pauses leaving batch session playback and keeps createSessionId synced while browsing in Projects', () => {
+      useRealTranscriptStore.setState({
+        mode: 'projects',
+        ingestionFocus: 'batch',
+        activeSessionId: 'hist-project',
+        createSessionId: 'batch-1',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'hist-project': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-project',
+            isPlaying: true,
+          },
+          'batch-1': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-b1',
+            isPlaying: true,
+          },
+          'batch-2': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-b2',
+            isPlaying: false,
+          },
+        },
+      });
+
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'batch-1',
+            filename: 'b1.wav',
+            filePath: '/b1.wav',
+            status: 'complete',
+            progress: 100,
+            segments: [],
+            audioUrl: null,
+            projectId: null,
+          },
+          {
+            id: 'batch-2',
+            filename: 'b2.wav',
+            filePath: '/b2.wav',
+            status: 'complete',
+            progress: 100,
+            segments: [],
+            audioUrl: null,
+            projectId: null,
+          },
+        ],
+        activeItemId: 'batch-1',
+      });
+
+      useBatchQueueStore.getState().setActiveItem('batch-2');
+      expect(useRealTranscriptStore.getState().sessions['batch-1'].isPlaying).toBe(false);
+      expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
+      expect(useRealTranscriptStore.getState().createSessionId).toBe('batch-2');
+
+      useBatchQueueStore.getState().setActiveItem(null);
+      expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
+      expect(useRealTranscriptStore.getState().createSessionId).toBe('default');
+    });
   });
 });

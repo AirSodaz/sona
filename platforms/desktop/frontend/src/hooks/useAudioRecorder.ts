@@ -85,6 +85,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   const recordControllerRef = useRef<RecordController | null>(null);
   const recordingAutomationSnapshotRef = useRef<{
     config: ReturnType<typeof getEffectiveConfigSnapshot>;
+    projectId: string | null;
   } | null>(null);
 
   const [isInitializing, setIsInitializing] = useState(false);
@@ -234,7 +235,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments) => {
-          const activeProjectId = useProjectStore.getState().activeProjectId;
+          const activeProjectId =
+            recordingAutomationSnapshotRef.current?.projectId ??
+            useProjectStore.getState().activeProjectId;
           const effectiveConfig = useConfigStore.getState().config;
           const pipeline = resolveItemPipeline(
             activeProjectId,
@@ -431,6 +434,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       effectiveConfig
     );
     recordingAutomationSnapshotRef.current = {
+      projectId: activeProjectId,
       config: {
         ...effectiveConfig,
         autoPolish: pipeline.autoPolish,

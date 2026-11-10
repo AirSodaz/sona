@@ -8,6 +8,7 @@ import {
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { historyService } from '../../services/historyService';
+import { transcriptAutoSaveRuntime } from '../../services/transcriptAutoSaveRuntime';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -2600,5 +2601,359 @@ describe('ProjectsView', () => {
     expect(
       (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
     ).toBe(true);
+  });
+
+  it('disables Set as Active in project and Inbox rail context menus during active recording', async () => {
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'live-draft-1',
+      activeSessionId: 'live-draft-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'live-draft-1' },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
+    expect(
+      (screen.getByRole('menuitem', { name: 'Set as Active' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+
+    fireEvent.contextMenu(getButtonByContent('Inbox'), { clientX: 40, clientY: 90 });
+    expect(
+      (screen.getByRole('menuitem', { name: 'Set as Active' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+  });
+
+  it('opens historical live_record drafts in the Projects detail pane when another live recording is active', async () => {
+    vi.mocked(historyService.loadTranscript).mockResolvedValueOnce([
+      { id: 'old-seg-1', text: 'Historical draft segment', start: 0, end: 1, isFinal: true },
+    ]);
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Active Live Recording',
+          timestamp: Date.now(),
+          duration: 15,
+          audioPath: 'active.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Recording now',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'old-live-draft',
+          title: 'Old Live Draft',
+          timestamp: Date.now() - 5000,
+          duration: 45,
+          audioPath: 'old-draft.wav',
+          transcriptPath: 'old-live-draft.json',
+          previewText: 'Interrupted earlier',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      mode: 'projects',
+      isRecording: true,
+      recordingSessionId: 'live-draft-1',
+      activeSessionId: 'live-draft-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-draft-1',
+          segments: [
+            { id: 'rec-1', text: 'Live still streaming', start: 0, end: 1, isFinal: false },
+          ],
+        },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(screen.getByRole('button', { name: 'Old Live Draft' }));
+
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).not.toBeNull();
+    });
+    expect(useTranscriptStore.getState().mode).toBe('projects');
+    expect(useTranscriptStore.getState().recordingSessionId).toBe('live-draft-1');
+    expect(useTranscriptStore.getState().activeSessionId).toBe('old-live-draft');
+    expect(useTranscriptStore.getState().sessions['live-draft-1'].segments[0].text).toBe(
+      'Live still streaming'
+    );
+  });
+
+  it('flushes pending autosave before reloading from disk without flashing saved status', async () => {
+    vi.mocked(historyService.commitTranscriptEdit).mockResolvedValue({
+      status: 'committed',
+      hash: 'next-hash',
+    } as any);
+    vi.mocked(historyService.loadTranscript).mockResolvedValue([
+      { id: 'seg-1', text: 'Flushed edit', start: 0, end: 1, isFinal: true },
+    ]);
+
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-shared',
+          title: 'Shared Doc',
+          timestamp: Date.now(),
+          duration: 30,
+          audioPath: 'shared.wav',
+          transcriptPath: 'hist-shared.json',
+          previewText: 'Original',
+          type: 'batch',
+          projectId: null,
+          status: 'complete',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      mode: 'projects',
+      activeSessionId: 'batch-slot-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'batch-slot-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-shared',
+          segments: [{ id: 'seg-1', text: 'Original', start: 0, end: 1, isFinal: true }],
+        },
+      },
+    });
+
+    transcriptAutoSaveRuntime.rebaseline('hist-shared', [
+      { id: 'seg-1', text: 'Original', start: 0, end: 1, isFinal: true },
+    ]);
+    transcriptAutoSaveRuntime.start();
+    try {
+      useTranscriptStore.getState().updateSegment('seg-1', { text: 'Flushed edit' });
+      expect(transcriptAutoSaveRuntime.hasPendingWork('hist-shared')).toBe(true);
+
+      render(<ProjectsView />);
+      await waitForInitialHistoryLoad();
+
+      await clickAsync(screen.getByRole('button', { name: 'Shared Doc' }));
+
+      await waitFor(() => {
+        expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+          'hist-shared',
+          expect.any(String),
+          expect.any(Array),
+          [expect.objectContaining({ text: 'Flushed edit' })]
+        );
+      });
+      const commitOrder = vi.mocked(historyService.commitTranscriptEdit).mock
+        .invocationCallOrder[0];
+      const loadOrder = vi.mocked(historyService.loadTranscript).mock.invocationCallOrder[0];
+      expect(commitOrder).toBeLessThan(loadOrder);
+      expect(useTranscriptStore.getState().autoSaveStates['hist-shared']).toBeUndefined();
+    } finally {
+      transcriptAutoSaveRuntime.stop();
+    }
+  });
+
+  it('excludes hidden live recording draft from summary chips and auto-clears selection mode on recording start', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Live Recording Draft',
+          timestamp: Date.now(),
+          duration: 30,
+          audioPath: 'draft.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Live recording',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'hist-rec-1',
+          title: 'Completed Call',
+          timestamp: Date.now() - 1000,
+          duration: 60,
+          audioPath: 'call.wav',
+          transcriptPath: 'hist-rec-1.json',
+          previewText: 'Notes',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+        },
+        {
+          id: 'hist-batch-1',
+          title: 'Imported Lecture',
+          timestamp: Date.now() - 2000,
+          duration: 120,
+          audioPath: 'lecture.mp3',
+          transcriptPath: 'hist-batch-1.json',
+          previewText: 'Slides',
+          type: 'batch',
+          projectId: null,
+          status: 'complete',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      mode: 'projects',
+      isRecording: false,
+      recordingSessionId: null,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByTestId('projects-fab')).toBeTruthy();
+
+    act(() => {
+      useTranscriptStore.setState({
+        isRecording: true,
+        recordingSessionId: 'live-draft-1',
+        activeSessionId: 'live-draft-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('projects-fab')).toBeNull();
+    });
+    expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
+    expect(screen.getByTestId('projects-summary-type-split').textContent).toBe(
+      '1 recordings / 1 imports'
+    );
+  });
+
+  it('disables Delete Project button inside Project Settings modal when live recording starts', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useTranscriptStore.setState({
+      mode: 'projects',
+      isRecording: false,
+      recordingSessionId: null,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      await Promise.resolve();
+    });
+
+    const deleteButton = (await screen.findByRole('button', {
+      name: 'Delete Project',
+    })) as HTMLButtonElement;
+    expect(deleteButton.disabled).toBe(false);
+
+    act(() => {
+      useTranscriptStore.setState({
+        isRecording: true,
+        recordingSessionId: 'live-draft-1',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole('button', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+      ).toBe(true);
+    });
+  });
+
+  it('syncs renamed metadata into background sessions and re-binds detail session cleanly on tab activation', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-completed',
+          title: 'Completed Call',
+          timestamp: Date.now() - 1000,
+          duration: 60,
+          audioPath: 'call.wav',
+          transcriptPath: 'hist-completed.json',
+          previewText: 'Notes',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+          icon: 'system:mic',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      mode: 'projects',
+      activeSessionId: 'default',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'batch-slot-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-completed',
+          title: 'Completed Call',
+          icon: 'system:mic',
+        },
+      },
+    });
+
+    const view = testingLibraryRender(
+      <ContextMenuProvider>
+        <ProjectsView isActive={true} />
+      </ContextMenuProvider>
+    );
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(screen.getByRole('button', { name: 'Rename Completed Call' }));
+    const titleInput = await screen.findByDisplayValue('Completed Call');
+    fireEvent.change(titleInput, { target: { value: 'Renamed Background Session' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().sessions['batch-slot-1'].title).toBe(
+        'Renamed Background Session'
+      );
+    });
+
+    // Open item, switch away to Create ('create-1'), then return -> activeSessionId synchronously re-binds
+    await clickAsync(screen.getByRole('button', { name: 'Renamed Background Session' }));
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).not.toBeNull();
+    });
+
+    act(() => {
+      useTranscriptStore.setState({
+        activeSessionId: 'create-1',
+        sessions: {
+          ...useTranscriptStore.getState().sessions,
+          'create-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'create-1' },
+        },
+      });
+    });
+    view.rerender(
+      <ContextMenuProvider>
+        <ProjectsView isActive={false} />
+      </ContextMenuProvider>
+    );
+    expect(getDetailPlaceholder()).toBeNull();
+
+    view.rerender(
+      <ContextMenuProvider>
+        <ProjectsView isActive={true} />
+      </ContextMenuProvider>
+    );
+    expect(useTranscriptStore.getState().activeSessionId).toBe('hist-completed');
+    expect(getDetailPlaceholder()).not.toBeNull();
   });
 });

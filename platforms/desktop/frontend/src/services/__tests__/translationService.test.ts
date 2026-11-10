@@ -592,4 +592,58 @@ describe('TranslationService', () => {
       useCanonicalTranscriptStore.getState().getLlmState('history-a').isTranslationVisible
     ).toBe(true);
   });
+
+  it('patches translations to the originating unsaved session even if user switches to another unsaved session mid-job', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'unsaved-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'unsaved-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true }],
+        },
+        'unsaved-b': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '2', start: 0, end: 1, text: 'Hello B', isFinal: true }],
+        },
+      },
+    });
+
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      useCanonicalTranscriptStore.getState().activateSession('unsaved-b');
+      await onUpdate({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: null,
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true, translation: '你好 A' },
+        ],
+      });
+      return vi.fn();
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true, translation: '你好 A' },
+      ],
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['unsaved-a'].segments[0].translation
+    ).toBe('你好 A');
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['unsaved-b'].segments[0].translation
+    ).toBeUndefined();
+  });
 });

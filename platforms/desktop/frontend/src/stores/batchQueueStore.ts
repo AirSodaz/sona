@@ -787,32 +787,58 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         transcriptState.mode !== 'tools' &&
         (!isBackgroundRecording || transcriptState.ingestionFocus === 'batch');
       const audioChanged = audioUrl !== session.audioUrl;
-      useTranscriptStore.setState({
-        ...(canActivateInUi
+      const prevActiveSessionId = transcriptState.activeSessionId;
+      const shouldPausePrevSession =
+        canActivateInUi &&
+        prevActiveSessionId !== id &&
+        Boolean(transcriptState.sessions[prevActiveSessionId]?.isPlaying);
+      const shouldPauseLeavingBatchItem =
+        prevActiveId !== null &&
+        prevActiveId !== id &&
+        prevActiveId !== prevActiveSessionId &&
+        Boolean(transcriptState.sessions[prevActiveId]?.isPlaying);
+      const shouldUpdateCreateSession =
+        (canActivateInUi && transcriptState.mode === 'create') ||
+        (!isBackgroundRecording && transcriptState.ingestionFocus === 'batch');
+      const nextSessions: typeof transcriptState.sessions = {
+        ...transcriptState.sessions,
+        ...(shouldPausePrevSession
           ? {
-              activeSessionId: id,
-              ...(transcriptState.mode === 'create' ? { createSessionId: id } : {}),
+              [prevActiveSessionId]: {
+                ...transcriptState.sessions[prevActiveSessionId],
+                isPlaying: false,
+              },
             }
           : {}),
-        sessions: {
-          ...transcriptState.sessions,
-          [id]: {
-            ...session,
-            sourceHistoryId: item.historyId || session.sourceHistoryId,
-            title: item.historyTitle || session.title || item.filename,
-            audioUrl,
-            ...(audioChanged
-              ? {
-                  isPlaying: false,
-                  currentTime: 0,
-                  activeSegmentId: null,
-                  activeSegmentIndex: -1,
-                  seekRequest: null,
-                  lastSeekTimestamp: 0,
-                }
-              : {}),
-          },
+        ...(shouldPauseLeavingBatchItem
+          ? {
+              [prevActiveId]: {
+                ...transcriptState.sessions[prevActiveId],
+                isPlaying: false,
+              },
+            }
+          : {}),
+        [id]: {
+          ...session,
+          sourceHistoryId: item.historyId || session.sourceHistoryId,
+          title: item.historyTitle || session.title || item.filename,
+          audioUrl,
+          ...(audioChanged
+            ? {
+                isPlaying: false,
+                currentTime: 0,
+                activeSegmentId: null,
+                activeSegmentIndex: -1,
+                seekRequest: null,
+                lastSeekTimestamp: 0,
+              }
+            : {}),
         },
+      };
+      useTranscriptStore.setState({
+        ...(canActivateInUi ? { activeSessionId: id } : {}),
+        ...(shouldUpdateCreateSession ? { createSessionId: id } : {}),
+        sessions: nextSessions,
       });
       if (!isBackgroundRecording && transcriptState.mode !== 'projects') {
         void useProjectStore.getState().setActiveProjectId(item.projectId);
@@ -820,6 +846,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     } else if (id === null) {
       if (shouldClearActiveSessionForBatch(prevActiveId)) {
         clearActiveTranscriptSession({ clearAudio: true, title: '' });
+      } else {
+        const transcriptState = useTranscriptStore.getState();
+        if (
+          prevActiveId !== null &&
+          transcriptState.ingestionFocus === 'batch' &&
+          transcriptState.createSessionId === prevActiveId
+        ) {
+          useTranscriptStore.setState({ createSessionId: 'default' });
+        }
       }
     }
   },

@@ -2,7 +2,11 @@ import i18next from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/historyStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import {
+  type SessionData,
+  type TranscriptStore,
+  useTranscriptStore,
+} from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
@@ -19,6 +23,20 @@ type PendingSave = {
 function cloneSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
   return structuredClone(segments);
 }
+
+function findSessionByHistoryId(state: TranscriptStore, historyId: string): SessionData | null {
+  const direct = state.sessions[historyId];
+  if (direct && (!direct.sourceHistoryId || direct.sourceHistoryId === historyId)) {
+    return direct;
+  }
+  for (const session of Object.values(state.sessions)) {
+    if (session.sourceHistoryId === historyId) {
+      return session;
+    }
+  }
+  return direct ?? null;
+}
+
 function getI18nText(key: string, defaultValue: string): string {
   if (i18next.isInitialized) {
     const translated = i18next.t(key, { defaultValue });
@@ -209,7 +227,7 @@ class TranscriptAutoSaveRuntime {
       this.clearTimeout(historyId);
       const targetSegments =
         segments ??
-        storeState.sessions[historyId]?.segments ??
+        findSessionByHistoryId(storeState, historyId)?.segments ??
         (storeState.activeSessionId === historyId
           ? storeState.sessions[storeState.activeSessionId]?.segments
           : null);
@@ -223,7 +241,7 @@ class TranscriptAutoSaveRuntime {
       for (const pendingHistId of Array.from(this.timeouts.keys())) {
         this.clearTimeout(pendingHistId);
         const session =
-          storeState.sessions[pendingHistId] ??
+          findSessionByHistoryId(storeState, pendingHistId) ??
           (storeState.activeSessionId === pendingHistId
             ? storeState.sessions[storeState.activeSessionId]
             : null);
@@ -253,6 +271,22 @@ class TranscriptAutoSaveRuntime {
       }
     }
     await this.ensureDrain();
+  }
+
+  hasPendingWork(historyId: string): boolean {
+    return this.timeouts.has(historyId) || this.pendingByHistoryId.has(historyId);
+  }
+
+  resetBaselineIfTracked(historyId: string, segments: TranscriptSegment[]): void {
+    this.lastFingerprints.set(historyId, computeSegmentsFingerprint(segments));
+    if (this.editSessionIds.has(historyId) && !this.hasPendingWork(historyId)) {
+      const oldSessionId = this.editSessionIds.get(historyId);
+      if (oldSessionId) {
+        this.conflictedSessionIds.delete(oldSessionId);
+        this.baselinesBySessionId.delete(oldSessionId);
+      }
+      this.beginSession(historyId, segments);
+    }
   }
 
   rebaseline(historyId: string, segments: TranscriptSegment[]): void {

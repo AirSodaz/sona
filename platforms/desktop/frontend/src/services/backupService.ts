@@ -6,6 +6,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
   clearActiveTranscriptSession,
+  evictNonRecordingSessions,
   openTranscriptSession,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
@@ -127,6 +128,7 @@ export interface BackupServicePorts {
   getTranscriptSourceHistoryId: () => string | null;
   getHistoryItems: () => HistoryItem[];
   clearActiveTranscriptSession: (options: { clearAudio: boolean }) => void;
+  evictNonRecordingSessions?: (keepSessionIds?: string[]) => void;
   openTranscriptSession: typeof openTranscriptSession;
   setAudioFile: (file: File | null) => void;
   historyServiceLoadTranscript: typeof historyService.loadTranscript;
@@ -198,6 +200,7 @@ export class BackupService {
     const currentHistoryId = this.ports.getTranscriptSourceHistoryId();
 
     if (!currentHistoryId) {
+      this.ports.evictNonRecordingSessions?.([]);
       return;
     }
 
@@ -206,12 +209,14 @@ export class BackupService {
 
     if (!matchingItem) {
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
+      this.ports.evictNonRecordingSessions?.([]);
       return;
     }
 
     const segments = await this.ports.historyServiceLoadTranscript(matchingItem.id);
     if (!segments) {
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
+      this.ports.evictNonRecordingSessions?.([]);
       return;
     }
 
@@ -222,6 +227,7 @@ export class BackupService {
       icon: matchingItem.icon || null,
       audioUrl: await this.ports.historyServiceGetAudioUrl(matchingItem.id),
     });
+    this.ports.evictNonRecordingSessions?.([matchingItem.id]);
     this.ports.setAudioFile(null);
   }
 
@@ -309,6 +315,7 @@ export class BackupService {
       if (backendApplied && !transcriptSynchronized) {
         try {
           this.ports.clearActiveTranscriptSession({ clearAudio: true });
+          this.ports.evictNonRecordingSessions?.([]);
         } catch (error) {
           logger.error(
             '[Backup] Failed to clear transcript after import error:',
@@ -352,6 +359,7 @@ export const backupService = createBackupService({
   getTranscriptSourceHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId,
   getHistoryItems: () => useHistoryStore.getState().items,
   clearActiveTranscriptSession,
+  evictNonRecordingSessions,
   openTranscriptSession,
   setAudioFile: (file) => useTranscriptPlaybackStore.getState().setAudioFile(file),
   historyServiceLoadTranscript: (historyId) => historyService.loadTranscript(historyId),

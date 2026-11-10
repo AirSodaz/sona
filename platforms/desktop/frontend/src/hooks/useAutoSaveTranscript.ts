@@ -9,6 +9,17 @@ export async function flushPendingAutoSave(
   await transcriptAutoSaveRuntime.flushPending(historyId, segments);
 }
 
+export function hasPendingAutoSave(historyId: string): boolean {
+  return transcriptAutoSaveRuntime.hasPendingWork(historyId);
+}
+
+export function resetAutoSaveBaselineIfTracked(
+  historyId: string,
+  segments: TranscriptSegment[]
+): void {
+  transcriptAutoSaveRuntime.resetBaselineIfTracked(historyId, segments);
+}
+
 export function rebaselineTranscriptAutoSave(
   historyId: string,
   segments: TranscriptSegment[]

@@ -941,4 +941,58 @@ describe('LiveRecord', () => {
     expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
     expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
   });
+
+  it('only handles Space pause/resume in Create Live mode while Ctrl+Space switches to Create Live on start', async () => {
+    render(<LiveRecord />);
+
+    // Start from Projects mode via Ctrl+Space -> should switch to Create -> Live and start recording
+    await act(async () => {
+      useTranscriptStore.setState({ mode: 'projects', ingestionFocus: 'batch' });
+      fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(useTranscriptStore.getState().mode).toBe('create');
+    expect(useTranscriptStore.getState().ingestionFocus).toBe('live');
+    expect(useTranscriptStore.getState().isRecording).toBe(true);
+
+    // Switch to Projects mode while recording continues -> Space must NOT pause recording
+    await act(async () => {
+      useTranscriptStore.setState({ mode: 'projects' });
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true })
+      );
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(mockPauseStream).not.toHaveBeenCalled();
+
+    // Switch to Create -> Batch while recording continues -> Space must NOT pause recording
+    await act(async () => {
+      useTranscriptStore.setState({ mode: 'create', ingestionFocus: 'batch' });
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true })
+      );
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(mockPauseStream).not.toHaveBeenCalled();
+
+    // Return to Create -> Live -> Space now toggles pause
+    await act(async () => {
+      useTranscriptStore.setState({ mode: 'create', ingestionFocus: 'live' });
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true })
+      );
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(mockPauseStream).toHaveBeenCalledTimes(1);
+
+    // Stopping via Ctrl+Space keeps the current tab instead of forcing Create
+    await act(async () => {
+      useTranscriptStore.setState({ mode: 'projects' });
+      fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(useTranscriptStore.getState().isRecording).toBe(false);
+    expect(useTranscriptStore.getState().mode).toBe('projects');
+  });
 });

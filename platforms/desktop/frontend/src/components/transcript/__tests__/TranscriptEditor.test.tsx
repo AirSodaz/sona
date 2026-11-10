@@ -305,4 +305,24 @@ describe('TranscriptEditor', () => {
     });
     expect(container.querySelector('.search-ui-container')).toBeNull();
   });
+
+  it('closes search when isActive transitions from true to false without affecting stays-inactive renders', () => {
+    useSearchStore.setState({ isOpen: true });
+    useTranscriptStore.setState({
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+
+    const { rerender } = render(<TranscriptEditor isActive={true} />);
+    expect(useSearchStore.getState().isOpen).toBe(true);
+
+    rerender(<TranscriptEditor isActive={false} />);
+    expect(useSearchStore.getState().isOpen).toBe(false);
+
+    // An always-inactive editor re-rendering should not close search opened by the active editor
+    act(() => {
+      useSearchStore.setState({ isOpen: true });
+    });
+    rerender(<TranscriptEditor isActive={false} />);
+    expect(useSearchStore.getState().isOpen).toBe(true);
+  });
 });

@@ -196,5 +196,71 @@ describe('recordController stopRecording and coordinator delegation', () => {
     expect(persistNativeRecording).not.toHaveBeenCalled();
     expect(audioDeleteRecordingFile).toHaveBeenCalledWith('C:/history/draft-2.wav');
     expect(liveDraftRef.current).toBeNull();
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(useTranscriptStore.getState().sessions['rec-session-2']).toBeUndefined();
+  });
+
+  it('evicts the allocated recording session on start failure without disturbing active non-recording session', async () => {
+    useTranscriptStore.setState({
+      activeSessionId: 'projects-item-1',
+      recordingSessionId: null,
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'projects-item-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'projects-item-1',
+          segments: [{ id: 'p-1', text: 'Projects detail', start: 0, end: 1, isFinal: true }],
+        },
+        'rec-failed-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-failed-1',
+        },
+      },
+    });
+    const controller = createRecordController({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      config: { muteDuringRecording: false } as any,
+      inputSource: 'microphone',
+      activeInputSourceRef: createRef('microphone'),
+      usingNativeCaptureRef: createRef(false),
+      liveDraftRef: createRef<LiveRecordingDraftHandle | null>(null),
+      setAudioUrl: vi.fn(),
+      setAudioFile: vi.fn(),
+      setIsInitializing: vi.fn(),
+      setIsTransitioning: vi.fn(),
+      setIsPaused: vi.fn(),
+      showError: vi.fn().mockResolvedValue(undefined),
+      capture: {
+        cleanupPartialStart: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      session: {
+        openRecordSession: () => 'rec-failed-1',
+        softStopRecordSessionIfActive: vi.fn().mockResolvedValue(undefined),
+        resetRecordSession: vi.fn(),
+        getSessionId: () => 'rec-failed-1',
+        getPhase: () => 'starting',
+        setPhase: vi.fn(),
+        isActiveSession: () => false,
+        canMutateActiveRecordResources: () => false,
+        shouldFinalizeRecordStartAttempt: () => false,
+      } as any,
+      timing: {
+        clearFinalizedDurationSeconds: vi.fn(),
+      } as any,
+      persistence: {
+        createLiveRecordingDraft: vi.fn().mockRejectedValue(new Error('disk full')),
+        discardLiveRecordingDraft: vi.fn().mockResolvedValue(undefined),
+        persistNativeRecording: vi.fn(),
+      },
+    });
+
+    const started = await controller.startRecording();
+
+    expect(started).toBe(false);
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(useTranscriptStore.getState().sessions['rec-failed-1']).toBeUndefined();
+    expect(useTranscriptStore.getState().sessions['projects-item-1']?.segments[0].text).toBe(
+      'Projects detail'
+    );
   });
 });

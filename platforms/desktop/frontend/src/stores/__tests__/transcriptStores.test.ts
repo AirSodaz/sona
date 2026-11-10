@@ -20,6 +20,7 @@ import { getSessionStoreState, useTranscriptSessionStore } from '../transcriptSe
 import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
 import {
   DEFAULT_SESSION_DATA,
+  registerBatchActiveItemIdResolver,
   useTranscriptStore as useCanonicalTranscriptStore,
 } from '../transcriptStore';
 
@@ -921,6 +922,105 @@ describe('Transcript Stores', () => {
       expect(segments[0].draftTranslation).toBeUndefined();
       expect(segments[1].translation).toBeUndefined();
       expect(segments[1].draftTranslation).toBeUndefined();
+    });
+  });
+
+  describe('coordinator session utilities and batch focus restore', () => {
+    it('evictNonRecordingSessions keeps default, recordingSessionId, and requested keepSessionIds only', () => {
+      useTranscriptStore.setState({
+        activeSessionId: 'projects-doc',
+        createSessionId: 'create-old',
+        recordingSessionId: 'rec-live-1',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'rec-live-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'rec-live-1' },
+          'create-old': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'create-old' },
+          'projects-doc': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'projects-doc' },
+          'kept-doc': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'kept-doc' },
+        },
+      });
+
+      useTranscriptStore.getState().evictNonRecordingSessions(['kept-doc']);
+
+      const state = useTranscriptStore.getState();
+      expect(Object.keys(state.sessions).sort()).toEqual(['default', 'kept-doc', 'rec-live-1']);
+      expect(state.createSessionId).toBe('default');
+      expect(state.activeSessionId).toBe('default');
+    });
+
+    it('updateSessionMetaByHistoryId updates title and icon across non-active sessions matching historyId', () => {
+      useTranscriptStore.setState({
+        activeSessionId: 'other-doc',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'other-doc': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'other-doc', title: 'Other' },
+          'batch-slot-1': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-target',
+            title: 'Old Title',
+            icon: 'system:file',
+          },
+        },
+      });
+
+      useTranscriptStore
+        .getState()
+        .updateSessionMetaByHistoryId('hist-target', { title: 'New Title', icon: '🎯' });
+
+      expect(useTranscriptStore.getState().sessions['batch-slot-1'].title).toBe('New Title');
+      expect(useTranscriptStore.getState().sessions['batch-slot-1'].icon).toBe('🎯');
+      expect(useTranscriptStore.getState().sessions['other-doc'].title).toBe('Other');
+    });
+
+    it('patchSegmentTranslationsForSession patches only the addressed session even when activeSessionId changed', () => {
+      useTranscriptStore.setState({
+        activeSessionId: 'session-b',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'session-a': {
+            ...DEFAULT_SESSION_DATA,
+            segments: [{ id: 's1', text: 'Hello', start: 0, end: 1, isFinal: true }],
+          },
+          'session-b': {
+            ...DEFAULT_SESSION_DATA,
+            segments: [{ id: 's1', text: 'Other', start: 0, end: 1, isFinal: true }],
+          },
+        },
+      });
+
+      useTranscriptStore
+        .getState()
+        .patchSegmentTranslationsForSession('session-a', [{ id: 's1', translation: '你好' }]);
+
+      expect(useTranscriptStore.getState().sessions['session-a'].segments[0].translation).toBe(
+        '你好'
+      );
+      expect(
+        useTranscriptStore.getState().sessions['session-b'].segments[0].translation
+      ).toBeUndefined();
+    });
+
+    it('restores batch active item via activeBatchItemIdResolver when returning to Create with no focus arg', () => {
+      useTranscriptStore.setState({
+        mode: 'projects',
+        ingestionFocus: 'batch',
+        activeSessionId: 'projects-1',
+        createSessionId: 'default',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'projects-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'projects-1' },
+          'batch-item-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'hist-batch-1' },
+        },
+      });
+      registerBatchActiveItemIdResolver(() => 'batch-item-1');
+      try {
+        useTranscriptRuntimeStore.getState().setMode('create');
+
+        expect(useTranscriptStore.getState().activeSessionId).toBe('batch-item-1');
+        expect(useTranscriptStore.getState().createSessionId).toBe('batch-item-1');
+      } finally {
+        registerBatchActiveItemIdResolver(() => null);
+      }
     });
   });
 });

@@ -1,5 +1,6 @@
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { logger } from '../utils/logger';
 
 /** Props for useAudioSync hook. */
@@ -55,11 +56,14 @@ export function useAudioSync({
     }
   }, [playbackRate, audioRef]);
 
+  const restoredUrlRef = useRef<string | null>(null);
+
   // Reset duration when audioUrl changes
   useEffect(() => {
     if (audioUrl !== undefined) {
       setDuration(0);
       lastUpdateTimeRef.current = 0;
+      restoredUrlRef.current = null;
     }
   }, [audioUrl, setDuration, lastUpdateTimeRef]);
 
@@ -78,6 +82,18 @@ export function useAudioSync({
       }
     };
 
+    const restoreSavedTime = () => {
+      if (restoredUrlRef.current === audioUrl) {
+        return;
+      }
+      restoredUrlRef.current = audioUrl;
+      const savedTime = useTranscriptPlaybackStore.getState().currentTime;
+      if (savedTime > 0 && audio.currentTime === 0) {
+        audio.currentTime = savedTime;
+        lastUpdateTimeRef.current = savedTime;
+      }
+    };
+
     const updateDuration = () => {
       const d = audio.duration;
       if (d && Number.isFinite(d)) {
@@ -87,6 +103,7 @@ export function useAudioSync({
 
     const handleLoadedMetadata = () => {
       updateDuration();
+      restoreSavedTime();
     };
 
     const handleDurationChange = () => {
@@ -110,6 +127,7 @@ export function useAudioSync({
     // Check if metadata is already loaded (HAVE_METADATA = 1)
     if (audio.readyState >= 1) {
       updateDuration();
+      restoreSavedTime();
     }
 
     return () => {

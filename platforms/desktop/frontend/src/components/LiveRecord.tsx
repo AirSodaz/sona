@@ -7,6 +7,7 @@ import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAu
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { polishService } from '../services/polishService';
 import { useConfigStore } from '../stores/configStore';
+import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import {
   applyTranscriptUpdateToSession,
@@ -170,7 +171,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       if (isAgentRecording) {
         return;
       }
-      useTranscriptStore.getState().setIngestionFocus('live');
+      const transcriptState = useTranscriptStore.getState();
+      if (transcriptState.mode !== 'create') {
+        transcriptState.setMode('create', 'live');
+      } else {
+        transcriptState.setIngestionFocus('live');
+      }
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],
@@ -250,6 +256,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       const isPlainSpaceStartStop =
         !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space';
 
+      const isModalOpen = Boolean(
+        document.querySelector('.settings-overlay, .panel-modal-overlay, .shared-modal-overlay')
+      );
+      if (isModalOpen || isAnyDialogOpen()) {
+        return;
+      }
+
       if (isStartStopMatch) {
         e.preventDefault();
         void handleToggleRecording();
@@ -262,6 +275,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         !isPlainSpaceStartStop &&
         isRecordingRef.current
       ) {
+        const { mode, ingestionFocus } = useTranscriptStore.getState();
+        if (mode !== 'create' || ingestionFocus !== 'live') {
+          return;
+        }
         e.preventDefault();
         void handleTogglePause();
       }

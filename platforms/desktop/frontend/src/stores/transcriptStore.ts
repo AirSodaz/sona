@@ -128,6 +128,11 @@ export interface TranscriptStore {
   activateSession: (sessionId: string) => void;
   evictSession: (sessionId: string) => void;
   evictSessionsByHistoryIds: (historyIds: string[]) => void;
+  evictNonRecordingSessions: (keepSessionIds?: string[]) => void;
+  updateSessionMetaByHistoryId: (
+    historyId: string,
+    meta: { title?: string; icon?: string | null }
+  ) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
   clearTranscriptSegments: () => void;
   clearSegments: () => void;
@@ -159,6 +164,10 @@ export interface TranscriptStore {
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
   patchSegmentTranslation: (id: string, translation: string) => void;
   patchSegmentTranslations: (updates: Array<{ id: string; translation: string }>) => void;
+  patchSegmentTranslationsForSession: (
+    sessionId: string,
+    updates: Array<{ id: string; translation: string }>
+  ) => void;
   patchSegmentTranslationsForHistory: (
     historyId: string,
     updates: Array<{ id: string; translation: string }>
@@ -366,12 +375,16 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         if (focus === undefined) {
           const createId = state.createSessionId;
           const recordingSessionExists = Boolean(recId && state.sessions[recId]);
+          const activeBatchId =
+            state.ingestionFocus === 'batch' ? activeBatchItemIdResolver?.() : null;
           const targetSessionId =
             recId && recordingSessionExists
               ? recId
-              : createId && state.sessions[createId]
+              : createId && createId !== 'default' && state.sessions[createId]
                 ? createId
-                : 'default';
+                : activeBatchId && state.sessions[activeBatchId]
+                  ? activeBatchId
+                  : 'default';
           nextActiveSessionId = targetSessionId;
           nextCreateSessionId = targetSessionId;
           // Recording controls live in the live pane; never restore behind a stale batch focus.
@@ -466,7 +479,6 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       delete autoSaveStates.current;
       set({ autoSaveStates });
     }
-    const currentMode = get().mode;
     set((state) => {
       const nextSessions =
         state.activeSessionId !== sessionId
@@ -474,7 +486,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           : state.sessions;
       return {
         activeSessionId: sessionId,
-        createSessionId: currentMode === 'create' ? sessionId : state.createSessionId,
+        createSessionId: state.mode === 'create' ? sessionId : state.createSessionId,
         sessions: {
           ...nextSessions,
           [sessionId]: {
@@ -592,6 +604,69 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
+  evictNonRecordingSessions: (keepSessionIds = []) => {
+    const keepSet = new Set(keepSessionIds.filter(Boolean));
+    set((state) => {
+      let changed = false;
+      const nextSessions: Record<string, SessionData> = {};
+      const evictedHistoryIds = new Set<string>();
+
+      for (const [sessionId, session] of Object.entries(state.sessions)) {
+        const shouldKeep =
+          sessionId === 'default' ||
+          sessionId === state.recordingSessionId ||
+          keepSet.has(sessionId) ||
+          Boolean(session.sourceHistoryId && keepSet.has(session.sourceHistoryId));
+        if (shouldKeep) {
+          nextSessions[sessionId] = session;
+        } else {
+          changed = true;
+          revokeBlobAudioUrl(session.audioUrl);
+          if (session.sourceHistoryId) {
+            evictedHistoryIds.add(session.sourceHistoryId);
+          }
+        }
+      }
+
+      if (!changed) {
+        return state;
+      }
+
+      const nextAutoSaveStates = { ...state.autoSaveStates };
+      let autoSaveChanged = false;
+      for (const id of evictedHistoryIds) {
+        if (nextAutoSaveStates[id]) {
+          delete nextAutoSaveStates[id];
+          autoSaveChanged = true;
+        }
+      }
+
+      return {
+        sessions: nextSessions,
+        activeSessionId: nextSessions[state.activeSessionId] ? state.activeSessionId : 'default',
+        createSessionId: nextSessions[state.createSessionId] ? state.createSessionId : 'default',
+        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+      };
+    });
+  },
+  updateSessionMetaByHistoryId: (historyId, meta) => {
+    if (!historyId) return;
+    set((state) => {
+      let changed = false;
+      const nextSessions = { ...state.sessions };
+      for (const [sessionId, session] of Object.entries(state.sessions)) {
+        if (sessionId === historyId || session.sourceHistoryId === historyId) {
+          const nextTitle = meta.title !== undefined ? meta.title : session.title;
+          const nextIcon = meta.icon !== undefined ? meta.icon : session.icon;
+          if (nextTitle !== session.title || nextIcon !== session.icon) {
+            nextSessions[sessionId] = { ...session, title: nextTitle, icon: nextIcon };
+            changed = true;
+          }
+        }
+      }
+      return changed ? { sessions: nextSessions } : state;
+    });
+  },
   clearActiveTranscriptSession: (options) => {
     const state = get();
     // The recording session is off-limits while a record session owns it; callers like
@@ -704,6 +779,22 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     updateActiveSession(set, (session) => {
       const nextSegments = applyTranslationPatchToSegments(session.segments, translationMap);
       return nextSegments ? { segments: nextSegments } : {};
+    });
+  },
+  patchSegmentTranslationsForSession: (sessionId, updates) => {
+    if (updates.length === 0) return;
+    const translationMap = new Map(updates.map((u) => [u.id, u.translation]));
+    set((state) => {
+      const session = state.sessions[sessionId];
+      if (!session) return state;
+      const nextSegments = applyTranslationPatchToSegments(session.segments, translationMap);
+      if (!nextSegments) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...session, segments: nextSegments },
+        },
+      };
     });
   },
   patchSegmentTranslationsForHistory: (historyId, updates) => {
@@ -1141,8 +1232,30 @@ export const evictTranscriptSessionsByHistoryIds = (historyIds: string[]): void 
   useTranscriptStore.getState().evictSessionsByHistoryIds(historyIds);
 };
 
+export const evictNonRecordingSessions = (keepSessionIds?: string[]): void => {
+  useTranscriptStore.getState().evictNonRecordingSessions(keepSessionIds);
+};
+
+export const updateSessionMetaByHistoryId = (
+  historyId: string,
+  meta: { title?: string; icon?: string | null }
+): void => {
+  useTranscriptStore.getState().updateSessionMetaByHistoryId(historyId, meta);
+};
+
+export const setSegmentsForSession = (sessionId: string, segments: TranscriptSegment[]): void => {
+  useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
+};
+
 export const setSegmentsForHistory = (historyId: string, segments: TranscriptSegment[]): void => {
   useTranscriptStore.getState().setSegmentsForHistory(historyId, segments);
+};
+
+export const patchSegmentTranslationsForSession = (
+  sessionId: string,
+  updates: Array<{ id: string; translation: string }>
+): void => {
+  useTranscriptStore.getState().patchSegmentTranslationsForSession(sessionId, updates);
 };
 
 export const patchSegmentTranslationsForHistory = (

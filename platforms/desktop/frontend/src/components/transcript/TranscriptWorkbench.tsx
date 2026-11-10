@@ -400,7 +400,7 @@ export function TranscriptWorkbench({
         </ErrorBoundary>
       </div>
 
-      {isActive && audioUrl && <AudioPlayer />}
+      {isActive && audioUrl && <AudioPlayer isActive={isActive} />}
 
       <TranscriptSummaryPanel isOpen={isSummaryOpen} onClose={() => setIsSummaryOpen(false)} />
 

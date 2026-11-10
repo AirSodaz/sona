@@ -25,6 +25,7 @@ const testContext = vi.hoisted(() => {
     },
     config: initialConfig,
     clearActiveTranscriptSessionMock: vi.fn(),
+    evictNonRecordingSessionsMock: vi.fn(),
     openTranscriptSessionMock: vi.fn(),
     historyServiceGetAudioUrlMock: vi.fn(),
     historyServiceLoadTranscriptMock: vi.fn(),
@@ -153,6 +154,7 @@ vi.mock('../../stores/configStore', () => ({
 
 vi.mock('../../stores/transcriptCoordinator', () => ({
   clearActiveTranscriptSession: testContext.clearActiveTranscriptSessionMock,
+  evictNonRecordingSessions: testContext.evictNonRecordingSessionsMock,
   openTranscriptSession: testContext.openTranscriptSessionMock,
 }));
 
@@ -563,6 +565,7 @@ describe('backupService', () => {
       expect(testContext.clearActiveTranscriptSessionMock).toHaveBeenCalledWith({
         clearAudio: true,
       });
+      expect(testContext.evictNonRecordingSessionsMock).toHaveBeenCalledWith([]);
       expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
         importId: 'reload-failure',
       });
@@ -610,6 +613,7 @@ describe('backupService', () => {
       icon: historyItem.icon,
       audioUrl: 'asset://restored.wav',
     });
+    expect(testContext.evictNonRecordingSessionsMock).toHaveBeenCalledWith([historyItem.id]);
     expect(testContext.transcriptPlaybackState.setAudioFile).toHaveBeenCalledWith(null);
   });
 });
