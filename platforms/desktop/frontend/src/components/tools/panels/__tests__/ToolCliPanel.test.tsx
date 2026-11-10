@@ -92,13 +92,30 @@ describe('ToolCliPanel', () => {
     expect(screen.getByText(/fish\/completions\/sona-cli\.fish/)).toBeDefined();
   });
 
-  it('renders quick start cheat sheet commands', () => {
-    render(<ToolCliPanel />);
+  it('renders quick start cheat sheet commands and icon-only copy buttons', () => {
+    const { container } = render(<ToolCliPanel />);
 
     expect(screen.getByText('Batch Transcription')).toBeDefined();
     expect(
       screen.getByText('sona-cli transcribe ./audio.wav -m whisper-turbo -o ./subtitle.srt')
     ).toBeDefined();
     expect(screen.getByText('Live Microphone Recognition')).toBeDefined();
+
+    // Verify cheat sheet copy buttons have borderless icon class and no data-tooltip
+    const copyBtns = container.querySelectorAll('.tool-cli-terminal-copy');
+    expect(copyBtns.length).toBe(5);
+    for (const btn of copyBtns) {
+      expect(btn.classList.contains('btn-icon')).toBe(true);
+      expect(btn.hasAttribute('data-tooltip')).toBe(false);
+    }
+  });
+
+  it('renders bin directory path with unified custom tooltip', () => {
+    const { container } = render(<ToolCliPanel />);
+    const tooltipWrapper = container.querySelector('.tool-cli-path-tooltip-wrapper');
+    expect(tooltipWrapper).not.toBeNull();
+    expect(tooltipWrapper?.getAttribute('data-tooltip')).toBe('C:\\Program Files\\Sona\\bin');
+    expect(tooltipWrapper?.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(tooltipWrapper?.hasAttribute('data-tooltip-multiline')).toBe(true);
   });
 });

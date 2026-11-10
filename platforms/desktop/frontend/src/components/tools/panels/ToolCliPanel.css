@@ -57,6 +57,12 @@
   min-width: 0;
 }
 
+.tool-cli-path-tooltip-wrapper {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .tool-cli-inline-code-group .settings-code-inline {
   max-width: 380px;
   overflow: hidden;
@@ -181,6 +187,9 @@
 .tool-cli-terminal-copy {
   margin-left: auto;
   flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 /* Header pill for reference items */

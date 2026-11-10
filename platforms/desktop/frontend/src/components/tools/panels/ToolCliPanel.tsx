@@ -254,9 +254,16 @@ export function ToolCliPanel(): React.JSX.Element {
             })}
           >
             <div className="tool-cli-inline-code-group">
-              <code className="settings-code-inline" title={status?.binDir || ''}>
-                {status?.binDir || t('tools.cli.not_located', { defaultValue: 'Not located' })}
-              </code>
+              <div
+                className="tool-cli-path-tooltip-wrapper"
+                data-tooltip={status?.binDir || undefined}
+                data-tooltip-pos="top"
+                data-tooltip-multiline
+              >
+                <code className="settings-code-inline">
+                  {status?.binDir || t('tools.cli.not_located', { defaultValue: 'Not located' })}
+                </code>
+              </div>
               {status?.binDir && (
                 <button
                   type="button"
@@ -381,15 +388,15 @@ export function ToolCliPanel(): React.JSX.Element {
                   <code className="tool-cli-command">{item.cmd}</code>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm tool-cli-terminal-copy"
+                    className="btn btn-icon btn-sm tool-cli-terminal-copy"
                     onClick={() => copyToClipboard(item.cmd, item.id)}
-                  >
-                    {copiedKey === item.id ? <Check size={13} /> : <Copy size={13} />}
-                    <span>
-                      {copiedKey === item.id
+                    aria-label={
+                      copiedKey === item.id
                         ? t('common.copied', { defaultValue: 'Copied' })
-                        : t('common.copy', { defaultValue: 'Copy' })}
-                    </span>
+                        : t('common.copy', { defaultValue: 'Copy' })
+                    }
+                  >
+                    {copiedKey === item.id ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                 </div>
               </div>
