@@ -27,8 +27,9 @@ const LLM_USAGE_RECORDED_EVENT: &str = "llm-usage-recorded";
 pub(crate) use commands::{
     complete_llm_command, describe_llm_model_with_dirs, describe_llm_model_with_models_dir,
     generate_llm_text_command, list_llm_models_with_dirs, list_llm_models_with_models_dir,
-    polish_transcript_segments_command, summarize_transcript_command,
-    translate_transcript_segments_command,
+    polish_transcript_segments_command, polish_transcript_segments_command_for_app,
+    summarize_transcript_command, translate_transcript_segments_command,
+    translate_transcript_segments_command_for_app,
 };
 pub(crate) use jobs::run_transcript_llm_job_command;
 pub(crate) use providers::*;

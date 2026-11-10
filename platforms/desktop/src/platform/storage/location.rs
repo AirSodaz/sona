@@ -56,36 +56,44 @@ pub fn resolve_active_data_dir_for_app<R: Runtime>(app: &AppHandle<R>) -> Result
     Ok(resolve_active_data_dir(&default_dir))
 }
 
+pub fn resolve_active_models_dir_for_default_dir(default_dir: &Path) -> PathBuf {
+    let active_data_dir = resolve_active_data_dir(default_dir);
+    resolve_active_models_dir(default_dir, &active_data_dir)
+}
+
 pub fn resolve_active_models_dir_for_app<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<PathBuf, String> {
     let default_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_dir);
-    Ok(resolve_active_models_dir(&default_dir, &active_data_dir))
+    Ok(resolve_active_models_dir_for_default_dir(&default_dir))
 }
 
-pub fn get_storage_directories_info<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<StorageDirectoriesInfo, String> {
-    let default_data_dir = default_app_local_data_dir_for_app(app)?;
-    let active_data_dir = resolve_active_data_dir(&default_data_dir);
-    let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
+pub fn get_storage_directories_info_for_path(default_data_dir: &Path) -> StorageDirectoriesInfo {
+    let active_data_dir = resolve_active_data_dir(default_data_dir);
+    let active_models_dir = resolve_active_models_dir(default_data_dir, &active_data_dir);
     let default_models_dir = default_data_dir.join("models");
 
-    let config = load_bootstrap_config(&default_data_dir);
+    let config = load_bootstrap_config(default_data_dir);
     let is_custom_data_dir = config.custom_data_dir.is_some()
-        && config.custom_data_dir.as_ref() != Some(&default_data_dir);
+        && config.custom_data_dir.as_deref() != Some(default_data_dir);
     let is_custom_models_dir = config.custom_models_dir.is_some()
-        && config.custom_models_dir.as_ref() != Some(&default_models_dir);
+        && config.custom_models_dir.as_deref() != Some(default_models_dir.as_path());
 
-    Ok(StorageDirectoriesInfo {
+    StorageDirectoriesInfo {
         data_dir: active_data_dir.to_string_lossy().into_owned(),
         default_data_dir: default_data_dir.to_string_lossy().into_owned(),
         is_custom_data_dir,
         models_dir: active_models_dir.to_string_lossy().into_owned(),
         default_models_dir: default_models_dir.to_string_lossy().into_owned(),
         is_custom_models_dir,
-    })
+    }
+}
+
+pub fn get_storage_directories_info<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<StorageDirectoriesInfo, String> {
+    let default_data_dir = default_app_local_data_dir_for_app(app)?;
+    Ok(get_storage_directories_info_for_path(&default_data_dir))
 }
 
 pub fn validate_target_directory(path: &Path) -> Result<(), String> {

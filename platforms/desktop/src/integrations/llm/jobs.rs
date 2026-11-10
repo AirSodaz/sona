@@ -5,15 +5,16 @@ use sona_core::llm::jobs::{
     merge_translated_items_into_segments, normalized_job_history_id,
     segment_inputs_from_transcript, summary_inputs_from_transcript,
 };
-use tauri::{AppHandle, Emitter, State};
+use sona_core::ports::event::EventEmitterPort;
 
 use super::*;
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::history_repository::TranscriptSnapshotReason;
 use crate::platform::history_repository::llm_helpers;
+use crate::services::DesktopServices;
 
 fn emit_transcript_job_update(
-    app: &AppHandle,
+    emitter: &dyn EventEmitterPort,
     task_id: &str,
     task_type: LlmTaskType,
     job_history_id: Option<String>,
@@ -21,22 +22,23 @@ fn emit_transcript_job_update(
     summary: Option<HistorySummaryPayload>,
     history_item: Option<crate::platform::history_repository::HistoryItemRecord>,
 ) -> Result<(), String> {
-    app.emit(
-        LLM_TRANSCRIPT_JOB_UPDATE_EVENT,
-        TranscriptLlmJobResult {
-            task_id: task_id.to_string(),
-            task_type,
-            job_history_id,
-            segments,
-            summary,
-            history_item,
-        },
-    )
-    .map_err(|error| error.to_string())
+    let payload = serde_json::to_value(TranscriptLlmJobResult {
+        task_id: task_id.to_string(),
+        task_type,
+        job_history_id,
+        segments,
+        summary,
+        history_item,
+    })
+    .map_err(|error| error.to_string())?;
+
+    emitter
+        .emit(LLM_TRANSCRIPT_JOB_UPDATE_EVENT, payload)
+        .map_err(|error| error.to_string())
 }
 
 async fn create_transcript_job_snapshot(
-    app: AppHandle,
+    sqlite: &crate::platform::database::DesktopSqliteState,
     history_id: Option<&str>,
     reason: TranscriptSnapshotReason,
     segments: &[TranscriptSegment],
@@ -44,7 +46,7 @@ async fn create_transcript_job_snapshot(
     if let Some(history_id) = history_id {
         let history_id = history_id.to_string();
         let segments = segments.to_vec();
-        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
+        llm_helpers::run_llm_db_task(sqlite, move |store| {
             let repository = Arc::new(store);
             let mutation_service =
                 sona_application::history::HistoryMutationService::new(repository.clone());
@@ -62,7 +64,7 @@ async fn create_transcript_job_snapshot(
 }
 
 async fn run_segment_rewrite_job<F, Fut, TItem>(
-    app: AppHandle,
+    services: Arc<DesktopServices>,
     request: TranscriptLlmJobRequest,
     task_type: LlmTaskType,
     snapshot_reason: TranscriptSnapshotReason,
@@ -71,7 +73,7 @@ async fn run_segment_rewrite_job<F, Fut, TItem>(
 ) -> Result<TranscriptLlmJobResult, String>
 where
     F: FnOnce(
-        AppHandle,
+        Arc<DesktopServices>,
         TranscriptLlmJobRequest,
         Box<dyn FnMut(&[TItem]) -> Result<(), String> + Send + 'static>,
     ) -> Fut,
@@ -80,7 +82,7 @@ where
 {
     let history_id = normalized_job_history_id(request.job_history_id.as_deref());
     create_transcript_job_snapshot(
-        app.clone(),
+        &services.sqlite,
         history_id.as_deref(),
         snapshot_reason,
         &request.segments,
@@ -89,7 +91,7 @@ where
 
     let merged_segments = Arc::new(Mutex::new(request.segments.clone()));
     let observer_segments = merged_segments.clone();
-    let update_app = app.clone();
+    let emitter = services.emitter.clone();
     let update_task_id = request.task_id.clone();
     let update_history_id = history_id.clone();
 
@@ -102,7 +104,7 @@ where
             guard.clone()
         };
         emit_transcript_job_update(
-            &update_app,
+            emitter.as_ref(),
             &update_task_id,
             task_type,
             update_history_id.clone(),
@@ -113,7 +115,7 @@ where
     };
 
     let task_id = request.task_id.clone();
-    run_with_observer(app.clone(), request, Box::new(callback)).await?;
+    run_with_observer(services.clone(), request, Box::new(callback)).await?;
 
     let final_segments = merged_segments
         .lock()
@@ -121,7 +123,7 @@ where
         .clone();
     let fs_for_update = final_segments.clone();
     let history_item = if let Some(history_id) = history_id.clone() {
-        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
+        llm_helpers::run_llm_db_task(&services.sqlite, move |store| {
             let repository = Arc::new(store);
             let mutation_service =
                 sona_application::history::HistoryMutationService::new(repository);
@@ -137,7 +139,7 @@ where
     };
 
     emit_transcript_job_update(
-        &app,
+        services.emitter.as_ref(),
         &task_id,
         task_type,
         history_id.clone(),
@@ -157,15 +159,15 @@ where
 }
 
 async fn run_translate_job(
-    app: AppHandle,
+    services: Arc<DesktopServices>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     run_segment_rewrite_job(
-        app,
+        services,
         request,
         LlmTaskType::Translate,
         TranscriptSnapshotReason::Translate,
-        |app, req, mut callback| async move {
+        |services, req, mut callback| async move {
             let llm_request = TranslateSegmentsRequest {
                 task_id: req.task_id,
                 config: req.config,
@@ -178,9 +180,11 @@ async fn run_translate_job(
                 keywords: req.keywords,
                 post_process_replacements: req.post_process_replacements,
             };
-            commands::translate_transcript_segments_with_observer(app, llm_request, move |items| {
-                callback(items)
-            })
+            commands::translate_transcript_segments_with_observer(
+                &services,
+                llm_request,
+                move |items| callback(items),
+            )
             .await
         },
         merge_translated_items_into_segments,
@@ -189,15 +193,15 @@ async fn run_translate_job(
 }
 
 async fn run_polish_job(
-    app: AppHandle,
+    services: Arc<DesktopServices>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     run_segment_rewrite_job(
-        app,
+        services,
         request,
         LlmTaskType::Polish,
         TranscriptSnapshotReason::Polish,
-        |app, req, mut callback| async move {
+        |services, req, mut callback| async move {
             let llm_request = PolishSegmentsRequest {
                 task_id: req.task_id,
                 config: req.config,
@@ -207,9 +211,11 @@ async fn run_polish_job(
                 keywords: req.keywords,
                 mode: req.mode,
             };
-            commands::polish_transcript_segments_with_observer(app, llm_request, move |items| {
-                callback(items)
-            })
+            commands::polish_transcript_segments_with_observer(
+                &services,
+                llm_request,
+                move |items| callback(items),
+            )
             .await
         },
         merge_polished_items_into_segments,
@@ -218,7 +224,7 @@ async fn run_polish_job(
 }
 
 async fn run_summary_job(
-    app: AppHandle,
+    services: Arc<DesktopServices>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     let history_id = normalized_job_history_id(request.job_history_id.as_deref());
@@ -233,7 +239,7 @@ async fn run_summary_job(
         segments: summary_inputs_from_transcript(&request.segments),
         chunk_char_budget: request.chunk_char_budget,
     };
-    let result = commands::summarize_transcript_command(app.clone(), summary_request).await?;
+    let result = commands::summarize_transcript_command(&services, summary_request).await?;
     let summary = HistorySummaryPayload {
         active_template_id: result.template_id.clone(),
         record: Some(TranscriptSummaryRecordPayload {
@@ -247,14 +253,14 @@ async fn run_summary_job(
 
     if let Some(hid) = history_id.clone() {
         let persisted_summary = summary.clone();
-        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
+        llm_helpers::run_llm_db_task(&services.sqlite, move |store| {
             llm_helpers::save_llm_summary_payload(&store, &hid, persisted_summary)
         })
         .await?;
     }
 
     emit_transcript_job_update(
-        &app,
+        services.emitter.as_ref(),
         &request.task_id,
         LlmTaskType::Summary,
         history_id.clone(),
@@ -274,14 +280,14 @@ async fn run_summary_job(
 }
 
 pub(crate) async fn run_transcript_llm_job_command(
-    app: AppHandle,
-    _services: State<'_, crate::services::DesktopServices>,
+    services: &DesktopServices,
     mut request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     request.sanitize_for_task();
+    let services = Arc::new(services.clone());
     match request.task_type {
-        LlmTaskType::Translate => run_translate_job(app.clone(), request).await,
-        LlmTaskType::Polish => run_polish_job(app.clone(), request).await,
-        LlmTaskType::Summary => run_summary_job(app, request).await,
+        LlmTaskType::Translate => run_translate_job(services, request).await,
+        LlmTaskType::Polish => run_polish_job(services, request).await,
+        LlmTaskType::Summary => run_summary_job(services, request).await,
     }
 }

@@ -2,49 +2,31 @@ use crate::services::DesktopServices;
 
 use super::types::DownloadPresetModelRequest;
 
-pub async fn get_model_catalog(
-    services: &DesktopServices,
-    app_handle: Option<&tauri::AppHandle>,
-) -> Result<serde_json::Value, String> {
-    if let Some(app) = app_handle {
-        let snapshot =
-            crate::platform::models::preset::get_model_catalog_snapshot_for_app(app).await?;
-        serde_json::to_value(&snapshot).map_err(|e| e.to_string())
-    } else {
-        let models_dir = services
-            .sqlite
-            .current_context()
-            .map_err(|e| e.to_string())?
-            .app_data_dir()
-            .join("models");
-        let snapshot = tokio::task::spawn_blocking(move || {
-            let _ = sona_runtime_fs::ensure_directory_exists(&models_dir);
-            sona_runtime_fs::build_model_catalog_snapshot(&models_dir)
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-        serde_json::to_value(&snapshot).map_err(|e| e.to_string())
-    }
+pub async fn get_model_catalog(services: &DesktopServices) -> Result<serde_json::Value, String> {
+    let models_dir = services.active_models_dir();
+    let snapshot = tokio::task::spawn_blocking(move || {
+        let _ = sona_runtime_fs::ensure_directory_exists(&models_dir);
+        sona_runtime_fs::build_model_catalog_snapshot(&models_dir)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    serde_json::to_value(&snapshot).map_err(|e| e.to_string())
 }
 
 pub async fn download_preset_model(
     services: &DesktopServices,
-    app_handle: Option<&tauri::AppHandle>,
     req: DownloadPresetModelRequest,
 ) -> Result<String, String> {
-    let app = app_handle.ok_or_else(|| {
-        "APP_HANDLE_UNAVAILABLE: Desktop UI handle is required to initiate downloads".to_string()
-    })?;
     let download_id = req
         .download_id
         .unwrap_or_else(|| format!("mcp-{}", uuid::Uuid::new_v4()));
-    let app_clone = app.clone();
+    let emitter = services.emitter.clone();
     let downloads_service = services.downloads.clone();
     let dl_id_clone = download_id.clone();
     let model_id = req.model_id;
     let mirror = req.mirror;
 
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    let models_dir = services.active_models_dir();
     sona_core::models::downloads::resolve_model_download(&model_id, &models_dir)
         .map_err(|e| e.to_string())?;
     let notify = std::sync::Arc::new(tokio::sync::Notify::new());
@@ -52,10 +34,12 @@ pub async fn download_preset_model(
         .downloads
         .register_download(download_id.clone(), notify);
 
-    tauri::async_runtime::spawn(async move {
+    let models_dir_clone = models_dir.clone();
+    tokio::spawn(async move {
         let _guard = _download_guard;
         if let Err(e) = crate::platform::model_downloads::download_preset_model(
-            app_clone,
+            emitter,
+            &models_dir_clone,
             &downloads_service,
             model_id,
             dl_id_clone,
@@ -78,12 +62,10 @@ pub async fn cancel_download(
 }
 
 pub async fn delete_preset_model(
-    app_handle: Option<&tauri::AppHandle>,
+    services: &DesktopServices,
     model_id: String,
 ) -> Result<bool, String> {
-    let app = app_handle.ok_or_else(|| {
-        "APP_HANDLE_UNAVAILABLE: Desktop UI handle is required to delete models".to_string()
-    })?;
-    crate::platform::model_downloads::delete_preset_model(app, &model_id).await?;
+    crate::platform::model_downloads::delete_preset_model(&services.active_models_dir(), &model_id)
+        .await?;
     Ok(true)
 }

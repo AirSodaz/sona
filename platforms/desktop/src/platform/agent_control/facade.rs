@@ -394,14 +394,14 @@ impl AgentControlFacade {
     }
 
     pub async fn get_model_catalog(&self) -> Result<serde_json::Value, String> {
-        models::get_model_catalog(&self.services, self.app_handle.as_ref()).await
+        models::get_model_catalog(&self.services).await
     }
 
     pub async fn download_preset_model(
         &self,
         req: DownloadPresetModelRequest,
     ) -> Result<String, String> {
-        models::download_preset_model(&self.services, self.app_handle.as_ref(), req).await
+        models::download_preset_model(&self.services, req).await
     }
 
     pub async fn cancel_download(&self, download_id: String) -> Result<bool, String> {
@@ -409,7 +409,7 @@ impl AgentControlFacade {
     }
 
     pub async fn delete_preset_model(&self, model_id: String) -> Result<bool, String> {
-        models::delete_preset_model(self.app_handle.as_ref(), model_id).await
+        models::delete_preset_model(&self.services, model_id).await
     }
 
     pub async fn get_sync_status(&self) -> Result<serde_json::Value, String> {

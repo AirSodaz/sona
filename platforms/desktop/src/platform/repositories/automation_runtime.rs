@@ -6,6 +6,7 @@ pub use sona_core::automation::{
     AutomationRuntimeRuleConfig, collect_runtime_rule_path_result, normalize_automation_path,
     should_consider_runtime_candidate_path,
 };
+use sona_core::ports::event::EventEmitterPort;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -53,6 +54,21 @@ struct AutomationRuleRuntime {
 
 pub trait AutomationRuntimeEventSink: Send + Sync {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String>;
+}
+
+struct PortAutomationRuntimeEventSink {
+    emitter: Arc<dyn EventEmitterPort>,
+}
+
+impl AutomationRuntimeEventSink for PortAutomationRuntimeEventSink {
+    fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String> {
+        sona_ts_bind::validate_typescript_safe_integers(&payload)
+            .map_err(|error| error.to_string())?;
+        let value = serde_json::to_value(payload).map_err(|error| error.to_string())?;
+        self.emitter
+            .emit(AUTOMATION_RUNTIME_CANDIDATE_EVENT, value)
+            .map_err(|error| error.to_string())
+    }
 }
 
 struct TauriAutomationRuntimeEventSink<R: Runtime> {
@@ -111,6 +127,12 @@ impl AutomationRuntimeState {
 
 pub fn create_event_sink<R: Runtime>(app: AppHandle<R>) -> Arc<dyn AutomationRuntimeEventSink> {
     Arc::new(TauriAutomationRuntimeEventSink { app })
+}
+
+pub fn create_event_sink_from_emitter(
+    emitter: Arc<dyn EventEmitterPort>,
+) -> Arc<dyn AutomationRuntimeEventSink> {
+    Arc::new(PortAutomationRuntimeEventSink { emitter })
 }
 
 fn build_pending_candidate_key(rule_id: &str, normalized_path: &str) -> String {
@@ -352,12 +374,11 @@ fn create_rule_watcher(
     Ok(watcher)
 }
 
-pub async fn start_rule_runtime<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn start_rule_runtime_with_sink(
     state: AutomationRuntimeState,
     rule: AutomationRuntimeRuleConfig,
+    event_sink: Arc<dyn AutomationRuntimeEventSink>,
 ) -> Result<(), String> {
-    let event_sink = create_event_sink(app.clone());
     let watcher = create_rule_watcher(state.clone(), rule.clone(), event_sink.clone())?;
     state.insert_rule_runtime(rule.rule_id.clone(), watcher);
 
@@ -367,6 +388,15 @@ pub async fn start_rule_runtime<R: Runtime>(
     }
 
     Ok(())
+}
+
+pub async fn start_rule_runtime<R: Runtime>(
+    app: AppHandle<R>,
+    state: AutomationRuntimeState,
+    rule: AutomationRuntimeRuleConfig,
+) -> Result<(), String> {
+    let event_sink = create_event_sink(app);
+    start_rule_runtime_with_sink(state, rule, event_sink).await
 }
 
 pub async fn replace_rule_runtimes_with<StartFn, StartFuture>(

@@ -1,4 +1,4 @@
-﻿use crate::platform::paths::{PathKind, PathPort};
+use crate::platform::paths::{PathKind, PathPort};
 pub use sona_core::models::preset_models::*;
 pub use sona_runtime_fs::{build_model_catalog_snapshot, is_preset_model_installed_at};
 use std::path::PathBuf;
@@ -44,10 +44,18 @@ pub async fn resolve_model_catalog_selected_ids_for_app<R: tauri::Runtime>(
     Ok(resolve_model_catalog_selected_ids(&snapshot, &paths))
 }
 
-async fn build_model_catalog_snapshot_for_models_dir(
+pub async fn resolve_model_catalog_selected_ids_for_models_dir(
+    models_dir: PathBuf,
+    paths: ModelSelectionPaths,
+) -> Result<ModelCatalogSelectedIds, String> {
+    let snapshot = build_model_catalog_snapshot_for_models_dir(models_dir).await?;
+    Ok(resolve_model_catalog_selected_ids(&snapshot, &paths))
+}
+
+pub async fn build_model_catalog_snapshot_for_models_dir(
     models_dir: PathBuf,
 ) -> Result<ModelCatalogSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         sona_runtime_fs::ensure_directory_exists(&models_dir).map_err(|error| error.to_string())?;
 
         Ok(build_model_catalog_snapshot(&models_dir))

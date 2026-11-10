@@ -1,10 +1,15 @@
-use tauri::AppHandle;
+use crate::services::DesktopServices;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn storage_get_usage_snapshot(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<crate::platform::storage_usage::StorageUsageSnapshot, String> {
-    crate::platform::storage_usage::get_usage_snapshot(&app).await
+    crate::platform::storage_usage::get_usage_snapshot_with_sqlite_and_models_dir(
+        &services.sqlite,
+        services.active_models_dir(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -16,9 +21,9 @@ pub async fn storage_clear_webview_browsing_data(
 
 #[tauri::command]
 pub async fn storage_get_directories(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<crate::platform::storage_location::StorageDirectoriesInfo, String> {
-    crate::platform::storage_location::get_storage_directories_info(&app)
+    Ok(services.storage_directories_info())
 }
 
 #[tauri::command]

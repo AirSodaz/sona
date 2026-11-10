@@ -1,14 +1,14 @@
-﻿use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
-use crate::platform::blocking::{map_err_string, spawn_blocking_map, with_sqlite_context};
+use crate::platform::blocking::{map_err_string, spawn_blocking_map};
 use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClearResult};
 
-pub async fn get_usage_snapshot<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn get_usage_snapshot_with_sqlite_and_models_dir(
+    sqlite: &crate::platform::database::DesktopSqliteState,
+    models_dir: std::path::PathBuf,
 ) -> Result<StorageUsageSnapshot, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
-    let snapshot = with_sqlite_context(app, move |context| {
+    let snapshot = crate::services::db_runner::run_sqlite_task(sqlite, move |context| {
         sona_sqlite::load_storage_usage_snapshot_with_database_and_models_dir(
             context.app_data_dir().to_path_buf(),
             context.database(),
@@ -20,6 +20,14 @@ pub async fn get_usage_snapshot<R: Runtime>(
     sona_ts_bind::validate_storage_usage_snapshot_for_typescript(&snapshot)
         .map_err(map_err_string)?;
     Ok(snapshot)
+}
+
+pub async fn get_usage_snapshot<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<StorageUsageSnapshot, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    let sqlite = app.state::<crate::platform::database::DesktopSqliteState>();
+    get_usage_snapshot_with_sqlite_and_models_dir(&sqlite, models_dir).await
 }
 
 pub async fn clear_webview_browsing_data<R: Runtime>(

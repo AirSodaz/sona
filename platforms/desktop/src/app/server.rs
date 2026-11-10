@@ -188,7 +188,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             mode: None,
         };
 
-        let polished_items = crate::integrations::llm::polish_transcript_segments_command(
+        let polished_items = crate::integrations::llm::polish_transcript_segments_command_for_app(
             app_handle.clone(),
             request,
         )
@@ -239,12 +239,13 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             post_process_replacements: None,
         };
 
-        let translated_items = crate::integrations::llm::translate_transcript_segments_command(
-            app_handle.clone(),
-            request,
-        )
-        .await
-        .map_err(ApiServerPlatformError::unavailable)?;
+        let translated_items =
+            crate::integrations::llm::translate_transcript_segments_command_for_app(
+                app_handle.clone(),
+                request,
+            )
+            .await
+            .map_err(ApiServerPlatformError::unavailable)?;
 
         let segments =
             sona_core::llm::jobs::merge_translated_items_into_segments(segments, &translated_items);

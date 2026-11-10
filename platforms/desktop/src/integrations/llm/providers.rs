@@ -1,6 +1,6 @@
 use super::*;
 use log::warn;
-use tauri::{AppHandle, Emitter};
+use sona_core::ports::event::EventEmitterPort;
 
 use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
@@ -348,7 +348,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
 }
 
 pub(crate) fn emit_llm_usage_event(
-    app: &AppHandle,
+    emitter: &dyn EventEmitterPort,
     config: &LlmConfig,
     category: LlmUsageCategory,
     occurred_at: String,
@@ -362,7 +362,9 @@ pub(crate) fn emit_llm_usage_event(
         usage,
     };
 
-    if let Err(error) = app.emit(LLM_USAGE_RECORDED_EVENT, payload) {
+    if let Ok(value) = serde_json::to_value(payload)
+        && let Err(error) = emitter.emit(LLM_USAGE_RECORDED_EVENT, value)
+    {
         warn!(
             "[LLM] failed to emit usage event: provider={:?} category={:?} error={}",
             config.provider, category, error

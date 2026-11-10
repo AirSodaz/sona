@@ -96,6 +96,8 @@ impl DesktopRecordingSessionTracker {
 /// Strictly prohibits any dependency on `tauri::*`.
 #[derive(Clone)]
 pub struct DesktopServices {
+    pub app_local_data_dir: PathBuf,
+    pub app_log_dir: PathBuf,
     pub sqlite: DesktopSqliteState,
     pub projects: Arc<ProjectService>,
     pub history: Arc<HistoryService>,
@@ -114,6 +116,8 @@ pub struct DesktopServices {
 
 #[derive(Default)]
 pub struct DesktopServicesBuilder {
+    app_local_data_dir: Option<PathBuf>,
+    app_log_dir: Option<PathBuf>,
     sqlite: Option<DesktopSqliteState>,
     sync_config_path: Option<PathBuf>,
     emitter: Option<Arc<dyn EventEmitterPort>>,
@@ -128,6 +132,16 @@ pub struct DesktopServicesBuilder {
 impl DesktopServicesBuilder {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn app_local_data_dir(mut self, path: PathBuf) -> Self {
+        self.app_local_data_dir = Some(path);
+        self
+    }
+
+    pub fn app_log_dir(mut self, path: PathBuf) -> Self {
+        self.app_log_dir = Some(path);
+        self
     }
 
     pub fn sqlite(mut self, sqlite: DesktopSqliteState) -> Self {
@@ -185,9 +199,20 @@ impl DesktopServicesBuilder {
             .emitter
             .ok_or_else(|| "EventEmitterPort is required to build DesktopServices".to_string())?;
 
+        let app_local_data_dir = self.app_local_data_dir.unwrap_or_else(|| {
+            sqlite
+                .current_context()
+                .map(|ctx| ctx.app_data_dir().to_path_buf())
+                .unwrap_or_else(|_| PathBuf::from("."))
+        });
+
+        let app_log_dir = self
+            .app_log_dir
+            .unwrap_or_else(|| app_local_data_dir.join("logs"));
+
         let sync_config_path = self
             .sync_config_path
-            .unwrap_or_else(|| PathBuf::from(crate::platform::sync::SYNC_CONFIG_FILE));
+            .unwrap_or_else(|| app_local_data_dir.join(crate::platform::sync::SYNC_CONFIG_FILE));
 
         let history_state = self.history_state.unwrap_or_default();
         let backup_state = self.backup_state.unwrap_or_default();
@@ -215,6 +240,8 @@ impl DesktopServicesBuilder {
         let local_llm_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
 
         Ok(DesktopServices {
+            app_local_data_dir,
+            app_log_dir,
             sqlite,
             projects,
             history,
@@ -237,6 +264,34 @@ impl DesktopServices {
     pub fn builder() -> DesktopServicesBuilder {
         DesktopServicesBuilder::new()
     }
+
+    pub fn app_local_data_dir(&self) -> &std::path::Path {
+        &self.app_local_data_dir
+    }
+
+    pub fn app_log_dir(&self) -> &std::path::Path {
+        &self.app_log_dir
+    }
+
+    pub fn active_data_dir(&self) -> PathBuf {
+        crate::platform::storage_location::resolve_active_data_dir(&self.app_local_data_dir)
+    }
+
+    pub fn active_models_dir(&self) -> PathBuf {
+        let active_data_dir = self.active_data_dir();
+        crate::platform::storage_location::resolve_active_models_dir(
+            &self.app_local_data_dir,
+            &active_data_dir,
+        )
+    }
+
+    pub fn storage_directories_info(
+        &self,
+    ) -> crate::platform::storage_location::StorageDirectoriesInfo {
+        crate::platform::storage_location::get_storage_directories_info_for_path(
+            &self.app_local_data_dir,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -252,6 +307,7 @@ mod tests {
         let emitter = Arc::new(MockEventEmitter::new());
 
         let services = DesktopServices::builder()
+            .app_local_data_dir(temp.path().to_path_buf())
             .sqlite(sqlite)
             .event_emitter(emitter)
             .sync_config_path(temp.path().join("sync.json"))
@@ -280,6 +336,21 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(history_items.len(), 0);
+
+        // Verify decoupled storage path resolution
+        assert_eq!(services.app_local_data_dir(), temp.path());
+        assert_eq!(services.app_log_dir(), temp.path().join("logs"));
+        assert_eq!(services.active_data_dir(), temp.path());
+        assert_eq!(services.active_models_dir(), temp.path().join("models"));
+        let dirs_info = services.storage_directories_info();
+        assert_eq!(
+            std::path::Path::new(&dirs_info.data_dir),
+            services.active_data_dir()
+        );
+        assert_eq!(
+            std::path::Path::new(&dirs_info.models_dir),
+            services.active_models_dir()
+        );
     }
 
     #[tokio::test]
