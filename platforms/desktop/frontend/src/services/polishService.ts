@@ -10,6 +10,7 @@ import type { PolishMode } from '../types/llmTask';
 import type { TranscriptSegment } from '../types/transcript';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
+import { LlmJobCancelledError, type LlmJobPriority } from './llm/llmJobScheduler';
 import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
 import { runTranscriptLlmJob } from './llmOperations';
 import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
@@ -19,13 +20,30 @@ import type {
   TranscriptLlmJobResult,
 } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
-import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
+import {
+  createTaskTarget,
+  mergeUpdatedSegmentsById,
+  normalizeHistoryId,
+  resolveLatestSegmentsForTarget,
+  resolveTargetHistoryId,
+  runWithDocumentLock,
+  type TaskTarget,
+} from './task/taskTarget';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];
   historyId: string | null;
+  sessionId?: string | null;
   polishPresetId?: string;
+  priority?: LlmJobPriority;
+}
+
+interface SegmentExecutionOptions {
+  priority?: LlmJobPriority;
+  signal?: AbortSignal;
+  cancelCheck?: () => boolean;
+  onStart?: () => void | Promise<void>;
 }
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
@@ -56,6 +74,8 @@ export interface PolishServicePorts {
   getSessionSnapshot?: (sessionId: string) => { sourceHistoryId: string | null } | null;
   setSegmentsForSession?: typeof setSegmentsForSession;
   setSegmentsForHistory: typeof setSegmentsForHistory;
+  commitSystemTranscriptUpdate?: (id: string, segments: TranscriptSegment[]) => Promise<unknown>;
+  rekeySessionSidecar?: (sessionId: string, nextHistoryId: string) => void;
   runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
@@ -70,7 +90,8 @@ export class PolishService {
     config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets'>,
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
-    taskIdOverride?: string
+    taskIdOverride?: string,
+    executionOptions?: SegmentExecutionOptions
   ): Promise<PolishedSegment[]> {
     return this.ports.runConfiguredSegmentTask({
       feature: 'polish',
@@ -79,6 +100,10 @@ export class PolishService {
       segments,
       onChunk: onChunkPolished,
       taskIdOverride,
+      priority: executionOptions?.priority,
+      signal: executionOptions?.signal,
+      cancelCheck: executionOptions?.cancelCheck,
+      onStart: executionOptions?.onStart,
       buildRequest: ({ taskId, llmConfig, segments: inputSegments }) =>
         this.buildRequest(taskId, llmConfig, config, inputSegments),
     });
@@ -86,25 +111,40 @@ export class PolishService {
 
   async polishSegments(
     segments: TranscriptSegment[],
-    onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>
+    onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
+    executionOptions?: SegmentExecutionOptions
   ): Promise<PolishedSegment[]> {
     return this.polishSegmentsWithConfig(
       this.ports.getEffectiveConfigSnapshot(),
       segments,
-      onChunkPolished
+      onChunkPolished,
+      undefined,
+      executionOptions
     );
   }
 
-  async polishTranscript() {
+  async polishTranscript(options?: { sessionId?: string | null }) {
+    const requestedSessionId =
+      options?.sessionId ?? this.ports.getActiveSessionSnapshot?.().sessionId ?? null;
+    const sessionSnapshot = requestedSessionId
+      ? useTranscriptStore.getState().sessions[requestedSessionId]
+      : undefined;
     const sessionStore = this.ports.getTranscriptSessionStore();
+    const segments = sessionSnapshot?.segments ?? sessionStore.segments;
+    const historyId = sessionSnapshot
+      ? sessionSnapshot.sourceHistoryId
+      : sessionStore.sourceHistoryId;
+
     await this.retryPolishTranscriptJob({
-      segments: sessionStore.segments,
-      historyId: sessionStore.sourceHistoryId,
+      segments,
+      historyId,
+      sessionId: requestedSessionId,
+      priority: 'high',
     });
   }
 
   async retryPolishTranscriptJob(options: RetryPolishTranscriptJobOptions): Promise<void> {
-    const { segments, historyId, polishPresetId } = options;
+    const { segments, historyId, sessionId, polishPresetId, priority } = options;
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = this.ports.getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'polish');
@@ -117,72 +157,103 @@ export class PolishService {
       taskType: 'polish',
       segments,
       sourceHistoryId: historyId,
-      onStart: (jobHistoryId) => {
-        sidecarStore.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
+      originSessionId: sessionId ?? null,
+      onStart: (sidecarKey) => {
+        sidecarStore.updateLlmState({ isPolishing: true, polishProgress: 0 }, sidecarKey);
       },
-      onProgress: (polishProgress, jobHistoryId) => {
+      onProgress: (polishProgress, sidecarKey) => {
         // Progress tracks the transcript that launched the job, not whichever record the
         // user is viewing by the time a late chunk event arrives.
-        this.ports.getTranscriptSidecarStore().updateLlmState({ polishProgress }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState({ polishProgress }, sidecarKey);
       },
-      runTask: async (taskId, jobHistoryId) => {
-        const originSessionId =
-          jobHistoryId === 'current'
-            ? (this.ports.getActiveSessionSnapshot?.().sessionId ?? null)
+      runTask: async (taskId, _initialSidecarKey, ctx) => {
+        await runWithDocumentLock(ctx.target, { taskType: 'polish' }, async () => {
+          if (ctx.isCancelled()) {
+            throw new LlmJobCancelledError();
+          }
+
+          const latestSegments = await resolveLatestSegmentsForTarget(ctx.target, segments);
+          const sentJobHistoryId = ctx.resolveHistoryId();
+          const activeProjectId = useProjectStore.getState().activeProjectId;
+          const currentItem = sentJobHistoryId
+            ? useHistoryStore.getState().items.find((i) => i.id === sentJobHistoryId)
             : null;
-        const activeProjectId = useProjectStore.getState().activeProjectId;
-        const currentItem =
-          jobHistoryId && jobHistoryId !== 'current'
-            ? useHistoryStore.getState().items.find((i) => i.id === jobHistoryId)
-            : null;
-        const projectId = currentItem?.projectId ?? activeProjectId;
-        const pipeline = resolveItemPipeline(
-          projectId,
-          useProjectStore.getState().projects,
-          config
-        );
-        const resolvedPresetId = polishPresetId || pipeline.polishPresetId || config.polishPresetId;
-        const preset = resolvePolishPreset(resolvedPresetId, config.polishCustomPresets);
-        const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
-          taskId,
-          'polish',
-          (payload) => {
-            if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+          const projectId = currentItem?.projectId ?? activeProjectId;
+          const pipeline = resolveItemPipeline(
+            projectId,
+            useProjectStore.getState().projects,
+            config
+          );
+          const resolvedPresetId =
+            polishPresetId || pipeline.polishPresetId || config.polishPresetId;
+          const preset = resolvePolishPreset(resolvedPresetId, config.polishCustomPresets);
+          const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
+            taskId,
+            'polish',
+            (payload) => {
+              if (ctx.isCancelled()) {
+                return;
+              }
+              this.applyTranscriptJobUpdate(payload, ctx.target);
+            }
+          );
+          try {
+            const mode: PolishMode =
+              preset.id === 'verbatim' || preset.id === 'formal' ? preset.id : 'clean';
+            const result = await this.ports.runTranscriptLlmJob(
+              {
+                taskId,
+                taskType: 'polish',
+                jobHistoryId: sentJobHistoryId,
+                config: llm,
+                segments: latestSegments,
+                context: preset.context || undefined,
+                mode,
+              },
+              {
+                priority: priority ?? 'normal',
+                taskId,
+                cancelCheck: ctx.isCancelled,
+                onStart: ctx.markRunning,
+              }
+            );
+            if (ctx.isCancelled()) {
               return;
             }
-            this.applyTranscriptJobUpdate(payload, originSessionId);
+
+            const completedHistoryId = ctx.resolveHistoryId();
+            if (!sentJobHistoryId && completedHistoryId && result.segments) {
+              if (ctx.target.sessionId) {
+                (
+                  this.ports.rekeySessionSidecar ??
+                  useTranscriptStore.getState().rekeySessionSidecar
+                )(ctx.target.sessionId, completedHistoryId);
+              }
+              const latestBase = await resolveLatestSegmentsForTarget(ctx.target, result.segments);
+              const merged = mergeUpdatedSegmentsById(latestBase, result.segments, 'text');
+              const commitUpdate =
+                this.ports.commitSystemTranscriptUpdate ??
+                useHistoryStore.getState().commitSystemTranscriptUpdate;
+              await commitUpdate(completedHistoryId, merged);
+              return;
+            }
+
+            this.applyTranscriptJobUpdate(result, ctx.target);
+            if (result.segments && completedHistoryId) {
+              this.ports.rebaselineTranscriptAutoSave?.(completedHistoryId, result.segments);
+            }
+          } finally {
+            unlistenJobUpdates();
           }
-        );
-        try {
-          const mode: PolishMode =
-            preset.id === 'verbatim' || preset.id === 'formal' ? preset.id : 'clean';
-          const result = await this.ports.runTranscriptLlmJob({
-            taskId,
-            taskType: 'polish',
-            jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
-            config: llm,
-            segments,
-            context: preset.context || undefined,
-            mode,
-          });
-          if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
-            return;
-          }
-          this.applyTranscriptJobUpdate(result, originSessionId);
-          if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
-            this.ports.rebaselineTranscriptAutoSave?.(jobHistoryId, result.segments);
-          }
-        } finally {
-          unlistenJobUpdates();
-        }
+        });
       },
-      onFinally: (jobHistoryId) => {
+      onFinally: (sidecarKey) => {
         this.ports.getTranscriptSidecarStore().updateLlmState(
           {
             isPolishing: false,
             polishProgress: 0,
           },
-          jobHistoryId
+          sidecarKey
         );
       },
     });
@@ -213,34 +284,52 @@ export class PolishService {
       mode,
     };
   }
+
   private applyTranscriptJobUpdate(
     payload: TranscriptLlmJobResult,
-    originSessionId: string | null = null
+    targetOrOriginSession: TaskTarget | string | null = null
   ) {
     if (!payload.segments) {
       return;
     }
 
-    const payloadHistoryId = payload.jobHistoryId || 'current';
-    if (payloadHistoryId === 'current') {
-      if (originSessionId && this.ports.getSessionSnapshot && this.ports.setSegmentsForSession) {
-        const originSession = this.ports.getSessionSnapshot(originSessionId);
-        if (!originSession || originSession.sourceHistoryId) {
-          return;
-        }
-        this.ports.setSegmentsForSession(originSessionId, payload.segments);
-        return;
-      }
-
-      const sessionStore = this.ports.getTranscriptSessionStore();
-      if (sessionStore.sourceHistoryId) {
-        return;
-      }
-      sessionStore.setSegments(payload.segments);
+    const payloadHistoryId = normalizeHistoryId(payload.jobHistoryId);
+    if (payloadHistoryId) {
+      this.ports.setSegmentsForHistory(payloadHistoryId, payload.segments);
       return;
     }
 
-    this.ports.setSegmentsForHistory(payloadHistoryId, payload.segments);
+    const target =
+      typeof targetOrOriginSession === 'string' || targetOrOriginSession === null
+        ? createTaskTarget({ sessionId: targetOrOriginSession })
+        : targetOrOriginSession;
+
+    const latestHistoryId = resolveTargetHistoryId(target);
+    if (latestHistoryId) {
+      this.ports.setSegmentsForHistory(latestHistoryId, payload.segments);
+      return;
+    }
+
+    if (target.sessionId) {
+      const originSession =
+        this.ports.getSessionSnapshot?.(target.sessionId) ??
+        useTranscriptStore.getState().sessions[target.sessionId];
+      if (!originSession || normalizeHistoryId(originSession.sourceHistoryId)) {
+        return;
+      }
+      if (this.ports.setSegmentsForSession) {
+        this.ports.setSegmentsForSession(target.sessionId, payload.segments);
+      } else {
+        setSegmentsForSession(target.sessionId, payload.segments);
+      }
+      return;
+    }
+
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    if (sessionStore.sourceHistoryId) {
+      return;
+    }
+    sessionStore.setSegments(payload.segments);
   }
 }
 
@@ -265,6 +354,10 @@ export const polishService = createPolishService({
   },
   setSegmentsForSession,
   setSegmentsForHistory,
+  commitSystemTranscriptUpdate: (id, segments) =>
+    useHistoryStore.getState().commitSystemTranscriptUpdate(id, segments),
+  rekeySessionSidecar: (sessionId, nextHistoryId) =>
+    useTranscriptStore.getState().rekeySessionSidecar(sessionId, nextHistoryId),
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,

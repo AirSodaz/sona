@@ -279,6 +279,7 @@ fn translate_request_validation_requires_target_language() {
         source_language: None,
         context: None,
         keywords: None,
+        post_process_replacements: None,
     };
 
     let error = validate_translate_segments_request(&request).unwrap_err();
@@ -397,6 +398,7 @@ fn transcript_job_request_uses_core_transcript_segments() {
         }),
         chunk_size: Some(8),
         chunk_char_budget: Some(2400),
+        post_process_replacements: None,
     };
 
     let value = serde_json::to_value(&request).expect("job request should serialize");
@@ -460,6 +462,18 @@ fn transcript_job_request_sanitize_for_task() {
         }),
         chunk_size: Some(10),
         chunk_char_budget: Some(2000),
+        post_process_replacements: Some(vec![
+            sona_core::transcription::postprocess::TranscriptTextReplacementRuleSet {
+                enabled: true,
+                ignore_case: false,
+                rules: vec![
+                    sona_core::transcription::postprocess::TranscriptTextReplacementRule {
+                        from: "AI".to_string(),
+                        to: "人工智能".to_string(),
+                    },
+                ],
+            },
+        ]),
     };
 
     // Translate sanitization
@@ -477,6 +491,7 @@ fn transcript_job_request_sanitize_for_task() {
     assert!(translate_req.template.is_none());
     assert!(translate_req.chunk_size.is_none());
     assert!(translate_req.chunk_char_budget.is_none());
+    assert!(translate_req.post_process_replacements.is_some());
 
     // Polish sanitization
     let mut polish_req = make_request(LlmTaskType::Polish);
@@ -493,6 +508,7 @@ fn transcript_job_request_sanitize_for_task() {
     assert!(polish_req.template.is_none());
     assert!(polish_req.chunk_size.is_none());
     assert!(polish_req.chunk_char_budget.is_none());
+    assert!(polish_req.post_process_replacements.is_none());
 
     // Summary sanitization
     let mut summary_req = make_request(LlmTaskType::Summary);
@@ -503,6 +519,7 @@ fn transcript_job_request_sanitize_for_task() {
     assert!(summary_req.context.is_none());
     assert!(summary_req.keywords.is_none());
     assert!(summary_req.mode.is_none());
+    assert!(summary_req.post_process_replacements.is_none());
     assert_eq!(
         summary_req.template.as_ref().map(|t| t.id.as_str()),
         Some("meeting")

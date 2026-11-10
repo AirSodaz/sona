@@ -1,6 +1,8 @@
+import type { TranscriptTextReplacementRuleSet } from '../../bindings';
 import type { AppConfig } from '../../types/config';
 import type { TranslatedSegment } from '../../types/llmTask';
 import type { TranscriptSegment } from '../../types/transcript';
+import { isLlmJobCancelledError } from '../llm/llmJobScheduler';
 import {
   translationService as defaultTranslationService,
   type TranslationService,
@@ -12,6 +14,7 @@ export interface StreamingTranslationSchedulerOptions {
   batchSize?: number;
   maxWaitMs?: number;
   maxConcurrency?: number;
+  postProcessReplacements?: TranscriptTextReplacementRuleSet[];
   onBatchTranslated: (translated: TranslatedSegment[]) => Promise<void> | void;
   onError?: (error: unknown) => void;
   isCancelRequested: () => boolean;
@@ -154,7 +157,14 @@ export class StreamingTranslationScheduler {
       };
       const results = await this.translationService.translateSegmentsWithConfig(
         translateConfig,
-        batch
+        batch,
+        undefined,
+        undefined,
+        {
+          priority: 'normal',
+          cancelCheck: () => this.cancelled || this.options.isCancelRequested(),
+          postProcessReplacements: this.options.postProcessReplacements,
+        }
       );
 
       if (this.cancelled || this.options.isCancelRequested()) {
@@ -173,7 +183,7 @@ export class StreamingTranslationScheduler {
         this.options.onError?.(callbackError);
       }
     } catch (error) {
-      if (this.cancelled || this.options.isCancelRequested()) {
+      if (isLlmJobCancelledError(error) || this.cancelled || this.options.isCancelRequested()) {
         return;
       }
       this.consecutiveErrors += 1;

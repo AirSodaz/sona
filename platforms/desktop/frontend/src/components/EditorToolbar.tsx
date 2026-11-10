@@ -1,8 +1,12 @@
-import { FORMAT_TEXT_COMMAND, type LexicalEditor, REDO_COMMAND, UNDO_COMMAND } from 'lexical';
+import { FORMAT_TEXT_COMMAND, REDO_COMMAND, UNDO_COMMAND } from 'lexical';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { splitTranscriptSegment } from '../stores/transcriptCoordinator';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../services/task/documentMutationCoordinator';
 import { getActiveEditor } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -20,25 +24,24 @@ import {
 
 const SAVED_STATUS_VISIBLE_MS = 1500;
 
-function handleToolbarSplit(editor: LexicalEditor, segmentId: string): void {
-  const result = serializeSplitBlocks(editor);
-  if (result) {
-    splitTranscriptSegment(segmentId, result.leftHtml, result.rightHtml);
-  }
-}
-
 export function EditorToolbar(): React.JSX.Element | null {
   const { t } = useTranslation();
+  const boundSessionId = useBoundSessionId();
   const editingSegmentId = useTranscriptSessionStore((state) => state.editingSegmentId);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const splitTranscriptSegment = useTranscriptSessionStore((state) => state.splitTranscriptSegment);
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, sourceHistoryId)
+  );
   const autoSaveState = useTranscriptSidecarStore((state) =>
     sourceHistoryId ? state.autoSaveStates[sourceHistoryId] : undefined
   );
 
-  const isEditing = Boolean(editingSegmentId);
+  const isEditing = Boolean(editingSegmentId) && !isDocumentLocked;
   const [isSavedVisible, setIsSavedVisible] = useState(false);
 
   const handleAction = (command: string) => {
+    if (isDocumentLocked) return;
     const editor = getActiveEditor();
     if (!editor) return;
 
@@ -66,7 +69,10 @@ export function EditorToolbar(): React.JSX.Element | null {
         break;
       case 'insertLineBreak':
         if (editingSegmentId) {
-          handleToolbarSplit(editor, editingSegmentId);
+          const result = serializeSplitBlocks(editor);
+          if (result) {
+            splitTranscriptSegment(editingSegmentId, result.leftHtml, result.rightHtml);
+          }
         }
         break;
     }

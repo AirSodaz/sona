@@ -1,8 +1,13 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import { usePolishActions } from '../hooks/usePolishActions';
 import { resolveItemPipeline } from '../services/projectPipeline';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../services/task/documentMutationCoordinator';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -59,7 +64,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
 
+  const boundSessionId = useBoundSessionId();
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, sourceHistoryId)
+  );
   const currentHistoryItem = useHistoryStore((state) =>
     sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
   );
@@ -240,12 +249,14 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
           role="menu"
           aria-labelledby="polish-menu-button"
         >
-          {sourceHistoryId && sourceHistoryId !== 'current' && canRetranscribeCurrentHistory && (
+          {Boolean(
+            sourceHistoryId && sourceHistoryId !== 'current' && canRetranscribeCurrentHistory
+          ) && (
             <button
               type="button"
               className="export-dropdown-item"
               onClick={onRetranscribeClick}
-              disabled={isRetranscribing || isPolishing}
+              disabled={isRetranscribing || isPolishing || isDocumentLocked}
               role="menuitem"
               tabIndex={-1}
             >
@@ -262,7 +273,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
             type="button"
             className="export-dropdown-item"
             onClick={onStartPolishClick}
-            disabled={isPolishing || isRetranscribing}
+            disabled={isPolishing || isRetranscribing || isDocumentLocked}
             role="menuitem"
             tabIndex={-1}
           >

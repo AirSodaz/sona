@@ -9,6 +9,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { create, type StateCreator } from 'zustand';
+import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import type {
   AppMode,
@@ -38,7 +39,10 @@ import {
   DEFAULT_LLM_STATE,
   type LlmState,
   rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry,
+  rekeySessionSidecarEntries,
+  resolveSidecarKey,
   resolveTranscriptHistoryKey,
+  toSessionSidecarKey,
 } from './transcriptSidecarState';
 
 let activeBatchItemIdResolver: (() => string | null) | null = null;
@@ -87,7 +91,8 @@ export const DEFAULT_SESSION_DATA: SessionData = {
 export interface TranscriptStore {
   // --- Core State ---
   activeSessionId: string;
-  createSessionId: string;
+  createLiveSessionId: string;
+  createBatchAdhocSessionId: string | null;
   recordingSessionId: string | null;
   sessions: Record<string, SessionData>;
   // --- Runtime (Global) ---
@@ -100,13 +105,15 @@ export interface TranscriptStore {
   isPaused: boolean;
   isAgentRecording: boolean;
   agentRecordingHistoryId: string | null;
-  // --- Sidecar (Keyed by historyId or 'current') ---
+  // --- Sidecar (Keyed by historyId or `session:${sessionId}`) ---
   summaryStates: Record<string, TranscriptSummaryState>;
   llmStates: Record<string, LlmState>;
   autoSaveStates: Record<string, AutoSaveState>;
 
   // --- Actions ---
   // Coordinator / Session Pointers
+  setCreateLiveSessionId: (id: string) => void;
+  setCreateBatchAdhocSessionId: (id: string | null) => void;
   setRecordingSessionId: (id: string | null) => void;
   openSession: (
     args:
@@ -119,6 +126,21 @@ export interface TranscriptStore {
           audioUrl?: string | null;
         }
   ) => void;
+  openLiveDraftSession: (args: {
+    segments: TranscriptSegment[];
+    sourceHistoryId: string | null;
+    title?: string | null;
+    icon?: string | null;
+    audioUrl?: string | null;
+  }) => void;
+  openBatchAdhocDraft: (args: {
+    segments: TranscriptSegment[];
+    sourceHistoryId: string | null;
+    title?: string | null;
+    icon?: string | null;
+    audioUrl?: string | null;
+  }) => void;
+  closeBatchAdhocDraft: (sessionId?: string) => void;
   loadTranscriptSession: (
     segments: TranscriptSegment[],
     sourceHistoryId: string | null,
@@ -133,6 +155,10 @@ export interface TranscriptStore {
     historyId: string,
     meta: { title?: string; icon?: string | null }
   ) => void;
+  clearTranscriptSession: (
+    sessionId: string,
+    options?: { clearAudio?: boolean; title?: string | null }
+  ) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
   clearTranscriptSegments: () => void;
   clearSegments: () => void;
@@ -140,7 +166,8 @@ export interface TranscriptStore {
     title: string,
     historyId: string,
     icon: string | null | undefined,
-    audioUrl?: string | null
+    audioUrl?: string | null,
+    originSessionId?: string
   ) => void;
 
   // Runtime
@@ -152,17 +179,23 @@ export interface TranscriptStore {
   setIsCaptionMode: (isCaptionMode: boolean) => void;
   setIsPaused: (isPaused: boolean) => void;
   setIsAgentRecording: (isAgentRecording: boolean, historyId?: string | null) => void;
-  // Session Data Mutations (Applies to activeSessionId)
+  // Session Data Mutations (Applies to activeSessionId or explicit sessionId)
   setSourceHistoryId: (id: string | null) => void;
+  setSourceHistoryIdForSession: (sessionId: string, id: string | null) => void;
   setTitle: (title: string | null) => void;
+  setTitleForSession: (sessionId: string, title: string | null) => void;
   setIcon: (icon: string | null) => void;
+  setIconForSession: (sessionId: string, icon: string | null) => void;
   setSegments: (segments: TranscriptSegment[]) => void;
   setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => void;
   setSegmentsForHistory: (historyId: string, segments: TranscriptSegment[]) => void;
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
+  addSegmentForSession: (sessionId: string, segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
+  upsertSegmentForSession: (sessionId: string, segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
   patchSegmentTranslation: (id: string, translation: string) => void;
+  patchSegmentTranslationForSession: (sessionId: string, id: string, translation: string) => void;
   patchSegmentTranslations: (updates: Array<{ id: string; translation: string }>) => void;
   patchSegmentTranslationsForSession: (
     sessionId: string,
@@ -178,8 +211,18 @@ export interface TranscriptStore {
     updates: Partial<Omit<TranscriptSegment, 'id'>>
   ) => void;
   deleteSegment: (id: string) => void;
+  deleteSegmentForSession: (sessionId: string, id: string) => void;
   mergeSegments: (id1: string, id2: string) => void;
+  mergeSegmentsForSession: (sessionId: string, id1: string, id2: string) => void;
   splitTranscriptSegment: (
+    id: string,
+    leftText: string,
+    rightText: string,
+    leftTranslation?: string,
+    rightTranslation?: string
+  ) => string | null;
+  splitTranscriptSegmentForSession: (
+    sessionId: string,
     id: string,
     leftText: string,
     rightText: string,
@@ -195,18 +238,32 @@ export interface TranscriptStore {
     activeSegmentId?: string | null
   ) => void;
   upsertTranscriptSegmentAndSetActive: (segment: TranscriptSegment) => void;
+  upsertTranscriptSegmentAndSetActiveForSession: (
+    sessionId: string,
+    segment: TranscriptSegment
+  ) => void;
   setEditingSegmentId: (id: string | null) => void;
+  setEditingSegmentIdForSession: (sessionId: string, id: string | null) => void;
   addAligningSegmentId: (id: string) => void;
+  addAligningSegmentIdForSession: (sessionId: string, id: string) => void;
   removeAligningSegmentId: (id: string) => void;
+  removeAligningSegmentIdForSession: (sessionId: string, id: string) => void;
 
-  // Playback Mutations (Applies to activeSessionId)
+  // Playback Mutations
   setAudioFile: (file: File | null) => void;
+  setAudioFileForSession: (sessionId: string, file: File | null) => void;
   setAudioUrl: (url: string | null) => void;
+  setAudioUrlForSession: (sessionId: string, url: string | null) => void;
   setCurrentTime: (time: number) => void;
+  setCurrentTimeForSession: (sessionId: string, time: number) => void;
   setIsPlaying: (isPlaying: boolean) => void;
+  setIsPlayingForSession: (sessionId: string, isPlaying: boolean) => void;
   setActiveSegmentId: (id: string | null, index?: number) => void;
+  setActiveSegmentIdForSession: (sessionId: string, id: string | null, index?: number) => void;
   resetActiveSegmentIndex: () => void;
+  resetActiveSegmentIndexForSession: (sessionId: string) => void;
   requestSeek: (time: number) => void;
+  requestSeekForSession: (sessionId: string, time: number) => void;
 
   // Sidecar Mutations
   getLlmState: (historyId?: string) => LlmState;
@@ -217,8 +274,34 @@ export interface TranscriptStore {
   hydrateSummaryState: (payload: HistorySummaryPayload, historyId?: string) => void;
   clearSummaryState: (historyId?: string) => void;
   rekeyCurrentSummaryState: (nextHistoryId: string | null) => void;
+  rekeySessionSidecar: (sessionId: string, nextHistoryId: string) => void;
   setAutoSaveState: (historyId: string, status: AutoSaveStatus, errorMessage?: string) => void;
   clearAutoSaveState: (historyId?: string) => void;
+}
+
+export function selectCreateBoundSessionId(
+  state: Pick<
+    TranscriptStore,
+    | 'ingestionFocus'
+    | 'recordingSessionId'
+    | 'createLiveSessionId'
+    | 'createBatchAdhocSessionId'
+    | 'sessions'
+  >,
+  activeBatchItemId?: string | null
+): string {
+  if (state.ingestionFocus === 'live') {
+    if (state.recordingSessionId && state.sessions[state.recordingSessionId]) {
+      return state.recordingSessionId;
+    }
+    return state.createLiveSessionId && state.sessions[state.createLiveSessionId]
+      ? state.createLiveSessionId
+      : 'default';
+  }
+  if (state.createBatchAdhocSessionId && state.sessions[state.createBatchAdhocSessionId]) {
+    return state.createBatchAdhocSessionId;
+  }
+  return activeBatchItemId && state.sessions[activeBatchItemId] ? activeBatchItemId : 'default';
 }
 
 // Helper to get active session
@@ -228,6 +311,27 @@ function getActiveSession(state: TranscriptStore): SessionData {
 
 type StoreSet = Parameters<StateCreator<TranscriptStore>>[0];
 type StoreGet = Parameters<StateCreator<TranscriptStore>>[1];
+
+// Helper to mutate any target session cleanly
+function updateSession(
+  set: StoreSet,
+  sessionId: string,
+  updater: (session: SessionData) => Partial<SessionData>
+) {
+  set((state: TranscriptStore) => {
+    const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
+    const patch = updater(session);
+    if (!patch || Object.keys(patch).length === 0) {
+      return state;
+    }
+    return {
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...session, ...patch },
+      },
+    };
+  });
+}
 
 // Helper to mutate active session
 function updateActiveSession(
@@ -286,8 +390,13 @@ function applyTranslationPatchToSegments(
 }
 
 function resolveHistoryKey(historyId: string | undefined, get: StoreGet): string {
-  const activeSession = getActiveSession(get());
-  return resolveTranscriptHistoryKey(historyId, activeSession.sourceHistoryId);
+  const state = get();
+  const activeSession = getActiveSession(state);
+  return resolveTranscriptHistoryKey(
+    historyId,
+    activeSession.sourceHistoryId,
+    state.activeSessionId
+  );
 }
 
 function calculateSegmentUpdate(
@@ -321,7 +430,8 @@ function calculateSegmentUpdate(
 
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   activeSessionId: 'default',
-  createSessionId: 'default',
+  createLiveSessionId: 'default',
+  createBatchAdhocSessionId: null,
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
   mode: 'create',
@@ -333,8 +443,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   isPaused: false,
   isAgentRecording: false,
   agentRecordingHistoryId: null,
-  summaryStates: { current: createDefaultSummaryState() },
-  llmStates: { current: { ...DEFAULT_LLM_STATE } },
+  summaryStates: {},
+  llmStates: {},
   autoSaveStates: {},
 
   // --- Runtime ---
@@ -343,70 +453,48 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let nextMode: AppMode = state.mode;
       let nextFocus: IngestionFocus | undefined;
       let nextActiveSessionId = state.activeSessionId;
-      let nextCreateSessionId = state.createSessionId;
+      let nextCreateLiveSessionId = state.createLiveSessionId;
+      const activeBatchId = activeBatchItemIdResolver?.();
 
       if ((mode as string) === 'live') {
-        const recId = state.recordingSessionId;
-        const targetSessionId =
-          recId && state.sessions[recId]
-            ? recId
-            : state.createSessionId && state.sessions[state.createSessionId]
-              ? state.createSessionId
-              : 'default';
         nextMode = 'create';
         nextFocus = 'live';
-        nextActiveSessionId = targetSessionId;
-        nextCreateSessionId = targetSessionId;
+        nextActiveSessionId = selectCreateBoundSessionId(
+          { ...state, ingestionFocus: 'live' },
+          activeBatchId
+        );
+        if (nextActiveSessionId !== state.recordingSessionId) {
+          nextCreateLiveSessionId = nextActiveSessionId;
+        }
       } else if ((mode as string) === 'batch') {
-        const activeItemId = activeBatchItemIdResolver?.();
-        const targetSessionId =
-          activeItemId && state.sessions[activeItemId]
-            ? activeItemId
-            : state.createSessionId && state.sessions[state.createSessionId]
-              ? state.createSessionId
-              : 'default';
         nextMode = 'create';
         nextFocus = 'batch';
-        nextActiveSessionId = targetSessionId;
-        nextCreateSessionId = targetSessionId;
+        nextActiveSessionId = selectCreateBoundSessionId(
+          { ...state, ingestionFocus: 'batch' },
+          activeBatchId
+        );
       } else if (mode === 'create') {
         const recId = state.recordingSessionId;
+        const recordingSessionExists = Boolean(recId && state.sessions[recId]);
         nextMode = 'create';
         if (focus === undefined) {
-          const createId = state.createSessionId;
-          const recordingSessionExists = Boolean(recId && state.sessions[recId]);
-          const activeBatchId =
-            state.ingestionFocus === 'batch' ? activeBatchItemIdResolver?.() : null;
-          const targetSessionId =
-            recId && recordingSessionExists
-              ? recId
-              : createId && createId !== 'default' && state.sessions[createId]
-                ? createId
-                : activeBatchId && state.sessions[activeBatchId]
-                  ? activeBatchId
-                  : 'default';
-          nextActiveSessionId = targetSessionId;
-          nextCreateSessionId = targetSessionId;
-          // Recording controls live in the live pane; never restore behind a stale batch focus.
           if (recordingSessionExists) {
             nextFocus = 'live';
           }
+          const resolvedFocus = nextFocus ?? state.ingestionFocus;
+          nextActiveSessionId = selectCreateBoundSessionId(
+            { ...state, ingestionFocus: resolvedFocus },
+            activeBatchId
+          );
         } else {
           nextFocus = focus;
-          const focusItemId =
-            focus === 'live' ? recId : focus === 'batch' ? activeBatchItemIdResolver?.() : null;
-          // An explicit focus selects that ingestion surface fresh: the recording session
-          // (live) or active batch item, otherwise the empty default pane. Only a focus-less
-          // tab switch restores the previous create session.
-          const targetSessionId =
-            focusItemId && state.sessions[focusItemId] ? focusItemId : 'default';
-          nextActiveSessionId = targetSessionId;
-          nextCreateSessionId = targetSessionId;
+          nextActiveSessionId = selectCreateBoundSessionId(
+            { ...state, ingestionFocus: focus },
+            activeBatchId
+          );
         }
       } else if (mode === 'projects' || mode === 'tools') {
         nextMode = mode;
-        nextCreateSessionId =
-          state.mode === 'create' ? state.activeSessionId : state.createSessionId;
       } else {
         return state;
       }
@@ -420,24 +508,22 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         mode: nextMode,
         ...(nextFocus !== undefined ? { ingestionFocus: nextFocus } : {}),
         activeSessionId: nextActiveSessionId,
-        createSessionId: nextCreateSessionId,
+        createLiveSessionId: nextCreateLiveSessionId,
         ...(nextSessions !== state.sessions ? { sessions: nextSessions } : {}),
       };
     });
   },
   setIngestionFocus: (ingestionFocus) => {
     set((state) => {
-      const isCreateMode = state.mode === 'create';
-      let targetSessionId = state.activeSessionId;
-      if (ingestionFocus === 'live') {
-        const recId = state.recordingSessionId;
-        targetSessionId = recId && state.sessions[recId] ? recId : 'default';
-      } else if (ingestionFocus === 'batch') {
-        const activeItemId = activeBatchItemIdResolver?.();
-        targetSessionId = activeItemId && state.sessions[activeItemId] ? activeItemId : 'default';
-      } else {
+      if (ingestionFocus !== 'live' && ingestionFocus !== 'batch') {
         return { ingestionFocus };
       }
+      const isCreateMode = state.mode === 'create';
+      const activeBatchId = activeBatchItemIdResolver?.();
+      const targetSessionId = selectCreateBoundSessionId(
+        { ...state, ingestionFocus },
+        activeBatchId
+      );
       const nextSessions =
         isCreateMode && targetSessionId !== state.activeSessionId
           ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
@@ -457,10 +543,12 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIsAgentRecording: (isAgentRecording, agentRecordingHistoryId = null) =>
     set({ isAgentRecording, agentRecordingHistoryId }),
   // --- Coordinator / Pointers ---
+  setCreateLiveSessionId: (id) => set({ createLiveSessionId: id || 'default' }),
+  setCreateBatchAdhocSessionId: (id) => set({ createBatchAdhocSessionId: id }),
   setRecordingSessionId: (id) =>
     set((state) => ({
       recordingSessionId: id,
-      createSessionId: id ? id : state.createSessionId,
+      createLiveSessionId: id ? id : state.createLiveSessionId,
     })),
   openSession: (args) => {
     if (typeof args === 'string') {
@@ -484,9 +572,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         state.activeSessionId !== sessionId
           ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
           : state.sessions;
+      const shouldUpdateCreateLive = state.mode === 'create' && state.ingestionFocus === 'live';
       return {
         activeSessionId: sessionId,
-        createSessionId: state.mode === 'create' ? sessionId : state.createSessionId,
+        ...(shouldUpdateCreateLive ? { createLiveSessionId: sessionId } : {}),
         sessions: {
           ...nextSessions,
           [sessionId]: {
@@ -500,6 +589,92 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         },
       };
     });
+  },
+  openLiveDraftSession: (args) => {
+    const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const sessionId = sourceHistoryId || uuidv4();
+    if (get().recordingSessionId === sessionId) {
+      return;
+    }
+    if (sourceHistoryId) {
+      const autoSaveStates = { ...get().autoSaveStates };
+      delete autoSaveStates[sourceHistoryId];
+      delete autoSaveStates.current;
+      set({ autoSaveStates });
+    }
+    set((state) => {
+      const nextSessions =
+        state.activeSessionId !== sessionId
+          ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
+          : state.sessions;
+      return {
+        mode: 'create',
+        ingestionFocus: 'live',
+        createLiveSessionId: sessionId,
+        activeSessionId: sessionId,
+        sessions: {
+          ...nextSessions,
+          [sessionId]: {
+            ...DEFAULT_SESSION_DATA,
+            segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
+            sourceHistoryId,
+            title: title || '',
+            icon: icon || null,
+            audioUrl: audioUrl !== undefined ? audioUrl : null,
+          },
+        },
+      };
+    });
+  },
+  openBatchAdhocDraft: (args) => {
+    const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const sessionId = sourceHistoryId || uuidv4();
+    if (get().recordingSessionId === sessionId) {
+      return;
+    }
+    if (sourceHistoryId) {
+      const autoSaveStates = { ...get().autoSaveStates };
+      delete autoSaveStates[sourceHistoryId];
+      delete autoSaveStates.current;
+      set({ autoSaveStates });
+    }
+    set((state) => {
+      const nextSessions =
+        state.activeSessionId !== sessionId
+          ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
+          : state.sessions;
+      return {
+        mode: 'create',
+        ingestionFocus: 'batch',
+        createBatchAdhocSessionId: sessionId,
+        activeSessionId: sessionId,
+        sessions: {
+          ...nextSessions,
+          [sessionId]: {
+            ...DEFAULT_SESSION_DATA,
+            segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
+            sourceHistoryId,
+            title: title || '',
+            icon: icon || null,
+            audioUrl: audioUrl !== undefined ? audioUrl : null,
+          },
+        },
+      };
+    });
+  },
+  closeBatchAdhocDraft: (sessionId) => {
+    const state = get();
+    const targetId = sessionId ?? state.createBatchAdhocSessionId;
+    if (!targetId) {
+      return;
+    }
+    set((s) => ({
+      createBatchAdhocSessionId:
+        s.createBatchAdhocSessionId === targetId ? null : s.createBatchAdhocSessionId,
+    }));
+    if (targetId !== activeBatchItemIdResolver?.()) {
+      get().evictSession(targetId);
+    }
   },
   loadTranscriptSession: (segments, sourceHistoryId, title, icon) => {
     get().openSession({ segments, sourceHistoryId, title, icon });
@@ -525,16 +700,28 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         return state;
       }
       const existing = state.sessions[sessionId];
+      const nextAutoSaveStates = { ...state.autoSaveStates };
+      let autoSaveChanged = false;
+      const sessionSidecarKey = toSessionSidecarKey(sessionId);
+      if (nextAutoSaveStates[sessionSidecarKey]) {
+        delete nextAutoSaveStates[sessionSidecarKey];
+        autoSaveChanged = true;
+      }
       if (!existing) {
-        return state;
+        return autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : state;
       }
       revokeBlobAudioUrl(existing.audioUrl);
+      if (existing.sourceHistoryId && nextAutoSaveStates[existing.sourceHistoryId]) {
+        delete nextAutoSaveStates[existing.sourceHistoryId];
+        autoSaveChanged = true;
+      }
       if (sessionId === 'default') {
         return {
           sessions: {
             ...state.sessions,
             default: { ...DEFAULT_SESSION_DATA },
           },
+          ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
         };
       }
       const nextSessions = { ...state.sessions };
@@ -542,7 +729,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return {
         sessions: nextSessions,
         activeSessionId: state.activeSessionId === sessionId ? 'default' : state.activeSessionId,
-        createSessionId: state.createSessionId === sessionId ? 'default' : state.createSessionId,
+        createLiveSessionId:
+          state.createLiveSessionId === sessionId ? 'default' : state.createLiveSessionId,
+        createBatchAdhocSessionId:
+          state.createBatchAdhocSessionId === sessionId ? null : state.createBatchAdhocSessionId,
+        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
       };
     });
   },
@@ -553,7 +744,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let changed = false;
       const nextSessions = { ...state.sessions };
       let nextActiveSessionId = state.activeSessionId;
-      let nextCreateSessionId = state.createSessionId;
+      let nextCreateLiveSessionId = state.createLiveSessionId;
+      let nextCreateBatchAdhocSessionId = state.createBatchAdhocSessionId;
 
       for (const [sessionId, session] of Object.entries(state.sessions)) {
         if (sessionId === state.recordingSessionId) {
@@ -574,8 +766,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           if (nextActiveSessionId === sessionId) {
             nextActiveSessionId = 'default';
           }
-          if (nextCreateSessionId === sessionId) {
-            nextCreateSessionId = 'default';
+          if (nextCreateLiveSessionId === sessionId) {
+            nextCreateLiveSessionId = 'default';
+          }
+          if (nextCreateBatchAdhocSessionId === sessionId) {
+            nextCreateBatchAdhocSessionId = null;
           }
         }
       }
@@ -585,6 +780,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       for (const id of idSet) {
         if (nextAutoSaveStates[id]) {
           delete nextAutoSaveStates[id];
+          autoSaveChanged = true;
+        }
+        const sessionSidecarKey = toSessionSidecarKey(id);
+        if (nextAutoSaveStates[sessionSidecarKey]) {
+          delete nextAutoSaveStates[sessionSidecarKey];
           autoSaveChanged = true;
         }
       }
@@ -597,7 +797,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           ? {
               sessions: nextSessions,
               activeSessionId: nextActiveSessionId,
-              createSessionId: nextCreateSessionId,
+              createLiveSessionId: nextCreateLiveSessionId,
+              createBatchAdhocSessionId: nextCreateBatchAdhocSessionId,
             }
           : {}),
         ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
@@ -609,7 +810,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     set((state) => {
       let changed = false;
       const nextSessions: Record<string, SessionData> = {};
-      const evictedHistoryIds = new Set<string>();
+      const evictedIds = new Set<string>();
 
       for (const [sessionId, session] of Object.entries(state.sessions)) {
         const shouldKeep =
@@ -622,8 +823,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         } else {
           changed = true;
           revokeBlobAudioUrl(session.audioUrl);
+          evictedIds.add(toSessionSidecarKey(sessionId));
           if (session.sourceHistoryId) {
-            evictedHistoryIds.add(session.sourceHistoryId);
+            evictedIds.add(session.sourceHistoryId);
           }
         }
       }
@@ -634,7 +836,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
 
       const nextAutoSaveStates = { ...state.autoSaveStates };
       let autoSaveChanged = false;
-      for (const id of evictedHistoryIds) {
+      for (const id of evictedIds) {
         if (nextAutoSaveStates[id]) {
           delete nextAutoSaveStates[id];
           autoSaveChanged = true;
@@ -644,7 +846,13 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return {
         sessions: nextSessions,
         activeSessionId: nextSessions[state.activeSessionId] ? state.activeSessionId : 'default',
-        createSessionId: nextSessions[state.createSessionId] ? state.createSessionId : 'default',
+        createLiveSessionId: nextSessions[state.createLiveSessionId]
+          ? state.createLiveSessionId
+          : 'default',
+        createBatchAdhocSessionId:
+          state.createBatchAdhocSessionId && nextSessions[state.createBatchAdhocSessionId]
+            ? state.createBatchAdhocSessionId
+            : null,
         ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
       };
     });
@@ -667,32 +875,41 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return changed ? { sessions: nextSessions } : state;
     });
   },
-  clearActiveTranscriptSession: (options) => {
+  clearTranscriptSession: (sessionId, options) => {
     const state = get();
-    // The recording session is off-limits while a record session owns it; callers like
-    // backup import and history deletion must not wipe the in-progress transcript.
-    if (state.recordingSessionId && state.activeSessionId === state.recordingSessionId) {
+    if (!sessionId || (state.recordingSessionId && sessionId === state.recordingSessionId)) {
       return;
     }
-    updateActiveSession(set, (session) => ({
+    const existing = state.sessions[sessionId];
+    if (options?.clearAudio) {
+      revokeBlobAudioUrl(existing?.audioUrl);
+    }
+    const sidecarKey = resolveSidecarKey(sessionId, existing?.sourceHistoryId);
+    updateSession(set, sessionId, (session) => ({
       ...DEFAULT_SESSION_DATA,
       title: options?.title ?? session.title,
       audioFile: options?.clearAudio ? null : session.audioFile,
       audioUrl: options?.clearAudio ? null : session.audioUrl,
     }));
-    get().clearSummaryState('current');
+    get().clearSummaryState(sidecarKey);
+  },
+  clearActiveTranscriptSession: (options) => {
+    const state = get();
+    get().clearTranscriptSession(state.activeSessionId, options);
   },
   clearSegments: () => get().clearActiveTranscriptSession(),
   clearTranscriptSegments: () => get().clearActiveTranscriptSession(),
-  syncSavedRecordingMeta: (title, historyId, icon, audioUrl) => {
+  syncSavedRecordingMeta: (title, historyId, icon, audioUrl, originSessionId) => {
     const state = get();
-    const session = state.sessions[historyId];
+    const targetSessionId =
+      originSessionId && state.sessions[originSessionId] ? originSessionId : historyId;
+    const session = state.sessions[targetSessionId];
     if (!session) return;
 
     set({
       sessions: {
         ...state.sessions,
-        [historyId]: {
+        [targetSessionId]: {
           ...session,
           sourceHistoryId: historyId,
           title,
@@ -701,17 +918,20 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         },
       },
     });
-    get().rekeyCurrentSummaryState(historyId);
+    get().rekeySessionSidecar(targetSessionId, historyId);
   },
 
   // --- Session Data Mutations ---
-  setSourceHistoryId: (sourceHistoryId) => updateActiveSession(set, () => ({ sourceHistoryId })),
-  setTitle: (title) => updateActiveSession(set, () => ({ title: title || '' })),
-  setIcon: (icon) => updateActiveSession(set, () => ({ icon })),
-  setSegments: (segments) =>
-    updateActiveSession(set, () => ({
-      segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
-    })),
+  setSourceHistoryIdForSession: (sessionId, sourceHistoryId) =>
+    updateSession(set, sessionId, () => ({ sourceHistoryId })),
+  setSourceHistoryId: (sourceHistoryId) =>
+    get().setSourceHistoryIdForSession(get().activeSessionId, sourceHistoryId),
+  setTitleForSession: (sessionId, title) =>
+    updateSession(set, sessionId, () => ({ title: title || '' })),
+  setTitle: (title) => get().setTitleForSession(get().activeSessionId, title),
+  setIconForSession: (sessionId, icon) => updateSession(set, sessionId, () => ({ icon })),
+  setIcon: (icon) => get().setIconForSession(get().activeSessionId, icon),
+  setSegments: (segments) => get().setSegmentsForSession(get().activeSessionId, segments),
   setSegmentsForSession: (sessionId, segments) => {
     set((state: TranscriptStore) => ({
       sessions: {
@@ -749,37 +969,31 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return changed ? { sessions: nextSessions } : state;
     });
   },
-  addSegment: (segment) => {
+  addSegmentForSession: (sessionId, segment) => {
     const id = uuidv4();
     const newSegment = normalizeTranscriptSegment({ ...segment, id });
-    updateActiveSession(set, (session) => ({
+    updateSession(set, sessionId, (session) => ({
       segments: [...session.segments, newSegment].sort((a, b) => a.start - b.start),
     }));
     return id;
   },
-  upsertSegment: (segment) => {
-    updateActiveSession(set, (session) => ({
+  addSegment: (segment) => get().addSegmentForSession(get().activeSessionId, segment),
+  upsertSegmentForSession: (sessionId, segment) => {
+    updateSession(set, sessionId, (session) => ({
       segments: calculateSegmentUpdate(session.segments, normalizeTranscriptSegment(segment))
         .segments,
     }));
   },
-  updateSegment: (id, updates) => {
-    updateActiveSession(set, (session) => ({
-      segments: session.segments.map((s) =>
-        s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
-      ),
-    }));
+  upsertSegment: (segment) => get().upsertSegmentForSession(get().activeSessionId, segment),
+  updateSegment: (id, updates) => get().updateSegmentForSession(get().activeSessionId, id, updates),
+  patchSegmentTranslationForSession: (sessionId, id, translation) => {
+    get().patchSegmentTranslationsForSession(sessionId, [{ id, translation }]);
   },
   patchSegmentTranslation: (id, translation) => {
     get().patchSegmentTranslations([{ id, translation }]);
   },
   patchSegmentTranslations: (updates) => {
-    if (updates.length === 0) return;
-    const translationMap = new Map(updates.map((u) => [u.id, u.translation]));
-    updateActiveSession(set, (session) => {
-      const nextSegments = applyTranslationPatchToSegments(session.segments, translationMap);
-      return nextSegments ? { segments: nextSegments } : {};
-    });
+    get().patchSegmentTranslationsForSession(get().activeSessionId, updates);
   },
   patchSegmentTranslationsForSession: (sessionId, updates) => {
     if (updates.length === 0) return;
@@ -849,14 +1063,15 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
-  deleteSegment: (id) =>
-    updateActiveSession(set, (session) => ({
+  deleteSegmentForSession: (sessionId, id) =>
+    updateSession(set, sessionId, (session) => ({
       segments: session.segments.filter((s) => s.id !== id),
       editingSegmentId: session.editingSegmentId === id ? null : session.editingSegmentId,
       activeSegmentId: session.activeSegmentId === id ? null : session.activeSegmentId,
     })),
-  mergeSegments: (id1, id2) => {
-    updateActiveSession(set, (session) => {
+  deleteSegment: (id) => get().deleteSegmentForSession(get().activeSessionId, id),
+  mergeSegmentsForSession: (sessionId, id1, id2) => {
+    updateSession(set, sessionId, (session) => {
       const seg1 = session.segments.find((s) => s.id === id1);
       const seg2 = session.segments.find((s) => s.id === id2);
       if (!seg1 || !seg2) return {};
@@ -888,8 +1103,17 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
-  splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) => {
-    const session = getActiveSession(get());
+  mergeSegments: (id1, id2) => get().mergeSegmentsForSession(get().activeSessionId, id1, id2),
+  splitTranscriptSegmentForSession: (
+    sessionId,
+    id,
+    leftText,
+    rightText,
+    leftTranslation,
+    rightTranslation
+  ) => {
+    const state = get();
+    const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
     const segment = session.segments.find((s) => s.id === id);
     if (!segment) return null;
     const plainText = stripHtmlTags(leftText) + stripHtmlTags(rightText);
@@ -915,12 +1139,21 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       nextSegments.push(segmentLeft, segmentRight);
     }
 
-    updateActiveSession(set, () => ({
+    updateSession(set, sessionId, () => ({
       segments: nextSegments,
       editingSegmentId: newSegmentId,
     }));
     return newSegmentId;
   },
+  splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) =>
+    get().splitTranscriptSegmentForSession(
+      get().activeSessionId,
+      id,
+      leftText,
+      rightText,
+      leftTranslation,
+      rightTranslation
+    ),
   finalizeLastSegment: () =>
     updateActiveSession(set, (session) => {
       if (session.segments.length === 0) return {};
@@ -1019,8 +1252,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
-  upsertTranscriptSegmentAndSetActive: (segment) =>
-    updateActiveSession(set, (session) => {
+  upsertTranscriptSegmentAndSetActiveForSession: (sessionId, segment) =>
+    updateSession(set, sessionId, (session) => {
       const nextSegmentsData = calculateSegmentUpdate(
         session.segments,
         normalizeTranscriptSegment(segment)
@@ -1037,24 +1270,31 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         activeSegmentIndex: activeIndex === -1 ? nextSegments.length - 1 : activeIndex,
       };
     }),
-  setEditingSegmentId: (id) => updateActiveSession(set, () => ({ editingSegmentId: id })),
-  addAligningSegmentId: (id) =>
-    updateActiveSession(set, (session) => {
+  upsertTranscriptSegmentAndSetActive: (segment) =>
+    get().upsertTranscriptSegmentAndSetActiveForSession(get().activeSessionId, segment),
+  setEditingSegmentIdForSession: (sessionId, id) =>
+    updateSession(set, sessionId, () => ({ editingSegmentId: id })),
+  setEditingSegmentId: (id) => get().setEditingSegmentIdForSession(get().activeSessionId, id),
+  addAligningSegmentIdForSession: (sessionId, id) =>
+    updateSession(set, sessionId, (session) => {
       const next = new Set(session.aligningSegmentIds);
       next.add(id);
       return { aligningSegmentIds: next };
     }),
-  removeAligningSegmentId: (id) =>
-    updateActiveSession(set, (session) => {
+  addAligningSegmentId: (id) => get().addAligningSegmentIdForSession(get().activeSessionId, id),
+  removeAligningSegmentIdForSession: (sessionId, id) =>
+    updateSession(set, sessionId, (session) => {
       const next = new Set(session.aligningSegmentIds);
       next.delete(id);
       return { aligningSegmentIds: next };
     }),
+  removeAligningSegmentId: (id) =>
+    get().removeAligningSegmentIdForSession(get().activeSessionId, id),
 
   // --- Playback Mutations ---
-  setAudioFile: (file) =>
-    updateActiveSession(set, (session) => {
-      if (session.audioUrl) URL.revokeObjectURL(session.audioUrl);
+  setAudioFileForSession: (sessionId, file) =>
+    updateSession(set, sessionId, (session) => {
+      revokeBlobAudioUrl(session.audioUrl);
       return {
         audioFile: file,
         audioUrl: file ? URL.createObjectURL(file) : null,
@@ -1066,8 +1306,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         lastSeekTimestamp: 0,
       };
     }),
-  setAudioUrl: (audioUrl) =>
-    updateActiveSession(set, () => ({
+  setAudioFile: (file) => get().setAudioFileForSession(get().activeSessionId, file),
+  setAudioUrlForSession: (sessionId, audioUrl) =>
+    updateSession(set, sessionId, () => ({
       audioUrl,
       isPlaying: false,
       currentTime: 0,
@@ -1076,8 +1317,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       seekRequest: null,
       lastSeekTimestamp: 0,
     })),
-  setCurrentTime: (time) =>
-    updateActiveSession(set, (session) => {
+  setAudioUrl: (audioUrl) => get().setAudioUrlForSession(get().activeSessionId, audioUrl),
+  setCurrentTimeForSession: (sessionId, time) =>
+    updateSession(set, sessionId, (session) => {
       const { segment, index } = findSegmentAndIndexForTime(
         session.segments,
         time,
@@ -1092,18 +1334,26 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       }
       return { currentTime: time };
     }),
-  setIsPlaying: (isPlaying) => updateActiveSession(set, () => ({ isPlaying })),
+  setCurrentTime: (time) => get().setCurrentTimeForSession(get().activeSessionId, time),
+  setIsPlayingForSession: (sessionId, isPlaying) =>
+    updateSession(set, sessionId, () => ({ isPlaying })),
+  setIsPlaying: (isPlaying) => get().setIsPlayingForSession(get().activeSessionId, isPlaying),
+  setActiveSegmentIdForSession: (sessionId, activeSegmentId, activeSegmentIndex = -1) =>
+    updateSession(set, sessionId, () => ({ activeSegmentId, activeSegmentIndex })),
   setActiveSegmentId: (activeSegmentId, activeSegmentIndex = -1) =>
-    updateActiveSession(set, () => ({ activeSegmentId, activeSegmentIndex })),
-  resetActiveSegmentIndex: () => updateActiveSession(set, () => ({ activeSegmentIndex: -1 })),
-  requestSeek: (time) => {
-    get().setCurrentTime(time);
+    get().setActiveSegmentIdForSession(get().activeSessionId, activeSegmentId, activeSegmentIndex),
+  resetActiveSegmentIndexForSession: (sessionId) =>
+    updateSession(set, sessionId, () => ({ activeSegmentIndex: -1 })),
+  resetActiveSegmentIndex: () => get().resetActiveSegmentIndexForSession(get().activeSessionId),
+  requestSeekForSession: (sessionId, time) => {
+    get().setCurrentTimeForSession(sessionId, time);
     const timestamp = Date.now();
-    updateActiveSession(set, () => ({
+    updateSession(set, sessionId, () => ({
       seekRequest: { time, timestamp },
       lastSeekTimestamp: timestamp,
     }));
   },
+  requestSeek: (time) => get().requestSeekForSession(get().activeSessionId, time),
 
   // --- Sidecar Mutations ---
   getLlmState: (historyId) => {
@@ -1169,8 +1419,35 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     }),
   rekeyCurrentSummaryState: (nextHistoryId) =>
     set((state) => ({
-      summaryStates: rekeyCurrentSummaryStateEntry(state.summaryStates, nextHistoryId),
+      summaryStates: rekeyCurrentSummaryStateEntry(
+        state.summaryStates,
+        nextHistoryId,
+        state.activeSessionId
+      ),
     })),
+  rekeySessionSidecar: (sessionId, nextHistoryId) => {
+    if (!nextHistoryId || nextHistoryId === 'current') return;
+    documentMutationCoordinator.rekeyAlias(sessionId, nextHistoryId);
+    set((state) => {
+      const rekeyed = rekeySessionSidecarEntries(
+        {
+          llmStates: state.llmStates,
+          summaryStates: state.summaryStates,
+          autoSaveStates: state.autoSaveStates,
+        },
+        sessionId,
+        nextHistoryId
+      );
+      if (
+        rekeyed.llmStates === state.llmStates &&
+        rekeyed.summaryStates === state.summaryStates &&
+        rekeyed.autoSaveStates === state.autoSaveStates
+      ) {
+        return state;
+      }
+      return rekeyed;
+    });
+  },
   setAutoSaveState: (historyId, status, errorMessage) =>
     set((state) => {
       if (!historyId || historyId === 'current') return state;

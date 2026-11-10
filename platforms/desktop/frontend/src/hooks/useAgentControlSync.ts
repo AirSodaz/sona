@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { historyService } from '../services/historyService';
 import { APP_SETTING_UPDATED_EVENT, STORE_KEY_CONFIG } from '../services/storageService';
+import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import {
   type AgentRecordingStatusPayload,
   TauriEvent,
@@ -92,23 +93,37 @@ export function useAgentControlSync(): void {
                 )
             );
             if (historyId && hasMatchingSession) {
-              try {
-                const updatedSegments = await historyService.loadTranscript(historyId);
-                const latestTranscriptState = useTranscriptStore.getState();
-                const stillHasMatchingSession = Object.entries(latestTranscriptState.sessions).some(
-                  ([sessionId, session]) =>
-                    sessionId !== latestTranscriptState.recordingSessionId &&
-                    (sessionId === historyId || session.sourceHistoryId === historyId)
-                );
-                if (isMounted && updatedSegments && stillHasMatchingSession) {
-                  setSegmentsForHistory(historyId, updatedSegments);
-                  rebaselineTranscriptAutoSave(historyId, updatedSegments);
+              const reloadMatchingSession = async () => {
+                try {
+                  const updatedSegments = await historyService.loadTranscript(historyId);
+                  const latestTranscriptState = useTranscriptStore.getState();
+                  const stillHasMatchingSession = Object.entries(
+                    latestTranscriptState.sessions
+                  ).some(
+                    ([sessionId, session]) =>
+                      sessionId !== latestTranscriptState.recordingSessionId &&
+                      (sessionId === historyId || session.sourceHistoryId === historyId)
+                  );
+                  if (isMounted && updatedSegments && stillHasMatchingSession) {
+                    setSegmentsForHistory(historyId, updatedSegments);
+                    rebaselineTranscriptAutoSave(historyId, updatedSegments);
+                  }
+                } catch (error) {
+                  logger.error(
+                    '[AgentControlSync] Failed to reload matching transcript segments:',
+                    error
+                  );
                 }
-              } catch (error) {
-                logger.error(
-                  '[AgentControlSync] Failed to reload matching transcript segments:',
-                  error
+              };
+
+              if (documentMutationCoordinator.isLocked(null, historyId)) {
+                void documentMutationCoordinator.runExclusive(
+                  { historyId },
+                  { taskType: 'agentSyncReload', lockEditor: false },
+                  reloadMatchingSession
                 );
+              } else {
+                await reloadMatchingSession();
               }
             }
           }

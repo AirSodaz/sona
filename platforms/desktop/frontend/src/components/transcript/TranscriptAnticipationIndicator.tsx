@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
@@ -8,17 +9,17 @@ import { formatDisplayTime } from '../../utils/exportFormats';
  * Informs the user where the next transcribed element will appear with minimal perceptual load.
  */
 export function TranscriptAnticipationIndicator(): React.JSX.Element | null {
+  const boundSessionId = useBoundSessionId();
   const isRecording = useTranscriptStore((state) => state.isRecording);
   const isPaused = useTranscriptStore((state) => state.isPaused);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
-  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
   const segments = useTranscriptSessionStore((state) => state.segments);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
 
   const isCurrentSessionRecording = Boolean(
     isRecording &&
       (recordingSessionId
-        ? activeSessionId === recordingSessionId
+        ? boundSessionId === recordingSessionId
         : sourceHistoryId === 'current' || !sourceHistoryId)
   );
 

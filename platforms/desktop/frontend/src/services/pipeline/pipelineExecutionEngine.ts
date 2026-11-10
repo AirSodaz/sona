@@ -1,22 +1,29 @@
+import { useHistoryStore } from '../../stores/historyStore';
 import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
 import type { TranscriptSegment } from '../../types/transcript';
-import { formatCjkTypography } from '../../utils/cjkTypography';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
-import { isFeatureLlmConfigComplete } from '../llm/configUtils';
+import { getFeatureLlmConfig, isFeatureLlmConfigComplete } from '../llm/configUtils';
 import { polishService } from '../polishService';
 import type { EffectivePipelineSnapshot } from '../projectPipeline';
 import { summaryService } from '../summaryService';
+import {
+  buildLocalNmtPostProcessReplacements,
+  createTaskTarget,
+  resolveLatestSegmentsForTarget,
+  runWithDocumentLock,
+} from '../task/taskTarget';
 import { translationService } from '../translationService';
 
 export type PipelineStage = 'polishing' | 'translating' | 'summarizing' | 'exporting';
 
 export interface ExecutePipelineOptions {
   historyId: string;
+  sessionId?: string | null;
   projectId?: string | null;
   segments: TranscriptSegment[];
   pipeline: EffectivePipelineSnapshot;
@@ -40,6 +47,7 @@ export interface PipelineExecutionEnginePorts {
   exportService: typeof exportService;
   historyService: typeof historyService;
   isFeatureLlmConfigComplete: typeof isFeatureLlmConfigComplete;
+  commitSystemTranscriptUpdate?: (id: string, segments: TranscriptSegment[]) => Promise<unknown>;
 }
 
 export class PipelineExecutionEngine {
@@ -51,9 +59,24 @@ export class PipelineExecutionEngine {
     }
   }
 
+  private async persistUpdatedSegments(
+    historyId: string,
+    segments: TranscriptSegment[]
+  ): Promise<void> {
+    if (!historyId) {
+      return;
+    }
+    if (this.ports.commitSystemTranscriptUpdate) {
+      await this.ports.commitSystemTranscriptUpdate(historyId, segments);
+      return;
+    }
+    await this.ports.historyService.updateTranscript(historyId, segments);
+  }
+
   async execute(options: ExecutePipelineOptions): Promise<PipelineExecutionResult> {
     const {
       historyId,
+      sessionId,
       pipeline,
       globalConfig,
       baseFileName,
@@ -70,138 +93,168 @@ export class PipelineExecutionEngine {
       return { segments: currentSegments };
     }
 
-    // 0. Auto Text Replacements from Unified Dictionary (or legacy pipeline terms)
-    const effectiveReplacementSets: TextReplacementRuleSet[] = [];
-    if (globalConfig.dictionaryContent?.trim()) {
-      const parsed = parseYamlDictionary(globalConfig.dictionaryContent);
-      const projectId =
-        options.projectId ??
-        ('projectId' in pipeline && typeof pipeline.projectId === 'string'
-          ? pipeline.projectId
-          : undefined);
-      const terms = getTermsForProject(parsed, projectId);
-      if (terms.replacements.length > 0) {
-        effectiveReplacementSets.push({
-          id: 'unified-dictionary-replacements',
-          name: 'Unified Dictionary',
-          enabled: true,
-          ignoreCase: false,
-          rules: terms.replacements.map((r, i) => ({
-            id: `rep_${i}`,
-            from: r.from,
-            to: r.to,
-          })),
-        });
-      }
-    } else {
-      if (pipeline.replacementSetIds && pipeline.replacementSetIds.length > 0) {
-        const globalSets = globalConfig.textReplacementSets ?? [];
-        for (const setId of pipeline.replacementSetIds) {
-          const found = globalSets.find((s) => s.id === setId);
-          if (found) effectiveReplacementSets.push(found);
-        }
-      }
-      const customReplacements = extractReplacementsFromTerms(pipeline.customTerms);
-      if (customReplacements.length > 0) {
-        effectiveReplacementSets.push({
-          id: 'pipeline-custom-terms',
-          name: 'Project Terms',
-          enabled: true,
-          ignoreCase: false,
-          rules: customReplacements,
-        });
-      }
-    }
-    if (effectiveReplacementSets.length > 0) {
-      currentSegments = currentSegments.map((seg) => ({
-        ...seg,
-        text: applyTextReplacements(seg.text, effectiveReplacementSets),
-      }));
-      await onSegmentsUpdated?.(currentSegments);
-      if (historyId) {
-        await this.ports.historyService.updateTranscript(historyId, currentSegments);
-      }
-    }
+    const target = createTaskTarget({
+      sessionId: sessionId ?? null,
+      historyId: historyId || null,
+    });
 
-    // 1. Auto Polish
-    if (pipeline.autoPolish) {
-      this.throwIfCancelled(isCancelRequested);
-      if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'polish')) {
-        logger.warn(
-          '[PipelineExecutionEngine] Polish model is not configured, skipping auto-polish.'
-        );
-      } else {
-        onProgress?.('polishing', 96);
-        const polishConfig: AppConfig = {
-          ...globalConfig,
-          polishPresetId: pipeline.polishPresetId || globalConfig.polishPresetId,
-        };
-        await this.ports.polishService.polishSegmentsWithConfig(
-          polishConfig,
-          currentSegments,
-          async (polishedChunk) => {
-            currentSegments = this.ports.polishService.applyPolishedSegmentsInMemory(
-              currentSegments,
-              polishedChunk
-            );
-            await onSegmentsUpdated?.(currentSegments);
+    // Guard whole-document segment rewrites (Steps 0-2) under Channel 3 lock and explicitly
+    // release the lock before Step 3 (Summary) and Step 4 (Export) so edits/ASR are never blocked
+    // on long-running summary or export I/O.
+    await runWithDocumentLock(
+      target,
+      {
+        taskType: 'pipeline',
+        lockEditor: true,
+      },
+      async () => {
+        const latestBase = await resolveLatestSegmentsForTarget(target, currentSegments);
+        if (latestBase.length > 0) {
+          currentSegments = [...latestBase];
+        }
+
+        // 0. Auto Text Replacements from Unified Dictionary (or legacy pipeline terms)
+        const effectiveReplacementSets: TextReplacementRuleSet[] = [];
+        if (globalConfig.dictionaryContent?.trim()) {
+          const parsed = parseYamlDictionary(globalConfig.dictionaryContent);
+          const projectId =
+            options.projectId ??
+            ('projectId' in pipeline && typeof pipeline.projectId === 'string'
+              ? pipeline.projectId
+              : undefined);
+          const terms = getTermsForProject(parsed, projectId);
+          if (terms.replacements.length > 0) {
+            effectiveReplacementSets.push({
+              id: 'unified-dictionary-replacements',
+              name: 'Unified Dictionary',
+              enabled: true,
+              ignoreCase: false,
+              rules: terms.replacements.map((r, i) => ({
+                id: `rep_${i}`,
+                from: r.from,
+                to: r.to,
+              })),
+            });
           }
-        );
-        if (historyId) {
-          await this.ports.historyService.updateTranscript(historyId, currentSegments);
-        }
-      }
-    }
-
-    // 2. Auto Translate
-    if (pipeline.autoTranslate) {
-      this.throwIfCancelled(isCancelRequested);
-      if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'translation')) {
-        logger.warn(
-          '[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.'
-        );
-      } else {
-        const untranslatedSegments = pipeline.autoPolish
-          ? currentSegments.filter((seg) => Boolean(seg.text?.trim()))
-          : currentSegments.filter((seg) => Boolean(seg.text?.trim()) && !seg.translation?.trim());
-
-        if (untranslatedSegments.length === 0) {
-          logger.info(
-            '[PipelineExecutionEngine] All segments already translated, skipping auto-translate.'
-          );
         } else {
-          onProgress?.('translating', 98);
-          const translateConfig: AppConfig = {
-            ...globalConfig,
-            translationLanguage: pipeline.targetLanguage || globalConfig.translationLanguage,
-          };
-          const segmentsToTranslate =
-            untranslatedSegments.length === currentSegments.length
-              ? currentSegments
-              : untranslatedSegments;
-          await this.ports.translationService.translateSegmentsWithConfig(
-            translateConfig,
-            segmentsToTranslate,
-            async (translatedChunk) => {
-              const formattedChunk = translatedChunk.map((chunk) => ({
-                ...chunk,
-                translation: formatCjkTypography(chunk.translation),
-              }));
-              currentSegments = this.ports.translationService.applyTranslationsInMemory(
-                currentSegments,
-                formattedChunk
-              );
-              await onSegmentsUpdated?.(currentSegments);
+          if (pipeline.replacementSetIds && pipeline.replacementSetIds.length > 0) {
+            const globalSets = globalConfig.textReplacementSets ?? [];
+            for (const setId of pipeline.replacementSetIds) {
+              const found = globalSets.find((s) => s.id === setId);
+              if (found) effectiveReplacementSets.push(found);
             }
-          );
-          if (historyId) {
-            await this.ports.historyService.updateTranscript(historyId, currentSegments);
+          }
+          const customReplacements = extractReplacementsFromTerms(pipeline.customTerms);
+          if (customReplacements.length > 0) {
+            effectiveReplacementSets.push({
+              id: 'pipeline-custom-terms',
+              name: 'Project Terms',
+              enabled: true,
+              ignoreCase: false,
+              rules: customReplacements,
+            });
+          }
+        }
+        if (effectiveReplacementSets.length > 0) {
+          currentSegments = currentSegments.map((seg) => ({
+            ...seg,
+            text: applyTextReplacements(seg.text, effectiveReplacementSets),
+          }));
+          await onSegmentsUpdated?.(currentSegments);
+          await this.persistUpdatedSegments(historyId, currentSegments);
+        }
+
+        // 1. Auto Polish
+        if (pipeline.autoPolish) {
+          this.throwIfCancelled(isCancelRequested);
+          if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'polish')) {
+            logger.warn(
+              '[PipelineExecutionEngine] Polish model is not configured, skipping auto-polish.'
+            );
+          } else {
+            onProgress?.('polishing', 96);
+            const polishConfig: AppConfig = {
+              ...globalConfig,
+              polishPresetId: pipeline.polishPresetId || globalConfig.polishPresetId,
+            };
+            await this.ports.polishService.polishSegmentsWithConfig(
+              polishConfig,
+              currentSegments,
+              async (polishedChunk) => {
+                currentSegments = this.ports.polishService.applyPolishedSegmentsInMemory(
+                  currentSegments,
+                  polishedChunk
+                );
+                await onSegmentsUpdated?.(currentSegments);
+              },
+              undefined,
+              {
+                priority: 'normal',
+                cancelCheck: isCancelRequested,
+              }
+            );
+            await this.persistUpdatedSegments(historyId, currentSegments);
+          }
+        }
+
+        // 2. Auto Translate
+        if (pipeline.autoTranslate) {
+          this.throwIfCancelled(isCancelRequested);
+          if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'translation')) {
+            logger.warn(
+              '[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.'
+            );
+          } else {
+            const untranslatedSegments = pipeline.autoPolish
+              ? currentSegments.filter((seg) => Boolean(seg.text?.trim()))
+              : currentSegments.filter(
+                  (seg) => Boolean(seg.text?.trim()) && !seg.translation?.trim()
+                );
+
+            if (untranslatedSegments.length === 0) {
+              logger.info(
+                '[PipelineExecutionEngine] All segments already translated, skipping auto-translate.'
+              );
+            } else {
+              onProgress?.('translating', 98);
+              const translateConfig: AppConfig = {
+                ...globalConfig,
+                translationLanguage: pipeline.targetLanguage || globalConfig.translationLanguage,
+              };
+              const translationLlm = getFeatureLlmConfig(translateConfig, 'translation');
+              const postProcessReplacements =
+                translationLlm?.strategy === 'local_nmt'
+                  ? buildLocalNmtPostProcessReplacements(pipeline)
+                  : undefined;
+              const segmentsToTranslate =
+                untranslatedSegments.length === currentSegments.length
+                  ? currentSegments
+                  : untranslatedSegments;
+              await this.ports.translationService.translateSegmentsWithConfig(
+                translateConfig,
+                segmentsToTranslate,
+                async (translatedChunk) => {
+                  currentSegments = this.ports.translationService.applyTranslationsInMemory(
+                    currentSegments,
+                    translatedChunk
+                  );
+                  await onSegmentsUpdated?.(currentSegments);
+                },
+                undefined,
+                {
+                  priority: 'normal',
+                  cancelCheck: isCancelRequested,
+                  postProcessReplacements,
+                }
+              );
+              await this.persistUpdatedSegments(historyId, currentSegments);
+            }
           }
         }
       }
-    }
+    );
 
-    // 3. Auto Summary
+    // 3. Auto Summary (Channel 2 concurrent with document lock)
     if (pipeline.autoSummary && historyId) {
       this.throwIfCancelled(isCancelRequested);
       if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'summary')) {
@@ -214,8 +267,10 @@ export class PipelineExecutionEngine {
         await this.ports.summaryService.retrySummaryTranscriptJob({
           segments: currentSegments,
           historyId,
+          sessionId: sessionId ?? null,
           templateId,
           config: globalConfig,
+          priority: 'normal',
         });
         await this.ports.summaryService.persistSummary(historyId);
       }
@@ -256,6 +311,8 @@ export function createPipelineExecutionEngine(
     exportService,
     historyService,
     isFeatureLlmConfigComplete,
+    commitSystemTranscriptUpdate: (id, segments) =>
+      useHistoryStore.getState().commitSystemTranscriptUpdate(id, segments),
   }
 ): PipelineExecutionEngine {
   return new PipelineExecutionEngine(ports);

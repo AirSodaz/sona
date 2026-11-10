@@ -211,5 +211,8 @@ export function normalizeTranscriptJobRequest(
       'template' in request && request.template ? normalizeSummaryTemplate(request.template) : null,
     chunkSize: null,
     chunkCharBudget: null,
+    ...('postProcessReplacements' in request && request.postProcessReplacements?.length
+      ? { postProcessReplacements: request.postProcessReplacements }
+      : {}),
   };
 }

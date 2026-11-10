@@ -4,7 +4,11 @@ import type { HistoryItem } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { evictTranscriptSessionsByHistoryIds } from './transcriptCoordinator';
+import { getAutoSaveLifecycleHooks } from './autoSaveHooks';
+import {
+  evictTranscriptSessionsByHistoryIds,
+  setSegmentsForHistory,
+} from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptSidecarStore } from './transcriptSidecarStore';
 import { useTranscriptStore } from './transcriptStore';
@@ -39,6 +43,11 @@ export interface HistoryState {
    * @return A promise that resolves when the update is complete.
    */
   updateTranscript: (id: string, segments: TranscriptSegment[]) => Promise<void>;
+  /**
+   * Single canonical system writeback entry: persists segments to disk, updates history item metadata,
+   * updates all resident transcript sessions linked to `historyId`, and rebaselines auto-save.
+   */
+  commitSystemTranscriptUpdate: (id: string, segments: TranscriptSegment[]) => Promise<HistoryItem>;
   commitTranscriptEdit: (
     id: string,
     editSessionId: string,
@@ -120,7 +129,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     }));
 
     try {
+      getAutoSaveLifecycleHooks()?.cancelPending([id]);
       await historyService.deleteRecording(id);
+      getAutoSaveLifecycleHooks()?.cancelPending([id]);
       useTranscriptSidecarStore.getState().clearSummaryState(id);
 
       // Evict matching active or background transcript sessions
@@ -139,7 +150,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     }));
 
     try {
+      getAutoSaveLifecycleHooks()?.cancelPending(ids);
       await historyService.deleteRecordings(ids);
+      getAutoSaveLifecycleHooks()?.cancelPending(ids);
       ids.forEach((id) => {
         useTranscriptSidecarStore.getState().clearSummaryState(id);
       });
@@ -177,6 +190,26 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       const errorMessage = extractErrorMessage(error);
       logger.error('Failed to update history transcript:', error);
       set({ error: errorMessage || 'Failed to update history transcript' });
+      throw error;
+    }
+  },
+
+  commitSystemTranscriptUpdate: async (id, segments) => {
+    try {
+      const updatedItem = await historyService.updateTranscript(id, segments);
+      set((state) => ({
+        items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
+      }));
+      setSegmentsForHistory(id, segments);
+      getAutoSaveLifecycleHooks()?.rebaseline(id, segments);
+      for (const listener of get().transcriptUpdateListeners) {
+        listener(id, segments);
+      }
+      return updatedItem;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      logger.error('Failed to commit system transcript update:', error);
+      set({ error: errorMessage || 'Failed to commit system transcript update' });
       throw error;
     }
   },

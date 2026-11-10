@@ -503,10 +503,12 @@ pub async fn history_preview_audio_cleanup(
     services: State<'_, DesktopServices>,
     retention_days: Option<u64>,
     exclude_history_id: Option<String>,
+    exclude_history_ids: Option<Vec<String>>,
 ) -> Result<HistoryAudioCleanupReport, String> {
     let request = HistoryAudioCleanupRequest {
         retention_days,
         exclude_history_id,
+        exclude_history_ids,
     };
     validate_history_input(&request)?;
     services
@@ -520,10 +522,12 @@ pub async fn history_cleanup_audio(
     services: State<'_, DesktopServices>,
     retention_days: Option<u64>,
     exclude_history_id: Option<String>,
+    exclude_history_ids: Option<Vec<String>>,
 ) -> Result<HistoryAudioCleanupReport, String> {
     let request = HistoryAudioCleanupRequest {
         retention_days,
         exclude_history_id,
+        exclude_history_ids,
     };
     validate_history_input(&request)?;
     services

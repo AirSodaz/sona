@@ -48,9 +48,10 @@ describe('TranscriptVersionPanel', () => {
     vi.mocked(transcriptSnapshotService.createSnapshot).mockResolvedValue(null);
     vi.mocked(transcriptSnapshotService.buildDiff).mockResolvedValue({ rows: [], changedCount: 0 });
     vi.mocked(transcriptSnapshotService.restoreDiffRows).mockResolvedValue([]);
-    useHistoryStore.setState({ updateTranscript: vi.fn().mockResolvedValue(undefined) } as Partial<
-      ReturnType<typeof useHistoryStore.getState>
-    >);
+    useHistoryStore.setState({
+      commitSystemTranscriptUpdate: vi.fn().mockResolvedValue(undefined),
+      updateTranscript: vi.fn().mockResolvedValue(undefined),
+    } as Partial<ReturnType<typeof useHistoryStore.getState>>);
   });
 
   it('renders an empty snapshot state', async () => {
@@ -64,10 +65,10 @@ describe('TranscriptVersionPanel', () => {
   });
 
   it('restores selected diff rows and snapshots current content first', async () => {
-    const updateTranscript = vi.fn().mockResolvedValue(undefined);
+    const commitSystemTranscriptUpdate = vi.fn().mockResolvedValue(undefined);
     const currentSegment = { id: 'seg-1', start: 0, end: 1, text: 'new', isFinal: true };
     const snapshotSegment = { id: 'seg-1', start: 0, end: 1, text: 'old', isFinal: true };
-    useHistoryStore.setState({ updateTranscript } as Partial<
+    useHistoryStore.setState({ commitSystemTranscriptUpdate } as Partial<
       ReturnType<typeof useHistoryStore.getState>
     >);
     useTranscriptStore.setState({
@@ -128,7 +129,7 @@ describe('TranscriptVersionPanel', () => {
       [expect.objectContaining({ id: 'diff-0-0', status: 'modified' })],
       expect.any(Set)
     );
-    expect(updateTranscript).toHaveBeenCalledWith('history-a', [
+    expect(commitSystemTranscriptUpdate).toHaveBeenCalledWith('history-a', [
       expect.objectContaining({ text: 'old' }),
     ]);
   });

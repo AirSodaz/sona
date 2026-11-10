@@ -97,5 +97,6 @@ export interface RecordingHistorySaver {
     duration: number,
     projectId?: string | null
   ) => Promise<HistoryItem | null>;
+  loadTranscript?: (historyId: string) => Promise<TranscriptSegment[] | null>;
   updateTranscript?: (historyId: string, segments: TranscriptSegment[]) => Promise<HistoryItem>;
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { llmJobScheduler } from '../services/llm/llmJobScheduler';
 import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import {
@@ -223,6 +224,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
       cancelRequestedIds.add(id);
       return { cancelRequestedIds };
     });
+    llmJobScheduler.sweepCancelled();
 
     await get().patchTask(id, {
       status: 'cancelRequested',

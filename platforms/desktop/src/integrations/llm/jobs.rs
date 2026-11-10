@@ -176,6 +176,7 @@ async fn run_translate_job(
                 source_language: req.source_language,
                 context: req.context,
                 keywords: req.keywords,
+                post_process_replacements: req.post_process_replacements,
             };
             commands::translate_transcript_segments_with_observer(app, llm_request, move |items| {
                 callback(items)

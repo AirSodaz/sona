@@ -120,6 +120,7 @@ export function useTrayHandling(
             }
             useTranscriptStore.getState().setIsRecording(false);
             useTranscriptStore.getState().setIsPaused(false);
+            useTranscriptStore.getState().setRecordingSessionId(null);
           }
         });
         if (isMounted) unlistenFunctions.push(unlistenStopRecording);

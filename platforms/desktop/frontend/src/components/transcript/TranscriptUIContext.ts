@@ -16,6 +16,8 @@ export interface TranscriptUIState {
   totalSegments: number;
   /** Set of segment IDs currently being re-aligned. */
   aligningSegmentIds: Set<string>;
+  /** True while whole-document mutation lock or active Batch processing holds the transcript read-only. */
+  isDocumentLocked?: boolean;
 }
 
 /**

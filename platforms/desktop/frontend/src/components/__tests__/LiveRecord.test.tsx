@@ -920,7 +920,7 @@ describe('LiveRecord', () => {
     expect(lastSegment.text).toBe('Final segment text');
   });
 
-  it('cleans up recording session and returns to start state when isRecording transitions to false externally', async () => {
+  it('returns to start state without mutating controller-owned recordingSessionId when isRecording transitions to false externally', async () => {
     render(<LiveRecord />);
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
 
@@ -930,16 +930,19 @@ describe('LiveRecord', () => {
     });
 
     expect(useTranscriptStore.getState().isRecording).toBe(true);
+    const activeRecSessionId = useTranscriptStore.getState().recordingSessionId;
+    expect(activeRecSessionId).toBeTruthy();
     expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
 
-    // External stop (such as from system tray)
+    // External raw isRecording toggle without going through stopRecording(): UI resets without
+    // prematurely clearing controller-owned recordingSessionId while archiving may still be running
     await act(async () => {
       useTranscriptStore.setState({ isRecording: false, isPaused: false });
       await vi.advanceTimersByTimeAsync(50);
     });
 
     expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
-    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(useTranscriptStore.getState().recordingSessionId).toBe(activeRecSessionId);
   });
 
   it('only handles Space pause/resume in Create Live mode while Ctrl+Space switches to Create Live on start', async () => {

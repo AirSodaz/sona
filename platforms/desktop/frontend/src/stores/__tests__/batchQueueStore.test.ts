@@ -5,6 +5,7 @@ import type { AppConfig } from '../../types/config';
 import { buildEmbyStreamUrl, deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
 import {
   DEFAULT_SESSION_DATA,
+  selectCreateBoundSessionId,
   useTranscriptStore as useRealTranscriptStore,
 } from '../transcriptStore';
 
@@ -446,7 +447,14 @@ describe('batchQueueStore', () => {
     });
 
     // Simulate what happens when 1 is active
-    useTranscriptStore.getState().setAudioUrl('asset:///1.wav');
+    useTranscriptStore.getState().setIngestionFocus('batch');
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('1', [
+        { id: 'seg-1', text: 'batch', start: 0, end: 1, isFinal: true },
+      ]);
+    useTranscriptStore.getState().setAudioUrlForSession('1', 'asset:///1.wav');
+    useTranscriptStore.getState().activateSession('1');
 
     // Action: Remove non-active item
     useBatchQueueStore.getState().removeItem('2');
@@ -481,7 +489,14 @@ describe('batchQueueStore', () => {
     });
 
     // Simulate what happens when 1 is active
-    useTranscriptStore.getState().setAudioUrl('asset:///1.wav');
+    useTranscriptStore.getState().setIngestionFocus('batch');
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('1', [
+        { id: 'seg-1', text: 'batch', start: 0, end: 1, isFinal: true },
+      ]);
+    useTranscriptStore.getState().setAudioUrlForSession('1', 'asset:///1.wav');
+    useTranscriptStore.getState().activateSession('1');
 
     // Action: Remove active item (the only one)
     useBatchQueueStore.getState().removeItem('1');
@@ -1293,7 +1308,7 @@ describe('batchQueueStore', () => {
         mode: 'projects',
         ingestionFocus: 'batch',
         activeSessionId: 'hist-project',
-        createSessionId: 'batch-1',
+        createLiveSessionId: 'default',
         sessions: {
           default: { ...DEFAULT_SESSION_DATA },
           'hist-project': {
@@ -1343,11 +1358,21 @@ describe('batchQueueStore', () => {
       useBatchQueueStore.getState().setActiveItem('batch-2');
       expect(useRealTranscriptStore.getState().sessions['batch-1'].isPlaying).toBe(false);
       expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
-      expect(useRealTranscriptStore.getState().createSessionId).toBe('batch-2');
+      expect(
+        selectCreateBoundSessionId(
+          useRealTranscriptStore.getState(),
+          useBatchQueueStore.getState().activeItemId
+        )
+      ).toBe('batch-2');
 
       useBatchQueueStore.getState().setActiveItem(null);
       expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
-      expect(useRealTranscriptStore.getState().createSessionId).toBe('default');
+      expect(
+        selectCreateBoundSessionId(
+          useRealTranscriptStore.getState(),
+          useBatchQueueStore.getState().activeItemId
+        )
+      ).toBe('default');
     });
   });
 });

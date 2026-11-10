@@ -2,30 +2,57 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { resolveSidecarKey } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppConfig } from '../types/config';
 import type {
   ResolvedSummaryTemplate,
   SummaryTemplateId,
   TranscriptSegment,
   TranscriptSummaryRecord,
-  TranscriptSummaryState,
 } from '../types/transcript';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
+import { LlmJobCancelledError, type LlmJobPriority } from './llm/llmJobScheduler';
 import { runTranscriptLlmTaskJob } from './llm/segmentTask';
+import { runTranscriptLlmJob } from './llmOperations';
 import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
 import { summarySidecarService } from './summarySidecarService';
-import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
-import { runTranscriptLlmJob } from './tauri/llm';
+import {
+  captureTaskTarget,
+  normalizeHistoryId,
+  resolveTargetHistoryId,
+  resolveTargetSidecarKey,
+  type TaskTarget,
+} from './task/taskTarget';
 
 interface RetrySummaryTranscriptJobOptions {
   segments: TranscriptSegment[];
   historyId: string | null;
+  sessionId?: string | null;
   templateId?: SummaryTemplateId;
   config?: AppConfig;
+  priority?: LlmJobPriority;
+}
+
+type SummaryTargetOptions =
+  | string
+  | {
+      historyId?: string | null;
+      sessionId?: string | null;
+    };
+
+function parseSummaryTargetOptions(target?: SummaryTargetOptions): {
+  historyId?: string | null;
+  sessionId?: string | null;
+} {
+  if (typeof target === 'string') {
+    return { historyId: target };
+  }
+  return target ?? {};
 }
 
 function normalizeSummaryFingerprint(fingerprint: string): string {
@@ -90,6 +117,8 @@ export interface SummaryServicePorts {
 }
 
 export class SummaryService {
+  private readonly inFlightSummaryKeys = new Set<string>();
+
   constructor(private readonly ports: SummaryServicePorts) {}
 
   async loadSummary(historyId: string): Promise<void> {
@@ -100,25 +129,50 @@ export class SummaryService {
     await this.ports.summarySidecarService.persistSummary(historyId);
   }
 
-  async setActiveTemplate(templateId: SummaryTemplateId, historyId?: string): Promise<void> {
+  async setActiveTemplate(
+    templateId: SummaryTemplateId,
+    targetOptions?: SummaryTargetOptions
+  ): Promise<void> {
+    const { historyId, sessionId } = parseSummaryTargetOptions(targetOptions);
+    const resolvedSessionId =
+      sessionId ?? useTranscriptStore.getState().activeSessionId ?? 'default';
+    const sessionSnapshot = sessionId
+      ? useTranscriptStore.getState().sessions[sessionId]
+      : undefined;
     const sessionStore = this.ports.getTranscriptSessionStore();
+    const resolvedHistoryId =
+      normalizeHistoryId(historyId) ??
+      normalizeHistoryId(
+        sessionSnapshot ? sessionSnapshot.sourceHistoryId : sessionStore.sourceHistoryId
+      );
+    const sidecarKey = resolveSidecarKey(resolvedSessionId, resolvedHistoryId);
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = this.ports.getEffectiveConfigSnapshot();
-    const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
     const resolvedTemplateId = coerceSummaryTemplateId(templateId, config.summaryCustomTemplates);
-    sidecarStore.updateSummaryState({ activeTemplateId: resolvedTemplateId }, targetHistoryId);
+    sidecarStore.updateSummaryState({ activeTemplateId: resolvedTemplateId }, sidecarKey);
 
-    if (targetHistoryId !== 'current') {
-      await this.persistSummary(targetHistoryId);
+    if (resolvedHistoryId) {
+      await this.persistSummary(resolvedHistoryId);
     }
   }
 
-  async updateSummaryRecord(content: string, historyId?: string): Promise<void> {
+  async updateSummaryRecord(content: string, targetOptions?: SummaryTargetOptions): Promise<void> {
+    const { historyId, sessionId } = parseSummaryTargetOptions(targetOptions);
+    const resolvedSessionId =
+      sessionId ?? useTranscriptStore.getState().activeSessionId ?? 'default';
+    const sessionSnapshot = sessionId
+      ? useTranscriptStore.getState().sessions[sessionId]
+      : undefined;
     const sessionStore = this.ports.getTranscriptSessionStore();
+    const resolvedHistoryId =
+      normalizeHistoryId(historyId) ??
+      normalizeHistoryId(
+        sessionSnapshot ? sessionSnapshot.sourceHistoryId : sessionStore.sourceHistoryId
+      );
+    const sidecarKey = resolveSidecarKey(resolvedSessionId, resolvedHistoryId);
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = this.ports.getEffectiveConfigSnapshot();
-    const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
-    const summaryState = sidecarStore.getSummaryState(targetHistoryId);
+    const summaryState = sidecarStore.getSummaryState(sidecarKey);
     const activeTemplateId = coerceSummaryTemplateId(
       summaryState.activeTemplateId || config.summaryTemplateId,
       config.summaryCustomTemplates
@@ -129,7 +183,8 @@ export class SummaryService {
       return;
     }
 
-    const sourceFingerprint = computeSummarySourceFingerprint(sessionStore.segments);
+    const segments = sessionSnapshot?.segments ?? sessionStore.segments;
+    const sourceFingerprint = computeSummarySourceFingerprint(segments);
     sidecarStore.updateSummaryState(
       {
         activeTemplateId,
@@ -142,40 +197,84 @@ export class SummaryService {
         streamingContent: undefined,
         streamingThought: undefined,
       },
-      targetHistoryId
+      sidecarKey
     );
 
-    if (targetHistoryId !== 'current') {
-      await this.persistSummary(targetHistoryId);
+    if (resolvedHistoryId) {
+      await this.persistSummary(resolvedHistoryId);
     }
   }
 
-  async generateSummary(templateId?: SummaryTemplateId): Promise<void> {
+  async generateSummary(
+    templateIdOrOptions?:
+      | SummaryTemplateId
+      | { templateId?: SummaryTemplateId; sessionId?: string | null }
+  ): Promise<void> {
+    const templateId =
+      typeof templateIdOrOptions === 'string' || templateIdOrOptions === undefined
+        ? templateIdOrOptions
+        : templateIdOrOptions.templateId;
+    const sessionId =
+      typeof templateIdOrOptions === 'object' && templateIdOrOptions !== null
+        ? (templateIdOrOptions.sessionId ?? null)
+        : null;
+    const sessionSnapshot = sessionId
+      ? useTranscriptStore.getState().sessions[sessionId]
+      : undefined;
     const sessionStore = this.ports.getTranscriptSessionStore();
+    const segments = sessionSnapshot?.segments ?? sessionStore.segments;
+    const historyId = sessionSnapshot
+      ? sessionSnapshot.sourceHistoryId
+      : sessionStore.sourceHistoryId;
+
     await this.retrySummaryTranscriptJob({
-      segments: sessionStore.segments,
-      historyId: sessionStore.sourceHistoryId,
+      segments,
+      historyId,
+      sessionId,
       templateId,
+      priority: 'high',
     });
   }
 
   async retrySummaryTranscriptJob({
     segments,
     historyId,
+    sessionId,
     templateId,
+    config,
+    priority,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
     await this.runSummaryTranscriptJob({
       segments,
       historyId,
+      sessionId,
       templateId,
+      config,
+      priority,
     });
+  }
+
+  private getTargetInFlightKeys(target: TaskTarget): string[] {
+    const keys = new Set<string>();
+    const sidecarKey = resolveTargetSidecarKey(target);
+    keys.add(sidecarKey);
+    const latestHistoryId = resolveTargetHistoryId(target);
+    if (latestHistoryId) {
+      keys.add(latestHistoryId);
+    }
+    if (target.sessionId) {
+      keys.add(resolveSidecarKey(target.sessionId, null));
+    }
+    return Array.from(keys);
   }
 
   private async runSummaryTranscriptJob({
     segments,
     historyId,
+    sessionId,
     templateId,
     config: configOverride,
+    priority,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = configOverride ?? this.ports.getEffectiveConfigSnapshot();
@@ -192,17 +291,27 @@ export class SummaryService {
       return;
     }
 
-    const jobHistoryId = historyId || 'current';
+    const target = captureTaskTarget({ sessionId, historyId });
+    const candidateKeys = this.getTargetInFlightKeys(target);
+    if (candidateKeys.some((key) => this.inFlightSummaryKeys.has(key))) {
+      return;
+    }
+    const trackedKeys = new Set<string>(candidateKeys);
+    for (const key of trackedKeys) {
+      this.inFlightSummaryKeys.add(key);
+    }
+
+    const initialSidecarKey = resolveTargetSidecarKey(target);
+    const normalizedHistoryId = normalizeHistoryId(historyId);
     const activeProjectId = useProjectStore.getState().activeProjectId;
-    const currentItem =
-      historyId && historyId !== 'current'
-        ? useHistoryStore.getState().items.find((i) => i.id === historyId)
-        : null;
+    const currentItem = normalizedHistoryId
+      ? useHistoryStore.getState().items.find((i) => i.id === normalizedHistoryId)
+      : null;
     const projectId = currentItem?.projectId ?? activeProjectId;
     const pipeline = resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
     const candidateTemplateId =
       templateId ??
-      sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ??
+      sidecarStore.getSummaryState(initialSidecarKey).activeTemplateId ??
       pipeline.summaryTemplateId ??
       config.summaryTemplateId;
     const resolvedTemplate = resolveSummaryTemplate(
@@ -211,107 +320,162 @@ export class SummaryService {
     );
     const activeTemplateId = resolvedTemplate.id;
 
-    await this.ports.runTranscriptLlmTaskJob({
-      taskType: 'summary',
-      segments,
-      sourceHistoryId: historyId,
-      templateId: activeTemplateId,
-      onStart: (startedHistoryId) => {
-        sidecarStore.updateSummaryState(
-          {
-            activeTemplateId,
-            isGenerating: true,
-            generationProgress: 0,
-            // Keep a dedicated transient buffer for streamed text so the final record can still
-            // be written atomically once the backend returns the finished summary payload.
-            streamingContent: '',
-            streamingThought: '',
-          },
-          startedHistoryId
-        );
-      },
-      onProgress: (generationProgress, progressHistoryId) => {
-        this.updateJobSummaryState(progressHistoryId, {
-          generationProgress,
-        });
-      },
-      onText: ({ text, isThought, reset }, textHistoryId) => {
-        if (reset) {
-          this.updateJobSummaryState(textHistoryId, {
-            streamingContent: '',
-            streamingThought: '',
-          });
-          return;
-        }
-        if (isThought) {
-          this.updateJobSummaryState(textHistoryId, {
-            streamingThought: text,
-          });
-          return;
-        }
-        this.updateJobSummaryState(textHistoryId, {
-          streamingContent: text,
-        });
-      },
-      runTask: async (taskId, runningHistoryId) => {
-        const result = await this.ports.runTranscriptLlmJob(
-          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments, config)
-        );
-        const summary = result.summary;
-        const summaryRecord = summary?.record;
+    try {
+      await this.ports.runTranscriptLlmTaskJob({
+        taskType: 'summary',
+        segments,
+        sourceHistoryId: historyId,
+        originSessionId: sessionId ?? null,
+        templateId: activeTemplateId,
+        onStart: (sidecarKey) => {
+          sidecarStore.updateSummaryState(
+            {
+              activeTemplateId,
+              isGenerating: true,
+              generationProgress: 0,
+              // Keep a dedicated transient buffer for streamed text so the final record can still
+              // be written atomically once the backend returns the finished summary payload.
+              streamingContent: '',
+              streamingThought: '',
+            },
+            sidecarKey
+          );
+        },
+        onProgress: (generationProgress, sidecarKey) => {
+          this.ports.getTranscriptSidecarStore().updateSummaryState(
+            {
+              generationProgress,
+            },
+            sidecarKey
+          );
+        },
+        onText: ({ text, isThought, reset }, sidecarKey) => {
+          const currentSidecarStore = this.ports.getTranscriptSidecarStore();
+          if (reset) {
+            currentSidecarStore.updateSummaryState(
+              {
+                streamingContent: '',
+                streamingThought: '',
+              },
+              sidecarKey
+            );
+            return;
+          }
+          if (isThought) {
+            currentSidecarStore.updateSummaryState(
+              {
+                streamingThought: text,
+              },
+              sidecarKey
+            );
+            return;
+          }
+          currentSidecarStore.updateSummaryState(
+            {
+              streamingContent: text,
+            },
+            sidecarKey
+          );
+        },
+        runTask: async (taskId, _initialKey, ctx) => {
+          if (ctx.isCancelled()) {
+            throw new LlmJobCancelledError();
+          }
 
-        if (!summary || !summaryRecord) {
-          throw new Error('Summary job did not return a summary record.');
-        }
+          const sentJobHistoryId = ctx.resolveHistoryId();
+          const result = await this.ports.runTranscriptLlmJob(
+            this.buildRequest(taskId, sentJobHistoryId, resolvedTemplate, segments, config),
+            {
+              priority: priority ?? 'normal',
+              taskId,
+              cancelCheck: ctx.isCancelled,
+              onStart: ctx.markRunning,
+            }
+          );
+          const summary = result.summary;
+          const summaryRecord = summary?.record;
 
-        if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
-          return;
-        }
+          if (!summary || !summaryRecord) {
+            throw new Error('Summary job did not return a summary record.');
+          }
 
-        const resultTemplateId = coerceSummaryTemplateId(
-          summary.activeTemplateId,
-          config.summaryCustomTemplates
-        );
-        const record: TranscriptSummaryRecord = {
-          templateId: coerceSummaryTemplateId(
-            summaryRecord.templateId,
+          if (ctx.isCancelled()) {
+            return;
+          }
+
+          const resultTemplateId = coerceSummaryTemplateId(
+            summary.activeTemplateId,
             config.summaryCustomTemplates
-          ),
-          content: summaryRecord.content,
-          thought: summaryRecord.thought ?? undefined,
-          generatedAt: summaryRecord.generatedAt,
-          sourceFingerprint:
-            summaryRecord.sourceFingerprint || computeSummarySourceFingerprint(segments),
-        };
+          );
+          const record: TranscriptSummaryRecord = {
+            templateId: coerceSummaryTemplateId(
+              summaryRecord.templateId,
+              config.summaryCustomTemplates
+            ),
+            content: summaryRecord.content,
+            thought: summaryRecord.thought ?? undefined,
+            generatedAt: summaryRecord.generatedAt,
+            sourceFingerprint:
+              summaryRecord.sourceFingerprint || computeSummarySourceFingerprint(segments),
+          };
 
-        const targetHistoryId = this.updateJobSummaryState(runningHistoryId, {
-          activeTemplateId: resultTemplateId,
-          record,
-          streamingContent: undefined,
-          streamingThought: undefined,
-        });
+          const completedHistoryId = ctx.resolveHistoryId();
+          if (!sentJobHistoryId && completedHistoryId && ctx.target.sessionId) {
+            useTranscriptStore
+              .getState()
+              .rekeySessionSidecar(ctx.target.sessionId, completedHistoryId);
+          }
 
-        if (runningHistoryId === 'current' && targetHistoryId !== 'current') {
-          await this.persistSummary(targetHistoryId);
-        }
-      },
-      onError: (errorHistoryId) => {
-        this.updateJobSummaryState(errorHistoryId, {
-          generationProgress: 0,
-        });
-      },
-      onFinally: (finishedHistoryId) => {
-        this.updateJobSummaryState(finishedHistoryId, {
-          isGenerating: false,
-          generationProgress: 0,
-        });
-      },
-    });
+          const latestSidecarKey = ctx.resolveSidecarKey();
+          this.ports.getTranscriptSidecarStore().updateSummaryState(
+            {
+              activeTemplateId: resultTemplateId,
+              record,
+              streamingContent: undefined,
+              streamingThought: undefined,
+            },
+            latestSidecarKey
+          );
+
+          if (completedHistoryId) {
+            trackedKeys.add(completedHistoryId);
+            this.inFlightSummaryKeys.add(completedHistoryId);
+          }
+          if (!sentJobHistoryId && completedHistoryId) {
+            await this.persistSummary(completedHistoryId);
+          }
+        },
+        onError: (sidecarKey) => {
+          this.ports.getTranscriptSidecarStore().updateSummaryState(
+            {
+              generationProgress: 0,
+            },
+            sidecarKey
+          );
+        },
+        onFinally: (sidecarKey) => {
+          this.ports.getTranscriptSidecarStore().updateSummaryState(
+            {
+              isGenerating: false,
+              generationProgress: 0,
+            },
+            sidecarKey
+          );
+        },
+      });
+    } finally {
+      for (const key of this.getTargetInFlightKeys(target)) {
+        trackedKeys.add(key);
+      }
+      for (const key of trackedKeys) {
+        this.inFlightSummaryKeys.delete(key);
+      }
+    }
   }
 
   private buildRequest(
     taskId: string,
-    jobHistoryId: string,
+    jobHistoryId: string | null,
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
     config: AppConfig
@@ -323,36 +487,11 @@ export class SummaryService {
     return {
       taskId,
       taskType: 'summary',
-      jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
+      jobHistoryId,
       config: summaryLlmConfig,
       template,
       segments,
     };
-  }
-
-  private updateJobSummaryState(
-    jobHistoryId: string,
-    state: Partial<TranscriptSummaryState>
-  ): string {
-    const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId);
-    this.ports.getTranscriptSidecarStore().updateSummaryState(state, targetHistoryId);
-    return targetHistoryId;
-  }
-
-  private resolveTargetHistoryId(jobHistoryId: string): string {
-    if (jobHistoryId !== 'current') {
-      return jobHistoryId;
-    }
-
-    const sessionStore = this.ports.getTranscriptSessionStore();
-    // A "current" job can become history-backed after save. The coordinator rekeys
-    // the transient summary state during that save, so follow-up UI updates should
-    // continue on the newly durable history id.
-    if (sessionStore.sourceHistoryId) {
-      return sessionStore.sourceHistoryId;
-    }
-
-    return 'current';
   }
 }
 

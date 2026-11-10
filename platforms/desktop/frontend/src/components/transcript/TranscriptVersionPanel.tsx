@@ -1,7 +1,12 @@
 import { CheckSquare, Clock3, FileDiff, Loader2, RotateCcw, Square, Undo2 } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useVersionPanel } from '../../hooks/useVersionPanel';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../../services/task/documentMutationCoordinator';
 import type { TranscriptSegment } from '../../types/transcript';
 import type { TranscriptDiffRow, TranscriptSnapshotReason } from '../../types/transcriptSnapshot';
 import { PanelModal } from '../PanelModal';
@@ -52,6 +57,10 @@ export function TranscriptVersionPanel({
   onClose,
 }: TranscriptVersionPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const boundSessionId = useBoundSessionId();
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, historyId)
+  );
 
   const {
     snapshots,
@@ -71,7 +80,7 @@ export function TranscriptVersionPanel({
     handleToggleAll,
     handleRestoreSelected,
     handleRestoreAll,
-  } = useVersionPanel({ isOpen, historyId });
+  } = useVersionPanel({ isOpen, historyId, sessionId: boundSessionId });
 
   if (!isOpen) {
     return null;
@@ -107,7 +116,7 @@ export function TranscriptVersionPanel({
             type="button"
             className="btn btn-secondary"
             onClick={() => void handleRestoreSelected().then((success) => success && onClose())}
-            disabled={isBusy || isDiffLoading || selectedRowIds.size === 0}
+            disabled={isBusy || isDocumentLocked || isDiffLoading || selectedRowIds.size === 0}
           >
             {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Undo2 size={14} />}
             {t('versions.restore_selected')}
@@ -116,7 +125,7 @@ export function TranscriptVersionPanel({
             type="button"
             className="btn btn-secondary"
             onClick={() => void handleRestoreAll().then((success) => success && onClose())}
-            disabled={isBusy || !selectedRecord}
+            disabled={isBusy || isDocumentLocked || !selectedRecord}
           >
             <RotateCcw size={14} />
             {t('versions.restore_all')}

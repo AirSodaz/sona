@@ -219,6 +219,7 @@ fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
         .preview_audio_cleanup(HistoryAudioCleanupRequest {
             retention_days: Some(7),
             exclude_history_id: None,
+            exclude_history_ids: None,
         })
         .unwrap();
     assert_eq!(preview.eligible_count, 1);
@@ -233,6 +234,7 @@ fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
         .cleanup_audio(HistoryAudioCleanupRequest {
             retention_days: Some(7),
             exclude_history_id: None,
+            exclude_history_ids: None,
         })
         .unwrap();
     assert_eq!(report, preview);
@@ -285,6 +287,7 @@ fn audio_cleanup_skips_active_history_and_drafts() {
         .cleanup_audio(HistoryAudioCleanupRequest {
             retention_days: Some(0),
             exclude_history_id: Some(active.id.clone()),
+            exclude_history_ids: None,
         })
         .unwrap();
 
@@ -343,6 +346,7 @@ fn audio_cleanup_marks_missing_audio_without_deleting_history() {
         .cleanup_audio(HistoryAudioCleanupRequest {
             retention_days: Some(0),
             exclude_history_id: None,
+            exclude_history_ids: None,
         })
         .unwrap();
 
@@ -402,6 +406,7 @@ fn audio_cleanup_keeps_available_when_file_deletion_fails() {
         .cleanup_audio(HistoryAudioCleanupRequest {
             retention_days: Some(0),
             exclude_history_id: None,
+            exclude_history_ids: None,
         })
         .unwrap();
 
@@ -447,6 +452,7 @@ fn audio_cleanup_disabled_when_retention_is_none() {
         .cleanup_audio(HistoryAudioCleanupRequest {
             retention_days: None,
             exclude_history_id: None,
+            exclude_history_ids: None,
         })
         .unwrap();
 
@@ -456,6 +462,67 @@ fn audio_cleanup_disabled_when_retention_is_none() {
         store.list_items().unwrap()[0].audio_status,
         HistoryAudioStatus::Available
     );
+}
+
+#[test]
+fn audio_cleanup_skips_multiple_excluded_history_ids() {
+    let root = tempdir().unwrap();
+    let db = Database::open_in_memory().unwrap();
+    let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+    store.ensure_ready().unwrap();
+
+    let create_item = store
+        .save_recording(HistorySaveRecordingRequest {
+            segments: vec![segment_value("seg-1", "Create open", 0.0, 1.0)],
+            duration: 1.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            audio_bytes: Some(vec![1]),
+            native_audio_path: None,
+            audio_extension: Some("wav".to_string()),
+        })
+        .unwrap();
+    let project_item = store
+        .save_recording(HistorySaveRecordingRequest {
+            segments: vec![segment_value("seg-2", "Project open", 0.0, 1.0)],
+            duration: 1.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            audio_bytes: Some(vec![2]),
+            native_audio_path: None,
+            audio_extension: Some("wav".to_string()),
+        })
+        .unwrap();
+    let stale_item = store
+        .save_recording(HistorySaveRecordingRequest {
+            segments: vec![segment_value("seg-3", "Old item", 0.0, 1.0)],
+            duration: 1.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            audio_bytes: Some(vec![3, 4]),
+            native_audio_path: None,
+            audio_extension: Some("wav".to_string()),
+        })
+        .unwrap();
+
+    for id in [&create_item.id, &project_item.id, &stale_item.id] {
+        set_history_timestamp(&store, id, 1);
+    }
+
+    let report = store
+        .cleanup_audio(HistoryAudioCleanupRequest {
+            retention_days: Some(0),
+            exclude_history_id: Some(create_item.id.clone()),
+            exclude_history_ids: Some(vec![create_item.id.clone(), project_item.id.clone()]),
+        })
+        .unwrap();
+
+    assert_eq!(report.skipped_active_count, 2);
+    assert_eq!(report.eligible_count, 1);
+    assert_eq!(report.removed_count, 1);
+    assert!(saved_audio_path(&root, &create_item).exists());
+    assert!(saved_audio_path(&root, &project_item).exists());
+    assert!(!saved_audio_path(&root, &stale_item).exists());
 }
 
 #[test]

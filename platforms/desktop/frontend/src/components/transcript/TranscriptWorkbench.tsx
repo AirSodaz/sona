@@ -7,9 +7,15 @@ import {
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
 import { syncEmbySubtitles } from '../../services/emby/embyService';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../../services/task/documentMutationCoordinator';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
@@ -89,6 +95,7 @@ export function TranscriptWorkbench({
   isActive = true,
 }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const boundSessionId = useBoundSessionId();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSpeakerReviewOpen, setIsSpeakerReviewOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
@@ -103,7 +110,6 @@ export function TranscriptWorkbench({
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
-  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
   const setTitle = useTranscriptSessionStore((state) => state.setTitle);
   const setIcon = useTranscriptSessionStore((state) => state.setIcon);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
@@ -147,7 +153,7 @@ export function TranscriptWorkbench({
       await syncEmbySubtitles(segments, embyContext);
       if (
         !isMountedRef.current ||
-        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
       setEmbySyncSuccess(true);
@@ -160,7 +166,7 @@ export function TranscriptWorkbench({
     } catch (err: unknown) {
       if (
         !isMountedRef.current ||
-        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
       console.error('Failed to resync to Emby:', err);
@@ -172,7 +178,7 @@ export function TranscriptWorkbench({
     } finally {
       if (
         isMountedRef.current &&
-        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId === targetHistoryId
       ) {
         setIsSyncingEmby(false);
       }
@@ -182,8 +188,19 @@ export function TranscriptWorkbench({
   const isCurrentSessionRecording = Boolean(
     isRecording &&
       (recordingSessionId
-        ? activeSessionId === recordingSessionId
+        ? boundSessionId === recordingSessionId
         : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, sourceHistoryId)
+  );
+  const isBatchProcessing = useBatchQueueStore((state) =>
+    state.queueItems.some(
+      (item) =>
+        item.status === 'processing' &&
+        (item.id === boundSessionId ||
+          (Boolean(sourceHistoryId) && item.historyId === sourceHistoryId))
+    )
   );
 
   useEscapeKey(
@@ -225,7 +242,8 @@ export function TranscriptWorkbench({
       ? t('panel.batch_import', { defaultValue: 'Batch Import' })
       : t('panel.live_record', { defaultValue: 'Live Record' });
   const displayTitle = propsTitle || storeTitle || fallbackTitle;
-  const isManualHeaderActionsDisabled = isCurrentSessionRecording;
+  const isManualHeaderActionsDisabled =
+    isCurrentSessionRecording || isDocumentLocked || isBatchProcessing;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {

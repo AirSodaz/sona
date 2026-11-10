@@ -458,4 +458,31 @@ describe('transcriptAutoSaveRuntime', () => {
     expect(useTranscriptSidecarStore.getState().autoSaveStates['untracked-id']).toBeUndefined();
     expect(transcriptAutoSaveRuntime.hasPendingWork('hist-quiet-1')).toBe(false);
   });
+
+  it('cancels debounced auto-save timers via cancelPending and cancelAllPending so delete/restore never writes stale edits', async () => {
+    openTranscriptSession({
+      sourceHistoryId: 'hist-del',
+      segments: [{ id: 's-1', text: 'Initial', start: 0, end: 1, isFinal: true }],
+    });
+    transcriptAutoSaveRuntime.start();
+
+    updateTranscriptSegment('s-1', { text: 'Stale pending edit' });
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-del')).toBe(true);
+
+    transcriptAutoSaveRuntime.cancelPending(['hist-del']);
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-del')).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(historyService.commitTranscriptEdit).not.toHaveBeenCalled();
+
+    // Verify cancelAllPending clears edits across open sessions too
+    updateTranscriptSegment('s-1', { text: 'Another pending edit' });
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-del')).toBe(true);
+
+    transcriptAutoSaveRuntime.cancelAllPending();
+    expect(transcriptAutoSaveRuntime.hasPendingWork('hist-del')).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(historyService.commitTranscriptEdit).not.toHaveBeenCalled();
+  });
 });

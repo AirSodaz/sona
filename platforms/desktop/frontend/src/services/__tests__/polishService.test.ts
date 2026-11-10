@@ -440,4 +440,68 @@ describe('PolishService', () => {
       'raw b'
     );
   });
+
+  it('catches up persistence via commitSystemTranscriptUpdate when an unpersisted session saves mid-polish', async () => {
+    const { useHistoryStore } = await import('../../stores/historyStore');
+    const commitSystemTranscriptUpdate = vi.fn(async (id: string, segs: TranscriptSegment[]) => {
+      useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segs);
+      return {} as any;
+    });
+    useHistoryStore.setState({ commitSystemTranscriptUpdate } as any);
+
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'draft-rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'draft-rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [
+            { id: '1', start: 0, end: 1, text: 'raw one', isFinal: true },
+            { id: '2', start: 1, end: 2, text: 'user edited two', isFinal: true },
+          ],
+        },
+        'other-history': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'other-history',
+          segments: [{ id: 'x', start: 0, end: 1, text: 'other', isFinal: true }],
+        },
+      },
+    });
+
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (cmd) => {
+      if (cmd === 'run_transcript_llm_job') {
+        useCanonicalTranscriptStore
+          .getState()
+          .syncSavedRecordingMeta(
+            'Saved Recording',
+            'history-late',
+            'system:mic',
+            null,
+            'draft-rec-1'
+          );
+        useCanonicalTranscriptStore.getState().activateSession('other-history');
+        return {
+          taskId: 'polish-task-id',
+          taskType: 'polish',
+          jobHistoryId: null,
+          segments: [{ id: '1', start: 0, end: 1, text: 'Polished one.', isFinal: true }],
+        };
+      }
+      return null;
+    });
+
+    await polishService.polishTranscript();
+
+    const draftSegments = useCanonicalTranscriptStore.getState().sessions['draft-rec-1'].segments;
+    expect(draftSegments[0].text).toBe('Polished one.');
+    expect(draftSegments[1].text).toBe('user edited two');
+    expect(useCanonicalTranscriptStore.getState().sessions['other-history'].segments[0].text).toBe(
+      'other'
+    );
+    expect(commitSystemTranscriptUpdate).toHaveBeenCalledWith('history-late', [
+      expect.objectContaining({ id: '1', text: 'Polished one.' }),
+      expect.objectContaining({ id: '2', text: 'user edited two' }),
+    ]);
+  });
 });

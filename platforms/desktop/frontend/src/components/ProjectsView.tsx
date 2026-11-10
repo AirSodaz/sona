@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { TranscriptSessionProvider } from '../contexts/TranscriptSessionContext';
 import {
   flushPendingAutoSave,
   hasPendingAutoSave,
@@ -8,6 +9,7 @@ import {
 } from '../hooks/useAutoSaveTranscript';
 import { syncEmbySubtitles } from '../services/emby/embyService';
 import { historyService } from '../services/historyService';
+import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import { storageOpenPath } from '../services/tauri/storage';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
@@ -20,7 +22,7 @@ import {
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../stores/transcriptStore';
 import type { EmbyTaskContext } from '../types/batchQueue';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isHistoryItemDraft } from '../types/history';
@@ -111,7 +113,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const refreshHistory = useHistoryStore((state) => state.refresh);
 
   const sourceHistoryId = useTranscriptStore(
-    (state) => state.sessions[state.activeSessionId]?.sourceHistoryId ?? null
+    (state) => state.sessions[state.createLiveSessionId]?.sourceHistoryId ?? null
   );
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
@@ -139,6 +141,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
   const browseScopeRef = useRef('inbox');
   const syncingEmbyIdsRef = useRef<Set<string>>(new Set());
+  const openRequestSeqRef = useRef(0);
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
   const isLiveDraftSessionLocked = useMemo(
     () =>
       getLiveDraftLockState(isRecording, sourceHistoryId, historyItems, recordingSessionId)
@@ -166,6 +171,25 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       if (item.deletedAt != null) {
         return;
       }
+      const requestSeq = ++openRequestSeqRef.current;
+      const isResidentProtected = (historyId: string): boolean => {
+        const state = useTranscriptStore.getState();
+        const existingSession = state.sessions[historyId];
+        if (!existingSession || existingSession.sourceHistoryId !== historyId) {
+          return false;
+        }
+        const llmState = state.llmStates[historyId];
+        const summaryState = state.summaryStates[historyId];
+        return Boolean(
+          documentMutationCoordinator.isLocked(historyId, historyId) ||
+            hasPendingAutoSave(historyId) ||
+            llmState?.isPolishing ||
+            llmState?.isTranslating ||
+            llmState?.isRetranscribing ||
+            summaryState?.isGenerating
+        );
+      };
+
       if (isHistoryItemDraft(item)) {
         const isBatch = item.type === 'batch';
         const transcriptState = useTranscriptStore.getState();
@@ -188,19 +212,38 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           // Bind the Create pane to this specific draft instead of whatever content
           // was left active, loading its persisted transcript and audio.
           try {
-            if (hasPendingAutoSave(item.id)) {
+            if (
+              hasPendingAutoSave(item.id) &&
+              !documentMutationCoordinator.isLocked(item.id, item.id)
+            ) {
               await flushPendingAutoSave(item.id);
+            }
+            if (requestSeq !== openRequestSeqRef.current) {
+              return;
             }
             const segments = (await historyService.loadTranscript(item.id)) ?? [];
             const url = await historyService.getAudioUrl(item.id);
+            if (requestSeq !== openRequestSeqRef.current) {
+              return;
+            }
             useTranscriptRuntimeStore.getState().setMode('create', isBatch ? 'batch' : 'live');
-            openTranscriptSession({
-              segments,
-              sourceHistoryId: item.id,
-              title: item.title,
-              icon: item.icon,
-              audioUrl: url,
-            });
+            if (isBatch) {
+              useTranscriptStore.getState().openBatchAdhocDraft({
+                segments,
+                sourceHistoryId: item.id,
+                title: item.title,
+                icon: item.icon,
+                audioUrl: url,
+              });
+            } else {
+              useTranscriptStore.getState().openLiveDraftSession({
+                segments,
+                sourceHistoryId: item.id,
+                title: item.title,
+                icon: item.icon,
+                audioUrl: url,
+              });
+            }
             resetAutoSaveBaselineIfTracked(item.id, segments);
           } catch (error) {
             await showError({
@@ -219,17 +262,44 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         return;
       }
 
+      const activateProtectedSession = (latestItem: HistoryItemType) => {
+        const store = useTranscriptStore.getState();
+        store.updateSessionMetaByHistoryId(latestItem.id, {
+          title: latestItem.title,
+          icon: latestItem.icon ?? null,
+        });
+        if (isActiveRef.current) {
+          store.activateSession(item.id);
+        }
+        setSelectedHistoryId(item.id);
+      };
+
+      if (isResidentProtected(item.id)) {
+        activateProtectedSession(initialItem);
+        return;
+      }
+
       try {
         if (hasPendingAutoSave(item.id)) {
           await flushPendingAutoSave(item.id);
         }
+        if (requestSeq !== openRequestSeqRef.current) {
+          return;
+        }
         let segments = await historyService.loadTranscript(item.id);
         const url = await historyService.getAudioUrl(item.id);
+        if (requestSeq !== openRequestSeqRef.current) {
+          return;
+        }
 
         const latestItem = useHistoryStore
           .getState()
           .items.find((candidate) => candidate.id === item.id);
         if (!latestItem) {
+          return;
+        }
+        if (isResidentProtected(item.id)) {
+          activateProtectedSession(latestItem);
           return;
         }
         if (!segments && !url) {
@@ -245,17 +315,33 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           segments = [];
         }
 
-        openTranscriptSession({
-          segments,
-          sourceHistoryId: item.id,
-          title: latestItem.title,
-          icon: latestItem.icon,
-          audioUrl: url,
-        });
+        if (isActiveRef.current) {
+          openTranscriptSession({
+            segments,
+            sourceHistoryId: item.id,
+            title: latestItem.title,
+            icon: latestItem.icon,
+            audioUrl: url,
+          });
+        } else {
+          useTranscriptStore.setState((state) => ({
+            sessions: {
+              ...state.sessions,
+              [item.id]: {
+                ...(state.sessions[item.id] || DEFAULT_SESSION_DATA),
+                segments,
+                sourceHistoryId: item.id,
+                title: latestItem.title || '',
+                icon: latestItem.icon || null,
+                audioUrl: url ?? null,
+              },
+            },
+          }));
+        }
         resetAutoSaveBaselineIfTracked(item.id, segments);
         setSelectedHistoryId(item.id);
         const store = useTranscriptStore.getState();
-        if (!store.isRecording && !store.recordingSessionId) {
+        if (isActiveRef.current && !store.isRecording && !store.recordingSessionId) {
           await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
         }
       } catch (error) {
@@ -1099,14 +1185,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         </section>
       )}
 
-      {selectedItem && activeSessionId === effectiveSelectedHistoryId && (
+      {selectedItem && effectiveSelectedHistoryId && (
         <aside className="projects-detail-pane">
-          <TranscriptWorkbench
-            isActive={isActive}
-            onClose={clearOpenedItem}
-            title={selectedItem.title}
-            defaultIconType={selectedItem.type}
-          />
+          <TranscriptSessionProvider sessionId={effectiveSelectedHistoryId} isActive={isActive}>
+            <TranscriptWorkbench
+              isActive={isActive}
+              onClose={clearOpenedItem}
+              title={selectedItem.title}
+              defaultIconType={selectedItem.type}
+            />
+          </TranscriptSessionProvider>
         </aside>
       )}
 

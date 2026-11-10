@@ -5,6 +5,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { logger } from '../utils/logger';
 import { flushConfigPersistence } from './configPersistenceService';
+import { documentMutationCoordinator } from './task/documentMutationCoordinator';
 import { forceExit, hasActiveApiServerJobs, hasActiveDownloads } from './tauri/app';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
@@ -37,6 +38,20 @@ function hasActiveBatchQueueTasks(state: BatchQueueQuitTaskSnapshot): boolean {
   return hasProcessingItem || hasPendingItemWhileQueueRunning;
 }
 
+const pendingQuitBlockingTasks = new Set<Promise<unknown>>();
+
+export function trackQuitBlockingTask<T>(promise: Promise<T>): Promise<T> {
+  const tracked = promise.finally(() => {
+    pendingQuitBlockingTasks.delete(tracked);
+  });
+  pendingQuitBlockingTasks.add(tracked);
+  return tracked;
+}
+
+export function hasActiveBackgroundQuitTasks(): boolean {
+  return pendingQuitBlockingTasks.size > 0;
+}
+
 export function hasActiveFrontendQuitTasks(
   transcriptState: TranscriptQuitTaskSnapshot,
   batchQueueState: BatchQueueQuitTaskSnapshot
@@ -48,7 +63,9 @@ export function hasActiveFrontendQuitTasks(
     transcriptState.processingStatus === 'processing' ||
     hasActiveLlmTasks(transcriptState) ||
     hasActiveSummaryTasks(transcriptState) ||
-    hasActiveBatchQueueTasks(batchQueueState)
+    hasActiveBatchQueueTasks(batchQueueState) ||
+    documentMutationCoordinator.hasActiveTasks() ||
+    hasActiveBackgroundQuitTasks()
   );
 }
 

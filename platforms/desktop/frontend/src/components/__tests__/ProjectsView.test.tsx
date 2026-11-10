@@ -2508,7 +2508,7 @@ describe('ProjectsView', () => {
     useTranscriptStore.setState({
       mode: 'projects',
       activeSessionId: 'create-1',
-      createSessionId: 'create-1',
+      createLiveSessionId: 'create-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'create-1': {
@@ -2955,5 +2955,96 @@ describe('ProjectsView', () => {
     );
     expect(useTranscriptStore.getState().activeSessionId).toBe('hist-completed');
     expect(getDetailPlaceholder()).not.toBeNull();
+  });
+
+  it('ignores stale handleOpenItem loads when rapidly clicking another item or switching tabs away', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-slow',
+          title: 'Slow Item',
+          timestamp: Date.now() - 2000,
+          duration: 60,
+          audioPath: 'slow.wav',
+          transcriptPath: 'hist-slow.json',
+          previewText: 'Slow',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+          icon: 'system:mic',
+        },
+        {
+          id: 'hist-fast',
+          title: 'Fast Item',
+          timestamp: Date.now() - 1000,
+          duration: 60,
+          audioPath: 'fast.wav',
+          transcriptPath: 'hist-fast.json',
+          previewText: 'Fast',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+          icon: 'system:mic',
+        },
+      ],
+    } as any);
+
+    const slowDeferred = Promise.withResolvers<any[]>();
+    vi.mocked(historyService.loadTranscript).mockImplementation(async (id: string) => {
+      if (id === 'hist-slow') {
+        return slowDeferred.promise;
+      }
+      return [{ id: 'f-1', start: 0, end: 1, text: 'fast loaded', isFinal: true }];
+    });
+
+    useTranscriptStore.setState({ mode: 'projects', activeSessionId: 'default' });
+    const view = testingLibraryRender(
+      <ContextMenuProvider>
+        <ProjectsView isActive={true} />
+      </ContextMenuProvider>
+    );
+    await waitForInitialHistoryLoad();
+
+    // Rapidly click Slow then Fast before Slow finishes loading
+    await clickAsync(screen.getByRole('button', { name: 'Slow Item' }));
+    await clickAsync(screen.getByRole('button', { name: 'Fast Item' }));
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().activeSessionId).toBe('hist-fast');
+    });
+
+    // Late resolution of Slow must NOT overwrite Fast
+    await act(async () => {
+      slowDeferred.resolve([{ id: 's-1', start: 0, end: 1, text: 'slow late', isFinal: true }]);
+      await Promise.resolve();
+    });
+    expect(useTranscriptStore.getState().activeSessionId).toBe('hist-fast');
+
+    // Close detail pane so list item is visible again, then click Slow and switch tab away (isActive=false + mode='create')
+    await clickAsync(screen.getByRole('button', { name: 'Close' }));
+    const tabDeferred = Promise.withResolvers<any[]>();
+    vi.mocked(historyService.loadTranscript).mockImplementationOnce(
+      async () => tabDeferred.promise
+    );
+    await clickAsync(screen.getByRole('button', { name: 'Slow Item' }));
+
+    act(() => {
+      useTranscriptStore.setState({ mode: 'create', activeSessionId: 'default' });
+    });
+    view.rerender(
+      <ContextMenuProvider>
+        <ProjectsView isActive={false} />
+      </ContextMenuProvider>
+    );
+
+    await act(async () => {
+      tabDeferred.resolve([
+        { id: 's-2', start: 0, end: 1, text: 'stale tab switch', isFinal: true },
+      ]);
+      await Promise.resolve();
+    });
+
+    expect(useTranscriptStore.getState().mode).toBe('create');
+    expect(useTranscriptStore.getState().activeSessionId).toBe('default');
   });
 });

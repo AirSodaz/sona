@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
@@ -64,6 +65,7 @@ export interface UseSpeakerReviewOptions {
 }
 
 export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReviewOptions) {
+  const boundSessionId = useBoundSessionId();
   const busyGroupIdRef = useRef<string | null>(null);
   const snapshotRequestIdRef = useRef(0);
   const showError = useDialogStore((state) => state.showError);
@@ -189,11 +191,15 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     async (groupId: string) => {
       await runGroupAction(
         groupId,
-        () => speakerCorrectionService.confirmSpeakerGroupReview(groupId),
+        () =>
+          speakerCorrectionService.confirmSpeakerGroupReview(groupId, {
+            sessionId: boundSessionId,
+            historyId: sourceHistoryId,
+          }),
         'speaker_review.confirm_failed'
       );
     },
-    [runGroupAction]
+    [boundSessionId, runGroupAction, sourceHistoryId]
   );
 
   const handleAssignProfile = useCallback(
@@ -204,23 +210,31 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
           speakerCorrectionService.assignProfileToSpeakerGroup(
             groupId,
             profileId,
-            currentProjectId
+            currentProjectId,
+            {
+              sessionId: boundSessionId,
+              historyId: sourceHistoryId,
+            }
           ),
         'speaker_review.apply_failed'
       );
     },
-    [runGroupAction, currentProjectId]
+    [boundSessionId, runGroupAction, currentProjectId, sourceHistoryId]
   );
 
   const handleResetGroup = useCallback(
     async (groupId: string) => {
       await runGroupAction(
         groupId,
-        () => speakerCorrectionService.resetGroupToAnonymous(groupId),
+        () =>
+          speakerCorrectionService.resetGroupToAnonymous(groupId, {
+            sessionId: boundSessionId,
+            historyId: sourceHistoryId,
+          }),
         'speaker_review.reset_failed'
       );
     },
-    [runGroupAction]
+    [boundSessionId, runGroupAction, sourceHistoryId]
   );
   const handleBatchApplyTopCandidates = useCallback(async () => {
     const eligibleGroups = visibleGroups.filter((g) => g.candidates.length > 0);
@@ -236,7 +250,11 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
           await speakerCorrectionService.assignProfileToSpeakerGroup(
             group.groupId,
             top.profileId,
-            currentProjectId
+            currentProjectId,
+            {
+              sessionId: boundSessionId,
+              historyId: sourceHistoryId,
+            }
           );
         }
       }
@@ -249,7 +267,14 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     } finally {
       setIsBatchApplying(false);
     }
-  }, [isBatchApplying, showError, visibleGroups, currentProjectId]);
+  }, [
+    boundSessionId,
+    isBatchApplying,
+    showError,
+    sourceHistoryId,
+    visibleGroups,
+    currentProjectId,
+  ]);
 
   const handleJumpToGroup = useCallback(
     (group: SpeakerReviewGroup) => {

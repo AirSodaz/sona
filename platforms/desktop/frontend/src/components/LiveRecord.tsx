@@ -153,22 +153,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     peakLevelRef,
     isPaused,
   });
-  // Automatically stop visualizer and clear session when recording stops (e.g. from tray or shortcut)
-  const prevIsRecordingRef = useRef(isRecording);
+  // Stop visualizer cleanly when recording ends without mutating `recordingSessionId`
+  // prematurely (owned by `recordController` stop lifecycle).
   useEffect(() => {
-    if (prevIsRecordingRef.current && !isRecording) {
+    if (!isRecording) {
       stopVisualizer();
-      setRecordingSessionId(null);
     }
-    prevIsRecordingRef.current = isRecording;
   }, [isRecording, stopVisualizer]);
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording();
       stopVisualizer();
-      setRecordingSessionId(null);
     } else {
-      if (isAgentRecording) {
+      if (isAgentRecording || isInitializing || isTransitioning) {
         return;
       }
       const transcriptState = useTranscriptStore.getState();
@@ -194,7 +191,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
   }, [
     isAgentRecording,
+    isInitializing,
     isRecording,
+    isTransitioning,
     startRecording,
     stopRecording,
     startVisualizer,
@@ -265,6 +264,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
       if (isStartStopMatch) {
         e.preventDefault();
+        if (isInitializing || isTransitioning) {
+          return;
+        }
         void handleToggleRecording();
       } else if (
         e.code === 'Space' &&
@@ -286,7 +288,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleRecording, handleTogglePause, config.liveRecordShortcut]);
+  }, [
+    handleToggleRecording,
+    handleTogglePause,
+    config.liveRecordShortcut,
+    isInitializing,
+    isTransitioning,
+  ]);
 
   return (
     <div className={`live-record-container ${className}`}>

@@ -43,10 +43,10 @@ import { useConfigStore } from './configStore';
 import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { useProjectStore } from './projectStore';
 import { useTaskLedgerStore } from './taskLedgerStore';
-import { clearActiveTranscriptSession, setTranscriptSegments } from './transcriptCoordinator';
 import {
   DEFAULT_SESSION_DATA,
   registerBatchActiveItemIdResolver,
+  selectCreateBoundSessionId,
   useTranscriptStore,
 } from './transcriptStore';
 
@@ -309,19 +309,18 @@ function flushSessionSegmentsToQueueItem(
   }));
 }
 
-function shouldClearActiveSessionForBatch(batchId: string | null): boolean {
-  const transcriptState = useTranscriptStore.getState();
-  if (batchId !== null && transcriptState.activeSessionId === batchId) {
-    return true;
+function syncActiveViewAfterBatchClear(
+  clearedBatchIds: string[],
+  nextActiveId: string | null = null
+): void {
+  if (clearedBatchIds.length === 0) {
+    return;
   }
-  return (
-    transcriptState.mode === 'create' &&
-    !transcriptState.isRecording &&
-    !transcriptState.recordingSessionId &&
-    (transcriptState.ingestionFocus === 'batch' ||
-      (transcriptState.activeSessionId === 'default' &&
-        !transcriptState.sessions.default?.sourceHistoryId))
-  );
+  const transcriptState = useTranscriptStore.getState();
+  if (!clearedBatchIds.includes(transcriptState.activeSessionId)) {
+    return;
+  }
+  transcriptState.activateSession(selectCreateBoundSessionId(transcriptState, nextActiveId));
 }
 
 function patchQueueItemTask(
@@ -710,8 +709,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             },
           },
         });
+        transcriptStore.rekeySessionSidecar(id, savedMeta.historyId);
         if (get().activeItemId === id) {
-          transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
           const {
             activeSessionId,
             mode: currentMode,
@@ -720,7 +719,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             recordingSessionId,
           } = useTranscriptStore.getState();
           if (activeSessionId === id) {
-            transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
+            useTranscriptStore.getState().setAudioUrl(savedMeta.audioUrl ?? null);
           }
           // Only update the active project when still in batch mode and not recording,
           // to avoid overriding the browse scope or active recording project.
@@ -797,9 +796,11 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         prevActiveId !== id &&
         prevActiveId !== prevActiveSessionId &&
         Boolean(transcriptState.sessions[prevActiveId]?.isPlaying);
-      const shouldUpdateCreateSession =
-        (canActivateInUi && transcriptState.mode === 'create') ||
-        (!isBackgroundRecording && transcriptState.ingestionFocus === 'batch');
+      const shouldClearAdhocDraft =
+        canActivateInUi &&
+        transcriptState.mode === 'create' &&
+        transcriptState.ingestionFocus === 'batch' &&
+        transcriptState.createBatchAdhocSessionId !== null;
       const nextSessions: typeof transcriptState.sessions = {
         ...transcriptState.sessions,
         ...(shouldPausePrevSession
@@ -837,24 +838,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       };
       useTranscriptStore.setState({
         ...(canActivateInUi ? { activeSessionId: id } : {}),
-        ...(shouldUpdateCreateSession ? { createSessionId: id } : {}),
+        ...(shouldClearAdhocDraft ? { createBatchAdhocSessionId: null } : {}),
         sessions: nextSessions,
       });
       if (!isBackgroundRecording && transcriptState.mode !== 'projects') {
         void useProjectStore.getState().setActiveProjectId(item.projectId);
       }
     } else if (id === null) {
-      if (shouldClearActiveSessionForBatch(prevActiveId)) {
-        clearActiveTranscriptSession({ clearAudio: true, title: '' });
-      } else {
-        const transcriptState = useTranscriptStore.getState();
-        if (
-          prevActiveId !== null &&
-          transcriptState.ingestionFocus === 'batch' &&
-          transcriptState.createSessionId === prevActiveId
-        ) {
-          useTranscriptStore.setState({ createSessionId: 'default' });
-        }
+      if (prevActiveId !== null) {
+        syncActiveViewAfterBatchClear([prevActiveId], null);
+        useTranscriptStore.getState().clearTranscriptSession(prevActiveId, {
+          clearAudio: true,
+          title: '',
+        });
       }
     }
   },
@@ -923,13 +919,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     // Write to dedicated session in transcript store
     useTranscriptStore.getState().setSegmentsForSession(id, segments);
-
-    const state = get();
-    if (state.activeItemId === id) {
-      if (useTranscriptStore.getState().activeSessionId === id) {
-        setTranscriptSegments(segments);
-      }
-    }
   },
   updateItemFilePath: (id, filePath) => {
     let nextQueueItems: BatchQueueItem[] = [];
@@ -1056,9 +1045,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       });
     });
 
-    if (shouldClearActiveSessionForBatch(activeId)) {
-      clearActiveTranscriptSession({ clearAudio: true });
-    }
+    const clearedIds = state.queueItems.map((item) => item.id);
+    syncActiveViewAfterBatchClear(clearedIds, null);
     state.queueItems.forEach((item) => {
       useTranscriptStore.getState().evictSession(item.id);
     });
@@ -1097,11 +1085,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       });
     });
 
+    const completedIds = completedItems.map((item) => item.id);
     if (isActiveItemCompleted) {
       if (newActiveId !== null) {
         get().setActiveItem(newActiveId);
-      } else if (shouldClearActiveSessionForBatch(activeId)) {
-        clearActiveTranscriptSession({ clearAudio: true, title: '' });
+      } else {
+        syncActiveViewAfterBatchClear(completedIds, null);
       }
     }
     completedItems.forEach((item) => {

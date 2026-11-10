@@ -54,6 +54,7 @@ export function AudioPlayer({
   useAudioSync({
     audioRef,
     audioUrl,
+    isActive,
     isPlaying,
     playbackRate,
     setCurrentTime,

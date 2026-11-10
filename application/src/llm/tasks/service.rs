@@ -97,6 +97,18 @@ where
         }
     }
 
+    fn effective_task_concurrency(&self, config: &LlmConfig) -> usize {
+        let is_local = matches!(
+            config.provider,
+            sona_core::domain::LlmProvider::Builtin(sona_core::domain::BuiltinLlmProvider::Local)
+        ) || matches!(
+            config.strategy,
+            sona_core::llm::tasks::LlmProviderStrategy::Local
+                | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
+        );
+        if is_local { 1 } else { self.max_concurrency }
+    }
+
     pub async fn polish(
         &self,
         request: PolishSegmentsRequest,
@@ -140,6 +152,7 @@ where
         let cache = task_cache_policy(total_chunks);
         let config = request.config.clone();
         let segments = &request.segments;
+        let concurrency = self.effective_task_concurrency(&request.config);
         let mut pending = stream::iter(chunks.into_iter().enumerate())
             .map(|(chunk_index, planned)| {
                 let chunk = segments[planned.start..planned.end].to_vec();
@@ -171,7 +184,7 @@ where
                     .map(|items| (chunk_index, items))
                 }
             })
-            .buffer_unordered(self.max_concurrency);
+            .buffer_unordered(concurrency);
 
         let mut ordered = vec![None; total_chunks];
         let mut completed = 0usize;
@@ -271,6 +284,23 @@ where
         )?;
         let total_chunks = chunks.len();
         let cache = task_cache_policy(total_chunks);
+        let replacer = request
+            .post_process_replacements
+            .as_ref()
+            .filter(|sets| !sets.is_empty())
+            .map(|sets| {
+                sona_core::transcription::postprocess::TranscriptPostprocessor::compile(
+                    sona_core::transcription::postprocess::TranscriptPostprocessOptions {
+                        text_replacement_sets: sets.clone(),
+                        drop_final_dot_segments: false,
+                    },
+                )
+            })
+            .transpose()
+            .map_err(|error| LlmTaskError::InvalidRequest {
+                reason: error.to_string(),
+            })?;
+        let concurrency = self.effective_task_concurrency(&request.config);
         let config = request.config.clone();
         let target_language = request.target_language.clone();
         let target_language_name = request.target_language_name.clone();
@@ -327,12 +357,18 @@ where
                     result.map(|items| (chunk_index, items))
                 }
             })
-            .buffer_unordered(self.max_concurrency);
+            .buffer_unordered(concurrency);
 
         let mut ordered = vec![None; total_chunks];
         let mut completed = 0usize;
         while let Some(result) = pending.next().await {
-            let (chunk_index, items) = result?;
+            let (chunk_index, mut items) = result?;
+            for item in &mut items {
+                if let Some(postprocessor) = replacer.as_ref() {
+                    item.translation = postprocessor.apply_text_replacements(&item.translation);
+                }
+                item.translation = sona_core::text::format_cjk_typography(&item.translation);
+            }
             completed += 1;
             emit(
                 observer,
@@ -442,6 +478,7 @@ where
             return Ok(result);
         }
 
+        let concurrency = self.effective_task_concurrency(&request.config);
         let map_count = chunks.len();
         let total_chunks = map_count + 1;
         let config = request.config.clone();
@@ -468,7 +505,7 @@ where
                     .map(|response| (chunk_index, response.text.trim().to_string()))
                 }
             })
-            .buffer_unordered(self.max_concurrency);
+            .buffer_unordered(concurrency);
 
         let mut partials = vec![None; map_count];
         let mut completed = 0usize;

@@ -37,6 +37,19 @@ vi.mock('../../stores/transcriptSessionStore', () => ({
   },
 }));
 
+vi.mock('../../stores/transcriptStore', () => ({
+  useTranscriptStore: {
+    getState: () => ({
+      activeSessionId: 'default',
+      sessions: mocks.sourceHistoryId
+        ? { default: { sourceHistoryId: mocks.sourceHistoryId } }
+        : {},
+      sourceHistoryId: mocks.sourceHistoryId,
+      recordingSessionId: null,
+    }),
+  },
+}));
+
 vi.mock('../historyService', () => ({
   historyService: {
     cleanupAudio: (...args: unknown[]) => mocks.cleanupAudio(...args),
@@ -109,7 +122,7 @@ describe('historyAudioCleanupService', () => {
 
     const result = await runHistoryAudioCleanupForCurrentConfig(new Date(2026, 6, 4));
 
-    expect(mocks.cleanupAudio).toHaveBeenCalledWith(30, 'active-history');
+    expect(mocks.cleanupAudio).toHaveBeenCalledWith(30, 'active-history', ['active-history']);
     expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
     expect(result?.removedCount).toBe(1);
   });

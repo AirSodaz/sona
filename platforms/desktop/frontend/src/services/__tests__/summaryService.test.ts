@@ -560,4 +560,162 @@ describe('isSummaryRecordStale', () => {
     };
     expect(isSummaryRecordStale(record, segments)).toBe(true);
   });
+
+  it('isolates streaming and final summary writes to session:<id> when switching tabs mid-stream on an unpersisted draft', async () => {
+    const { historyService } = await import('../historyService');
+    const { useTranscriptSidecarStore } = await import('../../stores/transcriptSidecarStore');
+
+    useTranscriptStore.setState({
+      config: createSummaryReadyConfig(),
+      activeSessionId: 'draft-rec-1',
+      sessions: {
+        default: { ...useTranscriptStore.getState().sessions.default },
+        'draft-rec-1': {
+          ...useTranscriptStore.getState().sessions.default,
+          sourceHistoryId: null,
+          segments: [{ id: 'd-1', text: 'Draft call transcript', start: 0, end: 2, isFinal: true }],
+        },
+        'history-other': {
+          ...useTranscriptStore.getState().sessions.default,
+          sourceHistoryId: 'history-other',
+          segments: [{ id: 'o-1', text: 'Other history', start: 0, end: 2, isFinal: true }],
+        },
+      },
+    });
+    useTranscriptSidecarStore.getState().setSummaryState(
+      {
+        activeTemplateId: 'general',
+        record: {
+          templateId: 'general',
+          content: 'Existing other summary',
+          generatedAt: '2026-05-01T00:00:00.000Z',
+          sourceFingerprint: 'other-fp',
+        },
+      },
+      'history-other'
+    );
+
+    let emitChunk: ((event: any) => Promise<void>) | undefined;
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      emitChunk = onText;
+      return vi.fn();
+    });
+
+    const invokeGate = Promise.withResolvers<any>();
+    vi.mocked(invoke).mockImplementation(async () => invokeGate.promise);
+
+    const jobPromise = summaryService.generateSummary({
+      templateId: 'general',
+      sessionId: 'draft-rec-1',
+    });
+
+    // Switch foreground tab to history-other while streaming
+    await vi.waitFor(() => {
+      expect(emitChunk).toBeDefined();
+    });
+    useTranscriptStore.getState().activateSession('history-other');
+
+    await emitChunk?.({
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      text: 'Draft partial stream',
+      delta: 'Draft partial stream',
+    });
+
+    expect(
+      useTranscriptSidecarStore.getState().getSummaryState('session:draft-rec-1').streamingContent
+    ).toBe('Draft partial stream');
+    expect(
+      useTranscriptSidecarStore.getState().getSummaryState('history-other').record?.content
+    ).toBe('Existing other summary');
+
+    invokeGate.resolve({
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      jobHistoryId: null,
+      summary: {
+        activeTemplateId: 'general',
+        record: {
+          templateId: 'general',
+          content: 'Final draft summary',
+          generatedAt: '2026-05-05T00:00:00.000Z',
+          sourceFingerprint: 'draft-fp',
+        },
+      },
+    });
+    await jobPromise;
+
+    expect(
+      useTranscriptSidecarStore.getState().getSummaryState('session:draft-rec-1').record?.content
+    ).toBe('Final draft summary');
+    expect(
+      useTranscriptSidecarStore.getState().getSummaryState('history-other').record?.content
+    ).toBe('Existing other summary');
+    expect(historyService.saveSummary).not.toHaveBeenCalled();
+  });
+
+  it('runs Summary concurrently while Channel 3 lock is held and deduplicates same-document requests', async () => {
+    const { documentMutationCoordinator } = await import('../task/documentMutationCoordinator');
+
+    useTranscriptStore.setState({
+      config: createSummaryReadyConfig(),
+      activeSessionId: 'history-locked',
+      sessions: {
+        default: { ...useTranscriptStore.getState().sessions.default },
+        'history-locked': {
+          ...useTranscriptStore.getState().sessions.default,
+          sourceHistoryId: 'history-locked',
+          segments: [{ id: 'l-1', text: 'Locked transcript', start: 0, end: 2, isFinal: true }],
+        },
+      },
+    });
+
+    const lockGate = Promise.withResolvers<void>();
+    const summaryGate = Promise.withResolvers<any>();
+    vi.mocked(invoke).mockImplementation(async () => summaryGate.promise);
+
+    // Acquire Channel 3 exclusive document lock on history-locked
+    const heldLock = documentMutationCoordinator.runExclusive(
+      { sessionId: 'history-locked', historyId: 'history-locked' },
+      { taskType: 'polish' },
+      async () => {
+        // Trigger duplicate concurrent Summary calls while lock is STILL held
+        const p1 = summaryService.generateSummary({
+          templateId: 'general',
+          sessionId: 'history-locked',
+        });
+        const p2 = summaryService.generateSummary({
+          templateId: 'general',
+          sessionId: 'history-locked',
+        });
+
+        await vi.waitFor(() => {
+          expect(invoke).toHaveBeenCalledTimes(1);
+        });
+
+        summaryGate.resolve({
+          taskId: 'summary-task-id',
+          taskType: 'summary',
+          jobHistoryId: 'history-locked',
+          summary: {
+            activeTemplateId: 'general',
+            record: {
+              templateId: 'general',
+              content: 'Concurrent summary under lock',
+              generatedAt: '2026-05-05T00:00:00.000Z',
+              sourceFingerprint: 'lock-fp',
+            },
+          },
+        });
+        await Promise.all([p1, p2]);
+        await lockGate.promise;
+      }
+    );
+
+    await vi.waitFor(() => {
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
+    lockGate.resolve();
+    await heldLock;
+  });
 });

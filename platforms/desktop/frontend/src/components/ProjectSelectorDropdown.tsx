@@ -125,6 +125,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { ProjectRecord } from '../types/project';
+import { getLiveDraftLockState } from './projects/hooks/useWorkspaceItemMutations';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectVisual } from './projects/ProjectVisual';
 
@@ -166,7 +167,16 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
     return map;
   }, [historyItems, isRecording, recordingSessionId]);
 
-  const locked = isRecording && Boolean(recordingSessionId || sourceHistoryId);
+  const locked = useMemo(
+    () =>
+      getLiveDraftLockState(
+        Boolean(isRecording),
+        sourceHistoryId ?? null,
+        historyItems,
+        recordingSessionId ?? null
+      ).isLocked,
+    [isRecording, sourceHistoryId, historyItems, recordingSessionId]
+  );
   const active = projects.find((project) => project.id === activeProjectId) ?? null;
   const filtered = useMemo(
     () =>
@@ -331,12 +341,12 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
             icon: createIcon,
           });
           const runtimeState = useTranscriptStore.getState();
-          const isCurrentlyLocked =
-            runtimeState.isRecording &&
-            Boolean(
-              runtimeState.recordingSessionId ||
-                runtimeState.sessions[runtimeState.activeSessionId]?.sourceHistoryId
-            );
+          const isCurrentlyLocked = getLiveDraftLockState(
+            runtimeState.isRecording,
+            runtimeState.sessions[runtimeState.createLiveSessionId]?.sourceHistoryId ?? null,
+            useHistoryStore.getState().items,
+            runtimeState.recordingSessionId
+          ).isLocked;
           if (project && !isCurrentlyLocked) {
             await setActiveProjectId(project.id);
           }

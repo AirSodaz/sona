@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../constants/languages';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import {
   getActiveLlmConfig,
   getFeatureLlmConfig,
@@ -9,6 +10,10 @@ import {
 } from '../services/llm/configUtils';
 import { modelService } from '../services/modelService';
 import { resolveItemPipeline } from '../services/projectPipeline';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../services/task/documentMutationCoordinator';
 import { toggleLiveTranslation } from '../services/tauri/recognizer';
 import { translationService } from '../services/translationService';
 import { useConfigStore } from '../stores/configStore';
@@ -18,7 +23,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
+import { DEFAULT_LLM_STATE, resolveSidecarKey } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { DEFAULT_PROJECT_PIPELINE } from '../types/project';
@@ -105,16 +110,20 @@ export function TranslateButton({
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
 
   // LLM state
+  const boundSessionId = useBoundSessionId();
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const sidecarKey = resolveSidecarKey(boundSessionId, sourceHistoryId);
   const isLiveSession =
     isRecording &&
     (recordingSessionId
-      ? sourceHistoryId === recordingSessionId
+      ? boundSessionId === recordingSessionId
       : !sourceHistoryId || sourceHistoryId === 'current');
   const llmState =
-    useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) ||
-    DEFAULT_LLM_STATE;
+    useTranscriptSidecarStore((state) => state.llmStates[sidecarKey]) || DEFAULT_LLM_STATE;
   const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, sourceHistoryId)
+  );
   const updateLlmState = useTranscriptSidecarStore((state) => state.updateLlmState);
 
   const config = useEffectiveConfigStore((state) => state.config);
@@ -270,7 +279,9 @@ export function TranslateButton({
     triggerRef.current?.focus();
 
     try {
-      await translationService.translateCurrentTranscript(effectiveTargetLang);
+      await translationService.translateCurrentTranscript(effectiveTargetLang, {
+        sessionId: boundSessionId,
+      });
     } catch (error) {
       await showError({
         code: 'translation.failed',
@@ -281,7 +292,7 @@ export function TranslateButton({
   };
 
   const handleToggleVisibility = () => {
-    updateLlmState({ isTranslationVisible: !isTranslationVisible }, sourceHistoryId || undefined);
+    updateLlmState({ isTranslationVisible: !isTranslationVisible }, sidecarKey);
     closeMenu();
     triggerRef.current?.focus();
   };
@@ -559,7 +570,7 @@ export function TranslateButton({
               type="button"
               className="export-dropdown-item"
               onClick={handleStartTranslation}
-              disabled={isTranslating}
+              disabled={isTranslating || isRetranscribing || isDocumentLocked}
               role="menuitem"
               tabIndex={-1}
             >

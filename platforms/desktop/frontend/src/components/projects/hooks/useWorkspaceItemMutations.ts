@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import { historyService } from '../../../services/historyService';
 import { historyQueryWorkspace } from '../../../services/tauri/history';
+import { transcriptAutoSaveRuntime } from '../../../services/transcriptAutoSaveRuntime';
 import type { DialogCheckboxConfig, DialogOptions } from '../../../stores/dialogStore';
 import { useHistoryStore } from '../../../stores/historyStore';
 import { useProjectStore } from '../../../stores/projectStore';
@@ -17,10 +18,18 @@ export interface LiveDraftLockState {
 }
 
 export function getLiveDraftLockState(
-  isRecording = useTranscriptRuntimeStore.getState().isRecording,
-  sourceHistoryId = useTranscriptSessionStore.getState().sourceHistoryId,
-  historyItems = useHistoryStore.getState().items,
-  recordingSessionId = useTranscriptStore.getState().recordingSessionId
+  isRecording = typeof useTranscriptRuntimeStore?.getState === 'function'
+    ? useTranscriptRuntimeStore.getState().isRecording
+    : false,
+  sourceHistoryId = typeof useTranscriptSessionStore?.getState === 'function'
+    ? useTranscriptSessionStore.getState().sourceHistoryId
+    : null,
+  historyItems = typeof useHistoryStore?.getState === 'function'
+    ? useHistoryStore.getState().items
+    : [],
+  recordingSessionId = typeof useTranscriptStore?.getState === 'function'
+    ? useTranscriptStore.getState().recordingSessionId
+    : null
 ): LiveDraftLockState {
   const activeDraftHistoryId = recordingSessionId ?? sourceHistoryId;
   const sourceItem = activeDraftHistoryId
@@ -137,10 +146,12 @@ export function useWorkspaceItemMutations({
     }
 
     if (isTrashItem || isDirectDelete) {
+      transcriptAutoSaveRuntime.cancelPending([id]);
       await historyService.purgeRecordings([id]);
       if (sourceHistoryId === id) {
         clearOpenedItem();
       }
+      transcriptAutoSaveRuntime.cancelPending([id]);
       useTranscriptStore.getState().evictSessionsByHistoryIds([id]);
     } else {
       await useHistoryStore.getState().deleteItem(id);
@@ -222,10 +233,12 @@ export function useWorkspaceItemMutations({
     }
 
     if (isTrashScope || isDirectDelete) {
+      transcriptAutoSaveRuntime.cancelPending(targetIds);
       await historyService.purgeRecordings(targetIds);
       if (sourceHistoryId && targetIds.includes(sourceHistoryId)) {
         clearOpenedItem();
       }
+      transcriptAutoSaveRuntime.cancelPending(targetIds);
       useTranscriptStore.getState().evictSessionsByHistoryIds(targetIds);
     } else {
       await useHistoryStore.getState().deleteItems(targetIds);
@@ -282,7 +295,12 @@ export function useWorkspaceItemMutations({
       if (!page.hasMore || page.filteredItems.length === 0) break;
       offset += page.filteredItems.length;
     }
+    transcriptAutoSaveRuntime.cancelPending(ids);
     await historyService.purgeRecordings(ids);
+    if (sourceHistoryId && ids.includes(sourceHistoryId)) {
+      clearOpenedItem();
+    }
+    transcriptAutoSaveRuntime.cancelPending(ids);
     useTranscriptStore.getState().evictSessionsByHistoryIds(ids);
     await refreshHistory();
   };

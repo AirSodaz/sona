@@ -5,7 +5,7 @@ import {
   createProviderSetting,
   getProviderDefinition,
 } from '../../../services/llm/providers';
-import { generateLlmText } from '../../../services/tauri/llm';
+import { generateLlmText } from '../../../services/llmOperations';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript';

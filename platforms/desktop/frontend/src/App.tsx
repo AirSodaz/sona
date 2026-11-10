@@ -15,6 +15,7 @@ import { TabNavigation } from './components/TabNavigation';
 import { TranscriptionOptions } from './components/TranscriptionOptions';
 import { ToolsView } from './components/tools/ToolsView';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
+import { TranscriptSessionProvider } from './contexts/TranscriptSessionContext';
 import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -30,10 +31,9 @@ import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
 import { useConfigStore, useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
-import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
-import { useTranscriptStore } from './stores/transcriptStore';
+import { selectCreateBoundSessionId, useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
 import type { LlmProvider } from './types/transcript';
 import { logger } from './utils/logger';
@@ -86,6 +86,10 @@ function App(): React.JSX.Element | null {
   const isProjectsMode = mode === 'projects';
   const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const activeBatchItemId = useBatchQueueStore((state) => state.activeItemId);
+  const createBoundSessionId = useTranscriptStore((state) =>
+    selectCreateBoundSessionId(state, activeBatchItemId)
+  );
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
   const { t } = useTranslation();
@@ -220,15 +224,19 @@ function App(): React.JSX.Element | null {
 
   const closeTranscriptSession = () => {
     const activeBatchId = useBatchQueueStore.getState().activeItemId;
+    const transcriptState = useTranscriptStore.getState();
     if (
-      activeBatchId &&
-      (useTranscriptStore.getState().activeSessionId === activeBatchId ||
-        (mode === 'create' && ingestionFocus === 'batch'))
+      transcriptState.createBatchAdhocSessionId &&
+      createBoundSessionId === transcriptState.createBatchAdhocSessionId
     ) {
-      useBatchQueueStore.getState().setActiveItem(null);
-    } else {
-      clearActiveTranscriptSession({ clearAudio: true });
+      transcriptState.closeBatchAdhocDraft(transcriptState.createBatchAdhocSessionId);
+      return;
     }
+    if (activeBatchId && createBoundSessionId === activeBatchId) {
+      useBatchQueueStore.getState().setActiveItem(null);
+      return;
+    }
+    transcriptState.clearTranscriptSession(createBoundSessionId, { clearAudio: true });
   };
 
   if (!isLoaded) {
@@ -316,10 +324,15 @@ function App(): React.JSX.Element | null {
 
             {/* Right Panel - Editor */}
             <div className="panel panel-right">
-              <TranscriptWorkbench
-                onClose={closeTranscriptSession}
+              <TranscriptSessionProvider
+                sessionId={createBoundSessionId}
                 isActive={!isProjectsMode && !isToolsMode}
-              />
+              >
+                <TranscriptWorkbench
+                  onClose={closeTranscriptSession}
+                  isActive={!isProjectsMode && !isToolsMode}
+                />
+              </TranscriptSessionProvider>
             </div>
           </div>
         </div>

@@ -22,6 +22,11 @@ vi.mock('../../../services/transcriptionService', () => ({
 
 vi.mock('../../../services/historyService', () => ({
   flushPendingAutoSave: vi.fn().mockResolvedValue(undefined),
+  cancelPendingAutoSave: vi.fn(),
+  historyService: {
+    loadTranscript: vi.fn().mockResolvedValue(null),
+    updateTranscript: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 function createRef<T>(value: T): MutableRefLike<T> {

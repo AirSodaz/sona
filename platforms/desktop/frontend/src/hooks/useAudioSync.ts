@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef } from 'react';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 
 /** Props for useAudioSync hook. */
@@ -9,6 +10,8 @@ interface UseAudioSyncProps {
   audioRef: React.RefObject<HTMLAudioElement | null>;
   /** Current audio URL. */
   audioUrl: string | null;
+  /** Whether the host shell owning this player is active. Defaults to true. */
+  isActive?: boolean;
   /** Current playback state. */
   isPlaying: boolean;
   /** Playback rate. */
@@ -30,6 +33,7 @@ interface UseAudioSyncProps {
 export function useAudioSync({
   audioRef,
   audioUrl,
+  isActive = true,
   isPlaying,
   playbackRate,
   setCurrentTime,
@@ -37,17 +41,28 @@ export function useAudioSync({
   setDuration,
   lastUpdateTimeRef,
 }: UseAudioSyncProps) {
-  // Sync audio element play/pause with store state
+  const boundSessionId = useBoundSessionId();
+  const restoredKeyRef = useRef<string | null>(null);
+
+  // Sync audio element play/pause with store state & host visibility
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (isPlaying) {
+    if (isPlaying && isActive) {
       audio.play().catch(logger.error);
     } else {
       audio.pause();
     }
-  }, [isPlaying, audioRef]);
+  }, [isActive, isPlaying, audioRef]);
+
+  // Pause session playback flag cleanly when the host tab switches away without
+  // clearing the saved `currentTime`, so returning restores & resumes accurately.
+  useEffect(() => {
+    if (!isActive && isPlaying) {
+      setIsPlaying(false);
+    }
+  }, [isActive, isPlaying, setIsPlaying]);
 
   // Sync playback rate
   useEffect(() => {
@@ -56,16 +71,14 @@ export function useAudioSync({
     }
   }, [playbackRate, audioRef]);
 
-  const restoredUrlRef = useRef<string | null>(null);
-
-  // Reset duration when audioUrl changes
+  // Reset duration when audioUrl or bound session changes
   useEffect(() => {
-    if (audioUrl !== undefined) {
+    if (boundSessionId && audioUrl !== undefined) {
       setDuration(0);
       lastUpdateTimeRef.current = 0;
-      restoredUrlRef.current = null;
+      restoredKeyRef.current = null;
     }
-  }, [audioUrl, setDuration, lastUpdateTimeRef]);
+  }, [audioUrl, boundSessionId, setDuration, lastUpdateTimeRef]);
 
   // Handle audio events
   useEffect(() => {
@@ -83,12 +96,13 @@ export function useAudioSync({
     };
 
     const restoreSavedTime = () => {
-      if (restoredUrlRef.current === audioUrl) {
+      const targetKey = `${boundSessionId}:${audioUrl ?? ''}`;
+      if (restoredKeyRef.current === targetKey) {
         return;
       }
-      restoredUrlRef.current = audioUrl;
-      const savedTime = useTranscriptPlaybackStore.getState().currentTime;
-      if (savedTime > 0 && audio.currentTime === 0) {
+      restoredKeyRef.current = targetKey;
+      const savedTime = useTranscriptStore.getState().sessions[boundSessionId]?.currentTime ?? 0;
+      if (savedTime > 0 && Math.abs(audio.currentTime - savedTime) > 0.05) {
         audio.currentTime = savedTime;
         lastUpdateTimeRef.current = savedTime;
       }
@@ -137,5 +151,13 @@ export function useAudioSync({
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [setCurrentTime, setIsPlaying, audioUrl, setDuration, lastUpdateTimeRef, audioRef]);
+  }, [
+    boundSessionId,
+    setCurrentTime,
+    setIsPlaying,
+    audioUrl,
+    setDuration,
+    lastUpdateTimeRef,
+    audioRef,
+  ]);
 }

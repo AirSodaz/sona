@@ -130,12 +130,18 @@ describe('TranscriptSummaryPanel', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('option', { name: 'summary.templates.meeting' }));
     });
-    expect(mockSetActiveTemplate).toHaveBeenCalledWith('meeting');
+    expect(mockSetActiveTemplate).toHaveBeenCalledWith('meeting', {
+      sessionId: 'default',
+      historyId: 'history-1',
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByText('summary.regenerate'));
     });
-    expect(mockGenerateSummary).toHaveBeenCalledWith('general');
+    expect(mockGenerateSummary).toHaveBeenCalledWith({
+      templateId: 'general',
+      sessionId: 'default',
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByText('summary.copy'));
@@ -181,7 +187,10 @@ describe('TranscriptSummaryPanel', () => {
       fireEvent.blur(textarea);
     });
     await waitFor(() => {
-      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Blur draft');
+      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Blur draft', {
+        sessionId: 'default',
+        historyId: 'history-1',
+      });
     });
 
     await act(async () => {
@@ -195,8 +204,14 @@ describe('TranscriptSummaryPanel', () => {
       fireEvent.click(screen.getByRole('option', { name: 'summary.templates.meeting' }));
     });
     await waitFor(() => {
-      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Template draft');
-      expect(mockSetActiveTemplate).toHaveBeenCalledWith('meeting');
+      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Template draft', {
+        sessionId: 'default',
+        historyId: 'history-1',
+      });
+      expect(mockSetActiveTemplate).toHaveBeenCalledWith('meeting', {
+        sessionId: 'default',
+        historyId: 'history-1',
+      });
     });
 
     await act(async () => {
@@ -204,8 +219,14 @@ describe('TranscriptSummaryPanel', () => {
       fireEvent.click(screen.getByText('summary.regenerate'));
     });
     await waitFor(() => {
-      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Generate draft');
-      expect(mockGenerateSummary).toHaveBeenCalledWith('general');
+      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Generate draft', {
+        sessionId: 'default',
+        historyId: 'history-1',
+      });
+      expect(mockGenerateSummary).toHaveBeenCalledWith({
+        templateId: 'general',
+        sessionId: 'default',
+      });
     });
 
     await act(async () => {
@@ -213,7 +234,10 @@ describe('TranscriptSummaryPanel', () => {
       fireEvent.click(screen.getByLabelText('common.close'));
     });
     await waitFor(() => {
-      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Close draft');
+      expect(mockUpdateSummaryRecord).toHaveBeenCalledWith('Close draft', {
+        sessionId: 'default',
+        historyId: 'history-1',
+      });
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
@@ -222,7 +246,7 @@ describe('TranscriptSummaryPanel', () => {
     useTranscriptStore.setState({
       segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
-        current: {
+        'session:default': {
           activeTemplateId: 'general',
           record: undefined,
           streamingContent: 'Streaming summary text',
@@ -252,7 +276,7 @@ describe('TranscriptSummaryPanel', () => {
     useTranscriptStore.setState({
       segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
-        current: {
+        'session:default': {
           activeTemplateId: 'general',
           record: undefined,
           streamingContent: undefined,
@@ -272,7 +296,7 @@ describe('TranscriptSummaryPanel', () => {
     useTranscriptStore.setState({
       segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
-        current: {
+        'session:default': {
           activeTemplateId: 'general',
           record: undefined,
           streamingContent: 'Recoverable streamed summary',

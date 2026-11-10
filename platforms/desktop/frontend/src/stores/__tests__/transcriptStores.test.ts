@@ -21,6 +21,7 @@ import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
 import {
   DEFAULT_SESSION_DATA,
   registerBatchActiveItemIdResolver,
+  selectCreateBoundSessionId,
   useTranscriptStore as useCanonicalTranscriptStore,
 } from '../transcriptStore';
 
@@ -67,6 +68,15 @@ describe('Transcript Stores', () => {
   });
 
   it('opens and clears a transcript session, then syncs saved metadata back into session and sidecar state', () => {
+    openTranscriptSession({
+      segments: [{ id: 'seg-1', text: 'Hello', start: 0, end: 1, isFinal: true }],
+      sourceHistoryId: null,
+      title: 'Draft',
+      icon: 'system:mic',
+      audioUrl: 'asset:///draft.wav',
+    });
+
+    const activeSessionId = useTranscriptStore.getState().activeSessionId;
     useTranscriptSidecarStore.getState().setSummaryState(
       {
         activeTemplateId: 'meeting',
@@ -77,27 +87,19 @@ describe('Transcript Stores', () => {
           sourceFingerprint: 'fp-1',
         },
       },
-      'current'
+      `session:${activeSessionId}`
     );
-
-    openTranscriptSession({
-      segments: [{ id: 'seg-1', text: 'Hello', start: 0, end: 1, isFinal: true }],
-      sourceHistoryId: 'history-1',
-      title: 'Draft',
-      icon: 'system:mic',
-      audioUrl: 'asset:///draft.wav',
-    });
 
     expect(useTranscriptSessionStore.getState()).toEqual(
       expect.objectContaining({
-        sourceHistoryId: 'history-1',
+        sourceHistoryId: null,
         title: 'Draft',
         icon: 'system:mic',
       })
     );
     expect(useTranscriptPlaybackStore.getState().audioUrl).toBe('asset:///draft.wav');
 
-    syncSavedRecordingMeta('Saved title', 'history-1', 'system:file');
+    syncSavedRecordingMeta('Saved title', 'history-1', 'system:file', undefined, activeSessionId);
 
     expect(useTranscriptSessionStore.getState()).toEqual(
       expect.objectContaining({
@@ -106,7 +108,9 @@ describe('Transcript Stores', () => {
         icon: 'system:file',
       })
     );
-    expect(useTranscriptSidecarStore.getState().summaryStates.current).toBeUndefined();
+    expect(
+      useTranscriptSidecarStore.getState().summaryStates[`session:${activeSessionId}`]
+    ).toBeUndefined();
     expect(useTranscriptSidecarStore.getState().getSummaryState('history-1').record?.content).toBe(
       'Unsaved summary'
     );
@@ -463,6 +467,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'saved-transcript-789',
+      createLiveSessionId: 'saved-transcript-789',
       recordingSessionId: null,
       mode: 'create',
       ingestionFocus: 'live',
@@ -497,7 +502,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'create-session-123',
-      createSessionId: 'create-session-123',
+      createLiveSessionId: 'create-session-123',
       recordingSessionId: null,
       mode: 'create',
       ingestionFocus: 'live',
@@ -531,7 +536,7 @@ describe('Transcript Stores', () => {
       ],
     });
     expect(realStore.getState().activeSessionId).toBe('project-item-456');
-    expect(realStore.getState().createSessionId).toBe('create-session-123');
+    expect(realStore.getState().createLiveSessionId).toBe('create-session-123');
 
     // Switch back to create mode via tab navigation (no focus arg)
     realStore.getState().setMode('create');
@@ -694,7 +699,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'create-1',
-      createSessionId: 'create-1',
+      createLiveSessionId: 'create-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'create-1': { ...DEFAULT_SESSION_DATA, title: 'Create' },
@@ -704,7 +709,7 @@ describe('Transcript Stores', () => {
 
     realStore.getState().activateSession('detail-1');
     expect(realStore.getState().activeSessionId).toBe('detail-1');
-    expect(realStore.getState().createSessionId).toBe('create-1');
+    expect(realStore.getState().createLiveSessionId).toBe('create-1');
 
     realStore.getState().activateSession('missing');
     expect(realStore.getState().activeSessionId).toBe('detail-1');
@@ -714,7 +719,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'rec-1',
-      createSessionId: 'rec-1',
+      createLiveSessionId: 'rec-1',
       recordingSessionId: 'rec-1',
       mode: 'create',
       ingestionFocus: 'live',
@@ -751,7 +756,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'create-1',
-      createSessionId: 'create-1',
+      createLiveSessionId: 'create-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'create-1': {
@@ -786,7 +791,7 @@ describe('Transcript Stores', () => {
     const realStore = useCanonicalTranscriptStore;
     realStore.setState({
       activeSessionId: 'detail-1',
-      createSessionId: 'hist-create',
+      createLiveSessionId: 'hist-create',
       recordingSessionId: 'rec-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
@@ -802,7 +807,7 @@ describe('Transcript Stores', () => {
     expect(realStore.getState().sessions['detail-1']).toBeUndefined();
     expect(realStore.getState().sessions['rec-1']).toBeDefined();
     expect(realStore.getState().activeSessionId).toBe('default');
-    expect(realStore.getState().createSessionId).toBe('default');
+    expect(realStore.getState().createLiveSessionId).toBe('default');
   });
 
   it('pauses playback on the leaving session when switching tabs or activating another session', () => {
@@ -810,7 +815,7 @@ describe('Transcript Stores', () => {
     realStore.setState({
       mode: 'create',
       activeSessionId: 'create-1',
-      createSessionId: 'create-1',
+      createLiveSessionId: 'create-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'create-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'create-1', isPlaying: true },
@@ -929,7 +934,7 @@ describe('Transcript Stores', () => {
     it('evictNonRecordingSessions keeps default, recordingSessionId, and requested keepSessionIds only', () => {
       useTranscriptStore.setState({
         activeSessionId: 'projects-doc',
-        createSessionId: 'create-old',
+        createLiveSessionId: 'create-old',
         recordingSessionId: 'rec-live-1',
         sessions: {
           default: { ...DEFAULT_SESSION_DATA },
@@ -944,7 +949,7 @@ describe('Transcript Stores', () => {
 
       const state = useTranscriptStore.getState();
       expect(Object.keys(state.sessions).sort()).toEqual(['default', 'kept-doc', 'rec-live-1']);
-      expect(state.createSessionId).toBe('default');
+      expect(state.createLiveSessionId).toBe('default');
       expect(state.activeSessionId).toBe('default');
     });
 
@@ -1005,7 +1010,7 @@ describe('Transcript Stores', () => {
         mode: 'projects',
         ingestionFocus: 'batch',
         activeSessionId: 'projects-1',
-        createSessionId: 'default',
+        createLiveSessionId: 'default',
         sessions: {
           default: { ...DEFAULT_SESSION_DATA },
           'projects-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'projects-1' },
@@ -1017,7 +1022,10 @@ describe('Transcript Stores', () => {
         useTranscriptRuntimeStore.getState().setMode('create');
 
         expect(useTranscriptStore.getState().activeSessionId).toBe('batch-item-1');
-        expect(useTranscriptStore.getState().createSessionId).toBe('batch-item-1');
+        expect(selectCreateBoundSessionId(useTranscriptStore.getState(), 'batch-item-1')).toBe(
+          'batch-item-1'
+        );
+        expect(useTranscriptStore.getState().createLiveSessionId).toBe('default');
       } finally {
         registerBatchActiveItemIdResolver(() => null);
       }

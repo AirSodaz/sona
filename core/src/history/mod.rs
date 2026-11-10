@@ -315,6 +315,8 @@ pub struct HistoryAudioCleanupRequest {
     pub retention_days: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exclude_history_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude_history_ids: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]

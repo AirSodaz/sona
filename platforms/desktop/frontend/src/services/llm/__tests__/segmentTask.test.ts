@@ -27,7 +27,7 @@ const taskLedgerContext = vi.hoisted(() => ({
         : input.taskType === 'summary'
           ? 'llmSummary'
           : 'llmTranslate',
-    status: 'running',
+    status: input.status ?? 'running',
     title: input.taskType,
     progress: 0,
     createdAt: 100,
@@ -171,18 +171,28 @@ describe('segmentTask helpers', () => {
       onFinally,
     });
 
-    expect(onStart).toHaveBeenCalledWith('current');
-    expect(onProgress).toHaveBeenCalledWith(50, 'current');
-    expect(runTask).toHaveBeenCalledWith('shared-task-id', 'current');
-    expect(onSuccess).toHaveBeenCalledWith('current');
+    expect(onStart).toHaveBeenCalledWith('session:default');
+    expect(onProgress).toHaveBeenCalledWith(50, 'session:default');
+    expect(runTask).toHaveBeenCalledWith(
+      'shared-task-id',
+      'session:default',
+      expect.objectContaining({
+        target: expect.any(Object),
+        resolveHistoryId: expect.any(Function),
+        resolveSidecarKey: expect.any(Function),
+        isCancelled: expect.any(Function),
+        markRunning: expect.any(Function),
+      })
+    );
+    expect(onSuccess).toHaveBeenCalledWith('session:default');
     expect(unlistenProgress).toHaveBeenCalledTimes(1);
-    expect(onFinally).toHaveBeenCalledWith('current');
+    expect(onFinally).toHaveBeenCalledWith('session:default');
     expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'llm-shared-task-id',
         kind: 'llmPolish',
-        status: 'running',
-        historyId: undefined,
+        status: 'pending',
+        historyId: null,
       })
     );
     expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
@@ -205,7 +215,17 @@ describe('segmentTask helpers', () => {
       runTask,
     });
 
-    expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-a');
+    expect(runTask).toHaveBeenCalledWith(
+      'shared-task-id',
+      'history-a',
+      expect.objectContaining({
+        target: expect.any(Object),
+        resolveHistoryId: expect.any(Function),
+        resolveSidecarKey: expect.any(Function),
+        isCancelled: expect.any(Function),
+        markRunning: expect.any(Function),
+      })
+    );
     expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
       'llm-shared-task-id',
       expect.objectContaining({
@@ -263,7 +283,17 @@ describe('segmentTask helpers', () => {
       expect.objectContaining({ text: 'Partial summary' }),
       'history-summary'
     );
-    expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-summary');
+    expect(runTask).toHaveBeenCalledWith(
+      'shared-task-id',
+      'history-summary',
+      expect.objectContaining({
+        target: expect.any(Object),
+        resolveHistoryId: expect.any(Function),
+        resolveSidecarKey: expect.any(Function),
+        isCancelled: expect.any(Function),
+        markRunning: expect.any(Function),
+      })
+    );
     expect(taskLedgerContext.buildLlmTaskLedgerRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: 'shared-task-id',
@@ -341,5 +371,51 @@ describe('segmentTask helpers', () => {
     expect(updateTranscript).toHaveBeenCalledWith('history-a', [
       { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true },
     ]);
+  });
+
+  it('starts ledger record in pending state before markRunning transitions to running', async () => {
+    await runTranscriptSegmentTaskJob({
+      taskType: 'polish',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      sourceHistoryId: 'history-p',
+      runTask: async (_taskId, _target, context) => {
+        expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'llm-shared-task-id',
+            status: 'pending',
+          })
+        );
+        context.markRunning();
+        expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', {
+          status: 'running',
+        });
+      },
+    });
+  });
+
+  it('short-circuits queued LlmJobCancelledError cleanly as cancelled without triggering onError', async () => {
+    const { LlmJobCancelledError } = await import('../llmJobScheduler');
+    const onError = vi.fn();
+
+    await expect(
+      runTranscriptSegmentTaskJob({
+        taskType: 'translate',
+        segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+        sourceHistoryId: 'history-c',
+        runTask: async () => {
+          throw new LlmJobCancelledError();
+        },
+        onError,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'cancelled',
+        cancelable: false,
+      })
+    );
   });
 });

@@ -33,6 +33,7 @@ import {
   prepareBackupImport,
 } from './tauri/backup';
 import { openDialog, saveDialog } from './tauri/platform/dialog';
+import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 class BackupOperationBlockedError extends Error {
   constructor(
@@ -129,6 +130,7 @@ export interface BackupServicePorts {
   getHistoryItems: () => HistoryItem[];
   clearActiveTranscriptSession: (options: { clearAudio: boolean }) => void;
   evictNonRecordingSessions?: (keepSessionIds?: string[]) => void;
+  cancelPendingAutoSave?: () => void;
   openTranscriptSession: typeof openTranscriptSession;
   setAudioFile: (file: File | null) => void;
   historyServiceLoadTranscript: typeof historyService.loadTranscript;
@@ -200,6 +202,7 @@ export class BackupService {
     const currentHistoryId = this.ports.getTranscriptSourceHistoryId();
 
     if (!currentHistoryId) {
+      this.ports.cancelPendingAutoSave?.();
       this.ports.evictNonRecordingSessions?.([]);
       return;
     }
@@ -208,6 +211,7 @@ export class BackupService {
     const matchingItem = historyItems.find((item) => item.id === currentHistoryId);
 
     if (!matchingItem) {
+      this.ports.cancelPendingAutoSave?.();
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
       this.ports.evictNonRecordingSessions?.([]);
       return;
@@ -215,6 +219,7 @@ export class BackupService {
 
     const segments = await this.ports.historyServiceLoadTranscript(matchingItem.id);
     if (!segments) {
+      this.ports.cancelPendingAutoSave?.();
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
       this.ports.evictNonRecordingSessions?.([]);
       return;
@@ -227,6 +232,7 @@ export class BackupService {
       icon: matchingItem.icon || null,
       audioUrl: await this.ports.historyServiceGetAudioUrl(matchingItem.id),
     });
+    this.ports.cancelPendingAutoSave?.();
     this.ports.evictNonRecordingSessions?.([matchingItem.id]);
     this.ports.setAudioFile(null);
   }
@@ -276,6 +282,7 @@ export class BackupService {
       this.ensureBackupOperationsIdle();
       automationStopAttempted = true;
       await this.ports.stopAllAutomation();
+      this.ports.cancelPendingAutoSave?.();
       await this.ports.applyPreparedHistoryImport(prepared.importId);
       backendApplied = true;
 
@@ -314,6 +321,7 @@ export class BackupService {
 
       if (backendApplied && !transcriptSynchronized) {
         try {
+          this.ports.cancelPendingAutoSave?.();
           this.ports.clearActiveTranscriptSession({ clearAudio: true });
           this.ports.evictNonRecordingSessions?.([]);
         } catch (error) {
@@ -360,6 +368,7 @@ export const backupService = createBackupService({
   getHistoryItems: () => useHistoryStore.getState().items,
   clearActiveTranscriptSession,
   evictNonRecordingSessions,
+  cancelPendingAutoSave: () => transcriptAutoSaveRuntime.cancelAllPending(),
   openTranscriptSession,
   setAudioFile: (file) => useTranscriptPlaybackStore.getState().setAudioFile(file),
   historyServiceLoadTranscript: (historyId) => historyService.loadTranscript(historyId),

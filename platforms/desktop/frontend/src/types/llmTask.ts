@@ -9,6 +9,7 @@ import type {
   SummarySegmentInput as GeneratedSummarySegmentInput,
   TranscriptSummaryResult as GeneratedTranscriptSummaryResult,
   TranslatedSegment as GeneratedTranslatedSegment,
+  TranscriptTextReplacementRuleSet,
 } from '../bindings';
 import type { HistoryItem } from './history';
 import type {
@@ -45,6 +46,7 @@ export interface TranslateSegmentsRequest {
   sourceLanguage?: string;
   context?: string;
   keywords?: string;
+  postProcessReplacements?: TranscriptTextReplacementRuleSet[];
 }
 
 export type SummarySegmentInput = Omit<GeneratedSummarySegmentInput, 'start' | 'end'> & {
@@ -78,6 +80,7 @@ export interface TranslateTranscriptLlmJobRequest extends TranscriptLlmJobReques
   targetLanguageName?: string;
   sourceLanguage?: string;
   keywords?: string;
+  postProcessReplacements?: TranscriptTextReplacementRuleSet[];
 }
 
 export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {

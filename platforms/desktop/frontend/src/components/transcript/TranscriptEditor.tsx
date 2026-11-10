@@ -2,17 +2,12 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useStore } from 'zustand';
 import { useTranscriptScrollFollow } from '../../hooks/useTranscriptScrollFollow';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
 import { resolveCurrentSessionAudioPath } from '../../services/sessionAudioService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSearchStore } from '../../stores/searchStore';
-import {
-  deleteTranscriptSegment,
-  mergeTranscriptSegments,
-  splitTranscriptSegment,
-  updateTranscriptSegment,
-} from '../../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { areSpeakerTagsEqual } from '../../types/speakerNormalization';
@@ -77,10 +72,24 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
   const segments = useTranscriptSessionStore((state) => state.segments);
   const editingSegmentId = useTranscriptSessionStore((state) => state.editingSegmentId);
   const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
+  const updateSegment = useTranscriptSessionStore((state) => state.updateSegment);
+  const deleteSegment = useTranscriptSessionStore((state) => state.deleteSegment);
+  const mergeSegments = useTranscriptSessionStore((state) => state.mergeSegments);
+  const splitTranscriptSegment = useTranscriptSessionStore((state) => state.splitTranscriptSegment);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
   // Hooks for UI state and alignment
   const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
+  const isDocumentLocked = useStore(
+    uiStore,
+    useCallback((state) => Boolean(state.isDocumentLocked), [])
+  );
+
+  useEffect(() => {
+    if (isDocumentLocked && editingSegmentId) {
+      setEditingSegmentId(null);
+    }
+  }, [editingSegmentId, isDocumentLocked, setEditingSegmentId]);
 
   const [enrollTargetSegment, setEnrollTargetSegment] = useState<TranscriptSegment | null>(null);
   const [resolvedAudioPath, setResolvedAudioPath] = useState<string | null>(null);
@@ -114,25 +123,31 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (isDocumentLocked) return;
       setEditingSegmentId(id);
     },
-    [setEditingSegmentId]
+    [isDocumentLocked, setEditingSegmentId]
   );
 
   const handleSave = useCallback(
     (id: string, text: string) => {
-      updateTranscriptSegment(id, { text });
+      updateSegment(id, { text });
       setEditingSegmentId(null);
     },
-    [setEditingSegmentId]
+    [setEditingSegmentId, updateSegment]
   );
 
-  const handleSaveTranslation = useCallback((id: string, translation: string) => {
-    updateTranscriptSegment(id, { translation, draftTranslation: undefined });
-  }, []);
+  const handleSaveTranslation = useCallback(
+    (id: string, translation: string) => {
+      if (isDocumentLocked) return;
+      updateSegment(id, { translation, draftTranslation: undefined });
+    },
+    [isDocumentLocked, updateSegment]
+  );
 
   const handleDelete = useCallback(
     async (id: string) => {
+      if (isDocumentLocked) return;
       const confirmed = await confirm(
         t('editor.delete_confirm_message', {
           defaultValue: 'Are you sure you want to delete this segment?',
@@ -144,14 +159,15 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
       );
 
       if (confirmed) {
-        deleteTranscriptSegment(id);
+        deleteSegment(id);
       }
     },
-    [t, confirm]
+    [t, confirm, deleteSegment, isDocumentLocked]
   );
 
   const handleMergeWithNext = useCallback(
     async (id: string) => {
+      if (isDocumentLocked) return;
       const confirmed = await confirm(
         t('editor.merge_confirm_message', {
           defaultValue: 'Merge this segment with the next one?',
@@ -166,16 +182,20 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
         const currentSegments = segmentsRef.current;
         const index = currentSegments.findIndex((s) => s.id === id);
         if (index !== -1 && index < currentSegments.length - 1) {
-          mergeTranscriptSegments(id, currentSegments[index + 1].id);
+          mergeSegments(id, currentSegments[index + 1].id);
         }
       }
     },
-    [confirm, t]
+    [confirm, isDocumentLocked, mergeSegments, t]
   );
 
-  const handleSplit = useCallback((id: string, leftText: string, rightText: string) => {
-    splitTranscriptSegment(id, leftText, rightText);
-  }, []);
+  const handleSplit = useCallback(
+    (id: string, leftText: string, rightText: string) => {
+      if (isDocumentLocked) return;
+      splitTranscriptSegment(id, leftText, rightText);
+    },
+    [isDocumentLocked, splitTranscriptSegment]
+  );
 
   // Stable context for Virtuoso items (callbacks only)
   const contextValue = useMemo<TranscriptContext>(

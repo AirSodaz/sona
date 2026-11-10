@@ -561,6 +561,7 @@ pub(crate) fn translate_segments_request_from_ffi(
         source_language: request.source_language,
         context: request.context,
         keywords: request.keywords,
+        post_process_replacements: None,
     })
 }
 

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { isSummaryLlmConfigComplete } from '../../services/llm/configUtils';
 import { isSummaryRecordStale, summaryService } from '../../services/summaryService';
@@ -8,6 +9,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { resolveSidecarKey } from '../../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import { getSummaryTemplateOptions, resolveSummaryTemplate } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
@@ -34,12 +36,12 @@ export function TranscriptSummaryPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
+  const boundSessionId = useBoundSessionId();
   const segments = useTranscriptSessionStore((state) => state.segments);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const sidecarKey = resolveSidecarKey(boundSessionId, sourceHistoryId);
   const config = useEffectiveConfigStore((state) => state.config);
-  const summaryState = useTranscriptSidecarStore(
-    (state) => state.summaryStates[sourceHistoryId || 'current']
-  );
+  const summaryState = useTranscriptSidecarStore((state) => state.summaryStates[sidecarKey]);
   const setConfig = useConfigStore((state) => state.setConfig);
   const showError = useDialogStore((state) => state.showError);
 
@@ -95,16 +97,18 @@ export function TranscriptSummaryPanel({
     }
 
     const nextContent = editContentRef.current;
-    const hasStoredRecord = !!useTranscriptSidecarStore
-      .getState()
-      .getSummaryState(sourceHistoryId || 'current').record;
+    const hasStoredRecord = !!useTranscriptSidecarStore.getState().getSummaryState(sidecarKey)
+      .record;
     if (nextContent === lastSavedContentRef.current || (!hasStoredRecord && !nextContent.trim())) {
       return;
     }
 
     setIsSaving(true);
     const savePromise = summaryService
-      .updateSummaryRecord(nextContent)
+      .updateSummaryRecord(nextContent, {
+        sessionId: boundSessionId,
+        historyId: sourceHistoryId,
+      })
       .then(() => {
         lastSavedContentRef.current = nextContent;
       })
@@ -115,7 +119,7 @@ export function TranscriptSummaryPanel({
 
     saveInFlightRef.current = savePromise;
     return savePromise;
-  }, [sourceHistoryId]);
+  }, [boundSessionId, sidecarKey, sourceHistoryId]);
 
   const handleCloseRequest = useCallback(async () => {
     await persistDraftIfNeeded();
@@ -212,7 +216,10 @@ export function TranscriptSummaryPanel({
 
   const handleTemplateChange = async (templateId: string) => {
     await persistDraftIfNeeded();
-    await summaryService.setActiveTemplate(templateId);
+    await summaryService.setActiveTemplate(templateId, {
+      sessionId: boundSessionId,
+      historyId: sourceHistoryId,
+    });
     setConfig({ summaryTemplateId: templateId });
   };
 
@@ -228,7 +235,10 @@ export function TranscriptSummaryPanel({
     }
 
     try {
-      await summaryService.generateSummary(activeTemplate.id);
+      await summaryService.generateSummary({
+        templateId: activeTemplate.id,
+        sessionId: boundSessionId,
+      });
     } catch (error) {
       await showError({
         code: 'summary.failed',
