@@ -247,7 +247,9 @@ describe('TranslateButton', () => {
     const startBtn = screen.getByText('translation.start');
     fireEvent.click(startBtn);
 
-    expect(translationService.translateCurrentTranscript).toHaveBeenCalledWith('es');
+    expect(translationService.translateCurrentTranscript).toHaveBeenCalledWith('es', {
+      sessionId: 'default',
+    });
   });
 
   it('renders A => B language selector and swaps languages when clicking swap button', () => {

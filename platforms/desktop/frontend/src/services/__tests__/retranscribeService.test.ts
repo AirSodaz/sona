@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type HistoryState, useHistoryStore } from '../../stores/historyStore';
 import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
+import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
@@ -37,6 +41,8 @@ vi.mock('../historyService', () => ({
   historyService: {
     getAll: vi.fn(),
     getAudioAbsolutePath: vi.fn(),
+    updateTranscript: vi.fn().mockResolvedValue(undefined),
+    commitTranscriptEdit: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -84,13 +90,10 @@ describe('RetranscribeService', () => {
     const nextSegments: TranscriptSegment[] = [
       { id: 'new-1', start: 0, end: 1, text: 'new text', isFinal: true },
     ];
-    const updateTranscript = vi.fn().mockResolvedValue(undefined);
-
     useTranscriptStore.setState({
       sourceHistoryId: 'history-a',
       segments: originalSegments,
     });
-    useHistoryStore.setState({ updateTranscript } as Partial<HistoryState>);
     vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(nextSegments);
 
     await retranscribeService.retranscribeCurrentRecord();
@@ -103,7 +106,7 @@ describe('RetranscribeService', () => {
     expect(
       vi.mocked(transcriptSnapshotService.createSnapshot).mock.invocationCallOrder[0]
     ).toBeLessThan(vi.mocked(transcriptionService.transcribeFile).mock.invocationCallOrder[0]);
-    expect(updateTranscript).toHaveBeenCalledWith('history-a', nextSegments);
+    expect(historyService.updateTranscript).toHaveBeenCalledWith('history-a', nextSegments);
     expect(useTranscriptStore.getState().segments).toEqual(
       normalizeTranscriptSegments(nextSegments)
     );
@@ -126,6 +129,50 @@ describe('RetranscribeService', () => {
       undefined,
       undefined,
       'ja'
+    );
+  });
+
+  it('writes retranscribed segments only to the originating history session when switching tabs mid-job', async () => {
+    const originalSegments: TranscriptSegment[] = [
+      { id: 'old-1', start: 0, end: 1, text: 'old text', isFinal: true },
+    ];
+    const nextSegments: TranscriptSegment[] = [
+      { id: 'new-1', start: 0, end: 1, text: 'new text', isFinal: true },
+    ];
+    const otherSegments: TranscriptSegment[] = [
+      { id: 'rec-1', start: 0, end: 1, text: 'live recording', isFinal: false },
+    ];
+    const updateTranscript = vi.fn().mockResolvedValue(undefined);
+
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'history-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'history-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'history-a',
+          segments: originalSegments,
+        },
+        'live-rec': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-rec',
+          segments: otherSegments,
+        },
+      },
+    });
+    useHistoryStore.setState({ updateTranscript } as Partial<HistoryState>);
+    vi.mocked(transcriptionService.transcribeFile).mockImplementation(async () => {
+      useCanonicalTranscriptStore.getState().activateSession('live-rec');
+      return nextSegments;
+    });
+
+    await retranscribeService.retranscribeCurrentRecord();
+
+    expect(useCanonicalTranscriptStore.getState().sessions['history-a'].segments).toEqual(
+      normalizeTranscriptSegments(nextSegments)
+    );
+    expect(useCanonicalTranscriptStore.getState().sessions['live-rec'].segments).toEqual(
+      otherSegments
     );
   });
 });

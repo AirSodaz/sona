@@ -7,6 +7,7 @@
  * - Exposes active session actions (`sessionActions`) bound to the active session.
  * - UI components should prefer this store over subscribing to multi-session state directly.
  */
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import {
   DEFAULT_SESSION_DATA,
   type SessionData,
@@ -44,6 +45,78 @@ export type SessionStoreActions = Pick<
 
 export type SessionStoreState = SessionData & SessionStoreActions;
 
+function createSessionActionsForSession(sessionId: string): SessionStoreActions {
+  return {
+    setSourceHistoryId: (id) =>
+      useTranscriptStore.getState().setSourceHistoryIdForSession(sessionId, id),
+    setTitle: (title) => useTranscriptStore.getState().setTitleForSession(sessionId, title),
+    setIcon: (icon) => useTranscriptStore.getState().setIconForSession(sessionId, icon),
+    setSegments: (segments) =>
+      useTranscriptStore.getState().setSegmentsForSession(sessionId, segments),
+    addSegment: (segment) => useTranscriptStore.getState().addSegmentForSession(sessionId, segment),
+    upsertSegment: (segment) =>
+      useTranscriptStore.getState().upsertSegmentForSession(sessionId, segment),
+    updateSegment: (id, updates) =>
+      useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates),
+    patchSegmentTranslation: (id, translation) =>
+      useTranscriptStore.getState().patchSegmentTranslationForSession(sessionId, id, translation),
+    patchSegmentTranslations: (updates) =>
+      useTranscriptStore.getState().patchSegmentTranslationsForSession(sessionId, updates),
+    deleteSegment: (id) => useTranscriptStore.getState().deleteSegmentForSession(sessionId, id),
+    mergeSegments: (id1, id2) =>
+      useTranscriptStore.getState().mergeSegmentsForSession(sessionId, id1, id2),
+    splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) =>
+      useTranscriptStore
+        .getState()
+        .splitTranscriptSegmentForSession(
+          sessionId,
+          id,
+          leftText,
+          rightText,
+          leftTranslation,
+          rightTranslation
+        ),
+    finalizeLastSegment: () =>
+      useTranscriptStore.getState().finalizeLastSegmentForSession(sessionId),
+    applyTranscriptUpdate: (update, activeSegmentId) =>
+      useTranscriptStore
+        .getState()
+        .applyTranscriptUpdateToSession(sessionId, update, activeSegmentId),
+    upsertTranscriptSegmentAndSetActive: (segment) =>
+      useTranscriptStore
+        .getState()
+        .upsertTranscriptSegmentAndSetActiveForSession(sessionId, segment),
+    setEditingSegmentId: (id) =>
+      useTranscriptStore.getState().setEditingSegmentIdForSession(sessionId, id),
+    addAligningSegmentId: (id) =>
+      useTranscriptStore.getState().addAligningSegmentIdForSession(sessionId, id),
+    removeAligningSegmentId: (id) =>
+      useTranscriptStore.getState().removeAligningSegmentIdForSession(sessionId, id),
+    openSession: (args) => useTranscriptStore.getState().openSession(args),
+    loadTranscriptSession: (segments, sourceHistoryId, title, icon) =>
+      useTranscriptStore.getState().loadTranscriptSession(segments, sourceHistoryId, title, icon),
+    clearActiveTranscriptSession: (options) =>
+      useTranscriptStore.getState().clearTranscriptSession(sessionId, options),
+    clearTranscriptSegments: () => useTranscriptStore.getState().clearTranscriptSession(sessionId),
+    syncSavedRecordingMeta: (title, historyId, icon, audioUrl) =>
+      useTranscriptStore
+        .getState()
+        .syncSavedRecordingMeta(title, historyId, icon, audioUrl, sessionId),
+    clearSegments: () => useTranscriptStore.getState().clearTranscriptSession(sessionId),
+  };
+}
+
+const sessionActionsById = new Map<string, SessionStoreActions>();
+
+export function getSessionActionsFor(sessionId: string): SessionStoreActions {
+  let cached = sessionActionsById.get(sessionId);
+  if (!cached) {
+    cached = createSessionActionsForSession(sessionId);
+    sessionActionsById.set(sessionId, cached);
+  }
+  return cached;
+}
+
 export const sessionActions: SessionStoreActions = {
   setSourceHistoryId: (id) => useTranscriptStore.getState().setSourceHistoryId(id),
   setTitle: (title) => useTranscriptStore.getState().setTitle(title),
@@ -76,8 +149,10 @@ export const sessionActions: SessionStoreActions = {
   clearActiveTranscriptSession: (options) =>
     useTranscriptStore.getState().clearActiveTranscriptSession(options),
   clearTranscriptSegments: () => useTranscriptStore.getState().clearTranscriptSegments(),
-  syncSavedRecordingMeta: (title, historyId, icon, audioUrl) =>
-    useTranscriptStore.getState().syncSavedRecordingMeta(title, historyId, icon, audioUrl),
+  syncSavedRecordingMeta: (title, historyId, icon, audioUrl, originSessionId) =>
+    useTranscriptStore
+      .getState()
+      .syncSavedRecordingMeta(title, historyId, icon, audioUrl, originSessionId),
   clearSegments: () => useTranscriptStore.getState().clearSegments(),
 };
 
@@ -138,31 +213,37 @@ export function hasSessionContentChanged(a: SessionData, b: SessionData): boolea
   return false;
 }
 
-let sessionCacheState: {
-  sessionId: string;
-  session: SessionData;
-  state: SessionStoreState;
-} | null = null;
+const sessionCacheBySessionId = new Map<
+  string,
+  {
+    session: SessionData;
+    state: SessionStoreState;
+  }
+>();
 
 export function resetSessionStoreCache(): void {
-  sessionCacheState = null;
+  sessionCacheBySessionId.clear();
+  sessionActionsById.clear();
 }
 
-export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
-  const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  if (
-    sessionCacheState &&
-    sessionCacheState.sessionId === state.activeSessionId &&
-    !hasSessionContentChanged(sessionCacheState.session, activeSession)
-  ) {
-    return sessionCacheState.state;
+export function getSessionStoreState(
+  state: TranscriptStore,
+  sessionId = state.activeSessionId
+): SessionStoreState {
+  const targetSession = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
+  const cached = sessionCacheBySessionId.get(sessionId);
+  if (cached && !hasSessionContentChanged(cached.session, targetSession)) {
+    return cached.state;
   }
-  const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);
-  sessionCacheState = {
-    sessionId: state.activeSessionId,
-    session: activeSession,
+  const actions =
+    sessionId === state.activeSessionId && sessionCacheBySessionId.size === 0
+      ? getSessionActionsFor(sessionId)
+      : getSessionActionsFor(sessionId);
+  const nextState: SessionStoreState = Object.assign(Object.create(actions), targetSession);
+  sessionCacheBySessionId.set(sessionId, {
+    session: targetSession,
     state: nextState,
-  };
+  });
   return nextState;
 }
 
@@ -198,7 +279,7 @@ export const transcriptSessionStore = {
         nextSessionId !== lastSessionId ||
         hasSessionContentChanged(lastActiveSession, nextActiveSession)
       ) {
-        const nextFullState = getSessionStoreState(state);
+        const nextFullState = getSessionStoreState(state, nextSessionId);
         const prevFullState = lastFullState;
         lastActiveSession = nextActiveSession;
         lastSessionId = nextSessionId;
@@ -211,7 +292,8 @@ export const transcriptSessionStore = {
 
 export const useTranscriptSessionStore = Object.assign(
   <T>(selector: (state: SessionStoreState) => T) => {
-    return useTranscriptStore((state) => selector(getSessionStoreState(state)));
+    const boundSessionId = useBoundSessionId();
+    return useTranscriptStore((state) => selector(getSessionStoreState(state, boundSessionId)));
   },
   transcriptSessionStore
 );

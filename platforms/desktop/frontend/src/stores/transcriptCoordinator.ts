@@ -30,7 +30,15 @@ export {
 
 export {
   applyTranscriptUpdateToSession,
+  evictNonRecordingSessions,
+  evictTranscriptSessionsByHistoryIds,
+  finalizeLastSegmentForSession,
+  patchSegmentTranslationsForHistory,
+  patchSegmentTranslationsForSession,
   setRecordingSessionId,
+  setSegmentsForHistory,
+  setSegmentsForSession,
+  updateSessionMetaByHistoryId,
   updateTranscriptSegmentForSession,
 } from './transcriptStore';
 

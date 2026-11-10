@@ -102,11 +102,9 @@ impl DesktopTaskRuntime {
         let models_dir =
             crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
         let cache_dir = app.path().app_cache_dir().ok();
-        let translation_pool = app
-            .try_state::<crate::services::DesktopServices>()
-            .map(|s| s.translation_pool.clone());
+        let services = app.try_state::<crate::services::DesktopServices>();
         Self {
-            inner: DesktopLlmAdapter::with_pool(models_dir, cache_dir, translation_pool),
+            inner: DesktopLlmAdapter::with_services(models_dir, cache_dir, services.as_deref()),
             usage: UsageRecorder::new(app, config, category),
         }
     }
@@ -258,7 +256,8 @@ pub(crate) async fn complete_llm_command(
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
     let cache_dir = app.path().app_cache_dir().ok();
-    let adapter = DesktopLlmAdapter::new(models_dir, cache_dir);
+    let services = app.try_state::<crate::services::DesktopServices>();
+    let adapter = DesktopLlmAdapter::with_services(models_dir, cache_dir, services.as_deref());
     let response = complete_llm_with_port(request, adapter).await?;
     usage.record_usage(response.usage.clone());
     Ok(response)

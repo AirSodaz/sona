@@ -1,9 +1,19 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { setSegmentsForSession } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { SpeakerCorrectionProfileSections, SpeakerProfile } from '../types/speaker';
+import type { SpeakerCorrectionResponse } from '../types/speakerCommands';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import type { TranscriptSegment } from '../types/transcript';
+import {
+  captureTaskTarget,
+  resolveLatestSegmentsForTarget,
+  resolveTargetHistoryId,
+  runWithDocumentLock,
+} from './task/taskTarget';
 import {
   applySpeakerProfileToGroup,
   confirmSpeakerGroupReview as confirmSpeakerGroupReviewInRust,
@@ -16,6 +26,11 @@ export type {
   SpeakerCorrectionResponse,
   SpeakerGroupRequest,
 } from '../types/speakerCommands';
+
+export interface SpeakerTargetOptions {
+  sessionId?: string | null;
+  historyId?: string | null;
+}
 
 export function buildSpeakerCorrectionProfileSections(
   inputProfiles: SpeakerProfile[] | undefined,
@@ -51,26 +66,63 @@ export interface SpeakerCorrectionServicePorts {
 export class SpeakerCorrectionService {
   constructor(private readonly ports: SpeakerCorrectionServicePorts) {}
 
+  private async runLockedSpeakerMutation(
+    targetOptions: SpeakerTargetOptions | undefined,
+    mutate: (segments: TranscriptSegment[]) => Promise<SpeakerCorrectionResponse>
+  ): Promise<SpeakerCorrectionResponse> {
+    const fallbackSession = this.ports.getTranscriptSessionStore();
+    const sessionId = targetOptions?.sessionId ?? null;
+    const sessionSnapshot = sessionId
+      ? useTranscriptStore.getState().sessions[sessionId]
+      : undefined;
+    const target = captureTaskTarget({
+      sessionId,
+      historyId:
+        targetOptions?.historyId ??
+        (sessionSnapshot ? sessionSnapshot.sourceHistoryId : fallbackSession.sourceHistoryId),
+    });
+
+    return runWithDocumentLock(target, { taskType: 'speakerCorrection' }, async () => {
+      const latestSegments = await resolveLatestSegmentsForTarget(
+        target,
+        sessionSnapshot?.segments ?? fallbackSession.segments
+      );
+      const response = await mutate(latestSegments);
+      const resolvedHistoryId = resolveTargetHistoryId(target);
+
+      if (resolvedHistoryId) {
+        await useHistoryStore
+          .getState()
+          .commitSystemTranscriptUpdate(resolvedHistoryId, response.segments);
+      } else if (target.sessionId) {
+        setSegmentsForSession(target.sessionId, response.segments);
+      } else {
+        this.ports.getTranscriptSessionStore().setSegments(response.segments);
+      }
+      return response;
+    });
+  }
+
   async assignProfileToSpeakerGroup(
     sourceGroupId: string,
     targetProfileId: string,
-    currentProjectId?: string | null
+    currentProjectId?: string | null,
+    targetOptions?: SpeakerTargetOptions
   ): Promise<TranscriptSegment[]> {
     const configStore = this.ports.getConfigStore();
     const profiles = normalizeSpeakerProfiles(configStore.config.speakerProfiles);
-    const sessionStore = this.ports.getTranscriptSessionStore();
 
-    const response = await this.ports.applySpeakerProfileToGroup({
-      segments: sessionStore.segments,
-      groupId: sourceGroupId,
-      targetProfileId,
-      speakerProfiles: profiles,
-      enabledSpeakerProfileIds: profiles
-        .filter((profile) => profile.enabled)
-        .map((profile) => profile.id),
-    });
-
-    sessionStore.setSegments(response.segments);
+    const response = await this.runLockedSpeakerMutation(targetOptions, (segments) =>
+      this.ports.applySpeakerProfileToGroup({
+        segments,
+        groupId: sourceGroupId,
+        targetProfileId,
+        speakerProfiles: profiles,
+        enabledSpeakerProfileIds: profiles
+          .filter((profile) => profile.enabled)
+          .map((profile) => profile.id),
+      })
+    );
 
     if (response.enabledSpeakerProfileIds) {
       const enabledIds = new Set(response.enabledSpeakerProfileIds);
@@ -99,23 +151,29 @@ export class SpeakerCorrectionService {
     return response.segments;
   }
 
-  async resetGroupToAnonymous(groupId: string): Promise<TranscriptSegment[]> {
-    const sessionStore = this.ports.getTranscriptSessionStore();
-    const response = await this.ports.resetSpeakerGroupToAnonymous({
-      segments: sessionStore.segments,
-      groupId,
-    });
-    sessionStore.setSegments(response.segments);
+  async resetGroupToAnonymous(
+    groupId: string,
+    targetOptions?: SpeakerTargetOptions
+  ): Promise<TranscriptSegment[]> {
+    const response = await this.runLockedSpeakerMutation(targetOptions, (segments) =>
+      this.ports.resetSpeakerGroupToAnonymous({
+        segments,
+        groupId,
+      })
+    );
     return response.segments;
   }
 
-  async confirmSpeakerGroupReview(groupId: string): Promise<TranscriptSegment[]> {
-    const sessionStore = this.ports.getTranscriptSessionStore();
-    const response = await this.ports.confirmSpeakerGroupReview({
-      segments: sessionStore.segments,
-      groupId,
-    });
-    sessionStore.setSegments(response.segments);
+  async confirmSpeakerGroupReview(
+    groupId: string,
+    targetOptions?: SpeakerTargetOptions
+  ): Promise<TranscriptSegment[]> {
+    const response = await this.runLockedSpeakerMutation(targetOptions, (segments) =>
+      this.ports.confirmSpeakerGroupReview({
+        segments,
+        groupId,
+      })
+    );
     return response.segments;
   }
 }

@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
+import {
   buildTestConfig as buildBaseTestConfig,
   type DeepPartial,
 } from '../../test-utils/configTestUtils';
@@ -318,7 +322,7 @@ describe('TranslationService', () => {
     });
   });
 
-  it('passes customTerms as keywords to run_transcript_llm_job and applies them for local-nmt', async () => {
+  it('passes customTerms as keywords and postProcessReplacements to run_transcript_llm_job for local-nmt', async () => {
     useProjectStore.setState({
       activeProjectId: 'proj-1',
       projects: [
@@ -383,11 +387,21 @@ describe('TranslationService', () => {
         taskId: 'translate-task-id',
         taskType: 'translate',
         keywords: 'AI => 人工智能\nLLM => 大语言模型',
+        postProcessReplacements: [
+          {
+            enabled: true,
+            ignoreCase: false,
+            rules: [
+              { from: 'AI', to: '人工智能' },
+              { from: 'LLM', to: '大语言模型' },
+            ],
+          },
+        ],
       }),
     });
 
     const storeSegments = useTranscriptStore.getState().segments;
-    expect(storeSegments[0].translation).toBe('人工智能 和 大语言模型');
+    expect(storeSegments[0].translation).toBe('AI 和 LLM');
   });
 
   it('translates single text via translateText helper', async () => {
@@ -532,5 +546,182 @@ describe('TranslationService', () => {
     expect(segments[0].translation).toBe('分段 1');
     expect(segments[0].draftTranslation).toBeUndefined();
     expect(segments[1].text).toBe('Segment 2 (newly arrived)');
+  });
+
+  it('patches translations into the originating background session when switching tabs mid-job', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'history-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'history-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'history-a',
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        },
+        'create-b': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'create-b',
+          segments: [{ id: '2', start: 0, end: 1, text: 'Other tab', isFinal: true }],
+        },
+      },
+    });
+
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      useCanonicalTranscriptStore.getState().activateSession('create-b');
+      await onUpdate({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: 'history-a',
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: '你好' },
+        ],
+      });
+      return vi.fn();
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-a',
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: '你好' }],
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['history-a'].segments[0].translation
+    ).toBe('你好');
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['create-b'].segments[0].translation
+    ).toBeUndefined();
+    expect(
+      useCanonicalTranscriptStore.getState().getLlmState('history-a').isTranslationVisible
+    ).toBe(true);
+  });
+
+  it('patches translations to the originating unsaved session even if user switches to another unsaved session mid-job', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'unsaved-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'unsaved-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true }],
+        },
+        'unsaved-b': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [{ id: '2', start: 0, end: 1, text: 'Hello B', isFinal: true }],
+        },
+      },
+    });
+
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      useCanonicalTranscriptStore.getState().activateSession('unsaved-b');
+      await onUpdate({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: null,
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true, translation: '你好 A' },
+        ],
+      });
+      return vi.fn();
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'Hello A', isFinal: true, translation: '你好 A' },
+      ],
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['unsaved-a'].segments[0].translation
+    ).toBe('你好 A');
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['unsaved-b'].segments[0].translation
+    ).toBeUndefined();
+  });
+
+  it('catches up persistence via commitSystemTranscriptUpdate when an unpersisted session saves mid-translation', async () => {
+    const { useHistoryStore } = await import('../../stores/historyStore');
+    const commitSystemTranscriptUpdate = vi.fn(async (id: string, segs: any[]) => {
+      useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segs);
+      return {} as any;
+    });
+    useHistoryStore.setState({ commitSystemTranscriptUpdate } as any);
+
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'draft-rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'draft-rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: null,
+          segments: [
+            { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
+            { id: '2', start: 1, end: 2, text: 'Keep edited line', isFinal: true },
+          ],
+        },
+        'other-history': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'other-history',
+          segments: [{ id: 'x', start: 0, end: 1, text: 'Other', isFinal: true }],
+        },
+      },
+    });
+
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'run_transcript_llm_job') {
+        useCanonicalTranscriptStore
+          .getState()
+          .syncSavedRecordingMeta(
+            'Saved Recording',
+            'history-late',
+            'system:mic',
+            null,
+            'draft-rec-1'
+          );
+        useCanonicalTranscriptStore.getState().activateSession('other-history');
+        return {
+          taskId: 'translate-task-id',
+          taskType: 'translate',
+          jobHistoryId: null,
+          segments: [
+            { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: '你好' },
+          ],
+        };
+      }
+      return null;
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    const draftSegments = useCanonicalTranscriptStore.getState().sessions['draft-rec-1'].segments;
+    expect(draftSegments[0].translation).toBe('你好');
+    expect(draftSegments[1].text).toBe('Keep edited line');
+    expect(commitSystemTranscriptUpdate).toHaveBeenCalledWith('history-late', [
+      expect.objectContaining({ id: '1', translation: '你好' }),
+      expect.objectContaining({ id: '2', text: 'Keep edited line' }),
+    ]);
   });
 });

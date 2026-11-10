@@ -8,6 +8,7 @@ interface AudioShortcutsProps {
   volume: number;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
+  enabled?: boolean;
 }
 
 /**
@@ -28,8 +29,13 @@ export function useAudioShortcuts({
   volume,
   setVolume,
   toggleMute,
+  enabled = true,
 }: AudioShortcutsProps) {
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const audio = audioRef.current;
       if (!audio) return;
@@ -78,5 +84,5 @@ export function useAudioShortcuts({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [audioRef, seekTo, setIsPlaying, volume, setVolume, toggleMute]);
+  }, [audioRef, seekTo, setIsPlaying, volume, setVolume, toggleMute, enabled]);
 }

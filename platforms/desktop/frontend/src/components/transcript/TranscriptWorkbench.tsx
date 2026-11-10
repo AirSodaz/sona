@@ -7,9 +7,15 @@ import {
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
 import { syncEmbySubtitles } from '../../services/emby/embyService';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../../services/task/documentMutationCoordinator';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
@@ -17,6 +23,7 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 import { isHistoryItemDraft } from '../../types/history';
 import { AudioPlayer } from '../AudioPlayer';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -45,6 +52,9 @@ interface TranscriptWorkbenchProps {
   title?: string;
   /** Optional default type for the icon if the item has no icon set. */
   defaultIconType?: 'recording' | 'batch';
+  /** Whether this workbench's shell is visible. Hidden shells keep the editor mounted but
+   * must not own global audio playback or keyboard shortcuts. Defaults to true. */
+  isActive?: boolean;
 }
 
 /**
@@ -82,8 +92,10 @@ export function TranscriptWorkbench({
   onClose,
   title: propsTitle,
   defaultIconType,
+  isActive = true,
 }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const boundSessionId = useBoundSessionId();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSpeakerReviewOpen, setIsSpeakerReviewOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
@@ -97,11 +109,11 @@ export function TranscriptWorkbench({
   const storeIcon = useTranscriptSessionStore((state) => state.icon);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const setTitle = useTranscriptSessionStore((state) => state.setTitle);
   const setIcon = useTranscriptSessionStore((state) => state.setIcon);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
-
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
   const currentHistoryItem = useHistoryStore((state) =>
     sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
@@ -141,7 +153,7 @@ export function TranscriptWorkbench({
       await syncEmbySubtitles(segments, embyContext);
       if (
         !isMountedRef.current ||
-        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
       setEmbySyncSuccess(true);
@@ -154,7 +166,7 @@ export function TranscriptWorkbench({
     } catch (err: unknown) {
       if (
         !isMountedRef.current ||
-        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
       console.error('Failed to resync to Emby:', err);
@@ -166,12 +178,30 @@ export function TranscriptWorkbench({
     } finally {
       if (
         isMountedRef.current &&
-        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
+        useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId === targetHistoryId
       ) {
         setIsSyncingEmby(false);
       }
     }
   };
+
+  const isCurrentSessionRecording = Boolean(
+    isRecording &&
+      (recordingSessionId
+        ? boundSessionId === recordingSessionId
+        : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+  const isDocumentLocked = useDocumentMutationLockStore((state) =>
+    selectIsDocumentEditorLocked(state.locks, boundSessionId, sourceHistoryId)
+  );
+  const isBatchProcessing = useBatchQueueStore((state) =>
+    state.queueItems.some(
+      (item) =>
+        item.status === 'processing' &&
+        (item.id === boundSessionId ||
+          (Boolean(sourceHistoryId) && item.historyId === sourceHistoryId))
+    )
+  );
 
   useEscapeKey(
     (event) => {
@@ -179,7 +209,7 @@ export function TranscriptWorkbench({
       onClose();
     },
     {
-      enabled: !isRecording,
+      enabled: isActive && !isCurrentSessionRecording,
       checkTopMost: true,
     }
   );
@@ -212,7 +242,8 @@ export function TranscriptWorkbench({
       ? t('panel.batch_import', { defaultValue: 'Batch Import' })
       : t('panel.live_record', { defaultValue: 'Live Record' });
   const displayTitle = propsTitle || storeTitle || fallbackTitle;
-  const isManualHeaderActionsDisabled = isRecording;
+  const isManualHeaderActionsDisabled =
+    isCurrentSessionRecording || isDocumentLocked || isBatchProcessing;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
@@ -383,11 +414,11 @@ export function TranscriptWorkbench({
 
       <div className="panel-content">
         <ErrorBoundary>
-          <TranscriptEditor />
+          <TranscriptEditor isActive={isActive} />
         </ErrorBoundary>
       </div>
 
-      {audioUrl && <AudioPlayer />}
+      {isActive && audioUrl && <AudioPlayer isActive={isActive} />}
 
       <TranscriptSummaryPanel isOpen={isSummaryOpen} onClose={() => setIsSummaryOpen(false)} />
 

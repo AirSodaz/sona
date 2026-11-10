@@ -108,6 +108,8 @@ pub struct DesktopServices {
     pub emitter: Arc<dyn EventEmitterPort>,
     pub recording_session: DesktopRecordingSessionTracker,
     pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
+    pub local_nmt_semaphore: Arc<tokio::sync::Semaphore>,
+    pub local_llm_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 #[derive(Default)]
@@ -209,6 +211,8 @@ impl DesktopServicesBuilder {
         let translation_pool = self.translation_pool.unwrap_or_else(|| {
             Arc::new(crate::integrations::translation::TranslationModelPool::new())
         });
+        let local_nmt_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+        let local_llm_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
 
         Ok(DesktopServices {
             sqlite,
@@ -223,6 +227,8 @@ impl DesktopServicesBuilder {
             emitter,
             recording_session,
             translation_pool,
+            local_nmt_semaphore,
+            local_llm_semaphore,
         })
     }
 }

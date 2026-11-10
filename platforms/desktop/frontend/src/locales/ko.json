@@ -545,7 +545,7 @@
     "empty_trash": "휴지통 비우기",
     "empty_trash_confirm": "휴지통의 {{count}}개 항목을 모두 영구 삭제할까요? 되돌릴 수 없습니다.",
     "draft_badge": "Draft",
-    "live_record_draft_description": "중단된 Live Record 초안",
+    "draft_description": "완료되지 않은 초안",
     "no_transcript": "전사 없음",
     "delete_tooltip": "삭제",
     "search_placeholder": "기록 검색...",

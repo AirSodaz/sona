@@ -2,10 +2,10 @@ import type { LiveRecordingDraftHandle } from '../../services/historyService';
 import { audioDeleteRecordingFile } from '../../services/tauri/audio';
 import { transcriptionService } from '../../services/transcriptionService';
 import {
-  finalizeLastTranscriptSegment,
+  finalizeLastSegmentForSession,
   setRecordingSessionId,
 } from '../../stores/transcriptCoordinator';
-import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 import type { AppConfig } from '../../types/config';
 import { flushPendingAutoSave } from '../useAutoSaveTranscript';
 import { getSupportedMimeType, isTranscriptionStartupError } from './capture';
@@ -218,8 +218,11 @@ export function createRecordController({
           liveDraftRef.current = null;
         }
       }
-      session.resetRecordSession(sessionId, 'start_failed', true);
       setRecordingSessionId(null);
+      // Evict only the failed session; the active session may already belong to
+      // a Projects detail if the user switched tabs mid-start.
+      useTranscriptStore.getState().evictSession(sessionId);
+      session.resetRecordSession(sessionId, 'start_failed');
 
       if (session.canMutateActiveRecordResources(sessionId)) {
         const isTranscriptionError = isTranscriptionStartupError(error);
@@ -270,19 +273,21 @@ export function createRecordController({
       `[useAudioRecorder] Stopping recording session. session=${sessionId} input=${activeInputSourceRef.current}`
     );
     const duration = timing.finalizeRecordedDurationSeconds();
+    let shouldEvictDiscardedSession = false;
     try {
       const savedWavPath = await capture.stopCaptureForSession(sessionId);
 
       // Stop recognizer delivery before we persist outputs so no late segment
       // can land after the saved recording has already been finalized.
       await transcriptionService.softStop();
-      finalizeLastTranscriptSegment();
-      const latestSegments = useTranscriptSessionStore.getState().segments;
+      finalizeLastSegmentForSession(sessionId);
+      const latestSegments = useTranscriptStore.getState().sessions[sessionId]?.segments ?? [];
       if (liveDraft?.item.id) {
         await flushPendingAutoSave(liveDraft.item.id, latestSegments);
       }
 
       if (!liveDraft || latestSegments.length === 0 || options?.discard) {
+        shouldEvictDiscardedSession = true;
         liveDraftRef.current = null;
         await capture.stopFileRecording();
         await capture.teardownWebCaptureResources();
@@ -337,6 +342,9 @@ export function createRecordController({
     } finally {
       session.resetRecordSession(sessionId, 'stop_completed');
       setRecordingSessionId(null);
+      if (shouldEvictDiscardedSession) {
+        useTranscriptStore.getState().evictSession(sessionId);
+      }
     }
   }
 
@@ -360,7 +368,7 @@ export function createRecordController({
       if (liveDraftRef.current?.item.id) {
         await flushPendingAutoSave(
           liveDraftRef.current.item.id,
-          useTranscriptSessionStore.getState().segments
+          useTranscriptStore.getState().sessions[sessionId]?.segments ?? []
         );
       }
 

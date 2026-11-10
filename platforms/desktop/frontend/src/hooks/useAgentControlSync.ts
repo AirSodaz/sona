@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { historyService } from '../services/historyService';
 import { APP_SETTING_UPDATED_EVENT, STORE_KEY_CONFIG } from '../services/storageService';
+import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import {
   type AgentRecordingStatusPayload,
   TauriEvent,
@@ -12,12 +13,12 @@ import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useMcpStore } from '../stores/mcpStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
-import { stopActiveRecording } from '../stores/transcriptCoordinator';
-import { sessionActions, transcriptSessionStore } from '../stores/transcriptSessionStore';
+import { setSegmentsForHistory, stopActiveRecording } from '../stores/transcriptCoordinator';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppConfig } from '../types/config';
 import type { McpActivityLogEntry, McpMutationNotice } from '../types/mcp';
 import { logger } from '../utils/logger';
+import { rebaselineTranscriptAutoSave } from './useAutoSaveTranscript';
 
 /**
  * Hook to synchronize MCP / Agent Control background activities with the desktop UI:
@@ -82,21 +83,47 @@ export function useAgentControlSync(): void {
               `[AgentControlSync] Transcript updated for historyId=${historyId}, refreshing history`
             );
             void useHistoryStore.getState().loadItems();
-            if (historyId && transcriptSessionStore.getState().sourceHistoryId === historyId) {
-              try {
-                const updatedSegments = await historyService.loadTranscript(historyId);
-                if (
-                  isMounted &&
-                  updatedSegments &&
-                  transcriptSessionStore.getState().sourceHistoryId === historyId
-                ) {
-                  sessionActions.setSegments(updatedSegments);
+            const transcriptState = useTranscriptStore.getState();
+            const hasMatchingSession = Boolean(
+              historyId &&
+                Object.entries(transcriptState.sessions).some(
+                  ([sessionId, session]) =>
+                    sessionId !== transcriptState.recordingSessionId &&
+                    (sessionId === historyId || session.sourceHistoryId === historyId)
+                )
+            );
+            if (historyId && hasMatchingSession) {
+              const reloadMatchingSession = async () => {
+                try {
+                  const updatedSegments = await historyService.loadTranscript(historyId);
+                  const latestTranscriptState = useTranscriptStore.getState();
+                  const stillHasMatchingSession = Object.entries(
+                    latestTranscriptState.sessions
+                  ).some(
+                    ([sessionId, session]) =>
+                      sessionId !== latestTranscriptState.recordingSessionId &&
+                      (sessionId === historyId || session.sourceHistoryId === historyId)
+                  );
+                  if (isMounted && updatedSegments && stillHasMatchingSession) {
+                    setSegmentsForHistory(historyId, updatedSegments);
+                    rebaselineTranscriptAutoSave(historyId, updatedSegments);
+                  }
+                } catch (error) {
+                  logger.error(
+                    '[AgentControlSync] Failed to reload matching transcript segments:',
+                    error
+                  );
                 }
-              } catch (error) {
-                logger.error(
-                  '[AgentControlSync] Failed to reload active transcript segments:',
-                  error
+              };
+
+              if (documentMutationCoordinator.isLocked(null, historyId)) {
+                void documentMutationCoordinator.runExclusive(
+                  { historyId },
+                  { taskType: 'agentSyncReload', lockEditor: false },
+                  reloadMatchingSession
                 );
+              } else {
+                await reloadMatchingSession();
               }
             }
           }

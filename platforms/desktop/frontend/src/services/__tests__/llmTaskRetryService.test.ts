@@ -124,7 +124,9 @@ describe('retryLlmTaskFromLedger', () => {
     expect(translationService.retryTranslateTranscriptJob).toHaveBeenCalledWith({
       segments,
       historyId: 'history-a',
+      sessionId: 'default',
       targetLanguage: 'ja',
+      priority: 'normal',
     });
   });
 
@@ -137,7 +139,9 @@ describe('retryLlmTaskFromLedger', () => {
     expect(translationService.retryTranslateTranscriptJob).toHaveBeenCalledWith({
       segments,
       historyId: 'history-b',
+      sessionId: null,
       targetLanguage: 'ja',
+      priority: 'normal',
     });
   });
 
@@ -158,6 +162,8 @@ describe('retryLlmTaskFromLedger', () => {
     expect(polishService.retryPolishTranscriptJob).toHaveBeenCalledWith({
       segments,
       historyId: null,
+      sessionId: 'default',
+      priority: 'normal',
     });
   });
 
@@ -178,7 +184,9 @@ describe('retryLlmTaskFromLedger', () => {
     expect(summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith({
       segments,
       historyId: 'history-a',
+      sessionId: 'default',
       templateId: 'meeting',
+      priority: 'normal',
     });
   });
 

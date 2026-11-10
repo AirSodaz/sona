@@ -131,6 +131,159 @@ pub fn join_segments_with_boundary_space<S: AsRef<str>>(segments: &[S]) -> Strin
     acc
 }
 
+fn is_cj_typography_char(c: char) -> bool {
+    is_cjk_ideograph_or_kana(c) || matches!(c, '\u{FF66}'..='\u{FF9F}')
+}
+
+fn is_cjk_typography_pangu(c: char) -> bool {
+    is_cjk_char(c) || matches!(c, '\u{FF66}'..='\u{FF9F}')
+}
+
+fn is_closing_or_middle_cjk_punct(c: char) -> bool {
+    matches!(
+        c,
+        '，' | '。'
+            | '！'
+            | '？'
+            | '；'
+            | '：'
+            | '、'
+            | '）'
+            | '】'
+            | '》'
+            | '」'
+            | '』'
+            | '”'
+            | '’'
+    )
+}
+
+fn is_opening_cjk_punct(c: char) -> bool {
+    matches!(c, '（' | '【' | '《' | '「' | '『' | '“' | '‘')
+}
+
+fn is_dedup_cjk_punct(c: char) -> bool {
+    matches!(c, '，' | '。' | '！' | '？' | '；' | '：' | '、')
+}
+
+fn insert_pangu_spaces(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut prev: Option<char> = None;
+    for ch in text.chars() {
+        if let Some(p) = prev {
+            let p_cjk = is_cjk_typography_pangu(p);
+            let p_latin = p.is_ascii_alphanumeric();
+            let c_cjk = is_cjk_typography_pangu(ch);
+            let c_latin = ch.is_ascii_alphanumeric();
+            if (p_cjk && c_latin) || (p_latin && c_cjk) {
+                out.push(' ');
+            }
+        }
+        out.push(ch);
+        prev = Some(ch);
+    }
+    out
+}
+
+fn normalize_cj_ascii_punctuation(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    for (i, &ch) in chars.iter().enumerate() {
+        let prev_cj = i > 0 && is_cj_typography_char(chars[i - 1]);
+        if prev_cj {
+            let next = chars.get(i + 1).copied();
+            match ch {
+                ',' => out.push('，'),
+                '?' => out.push('？'),
+                '!' => out.push('！'),
+                ':' if !matches!(next, Some('0'..='9' | '/')) => out.push('：'),
+                '.' if next.is_none() || next.is_some_and(char::is_whitespace) => out.push('。'),
+                _ => out.push(ch),
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn clean_cjk_punctuation_spacing_and_duplicates(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    // Pass 5a: remove whitespace before closing / middle CJK punctuation
+    let mut after_before = Vec::with_capacity(chars.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_whitespace() {
+            let mut j = i + 1;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j < chars.len() && is_closing_or_middle_cjk_punct(chars[j]) {
+                i = j;
+                continue;
+            }
+        }
+        after_before.push(chars[i]);
+        i += 1;
+    }
+
+    // Pass 5b: remove whitespace after opening CJK punctuation
+    let mut after_open = Vec::with_capacity(after_before.len());
+    let mut k = 0;
+    while k < after_before.len() {
+        let ch = after_before[k];
+        after_open.push(ch);
+        if is_opening_cjk_punct(ch) {
+            while k + 1 < after_before.len() && after_before[k + 1].is_whitespace() {
+                k += 1;
+            }
+        }
+        k += 1;
+    }
+
+    // Pass 5c: remove whitespace between closing/middle CJK punctuation and CJK char
+    let mut after_close = Vec::with_capacity(after_open.len());
+    let mut m = 0;
+    while m < after_open.len() {
+        let ch = after_open[m];
+        after_close.push(ch);
+        if is_closing_or_middle_cjk_punct(ch) {
+            let mut n = m + 1;
+            while n < after_open.len() && after_open[n].is_whitespace() {
+                n += 1;
+            }
+            if n > m + 1 && n < after_open.len() && is_cjk_typography_pangu(after_open[n]) {
+                m = n;
+                continue;
+            }
+        }
+        m += 1;
+    }
+
+    // Pass 6: deduplicate consecutive Chinese punctuations
+    let mut out = String::with_capacity(text.len());
+    let mut prev: Option<char> = None;
+    for ch in after_close {
+        if is_dedup_cjk_punct(ch) && prev == Some(ch) {
+            continue;
+        }
+        out.push(ch);
+        prev = Some(ch);
+    }
+    out
+}
+
+/// Formats mixed CJK and Latin text with proper Pangu spacing, punctuation harmony,
+/// and duplicate Chinese punctuation cleanup (matching frontend `formatCjkTypography`).
+pub fn format_cjk_typography(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let with_pangu = insert_pangu_spaces(text);
+    let with_punct = normalize_cj_ascii_punctuation(&with_pangu);
+    clean_cjk_punctuation_spacing_and_duplicates(&with_punct)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,5 +410,65 @@ mod tests {
 
         let single = vec!["Single"];
         assert_eq!(join_segments_with_boundary_space(&single), "Single");
+    }
+
+    #[test]
+    fn test_format_cjk_typography_matches_frontend_semantics() {
+        assert_eq!(format_cjk_typography(""), "");
+        assert_eq!(format_cjk_typography("   "), "   ");
+
+        // Pangu spacing: CJK <-> Latin
+        assert_eq!(format_cjk_typography("识别到PR请求"), "识别到 PR 请求");
+        assert_eq!(format_cjk_typography("完成TODO事项"), "完成 TODO 事项");
+        assert_eq!(format_cjk_typography("hello世界"), "hello 世界");
+        assert_eq!(format_cjk_typography("世界hello"), "世界 hello");
+
+        // Pangu spacing: CJK <-> Numbers
+        assert_eq!(format_cjk_typography("第1阶段完成"), "第 1 阶段完成");
+        assert_eq!(format_cjk_typography("有99个人"), "有 99 个人");
+        assert_eq!(
+            format_cjk_typography("今天是2026年9月19日"),
+            "今天是 2026 年 9 月 19 日"
+        );
+
+        // Full-width punctuation adjacent to CJ
+        assert_eq!(format_cjk_typography("你好,我是Sona"), "你好，我是 Sona");
+        assert_eq!(format_cjk_typography("你好,我是世界."), "你好，我是世界。");
+        assert_eq!(format_cjk_typography("真的吗?当然!"), "真的吗？当然！");
+        assert_eq!(format_cjk_typography("请注意:重要通知"), "请注意：重要通知");
+
+        // Punctuation space cleanup
+        assert_eq!(format_cjk_typography("你好 ， 很好 。"), "你好，很好。");
+        assert_eq!(format_cjk_typography("【 重点 】 内容"), "【重点】内容");
+
+        // Deduplicate Chinese punctuation
+        assert_eq!(
+            format_cjk_typography("好的。。没问题！！"),
+            "好的。没问题！"
+        );
+        assert_eq!(format_cjk_typography("你好，，世界"), "你好，世界");
+
+        // Preserve decimals, times, URLs
+        assert_eq!(
+            format_cjk_typography("圆周率是3.14左右"),
+            "圆周率是 3.14 左右"
+        );
+        assert_eq!(format_cjk_typography("时间是12:30分"), "时间是 12:30 分");
+        assert_eq!(
+            format_cjk_typography("访问https://sona.ai即可"),
+            "访问 https://sona.ai 即可"
+        );
+
+        // Preserve Hangul punctuation while applying Pangu spacing
+        assert_eq!(format_cjk_typography("테스트1완료"), "테스트 1 완료");
+        assert_eq!(format_cjk_typography("1단계"), "1 단계");
+        assert_eq!(
+            format_cjk_typography("한국어English혼합"),
+            "한국어 English 혼합"
+        );
+        assert_eq!(
+            format_cjk_typography("안녕하세요. 오늘 1단계입니다."),
+            "안녕하세요. 오늘 1 단계입니다."
+        );
     }
 }

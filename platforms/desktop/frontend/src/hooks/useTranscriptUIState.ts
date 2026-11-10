@@ -1,32 +1,58 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createStore } from 'zustand/vanilla';
 import type { TranscriptUIState } from '../components/transcript/TranscriptUIContext';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
+import {
+  selectIsDocumentEditorLocked,
+  useDocumentMutationLockStore,
+} from '../services/task/documentMutationCoordinator';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
+
+function isBatchProcessingTarget(sessionId: string, historyId: string | null): boolean {
+  return useBatchQueueStore
+    .getState()
+    .queueItems.some(
+      (item) =>
+        item.status === 'processing' &&
+        (item.id === sessionId || (Boolean(historyId) && item.historyId === historyId))
+    );
+}
+
+function computeIsDocumentLocked(sessionId: string, historyId: string | null): boolean {
+  const locks = useDocumentMutationLockStore.getState().locks;
+  return (
+    selectIsDocumentEditorLocked(locks, sessionId, historyId) ||
+    isBatchProcessingTarget(sessionId, historyId)
+  );
+}
 
 /**
  * Hook to manage UI state for the transcript editor, specifically efficient re-rendering
  * of list items and animation of new segments.
  */
 export function useTranscriptUIState(segments: TranscriptSegment[]) {
+  const boundSessionId = useBoundSessionId();
+  const initialSessionIdRef = useRef(boundSessionId);
   // Track which segment IDs have been seen (for animation)
   const knownSegmentIdsRef = useRef<Set<string>>(new Set());
   const prevNewSegmentIdsRef = useRef<Set<string>>(new Set());
 
   // Create a local store for UI state (newSegmentIds) to prevent Context updates
   // from re-rendering the entire list.
-  const uiStore = useMemo(
-    () =>
-      createStore<TranscriptUIState>(() => ({
-        newSegmentIds: new Set(),
-        activeSegmentId: useTranscriptPlaybackStore.getState().activeSegmentId,
-        editingSegmentId: useTranscriptSessionStore.getState().editingSegmentId,
-        totalSegments: useTranscriptSessionStore.getState().segments.length,
-        aligningSegmentIds: useTranscriptSessionStore.getState().aligningSegmentIds,
-      })),
-    []
-  );
+  const uiStore = useMemo(() => {
+    const initialSession = useTranscriptStore.getState().sessions[initialSessionIdRef.current];
+    const initialHistoryId = initialSession?.sourceHistoryId ?? null;
+    return createStore<TranscriptUIState>(() => ({
+      newSegmentIds: new Set(),
+      activeSegmentId: initialSession?.activeSegmentId ?? null,
+      editingSegmentId: initialSession?.editingSegmentId ?? null,
+      totalSegments: initialSession?.segments.length ?? 0,
+      aligningSegmentIds: initialSession?.aligningSegmentIds ?? new Set(),
+      isDocumentLocked: computeIsDocumentLocked(initialSessionIdRef.current, initialHistoryId),
+    }));
+  }, []);
 
   useLayoutEffect(() => {
     const known = knownSegmentIdsRef.current;
@@ -88,45 +114,58 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
     });
   }, [segments, uiStore]);
 
-  // Sync activeSegmentId, editingSegmentId, and aligningSegmentIds from global store to local store
+  // Sync bound-session state & document lock state to local UI store
   useEffect(() => {
-    const unsubscribePlayback = useTranscriptPlaybackStore.subscribe((state, prevState) => {
+    const syncBoundState = () => {
+      const session = useTranscriptStore.getState().sessions[boundSessionId];
+      const historyId = session?.sourceHistoryId ?? null;
+      const nextActiveSegmentId = session?.activeSegmentId ?? null;
+      const nextEditingSegmentId = session?.editingSegmentId ?? null;
+      const nextAligningIds = session?.aligningSegmentIds ?? new Set<string>();
+      const nextLocked = computeIsDocumentLocked(boundSessionId, historyId);
+
+      const current = uiStore.getState();
       const updates: Partial<TranscriptUIState> = {};
       let hasUpdates = false;
 
-      if (state.activeSegmentId !== prevState.activeSegmentId) {
-        updates.activeSegmentId = state.activeSegmentId;
+      if (current.activeSegmentId !== nextActiveSegmentId) {
+        updates.activeSegmentId = nextActiveSegmentId;
+        hasUpdates = true;
+      }
+      if (current.editingSegmentId !== nextEditingSegmentId) {
+        updates.editingSegmentId = nextEditingSegmentId;
+        hasUpdates = true;
+      }
+      if (current.aligningSegmentIds !== nextAligningIds) {
+        updates.aligningSegmentIds = nextAligningIds;
+        hasUpdates = true;
+      }
+      if (current.isDocumentLocked !== nextLocked) {
+        updates.isDocumentLocked = nextLocked;
         hasUpdates = true;
       }
 
       if (hasUpdates) {
         uiStore.setState(updates);
       }
-    });
+    };
 
-    const unsubscribeSession = useTranscriptSessionStore.subscribe((state, prevState) => {
-      const updates: Partial<TranscriptUIState> = {};
-      let hasUpdates = false;
+    syncBoundState();
 
-      if (state.editingSegmentId !== prevState.editingSegmentId) {
-        updates.editingSegmentId = state.editingSegmentId;
-        hasUpdates = true;
-      }
-      if (state.aligningSegmentIds !== prevState.aligningSegmentIds) {
-        updates.aligningSegmentIds = state.aligningSegmentIds;
-        hasUpdates = true;
-      }
-
-      if (hasUpdates) {
-        uiStore.setState(updates);
+    const unsubscribeTranscript = useTranscriptStore.subscribe((state, prevState) => {
+      if (state.sessions[boundSessionId] !== prevState.sessions[boundSessionId]) {
+        syncBoundState();
       }
     });
+    const unsubscribeLocks = useDocumentMutationLockStore.subscribe(syncBoundState);
+    const unsubscribeBatch = useBatchQueueStore.subscribe(syncBoundState);
 
     return () => {
-      unsubscribePlayback();
-      unsubscribeSession();
+      unsubscribeTranscript();
+      unsubscribeLocks();
+      unsubscribeBatch();
     };
-  }, [uiStore]);
+  }, [boundSessionId, uiStore]);
 
   const handleAnimationEnd = useCallback(
     (id: string) => {

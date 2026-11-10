@@ -1,4 +1,10 @@
 import type { LiveRecordingDraftHandle } from '../../services/historyService';
+import { trackQuitBlockingTask } from '../../services/quitGuard';
+import {
+  createTaskTarget,
+  resolveLatestSegmentsForTarget,
+  runWithDocumentLock,
+} from '../../services/task/taskTarget';
 import type { AppConfig } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { TranscriptSegment } from '../../types/transcript';
@@ -40,8 +46,10 @@ interface CreateRecordingPersistenceArgs {
   persistSummary: (historyId: string) => Promise<void>;
   postProcessSavedItem?: (
     historyId: string,
-    segments: TranscriptSegment[]
+    segments: TranscriptSegment[],
+    projectId?: string | null
   ) => Promise<TranscriptSegment[]>;
+  commitTranscriptUpdate?: (historyId: string, segments: TranscriptSegment[]) => Promise<void>;
   annotateSegmentsForFile: (
     filePath: string,
     segments: TranscriptSegment[],
@@ -68,6 +76,7 @@ export function createRecordingPersistence({
   removeHistoryItem,
   persistSummary,
   postProcessSavedItem,
+  commitTranscriptUpdate,
   annotateSegmentsForFile,
   syncSavedRecordingMeta: syncMeta,
   writeFile,
@@ -86,11 +95,21 @@ export function createRecordingPersistence({
     }
     syncMeta(newItem.title, newItem.id, newItem.icon);
     void setActiveProjectId(newItem.tagIds?.[0] ?? newItem.projectId ?? null);
-    if (completedSegments?.length && postProcessSavedItem) {
-      const processedSegments = await postProcessSavedItem(newItem.id, completedSegments);
-      getTranscriptState().setSegments(processedSegments);
-    }
     await persistSummary(newItem.id);
+
+    // Detach heavy LLM post-processing (Polish / Translate / Summary / Export) after the
+    // recording draft has been archived and metadata/sidecar keys have been rekeyed so
+    // `stopRecording()` settles Channel 1 immediately.
+    if (completedSegments?.length && postProcessSavedItem) {
+      const capturedProjectId = newItem.tagIds?.[0] ?? newItem.projectId ?? null;
+      void trackQuitBlockingTask(
+        Promise.resolve()
+          .then(() => postProcessSavedItem(newItem.id, completedSegments, capturedProjectId))
+          .catch((error) => {
+            logger.error('[useAudioRecorder] Detached post-process pipeline failed:', error);
+          })
+      );
+    }
   }
 
   function mergeSpeakerAnnotations(
@@ -123,6 +142,8 @@ export function createRecordingPersistence({
   ): Promise<void> {
     try {
       const transcriptState = getTranscriptState();
+      // Keep heavy speaker embedding / diarization inference outside Channel 3 so the user
+      // can immediately edit segments or start reading without blocking the editor.
       const annotated = await annotateSegmentsForFile(
         filePath,
         initialSegments,
@@ -132,23 +153,34 @@ export function createRecordingPersistence({
         return;
       }
 
-      const currentTranscriptState = getTranscriptState();
-      if (currentTranscriptState.setSegmentsForSession) {
-        currentTranscriptState.setSegmentsForSession(
-          sessionId,
-          mergeSpeakerAnnotations(initialSegments, annotated)
-        );
-      } else if (currentTranscriptState.activeSessionId === sessionId) {
-        currentTranscriptState.setSegments(
-          mergeSpeakerAnnotations(currentTranscriptState.segments, annotated)
-        );
-      }
+      const target = createTaskTarget({ sessionId, historyId: sessionId });
+      await runWithDocumentLock(
+        target,
+        { taskType: 'speakerAnnotation', lockEditor: false },
+        async () => {
+          const latestSegments = await resolveLatestSegmentsForTarget(target, initialSegments, {
+            loadTranscript: history.loadTranscript,
+          });
+          const merged = mergeSpeakerAnnotations(latestSegments, annotated);
 
-      if (history.updateTranscript) {
-        const mergedForHistory = mergeSpeakerAnnotations(initialSegments, annotated);
-        const updatedItem = await history.updateTranscript(sessionId, mergedForHistory);
-        upsertHistoryItem(updatedItem);
-      }
+          if (commitTranscriptUpdate) {
+            await commitTranscriptUpdate(sessionId, merged);
+            return;
+          }
+
+          const currentTranscriptState = getTranscriptState();
+          if (currentTranscriptState.setSegmentsForSession) {
+            currentTranscriptState.setSegmentsForSession(sessionId, merged);
+          } else if (currentTranscriptState.activeSessionId === sessionId) {
+            currentTranscriptState.setSegments(merged);
+          }
+
+          if (history.updateTranscript) {
+            const updatedItem = await history.updateTranscript(sessionId, merged);
+            upsertHistoryItem(updatedItem);
+          }
+        }
+      );
     } catch (error) {
       logger.warn('[useAudioRecorder] Failed to annotate speaker labels in background:', error);
     }
@@ -197,8 +229,9 @@ export function createRecordingPersistence({
 
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
       await persistSavedItem(newItem, 'upsert', segments);
-
-      void applyBackgroundSpeakerAnnotation(draft.item.id, draft.audioAbsolutePath, segments);
+      void trackQuitBlockingTask(
+        applyBackgroundSpeakerAnnotation(draft.item.id, draft.audioAbsolutePath, segments)
+      );
     } catch (error) {
       logger.error('[useAudioRecorder] Failed to persist browser recording draft:', error);
       throw error;
@@ -216,10 +249,14 @@ export function createRecordingPersistence({
     if (segments.length > 0) {
       if (savedWavPath) {
         transcriptState.setAudioUrl(fileSrcFromPath(savedWavPath));
-        void applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments);
       }
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
       await persistSavedItem(newItem, 'upsert', segments);
+      if (savedWavPath) {
+        void trackQuitBlockingTask(
+          applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments)
+        );
+      }
       return;
     }
 

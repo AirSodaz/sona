@@ -16,6 +16,8 @@ vi.mock('../historyService', () => ({
   historyService: {
     updateProjectAssignments: vi.fn(),
     updateProjectAssignmentsByCurrentProject: vi.fn(),
+    updateTranscript: vi.fn().mockResolvedValue(undefined),
+    commitTranscriptEdit: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

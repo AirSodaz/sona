@@ -194,7 +194,12 @@ export class BatchItemProcessor {
         return;
       }
 
-      await this.ports.useHistoryStore.getState().updateTranscript(savedHistoryId, currentSegments);
+      const historyStore = this.ports.useHistoryStore.getState();
+      if (typeof historyStore.commitSystemTranscriptUpdate === 'function') {
+        await historyStore.commitSystemTranscriptUpdate(savedHistoryId, currentSegments);
+      } else {
+        await historyStore.updateTranscript(savedHistoryId, currentSegments);
+      }
     };
 
     const ensureHistorySaved = async (): Promise<void> => {
@@ -431,6 +436,7 @@ export class BatchItemProcessor {
 
       const pipelineResult = await engine.execute({
         historyId: savedHistoryId || '',
+        sessionId: item.id,
         projectId: item.projectId,
         segments: currentSegments,
         pipeline: {
@@ -456,7 +462,6 @@ export class BatchItemProcessor {
         },
         onSegmentsUpdated: async (updatedSegments) => {
           setCurrentSegments(updatedSegments);
-          await persistHistorySnapshot();
         },
         onExportComplete: (exportPath) => {
           callbacks.onExportComplete(exportPath);

@@ -165,7 +165,7 @@ impl TranscriptPostprocessor {
         }
     }
 
-    fn apply_text_replacements(&self, text: &str) -> String {
+    pub fn apply_text_replacements(&self, text: &str) -> String {
         if text.is_empty() || self.rules.is_empty() {
             return text.to_string();
         }

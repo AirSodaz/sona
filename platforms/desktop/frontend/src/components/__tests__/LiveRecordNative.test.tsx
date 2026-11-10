@@ -958,4 +958,51 @@ describe('LiveRecord Native Capture', () => {
     });
     expect(timer.textContent).toBe('00:03');
   });
+
+  it('keeps isRecording and live draft lock active on native capture error until stopRecording settles', async () => {
+    const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
+    let captureErrorCallback: ((event: any) => void) | null = null;
+    mockEventListen.mockImplementation((event: string, callback: (event: any) => void) => {
+      if (event === 'system-audio') {
+        systemAudioCallback = callback;
+      }
+      if (event === 'audio-capture-error') {
+        captureErrorCallback = callback;
+      }
+      return Promise.resolve(mockUnlisten);
+    });
+
+    const stopDeferred = Promise.withResolvers<void>();
+    mockStop.mockImplementationOnce(() => stopDeferred.promise);
+
+    render(<LiveRecord />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    const activeRecordingSessionId = useTranscriptStore.getState().recordingSessionId;
+    expect(useTranscriptStore.getState().isRecording).toBe(true);
+    expect(activeRecordingSessionId).toBeTruthy();
+    expect(captureErrorCallback).not.toBeNull();
+
+    // Emit native capture error while stopRecording is still awaiting stopDeferred
+    await act(async () => {
+      captureErrorCallback?.({ payload: 'microphone disconnected' });
+      await Promise.resolve();
+    });
+
+    expect(useTranscriptStore.getState().isRecording).toBe(true);
+    expect(useTranscriptStore.getState().recordingSessionId).toBe(activeRecordingSessionId);
+
+    // Finish stopRecording -> now both isRecording and recordingSessionId release
+    await act(async () => {
+      stopDeferred.resolve();
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(useTranscriptStore.getState().isRecording).toBe(false);
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+  });
 });

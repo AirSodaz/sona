@@ -90,7 +90,14 @@ describe('StreamingTranslationScheduler', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'seg-1' }),
         expect.objectContaining({ id: 'seg-6' }),
-      ])
+      ]),
+      undefined,
+      undefined,
+      {
+        cancelCheck: expect.any(Function),
+        postProcessReplacements: undefined,
+        priority: 'normal',
+      }
     );
 
     await vi.runAllTimersAsync();
@@ -134,7 +141,14 @@ describe('StreamingTranslationScheduler', () => {
       expect.arrayContaining([
         expect.objectContaining({ id: 'seg-1' }),
         expect.objectContaining({ id: 'seg-2' }),
-      ])
+      ]),
+      undefined,
+      undefined,
+      {
+        cancelCheck: expect.any(Function),
+        postProcessReplacements: undefined,
+        priority: 'normal',
+      }
     );
   });
 

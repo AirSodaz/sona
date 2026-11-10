@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
@@ -43,21 +44,26 @@ export function useTranscriptScrollFollow({
   segments,
   editingSegmentId,
 }: UseTranscriptScrollFollowOptions): UseTranscriptScrollFollowResult {
+  const boundSessionId = useBoundSessionId();
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
-  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+
+  // Follow live streaming only when this editor is bound to the active recording session.
+  const isCurrentSessionRecording =
+    isRecording && (recordingSessionId ? boundSessionId === recordingSessionId : !sourceHistoryId);
 
   // Check if the current session is undergoing streaming batch transcription
   const isBatchStreaming = useBatchQueueStore((state) =>
     state.queueItems.some(
       (item) =>
-        (item.id === activeSessionId || (sourceHistoryId && item.id === sourceHistoryId)) &&
+        (item.id === boundSessionId || (sourceHistoryId && item.id === sourceHistoryId)) &&
         item.status === 'processing'
     )
   );
 
-  const isStreamingActive = (isRecording && !isPaused) || isBatchStreaming;
+  const isStreamingActive = (isCurrentSessionRecording && !isPaused) || isBatchStreaming;
 
   // Playback state
   const isPlaying = useTranscriptPlaybackStore((state) => state.isPlaying);
@@ -83,9 +89,9 @@ export function useTranscriptScrollFollow({
   segmentsRef.current = segments;
 
   // When session switches, reset follow states to avoid inheriting detached state
-  const prevSessionKeyRef = useRef(`${activeSessionId}:${sourceHistoryId}`);
+  const prevSessionKeyRef = useRef(`${boundSessionId}:${sourceHistoryId}`);
   useEffect(() => {
-    const currentKey = `${activeSessionId}:${sourceHistoryId}`;
+    const currentKey = `${boundSessionId}:${sourceHistoryId}`;
     if (currentKey !== prevSessionKeyRef.current) {
       prevSessionKeyRef.current = currentKey;
       isStreamingFollowRef.current = true;
@@ -101,7 +107,7 @@ export function useTranscriptScrollFollow({
         });
       }
     }
-  }, [activeSessionId, sourceHistoryId, isStreamingActive, virtuosoRef]);
+  }, [boundSessionId, sourceHistoryId, isStreamingActive, virtuosoRef]);
 
   // When streaming becomes active, reset streaming follow to true
   const prevStreamingActiveRef = useRef(false);

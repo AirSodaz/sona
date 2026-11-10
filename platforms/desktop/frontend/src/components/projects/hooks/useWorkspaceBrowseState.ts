@@ -197,6 +197,7 @@ export function useWorkspaceBrowseState({
     isScrolled,
     handleScroll,
     scopeItemCount: workspaceQueryResult.summary.totalItems,
+    scopeSummary: workspaceQueryResult.summary,
     filteredItemCount: workspaceQueryResult.filteredItemCount,
     filteredAndSortedItems,
     searchMatchByItemId,

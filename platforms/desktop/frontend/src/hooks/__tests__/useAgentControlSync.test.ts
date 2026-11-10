@@ -6,14 +6,15 @@ import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
-import { sessionActions } from '../../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../../stores/transcriptStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import { useAgentControlSync } from '../useAgentControlSync';
 
 const stopActiveRecordingMock = vi.fn().mockResolvedValue(true);
 vi.mock('../../stores/transcriptCoordinator', () => ({
   stopActiveRecording: (options?: { discard?: boolean }) => stopActiveRecordingMock(options),
+  setSegmentsForHistory: (historyId: string, segments: TranscriptSegment[]) =>
+    useTranscriptStore.getState().setSegmentsForHistory(historyId, segments),
 }));
 
 const listeners = new Map<string, (...args: unknown[]) => unknown>();
@@ -57,6 +58,9 @@ describe('useAgentControlSync', () => {
       isPaused: false,
     });
     useTranscriptStore.setState({
+      activeSessionId: 'default',
+      recordingSessionId: null,
+      sessions: { default: { ...DEFAULT_SESSION_DATA } },
       isRecording: false,
       isPaused: false,
       isAgentRecording: false,
@@ -191,7 +195,7 @@ describe('useAgentControlSync', () => {
       { id: 'seg-1', text: 'Updated segment text', start: 0, end: 1, isFinal: true },
     ];
     vi.mocked(historyService.loadTranscript).mockResolvedValue(mockSegments);
-    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+    const setSegmentsSpy = vi.spyOn(useTranscriptStore.getState(), 'setSegmentsForHistory');
 
     useTranscriptStore.getState().setSourceHistoryId('hist-active-1');
 
@@ -209,12 +213,67 @@ describe('useAgentControlSync', () => {
 
     expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
     expect(historyService.loadTranscript).toHaveBeenCalledWith('hist-active-1');
-    expect(setSegmentsSpy).toHaveBeenCalledWith(mockSegments);
+    expect(setSegmentsSpy).toHaveBeenCalledWith('hist-active-1', mockSegments);
+    expect(useTranscriptStore.getState().sessions.default.segments).toEqual([
+      expect.objectContaining({
+        id: 'seg-1',
+        text: 'Updated segment text',
+      }),
+    ]);
+  });
+
+  it('reloads transcript segments into a non-active background session when sourceHistoryId matches', async () => {
+    const updatedSegments: TranscriptSegment[] = [
+      { id: 'seg-bg-1', text: 'Refreshed in background', start: 0, end: 1, isFinal: true },
+    ];
+    vi.mocked(historyService.loadTranscript).mockResolvedValue(updatedSegments);
+
+    useTranscriptStore.setState({
+      activeSessionId: 'default',
+      sessions: {
+        default: {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-foreground',
+          segments: [
+            { id: 'seg-fg-1', text: 'Foreground stays intact', start: 0, end: 1, isFinal: true },
+          ],
+        },
+        'hist-bg-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-bg-1',
+          segments: [
+            { id: 'seg-bg-old', text: 'Stale background', start: 0, end: 1, isFinal: true },
+          ],
+        },
+      },
+    });
+
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('transcript-updated')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('transcript-updated')?.({
+        payload: { historyId: 'hist-bg-1' },
+      });
+    });
+
+    expect(useTranscriptStore.getState().sessions['hist-bg-1'].segments).toEqual([
+      expect.objectContaining({
+        id: 'seg-bg-1',
+        text: 'Refreshed in background',
+      }),
+    ]);
+    expect(useTranscriptStore.getState().sessions.default.segments[0].text).toBe(
+      'Foreground stays intact'
+    );
   });
 
   it('reloads history but does not reload transcript segments if sourceHistoryId does not match', async () => {
     vi.mocked(historyService.loadTranscript).mockResolvedValue([]);
-    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+    const setSegmentsSpy = vi.spyOn(useTranscriptStore.getState(), 'setSegmentsForHistory');
 
     useTranscriptStore.getState().setSourceHistoryId('hist-other');
 
@@ -241,7 +300,7 @@ describe('useAgentControlSync', () => {
       resolveTranscript = resolve;
     });
     vi.mocked(historyService.loadTranscript).mockReturnValue(pendingPromise);
-    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+    const setSegmentsSpy = vi.spyOn(useTranscriptStore.getState(), 'setSegmentsForHistory');
 
     useTranscriptStore.getState().setSourceHistoryId('hist-active-1');
 

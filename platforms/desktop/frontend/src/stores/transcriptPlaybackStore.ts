@@ -1,3 +1,4 @@
+import { useBoundSessionId } from '../contexts/TranscriptSessionContext';
 import {
   DEFAULT_SESSION_DATA,
   type SessionData,
@@ -20,6 +21,38 @@ export type PlaybackStoreActions = Pick<
 
 export type PlaybackStoreState = SessionData & PlaybackStoreActions;
 
+function createPlaybackActionsForSession(sessionId: string): PlaybackStoreActions {
+  return {
+    setAudioFile: (file) => useTranscriptStore.getState().setAudioFileForSession(sessionId, file),
+    setAudioUrl: (url) => useTranscriptStore.getState().setAudioUrlForSession(sessionId, url),
+    setCurrentTime: (time) =>
+      useTranscriptStore.getState().setCurrentTimeForSession(sessionId, time),
+    setIsPlaying: (isPlaying) =>
+      useTranscriptStore.getState().setIsPlayingForSession(sessionId, isPlaying),
+    setActiveSegmentId: (id, index) =>
+      useTranscriptStore.getState().setActiveSegmentIdForSession(sessionId, id, index),
+    resetActiveSegmentIndex: () =>
+      useTranscriptStore.getState().resetActiveSegmentIndexForSession(sessionId),
+    requestSeek: (time) => useTranscriptStore.getState().requestSeekForSession(sessionId, time),
+    openSession: (args) => useTranscriptStore.getState().openSession(args),
+    clearActiveTranscriptSession: (options) =>
+      useTranscriptStore.getState().clearTranscriptSession(sessionId, options),
+    clearSession: (options) =>
+      useTranscriptStore.getState().clearTranscriptSession(sessionId, options),
+  };
+}
+
+const playbackActionsById = new Map<string, PlaybackStoreActions>();
+
+export function getPlaybackActionsFor(sessionId: string): PlaybackStoreActions {
+  let cached = playbackActionsById.get(sessionId);
+  if (!cached) {
+    cached = createPlaybackActionsForSession(sessionId);
+    playbackActionsById.set(sessionId, cached);
+  }
+  return cached;
+}
+
 export const playbackActions: PlaybackStoreActions = {
   setAudioFile: (file) => useTranscriptStore.getState().setAudioFile(file),
   setAudioUrl: (url) => useTranscriptStore.getState().setAudioUrl(url),
@@ -34,9 +67,12 @@ export const playbackActions: PlaybackStoreActions = {
   clearSession: (options) => useTranscriptStore.getState().clearActiveTranscriptSession(options),
 };
 
-export function getPlaybackStoreState(state: TranscriptStore): PlaybackStoreState {
-  const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  return Object.assign(Object.create(playbackActions), activeSession);
+export function getPlaybackStoreState(
+  state: TranscriptStore,
+  sessionId = state.activeSessionId
+): PlaybackStoreState {
+  const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
+  return Object.assign(Object.create(getPlaybackActionsFor(sessionId)), session);
 }
 
 export const transcriptPlaybackStore = {
@@ -69,7 +105,7 @@ export const transcriptPlaybackStore = {
       const nextActiveSession = state.sessions[nextSessionId];
 
       if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
-        const nextFullState = getPlaybackStoreState(state);
+        const nextFullState = getPlaybackStoreState(state, nextSessionId);
         const prevFullState = lastFullState;
         lastActiveSession = nextActiveSession;
         lastSessionId = nextSessionId;
@@ -82,7 +118,8 @@ export const transcriptPlaybackStore = {
 
 export const useTranscriptPlaybackStore = Object.assign(
   <T>(selector: (state: PlaybackStoreState) => T) => {
-    return useTranscriptStore((state) => selector(getPlaybackStoreState(state)));
+    const boundSessionId = useBoundSessionId();
+    return useTranscriptStore((state) => selector(getPlaybackStoreState(state, boundSessionId)));
   },
   transcriptPlaybackStore
 );

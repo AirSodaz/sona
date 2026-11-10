@@ -89,12 +89,14 @@ export class TaskLedgerBuilders {
     jobHistoryId,
     templateId,
     targetLanguage,
+    status = 'running',
   }: {
     taskId: string;
     taskType: LlmTaskType;
-    jobHistoryId: string;
+    jobHistoryId?: string | null;
     templateId?: string;
     targetLanguage?: string;
+    status?: TaskLedgerRecord['status'];
   }): TaskLedgerRecord => {
     const now = this.nowTaskLedgerTimestamp();
     let kind: TaskLedgerKind;
@@ -110,10 +112,15 @@ export class TaskLedgerBuilders {
       title = 'AI Summary';
     }
 
+    const normalizedHistoryId =
+      jobHistoryId && jobHistoryId !== 'current' && !jobHistoryId.startsWith('session:')
+        ? jobHistoryId
+        : undefined;
+
     return {
       id: this.createLlmTaskLedgerId(taskId),
       kind,
-      status: 'running',
+      status,
       title,
       progress: 0,
       createdAt: now,
@@ -121,7 +128,7 @@ export class TaskLedgerBuilders {
       retryable: true,
       cancelable: true,
       recoverable: false,
-      historyId: jobHistoryId === 'current' ? undefined : jobHistoryId,
+      historyId: normalizedHistoryId,
       templateId,
       targetLanguage,
     };

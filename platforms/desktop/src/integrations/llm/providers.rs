@@ -27,6 +27,8 @@ pub(crate) struct DesktopLlmAdapter {
     cache_dir: Option<PathBuf>,
     translation_pool:
         Option<std::sync::Arc<crate::integrations::translation::TranslationModelPool>>,
+    local_nmt_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
+    local_llm_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
 }
 
 fn detect_source_language(texts: &[String]) -> &'static str {
@@ -61,6 +63,32 @@ impl DesktopLlmAdapter {
             std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
         >,
     ) -> Self {
+        Self::with_resources(models_dir, cache_dir, translation_pool, None, None)
+    }
+
+    pub(crate) fn with_services(
+        models_dir: Option<PathBuf>,
+        cache_dir: Option<PathBuf>,
+        services: Option<&crate::services::DesktopServices>,
+    ) -> Self {
+        Self::with_resources(
+            models_dir,
+            cache_dir,
+            services.map(|s| std::sync::Arc::clone(&s.translation_pool)),
+            services.map(|s| std::sync::Arc::clone(&s.local_nmt_semaphore)),
+            services.map(|s| std::sync::Arc::clone(&s.local_llm_semaphore)),
+        )
+    }
+
+    pub(crate) fn with_resources(
+        models_dir: Option<PathBuf>,
+        cache_dir: Option<PathBuf>,
+        translation_pool: Option<
+            std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
+        >,
+        local_nmt_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
+        local_llm_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
+    ) -> Self {
         if let Some(dir) = &cache_dir {
             sona_online_llm::init_models_dev_cache_dir(dir.clone());
         }
@@ -70,6 +98,26 @@ impl DesktopLlmAdapter {
             models_dir,
             cache_dir,
             translation_pool,
+            local_nmt_semaphore,
+            local_llm_semaphore,
+        }
+    }
+
+    async fn acquire_semaphore(
+        semaphore: Option<&std::sync::Arc<tokio::sync::Semaphore>>,
+    ) -> Result<Option<tokio::sync::OwnedSemaphorePermit>, LlmPortError> {
+        match semaphore {
+            Some(sem) => std::sync::Arc::clone(sem)
+                .acquire_owned()
+                .await
+                .map(Some)
+                .map_err(|_| {
+                    LlmPortError::new(
+                        LlmPortErrorKind::Unavailable,
+                        "Local execution semaphore closed",
+                    )
+                }),
+            None => Ok(None),
         }
     }
 
@@ -99,6 +147,7 @@ impl LlmCompletionPort for DesktopLlmAdapter {
         request: LlmCompletionRequest,
     ) -> Result<StandardLlmResponse, LlmPortError> {
         if Self::is_local_config(&request.config) {
+            let _permit = Self::acquire_semaphore(self.local_llm_semaphore.as_ref()).await?;
             self.local.complete(request).await
         } else {
             self.online.complete(request).await
@@ -114,6 +163,7 @@ impl LlmStreamingPort for DesktopLlmAdapter {
         emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
     ) -> Result<StandardLlmResponse, LlmPortError> {
         if Self::is_local_config(&request.config) {
+            let _permit = Self::acquire_semaphore(self.local_llm_semaphore.as_ref()).await?;
             self.local.stream_completion(request, emit_delta).await
         } else {
             self.online.stream_completion(request, emit_delta).await
@@ -220,6 +270,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                 return Ok(request.texts);
             }
 
+            let _permit = Self::acquire_semaphore(self.local_nmt_semaphore.as_ref()).await?;
             let Some(models_dir) = &self.models_dir else {
                 return Err(LlmPortError::new(
                     LlmPortErrorKind::Unavailable,
@@ -269,6 +320,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                 return Ok(request.texts);
             }
 
+            let _permit = Self::acquire_semaphore(self.local_llm_semaphore.as_ref()).await?;
             use sona_core::ports::translation::TranslationEnginePort;
             let adapter = sona_llama_cpp::translation::LlamaCppTranslationAdapter::new(
                 std::sync::Arc::new(self.local.clone()),

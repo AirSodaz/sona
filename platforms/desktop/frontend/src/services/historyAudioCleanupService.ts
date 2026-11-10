@@ -1,9 +1,30 @@
 import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryAudioCleanupReport } from '../types/history';
 import { logger } from '../utils/logger';
 import { historyService } from './historyService';
+
+export function collectOpenHistoryExclusionIds(): string[] {
+  const { sessions, activeSessionId } = useTranscriptStore.getState();
+  const ids = new Set<string>();
+  for (const [sessionId, session] of Object.entries(sessions)) {
+    if (session.sourceHistoryId) {
+      ids.add(session.sourceHistoryId);
+    } else if (sessionId && sessionId !== 'default') {
+      // Only include IDs that exist in completed history items if session lacks sourceHistoryId
+      const matching = useHistoryStore.getState().items.find((item) => item.id === sessionId);
+      if (matching) {
+        ids.add(matching.id);
+      }
+    }
+  }
+  const activeSourceId = sessions[activeSessionId]?.sourceHistoryId;
+  if (activeSourceId) {
+    ids.add(activeSourceId);
+  }
+  return Array.from(ids);
+}
 
 let cleanupInFlight: Promise<HistoryAudioCleanupReport | null> | null = null;
 let lastCleanupDayKey: string | null = null;
@@ -39,8 +60,12 @@ export async function runHistoryAudioCleanupForCurrentConfig(
     lastCleanupDayKey = dayKey;
 
     try {
-      const excludeHistoryId = useTranscriptSessionStore.getState().sourceHistoryId || null;
-      const report = await historyService.cleanupAudio(retentionDays, excludeHistoryId);
+      const excludeHistoryIds = collectOpenHistoryExclusionIds();
+      const report = await historyService.cleanupAudio(
+        retentionDays,
+        excludeHistoryIds[0] ?? null,
+        excludeHistoryIds
+      );
 
       logger.info('[HistoryAudioCleanup] Automatic cleanup finished', report);
 

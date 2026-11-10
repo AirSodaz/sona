@@ -4,6 +4,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { useTranslation } from 'react-i18next';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
@@ -13,9 +14,8 @@ import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useSearchStore } from '../../stores/searchStore';
-import { updateTranscriptSegment } from '../../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { DEFAULT_LLM_STATE } from '../../stores/transcriptSidecarState';
+import { DEFAULT_LLM_STATE, resolveSidecarKey } from '../../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import { needsWordBoundarySpace } from '../../utils/cjkTypography';
@@ -86,11 +86,13 @@ export function SegmentItem({
   );
 
   // LLM state (translation visibility)
+  const boundSessionId = useBoundSessionId();
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const updateSegment = useTranscriptSessionStore((state) => state.updateSegment);
+  const sidecarKey = resolveSidecarKey(boundSessionId, sourceHistoryId);
   const isTranslationVisible = useTranscriptSidecarStore(
     (state) =>
-      (sourceHistoryId ? state.llmStates[sourceHistoryId] : state.llmStates.current)
-        ?.isTranslationVisible ?? DEFAULT_LLM_STATE.isTranslationVisible
+      state.llmStates[sidecarKey]?.isTranslationVisible ?? DEFAULT_LLM_STATE.isTranslationVisible
   );
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
 
@@ -99,14 +101,24 @@ export function SegmentItem({
     uiStore,
     useCallback((state) => index < state.totalSegments - 1, [index])
   );
+  const isDocumentLocked = useStore(
+    uiStore,
+    useCallback((state) => Boolean(state.isDocumentLocked), [])
+  );
 
-  const isLocked = !segment.isFinal;
+  const isLocked = !segment.isFinal || isDocumentLocked;
 
   // Translation editing state
   const [isEditingTranslation, setIsEditingTranslation] = useState(false);
   const [translationDraft, setTranslationDraft] = useState('');
   const translationInputRef = useRef<HTMLTextAreaElement>(null);
   const isTranslationActionClickedRef = useRef(false);
+
+  useEffect(() => {
+    if (isLocked && isEditingTranslation) {
+      setIsEditingTranslation(false);
+    }
+  }, [isEditingTranslation, isLocked]);
 
   const adjustTextareaHeight = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -135,11 +147,11 @@ export function SegmentItem({
       if (onSaveTranslation) {
         onSaveTranslation(segment.id, trimmed);
       } else {
-        updateTranscriptSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
+        updateSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
       }
       setIsEditingTranslation(false);
     },
-    [onSaveTranslation, segment.id]
+    [onSaveTranslation, segment.id, updateSegment]
   );
 
   const handleCancelTranslation = useCallback(() => {
@@ -280,6 +292,9 @@ export function SegmentItem({
 
   function handleSpeakerBadgeClick(e: React.MouseEvent): void {
     e.stopPropagation();
+    if (isLocked) {
+      return;
+    }
     setIsSpeakerMenuOpen((current) => {
       const next = !current;
       if (!next) {
@@ -290,7 +305,7 @@ export function SegmentItem({
   }
 
   async function handleSpeakerProfileSelect(profileId: string): Promise<void> {
-    if (!speakerGroupId) {
+    if (!speakerGroupId || isLocked) {
       return;
     }
 
@@ -299,7 +314,8 @@ export function SegmentItem({
       await speakerCorrectionService.assignProfileToSpeakerGroup(
         speakerGroupId,
         profileId,
-        currentProjectId
+        currentProjectId,
+        { sessionId: boundSessionId, historyId: sourceHistoryId }
       );
       closeSpeakerMenu();
     } catch (error) {
@@ -317,13 +333,16 @@ export function SegmentItem({
   }
 
   async function handleResetSpeakerGroup(): Promise<void> {
-    if (!speakerGroupId) {
+    if (!speakerGroupId || isLocked) {
       return;
     }
 
     try {
       setIsApplyingSpeakerProfile(true);
-      await speakerCorrectionService.resetGroupToAnonymous(speakerGroupId);
+      await speakerCorrectionService.resetGroupToAnonymous(speakerGroupId, {
+        sessionId: boundSessionId,
+        historyId: sourceHistoryId,
+      });
       closeSpeakerMenu();
     } catch (error) {
       await showError({
@@ -661,7 +680,13 @@ export function SegmentItem({
               onEdit(segment.id);
             }}
             disabled={isLocked}
-            data-tooltip={isLocked ? t('editor.locked_not_final') : t('editor.edit_tooltip')}
+            data-tooltip={
+              !segment.isFinal
+                ? t('editor.locked_not_final')
+                : isDocumentLocked
+                  ? t('editor.locked_processing', { defaultValue: 'Processing...' })
+                  : t('editor.edit_tooltip')
+            }
             aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
           >
             <EditIcon />
@@ -675,11 +700,13 @@ export function SegmentItem({
               }}
               disabled={isLocked || !canMergeWithNext}
               data-tooltip={
-                isLocked
+                !segment.isFinal
                   ? t('editor.locked_not_final')
-                  : !canMergeWithNext
-                    ? t('editor.locked_merge_not_final')
-                    : t('editor.merge_tooltip')
+                  : isDocumentLocked
+                    ? t('editor.locked_processing', { defaultValue: 'Processing...' })
+                    : !canMergeWithNext
+                      ? t('editor.locked_merge_not_final')
+                      : t('editor.merge_tooltip')
               }
               aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
             >
@@ -712,7 +739,13 @@ export function SegmentItem({
               onDelete(segment.id);
             }}
             disabled={isLocked}
-            data-tooltip={isLocked ? t('editor.locked_not_final') : t('editor.delete_tooltip')}
+            data-tooltip={
+              !segment.isFinal
+                ? t('editor.locked_not_final')
+                : isDocumentLocked
+                  ? t('editor.locked_processing', { defaultValue: 'Processing...' })
+                  : t('editor.delete_tooltip')
+            }
             aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
           >
             <TrashIcon />

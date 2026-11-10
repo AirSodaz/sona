@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
@@ -8,15 +9,24 @@ import { formatDisplayTime } from '../../utils/exportFormats';
  * Informs the user where the next transcribed element will appear with minimal perceptual load.
  */
 export function TranscriptAnticipationIndicator(): React.JSX.Element | null {
+  const boundSessionId = useBoundSessionId();
   const isRecording = useTranscriptStore((state) => state.isRecording);
   const isPaused = useTranscriptStore((state) => state.isPaused);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const segments = useTranscriptSessionStore((state) => state.segments);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
 
-  // Only render when recording is active, not paused, and we have existing segments
-  if (!isRecording || isPaused || segments.length === 0) {
+  const isCurrentSessionRecording = Boolean(
+    isRecording &&
+      (recordingSessionId
+        ? boundSessionId === recordingSessionId
+        : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+
+  // Only render when recording is active for this session, not paused, and we have existing segments
+  if (!isCurrentSessionRecording || isPaused || segments.length === 0) {
     return null;
   }
-
   const lastSegment = segments[segments.length - 1];
   const isLastSegmentPartial = !lastSegment.isFinal;
 

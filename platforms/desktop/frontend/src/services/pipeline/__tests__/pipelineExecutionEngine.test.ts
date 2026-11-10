@@ -92,7 +92,12 @@ describe('PipelineExecutionEngine', () => {
     expect(mockPorts.polishService.polishSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ polishPresetId: 'custom-preset' }),
       expect.any(Array),
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      {
+        priority: 'normal',
+        cancelCheck: undefined,
+      }
     );
     expect(mockPorts.historyService.updateTranscript).toHaveBeenCalledWith(
       'hist-1',
@@ -103,7 +108,13 @@ describe('PipelineExecutionEngine', () => {
     expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ translationLanguage: 'ja' }),
       expect.any(Array),
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      {
+        priority: 'normal',
+        cancelCheck: undefined,
+        postProcessReplacements: undefined,
+      }
     );
 
     // Verify summary called with project template override
@@ -147,12 +158,23 @@ describe('PipelineExecutionEngine', () => {
     expect(mockPorts.polishService.polishSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ polishPresetId: 'global-polish' }),
       expect.any(Array),
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      {
+        priority: 'normal',
+        cancelCheck: undefined,
+      }
     );
     expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ translationLanguage: 'zh' }),
       expect.any(Array),
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      {
+        priority: 'normal',
+        cancelCheck: undefined,
+        postProcessReplacements: undefined,
+      }
     );
     expect(mockPorts.summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith(
       expect.objectContaining({ templateId: 'global-summary' })
@@ -293,7 +315,13 @@ projects:
     expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
       expect.anything(),
       [expect.objectContaining({ id: 'seg-2' })],
-      expect.any(Function)
+      expect.any(Function),
+      undefined,
+      {
+        priority: 'normal',
+        cancelCheck: undefined,
+        postProcessReplacements: undefined,
+      }
     );
     expect(result.segments[0].translation).toBe('你好');
     expect(result.segments[1].translation).toBe('已翻译');

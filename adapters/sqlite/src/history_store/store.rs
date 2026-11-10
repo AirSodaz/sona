@@ -414,8 +414,16 @@ where
             return Ok(HistoryAudioCleanupReport::default());
         };
 
+        let mut excluded_ids = std::collections::HashSet::new();
         if let Some(history_id) = request.exclude_history_id.as_deref() {
             validate_id(history_id, "Excluded history ID").map_err(DatabaseError::Internal)?;
+            excluded_ids.insert(history_id.to_string());
+        }
+        if let Some(history_ids) = request.exclude_history_ids.as_ref() {
+            for history_id in history_ids {
+                validate_id(history_id, "Excluded history ID").map_err(DatabaseError::Internal)?;
+                excluded_ids.insert(history_id.clone());
+            }
         }
 
         let history_dir = self.history_dir();
@@ -423,7 +431,7 @@ where
         let mut report = HistoryAudioCleanupReport::default();
 
         for candidate in candidates {
-            if request.exclude_history_id.as_deref() == Some(candidate.id.as_str()) {
+            if excluded_ids.contains(candidate.id.as_str()) {
                 report.skipped_active_count += 1;
                 continue;
             }

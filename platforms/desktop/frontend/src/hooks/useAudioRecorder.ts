@@ -22,8 +22,8 @@ import { useProjectStore } from '../stores/projectStore';
 import {
   clearTranscriptSegments,
   registerActiveRecorderStopHandler,
+  setSegmentsForHistory,
   setTranscriptSegments,
-  syncSavedRecordingMeta as syncTranscriptSavedRecordingMeta,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
@@ -85,6 +85,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   const recordControllerRef = useRef<RecordController | null>(null);
   const recordingAutomationSnapshotRef = useRef<{
     config: ReturnType<typeof getEffectiveConfigSnapshot>;
+    projectId: string | null;
   } | null>(null);
 
   const [isInitializing, setIsInitializing] = useState(false);
@@ -177,6 +178,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           discardLiveRecordingDraft: (...args) => historyService.discardLiveRecordingDraft(...args),
           saveRecording: (...args) => historyService.saveRecording(...args),
           saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
+          loadTranscript: (...args) => historyService.loadTranscript(...args),
           updateTranscript: (...args) => historyService.updateTranscript(...args),
         },
         getTranscriptState: () => {
@@ -233,8 +235,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             items: state.items.filter((item) => item.id !== id),
           })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
-        postProcessSavedItem: async (historyId, segments) => {
-          const activeProjectId = useProjectStore.getState().activeProjectId;
+        postProcessSavedItem: async (historyId, segments, explicitProjectId) => {
+          const activeProjectId =
+            explicitProjectId ??
+            recordingAutomationSnapshotRef.current?.projectId ??
+            useProjectStore.getState().activeProjectId;
           const effectiveConfig = useConfigStore.getState().config;
           const pipeline = resolveItemPipeline(
             activeProjectId,
@@ -250,15 +255,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return segments;
           }
           try {
+            const originSessionId =
+              recordSessionIdRef.current ||
+              useTranscriptStore.getState().recordingSessionId ||
+              historyId;
             const result = await pipelineExecutionEngine.execute({
               historyId,
+              sessionId: originSessionId,
               projectId: activeProjectId,
               segments,
               pipeline,
               globalConfig: effectiveConfig,
               baseFileName: `Recording-${historyId}`,
               onSegmentsUpdated: (updatedSegments) => {
-                useTranscriptStore.getState().setSegmentsForSession(historyId, updatedSegments);
+                setSegmentsForHistory(historyId, updatedSegments);
               },
             });
             return result.segments;
@@ -267,10 +277,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return segments;
           }
         },
+        commitTranscriptUpdate: async (historyId, segments) => {
+          await useHistoryStore.getState().commitSystemTranscriptUpdate(historyId, segments);
+        },
         annotateSegmentsForFile: (filePath, segments, transcriptConfig) =>
           speakerService.annotateSegmentsForFile(filePath, segments, transcriptConfig),
-        syncSavedRecordingMeta: (title, historyId, icon) =>
-          syncTranscriptSavedRecordingMeta(title, historyId, icon),
+        syncSavedRecordingMeta: (title, historyId, icon) => {
+          const originSessionId =
+            recordSessionIdRef.current ||
+            useTranscriptStore.getState().recordingSessionId ||
+            undefined;
+          useTranscriptStore
+            .getState()
+            .syncSavedRecordingMeta(title, historyId, icon, undefined, originSessionId);
+        },
         writeFile: (filePath, contents) => writeFile(filePath, contents),
         removeFile: (filePath) => audioDeleteRecordingFile(filePath),
         fileSrcFromPath: convertManagedAudioFileSrc,
@@ -334,9 +354,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         messageKey: 'errors.audio.capture_failed',
         cause: error,
       });
-      setIsRecording(false);
       setIsPaused(false);
-      void recordControllerRef.current?.stopRecording();
+      // Keep `isRecording` active until `stopRecording()` finishes finalizing and archiving
+      // the live draft so Channel 1 locks hold and no duplicate recording starts mid-flush.
+      void recordControllerRef.current?.stopRecording().finally(() => {
+        setIsRecording(false);
+      });
     },
     [showError, setIsRecording, setIsPaused]
   );
@@ -431,6 +454,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       effectiveConfig
     );
     recordingAutomationSnapshotRef.current = {
+      projectId: activeProjectId,
       config: {
         ...effectiveConfig,
         autoPolish: pipeline.autoPolish,

@@ -1,11 +1,38 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use sona_core::ports::translation::{
     TranslationEngineKind, TranslationEnginePort, TranslationPortError,
 };
 
 use crate::services::DesktopServices;
+
+struct SemaphoreGuardedTranslationEngine {
+    inner: Arc<dyn TranslationEnginePort>,
+    semaphore: Arc<tokio::sync::Semaphore>,
+}
+
+#[async_trait]
+impl TranslationEnginePort for SemaphoreGuardedTranslationEngine {
+    async fn translate(
+        &self,
+        text: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String, TranslationPortError> {
+        let _permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| TranslationPortError::engine_failed("Translation semaphore closed"))?;
+        self.inner.translate(text, source_lang, target_lang).await
+    }
+
+    fn engine_kind(&self) -> TranslationEngineKind {
+        self.inner.engine_kind()
+    }
+}
 
 pub struct TranslationEngineFactory;
 
@@ -24,7 +51,10 @@ impl TranslationEngineFactory {
                     services
                         .translation_pool
                         .get_or_load(source_lang, target_lang, models_dir)?;
-                Ok(adapter as Arc<dyn TranslationEnginePort>)
+                Ok(Arc::new(SemaphoreGuardedTranslationEngine {
+                    inner: adapter,
+                    semaphore: Arc::clone(&services.local_nmt_semaphore),
+                }))
             }
             TranslationEngineKind::LlamaCpp => {
                 let model_name = match model_name_or_id {
@@ -39,7 +69,10 @@ impl TranslationEngineFactory {
                         engine, model_name,
                     ),
                 );
-                Ok(adapter as Arc<dyn TranslationEnginePort>)
+                Ok(Arc::new(SemaphoreGuardedTranslationEngine {
+                    inner: adapter,
+                    semaphore: Arc::clone(&services.local_llm_semaphore),
+                }))
             }
         }
     }

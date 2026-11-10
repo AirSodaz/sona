@@ -307,6 +307,9 @@ function normalizeTranslateRequest(
     sourceLanguage: request.sourceLanguage?.trim() ? request.sourceLanguage.trim() : null,
     context: request.context ?? null,
     keywords: request.keywords ?? null,
+    ...(request.postProcessReplacements?.length
+      ? { postProcessReplacements: request.postProcessReplacements }
+      : {}),
   };
 }
 

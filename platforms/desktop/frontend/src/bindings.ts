@@ -1146,11 +1146,13 @@ export type HistoryAudioCleanupRequest = HistoryAudioCleanupRequest_Serialize | 
 export type HistoryAudioCleanupRequest_Deserialize = {
 	retentionDays?: number | null,
 	excludeHistoryId?: string | null,
+	excludeHistoryIds?: string[] | null,
 };
 
 export type HistoryAudioCleanupRequest_Serialize = {
 	retentionDays?: number | null,
 	excludeHistoryId?: string | null,
+	excludeHistoryIds?: string[] | null,
 };
 
 export type HistoryAudioStatus = "available" | "missing" | "removed";
@@ -3131,6 +3133,7 @@ export type TranscriptLlmJobRequest_Deserialize = {
 	template: SummaryTemplateConfig | null,
 	chunkSize: number | null,
 	chunkCharBudget: number | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
 };
 
 export type TranscriptLlmJobRequest_Serialize = {
@@ -3148,6 +3151,7 @@ export type TranscriptLlmJobRequest_Serialize = {
 	template: SummaryTemplateConfig | null,
 	chunkSize: number | null,
 	chunkCharBudget: number | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
 };
 
 export type TranscriptNormalizationOptions = {
@@ -3286,6 +3290,7 @@ export type TranslateSegmentsRequest_Deserialize = {
 	sourceLanguage?: string | null,
 	context?: string | null,
 	keywords?: string | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
 };
 
 export type TranslateSegmentsRequest_Serialize = {
@@ -3298,6 +3303,7 @@ export type TranslateSegmentsRequest_Serialize = {
 	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
 };
 
 export type TranslatedSegment = {

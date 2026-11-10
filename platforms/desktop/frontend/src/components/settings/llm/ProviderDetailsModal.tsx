@@ -30,7 +30,8 @@ import {
   syncProviderDiscoveredModels,
   updateLlmModelMetadata,
 } from '../../../services/llm/state';
-import { describeLlmModel, generateLlmText, listLlmModels } from '../../../services/tauri/llm';
+import { generateLlmText } from '../../../services/llmOperations';
+import { describeLlmModel, listLlmModels } from '../../../services/tauri/llm';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmModelEntry, LlmProvider } from '../../../types/transcript';

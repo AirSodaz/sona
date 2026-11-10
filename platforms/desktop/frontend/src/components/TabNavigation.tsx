@@ -45,6 +45,12 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         }
         return;
       }
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.isContentEditable
+      ) {
+        document.activeElement.blur();
+      }
       setMode(newMode);
     },
     [mode, setMode]

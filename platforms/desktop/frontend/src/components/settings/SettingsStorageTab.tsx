@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { collectOpenHistoryExclusionIds } from '../../services/historyAudioCleanupService';
 import { historyService } from '../../services/historyService';
 import { modelService } from '../../services/modelService';
 import { storageLocationService } from '../../services/storageLocationService';
@@ -707,8 +708,13 @@ export function SettingsStorageTab(): React.JSX.Element {
     setResultMessage(null);
 
     try {
-      const excludeHistoryId = sourceHistoryId || null;
-      const preview = await historyService.previewAudioCleanup(retentionDays, excludeHistoryId);
+      const excludeHistoryIds = collectOpenHistoryExclusionIds();
+      const excludeHistoryId = sourceHistoryId || excludeHistoryIds[0] || null;
+      const preview = await historyService.previewAudioCleanup(
+        retentionDays,
+        excludeHistoryId,
+        excludeHistoryIds
+      );
 
       if (!reportHasCleanupWork(preview)) {
         setResultMessage(formatReportSummary(preview, t, i18n.language));
@@ -734,7 +740,11 @@ export function SettingsStorageTab(): React.JSX.Element {
         return;
       }
 
-      const result = await historyService.cleanupAudio(retentionDays, excludeHistoryId);
+      const result = await historyService.cleanupAudio(
+        retentionDays,
+        excludeHistoryId,
+        excludeHistoryIds
+      );
       await refreshHistory();
       await loadUsageSnapshot(true);
       setResultMessage(formatReportSummary(result, t, i18n.language));

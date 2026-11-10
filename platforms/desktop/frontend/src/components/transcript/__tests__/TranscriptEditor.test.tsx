@@ -1,6 +1,7 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
+import { useSearchStore } from '../../../stores/searchStore';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import TranscriptEditor from '../TranscriptEditor';
 
@@ -247,5 +248,81 @@ describe('TranscriptEditor', () => {
         behavior: 'smooth',
       })
     );
+  });
+
+  it('triggers search on Ctrl+F / Cmd+F when focused within .panel-right or .projects-detail-pane', () => {
+    useSearchStore.setState({ isOpen: false });
+    useTranscriptStore.setState({
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+    const wrapper = document.createElement('div');
+    wrapper.className = 'panel-right';
+    document.body.appendChild(wrapper);
+
+    const { container } = render(<TranscriptEditor />, { container: wrapper });
+    const editor = container.querySelector('.transcript-editor') as HTMLElement;
+    expect(editor).toBeTruthy();
+
+    // 1. Focused within .panel-right
+    editor.focus();
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    expect(useSearchStore.getState().isOpen).toBe(true);
+
+    useSearchStore.setState({ isOpen: false });
+
+    // 2. Focused on body
+    document.body.focus();
+    fireEvent.keyDown(window, { key: 'f', metaKey: true });
+    expect(useSearchStore.getState().isOpen).toBe(true);
+
+    useSearchStore.setState({ isOpen: false });
+
+    // 3. Focused outside both .panel-right and .projects-detail-pane
+    const outsideInput = document.createElement('input');
+    document.body.appendChild(outsideInput);
+    outsideInput.focus();
+
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    expect(useSearchStore.getState().isOpen).toBe(false);
+
+    document.body.removeChild(outsideInput);
+    document.body.removeChild(wrapper);
+  });
+
+  it('ignores Ctrl+F and does not render SearchUI when isActive is false', () => {
+    useSearchStore.setState({ isOpen: false });
+    useTranscriptStore.setState({
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+
+    const { container } = render(<TranscriptEditor isActive={false} />);
+    document.body.focus();
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    expect(useSearchStore.getState().isOpen).toBe(false);
+
+    act(() => {
+      useSearchStore.setState({ isOpen: true });
+    });
+    expect(container.querySelector('.search-ui-container')).toBeNull();
+  });
+
+  it('closes search when isActive transitions from true to false without affecting stays-inactive renders', () => {
+    useSearchStore.setState({ isOpen: true });
+    useTranscriptStore.setState({
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+
+    const { rerender } = render(<TranscriptEditor isActive={true} />);
+    expect(useSearchStore.getState().isOpen).toBe(true);
+
+    rerender(<TranscriptEditor isActive={false} />);
+    expect(useSearchStore.getState().isOpen).toBe(false);
+
+    // An always-inactive editor re-rendering should not close search opened by the active editor
+    act(() => {
+      useSearchStore.setState({ isOpen: true });
+    });
+    rerender(<TranscriptEditor isActive={false} />);
+    expect(useSearchStore.getState().isOpen).toBe(true);
   });
 });

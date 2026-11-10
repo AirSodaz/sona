@@ -78,4 +78,46 @@ describe('TranscriptAnticipationIndicator', () => {
     expect(screen.getByText('00:04.2')).toBeTruthy();
     expect(container.querySelector('.transcript-caret-pulse')).toBeTruthy();
   });
+
+  it('renders nothing when active session is not the recording session during background recording', () => {
+    const finalizedSegment: TranscriptSegment = {
+      id: 'seg-1',
+      start: 0,
+      end: 4.2,
+      text: '已保存记录',
+      isFinal: true,
+    };
+
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'active-rec-session',
+      activeSessionId: 'different-viewed-session',
+      isPaused: false,
+      segments: [finalizedSegment],
+    });
+
+    const { container } = render(<TranscriptAnticipationIndicator />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders nothing on completed historical record even if recordingSessionId is unset during recording', () => {
+    const finalizedSegment: TranscriptSegment = {
+      id: 'seg-1',
+      start: 0,
+      end: 4.2,
+      text: '已完成的历史录音',
+      isFinal: true,
+    };
+
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: null,
+      sourceHistoryId: 'historical-item-456',
+      isPaused: false,
+      segments: [finalizedSegment],
+    });
+
+    const { container } = render(<TranscriptAnticipationIndicator />);
+    expect(container.firstChild).toBeNull();
+  });
 });

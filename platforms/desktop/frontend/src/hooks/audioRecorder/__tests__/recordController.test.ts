@@ -5,7 +5,7 @@ import {
   registerActiveRecorderStopHandler,
   stopActiveRecording,
 } from '../../../stores/transcriptCoordinator';
-import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../../../stores/transcriptStore';
 import { createRecordController } from '../recordController';
 import type { MutableRefLike } from '../types';
 
@@ -22,6 +22,11 @@ vi.mock('../../../services/transcriptionService', () => ({
 
 vi.mock('../../../services/historyService', () => ({
   flushPendingAutoSave: vi.fn().mockResolvedValue(undefined),
+  cancelPendingAutoSave: vi.fn(),
+  historyService: {
+    loadTranscript: vi.fn().mockResolvedValue(null),
+    updateTranscript: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 function createRef<T>(value: T): MutableRefLike<T> {
@@ -52,13 +57,24 @@ function createDraftHandle(id: string): LiveRecordingDraftHandle {
 describe('recordController stopRecording and coordinator delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useTranscriptSessionStore.setState({
-      segments: [{ id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true }],
+    useTranscriptStore.setState({
+      activeSessionId: 'default',
+      recordingSessionId: null,
+      sessions: { default: { ...DEFAULT_SESSION_DATA } },
     });
   });
 
   it('finalizes native recording draft with WAV path when stopped normally', async () => {
     const liveDraft = createDraftHandle('draft-1');
+    useTranscriptStore.setState({
+      activeSessionId: 'rec-session-1',
+      recordingSessionId: 'rec-session-1',
+    });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('rec-session-1', [
+        { id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true },
+      ]);
     const usingNativeCaptureRef = createRef(true);
     const liveDraftRef = createRef<LiveRecordingDraftHandle | null>(liveDraft);
     const persistNativeRecording = vi.fn().mockResolvedValue(undefined);
@@ -120,6 +136,15 @@ describe('recordController stopRecording and coordinator delegation', () => {
 
   it('discards native recording draft when discard option is requested via coordinator', async () => {
     const liveDraft = createDraftHandle('draft-2');
+    useTranscriptStore.setState({
+      activeSessionId: 'rec-session-2',
+      recordingSessionId: 'rec-session-2',
+    });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('rec-session-2', [
+        { id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true },
+      ]);
     const usingNativeCaptureRef = createRef(true);
     const liveDraftRef = createRef<LiveRecordingDraftHandle | null>(liveDraft);
     const persistNativeRecording = vi.fn().mockResolvedValue(undefined);
@@ -176,5 +201,71 @@ describe('recordController stopRecording and coordinator delegation', () => {
     expect(persistNativeRecording).not.toHaveBeenCalled();
     expect(audioDeleteRecordingFile).toHaveBeenCalledWith('C:/history/draft-2.wav');
     expect(liveDraftRef.current).toBeNull();
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(useTranscriptStore.getState().sessions['rec-session-2']).toBeUndefined();
+  });
+
+  it('evicts the allocated recording session on start failure without disturbing active non-recording session', async () => {
+    useTranscriptStore.setState({
+      activeSessionId: 'projects-item-1',
+      recordingSessionId: null,
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'projects-item-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'projects-item-1',
+          segments: [{ id: 'p-1', text: 'Projects detail', start: 0, end: 1, isFinal: true }],
+        },
+        'rec-failed-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-failed-1',
+        },
+      },
+    });
+    const controller = createRecordController({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      config: { muteDuringRecording: false } as any,
+      inputSource: 'microphone',
+      activeInputSourceRef: createRef('microphone'),
+      usingNativeCaptureRef: createRef(false),
+      liveDraftRef: createRef<LiveRecordingDraftHandle | null>(null),
+      setAudioUrl: vi.fn(),
+      setAudioFile: vi.fn(),
+      setIsInitializing: vi.fn(),
+      setIsTransitioning: vi.fn(),
+      setIsPaused: vi.fn(),
+      showError: vi.fn().mockResolvedValue(undefined),
+      capture: {
+        cleanupPartialStart: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      session: {
+        openRecordSession: () => 'rec-failed-1',
+        softStopRecordSessionIfActive: vi.fn().mockResolvedValue(undefined),
+        resetRecordSession: vi.fn(),
+        getSessionId: () => 'rec-failed-1',
+        getPhase: () => 'starting',
+        setPhase: vi.fn(),
+        isActiveSession: () => false,
+        canMutateActiveRecordResources: () => false,
+        shouldFinalizeRecordStartAttempt: () => false,
+      } as any,
+      timing: {
+        clearFinalizedDurationSeconds: vi.fn(),
+      } as any,
+      persistence: {
+        createLiveRecordingDraft: vi.fn().mockRejectedValue(new Error('disk full')),
+        discardLiveRecordingDraft: vi.fn().mockResolvedValue(undefined),
+        persistNativeRecording: vi.fn(),
+      },
+    });
+
+    const started = await controller.startRecording();
+
+    expect(started).toBe(false);
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(useTranscriptStore.getState().sessions['rec-failed-1']).toBeUndefined();
+    expect(useTranscriptStore.getState().sessions['projects-item-1']?.segments[0].text).toBe(
+      'Projects detail'
+    );
   });
 });

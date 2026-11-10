@@ -5,6 +5,7 @@ use crate::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
 };
 use crate::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+use crate::transcription::postprocess::TranscriptTextReplacementRuleSet;
 use crate::transcription::transcript::TranscriptSegment;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -267,6 +268,8 @@ pub struct TranslateSegmentsRequest {
     pub context: Option<String>,
     #[serde(default)]
     pub keywords: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_process_replacements: Option<Vec<TranscriptTextReplacementRuleSet>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -312,6 +315,8 @@ pub struct TranscriptLlmJobRequest {
         specta(type = Option<specta_typescript::Number>)
     )]
     pub chunk_char_budget: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_process_replacements: Option<Vec<TranscriptTextReplacementRuleSet>>,
 }
 
 impl TranscriptLlmJobRequest {
@@ -331,6 +336,7 @@ impl TranscriptLlmJobRequest {
                 self.template = None;
                 self.chunk_size = None;
                 self.chunk_char_budget = None;
+                self.post_process_replacements = None;
             }
             LlmTaskType::Summary => {
                 self.source_language = None;
@@ -339,6 +345,7 @@ impl TranscriptLlmJobRequest {
                 self.context = None;
                 self.keywords = None;
                 self.mode = None;
+                self.post_process_replacements = None;
             }
         }
     }

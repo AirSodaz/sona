@@ -1,13 +1,17 @@
 import i18next from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
+import { registerAutoSaveLifecycleHooks } from '../stores/autoSaveHooks';
 import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/historyStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import {
+  type SessionData,
+  type TranscriptStore,
+  useTranscriptStore,
+} from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
+import { documentMutationCoordinator } from './task/documentMutationCoordinator';
 
 const DEFAULT_AUTO_SAVE_DELAY_MS = 2000;
 const LIVE_DRAFT_AUTO_SAVE_DELAY_MS = 500;
@@ -21,6 +25,20 @@ type PendingSave = {
 function cloneSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
   return structuredClone(segments);
 }
+
+function findSessionByHistoryId(state: TranscriptStore, historyId: string): SessionData | null {
+  const direct = state.sessions[historyId];
+  if (direct && (!direct.sourceHistoryId || direct.sourceHistoryId === historyId)) {
+    return direct;
+  }
+  for (const session of Object.values(state.sessions)) {
+    if (session.sourceHistoryId === historyId) {
+      return session;
+    }
+  }
+  return direct ?? null;
+}
+
 function getI18nText(key: string, defaultValue: string): string {
   if (i18next.isInitialized) {
     const translated = i18next.t(key, { defaultValue });
@@ -30,9 +48,9 @@ function getI18nText(key: string, defaultValue: string): string {
 }
 
 class TranscriptAutoSaveRuntime {
-  private timeout: ReturnType<typeof setTimeout> | null = null;
+  private timeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-  private lastFingerprint = '';
+  private lastFingerprints = new Map<string, string>();
 
   private pendingByHistoryId = new Map<string, PendingSave>();
 
@@ -48,6 +66,21 @@ class TranscriptAutoSaveRuntime {
 
   private unsubscribe: (() => void) | null = null;
   private unsubscribeHistoryUpdate: (() => void) | null = null;
+
+  private clearTimeout(historyId: string): void {
+    const timer = this.timeouts.get(historyId);
+    if (timer) {
+      clearTimeout(timer);
+      this.timeouts.delete(historyId);
+    }
+  }
+
+  private clearAllTimeouts(): void {
+    for (const timer of this.timeouts.values()) {
+      clearTimeout(timer);
+    }
+    this.timeouts.clear();
+  }
 
   private beginSession(historyId: string, segments: TranscriptSegment[]): string {
     const editSessionId = uuidv4();
@@ -161,36 +194,160 @@ class TranscriptAutoSaveRuntime {
   }
 
   private queueSave(historyId: string, segments: TranscriptSegment[], delayMs: number) {
-    if (this.timeout) clearTimeout(this.timeout);
+    this.clearTimeout(historyId);
     useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saving');
-    this.timeout = setTimeout(() => {
-      this.timeout = null;
+    const timer = setTimeout(() => {
+      this.timeouts.delete(historyId);
       this.enqueueSave(historyId, segments);
     }, delayMs);
+    this.timeouts.set(historyId, timer);
+  }
+
+  private handleSessionUpdate(
+    historyId: string,
+    segments: TranscriptSegment[],
+    isLive: boolean,
+    sessionId?: string | null
+  ) {
+    const currentFingerprint = computeSegmentsFingerprint(segments);
+    const lastFingerprint = this.lastFingerprints.get(historyId);
+    if (currentFingerprint === lastFingerprint) return;
+
+    const llmState = useTranscriptSidecarStore.getState().llmStates[historyId];
+    if (
+      llmState?.isPolishing ||
+      llmState?.isTranslating ||
+      llmState?.isRetranscribing ||
+      documentMutationCoordinator.isLocked(sessionId, historyId)
+    ) {
+      this.lastFingerprints.set(historyId, currentFingerprint);
+      return;
+    }
+
+    this.lastFingerprints.set(historyId, currentFingerprint);
+    const delayMs = isLive ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
+    this.queueSave(historyId, segments, delayMs);
+  }
+
+  /**
+   * Cancels and discards all pending debounce timers, queued saves, edit baselines, and auto-save status
+   * for the specified history IDs (used on delete / purge / backup evict so evicted sessions never
+   * trigger a stale `commitTranscriptEdit`).
+   */
+  cancelPending(historyIds: string[]): void {
+    const normalizedIds = Array.from(new Set(historyIds.filter(Boolean)));
+    if (normalizedIds.length === 0) return;
+
+    for (const historyId of normalizedIds) {
+      this.clearTimeout(historyId);
+      this.pendingByHistoryId.delete(historyId);
+      const editSessionId = this.editSessionIds.get(historyId);
+      if (editSessionId) {
+        this.baselinesBySessionId.delete(editSessionId);
+        this.conflictedSessionIds.delete(editSessionId);
+        this.editSessionIds.delete(historyId);
+      }
+      this.lastFingerprints.delete(historyId);
+      useTranscriptSidecarStore.getState().clearAutoSaveState(historyId);
+    }
+    const idSet = new Set(normalizedIds);
+    this.pendingOrder = this.pendingOrder.filter((id) => !idSet.has(id));
+  }
+
+  cancelAllPending(): void {
+    const allIds = Array.from(
+      new Set([
+        ...this.timeouts.keys(),
+        ...this.pendingByHistoryId.keys(),
+        ...this.editSessionIds.keys(),
+        ...this.lastFingerprints.keys(),
+      ])
+    );
+    this.cancelPending(allIds);
+  }
+
+  async flushPendingHistoryIds(historyIds: string[]): Promise<void> {
+    const unique = Array.from(new Set(historyIds.filter(Boolean)));
+    for (const id of unique) {
+      await this.flushPending(id);
+    }
   }
 
   async flushPending(
     historyId?: string | null,
     segments?: TranscriptSegment[] | null
   ): Promise<void> {
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
+    const storeState = useTranscriptStore.getState();
 
-    const targetHistoryId = historyId ?? useTranscriptSessionStore.getState().sourceHistoryId;
-    const targetSegments = segments ?? useTranscriptSessionStore.getState().segments;
-    if (targetHistoryId && targetSegments) {
-      this.enqueueSave(targetHistoryId, targetSegments);
+    if (historyId) {
+      this.clearTimeout(historyId);
+      const targetSegments =
+        segments ??
+        findSessionByHistoryId(storeState, historyId)?.segments ??
+        (storeState.activeSessionId === historyId &&
+        storeState.sessions[storeState.activeSessionId]?.sourceHistoryId === historyId
+          ? storeState.sessions[storeState.activeSessionId]?.segments
+          : null);
+      if (targetSegments) {
+        this.enqueueSave(historyId, targetSegments);
+      }
+    } else {
+      const flushedHistoryIds = new Set<string>();
+
+      // Flush any pending debounce timeouts across all sessions
+      for (const pendingHistId of Array.from(this.timeouts.keys())) {
+        this.clearTimeout(pendingHistId);
+        const session =
+          findSessionByHistoryId(storeState, pendingHistId) ??
+          (storeState.activeSessionId === pendingHistId
+            ? storeState.sessions[storeState.activeSessionId]
+            : null);
+        if (session?.segments) {
+          this.enqueueSave(pendingHistId, session.segments);
+          flushedHistoryIds.add(pendingHistId);
+        }
+      }
+
+      // Check activeSessionId
+      const activeSession = storeState.sessions[storeState.activeSessionId];
+      const activeHistoryId = activeSession?.sourceHistoryId;
+      if (activeHistoryId && !flushedHistoryIds.has(activeHistoryId) && activeSession.segments) {
+        this.enqueueSave(activeHistoryId, activeSession.segments);
+        flushedHistoryIds.add(activeHistoryId);
+      }
+
+      // Check recordingSessionId
+      const recId = storeState.recordingSessionId;
+      if (recId) {
+        const recSession = storeState.sessions[recId];
+        const recHistoryId = recSession?.sourceHistoryId || recId;
+        if (!flushedHistoryIds.has(recHistoryId) && recSession?.segments) {
+          this.enqueueSave(recHistoryId, recSession.segments);
+          flushedHistoryIds.add(recHistoryId);
+        }
+      }
     }
     await this.ensureDrain();
   }
 
-  rebaseline(historyId: string, segments: TranscriptSegment[]): void {
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
+  hasPendingWork(historyId: string): boolean {
+    return this.timeouts.has(historyId) || this.pendingByHistoryId.has(historyId);
+  }
+
+  resetBaselineIfTracked(historyId: string, segments: TranscriptSegment[]): void {
+    this.lastFingerprints.set(historyId, computeSegmentsFingerprint(segments));
+    if (this.editSessionIds.has(historyId) && !this.hasPendingWork(historyId)) {
+      const oldSessionId = this.editSessionIds.get(historyId);
+      if (oldSessionId) {
+        this.conflictedSessionIds.delete(oldSessionId);
+        this.baselinesBySessionId.delete(oldSessionId);
+      }
+      this.beginSession(historyId, segments);
     }
+  }
+
+  rebaseline(historyId: string, segments: TranscriptSegment[]): void {
+    this.clearTimeout(historyId);
     this.pendingByHistoryId.delete(historyId);
     this.pendingOrder = this.pendingOrder.filter((id) => id !== historyId);
 
@@ -201,53 +358,132 @@ class TranscriptAutoSaveRuntime {
     }
 
     this.beginSession(historyId, segments);
-    this.lastFingerprint = computeSegmentsFingerprint(segments);
+    this.lastFingerprints.set(historyId, computeSegmentsFingerprint(segments));
     useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
   }
 
   start() {
     if (this.unsubscribe) return;
 
-    const initial = useTranscriptSessionStore.getState();
-    this.lastFingerprint = computeSegmentsFingerprint(initial.segments);
-    if (initial.sourceHistoryId) this.beginSession(initial.sourceHistoryId, initial.segments);
+    const initial = useTranscriptStore.getState();
+    const initialActive = initial.sessions[initial.activeSessionId];
+    if (initialActive?.sourceHistoryId) {
+      this.beginSession(initialActive.sourceHistoryId, initialActive.segments);
+      this.lastFingerprints.set(
+        initialActive.sourceHistoryId,
+        computeSegmentsFingerprint(initialActive.segments)
+      );
+    }
+
+    const initialRecId = initial.recordingSessionId;
+    if (initialRecId && initialRecId !== initial.activeSessionId) {
+      const initialRecSession = initial.sessions[initialRecId];
+      const recHistoryId = initialRecSession?.sourceHistoryId || initialRecId;
+      if (initialRecSession) {
+        this.beginSession(recHistoryId, initialRecSession.segments);
+        this.lastFingerprints.set(
+          recHistoryId,
+          computeSegmentsFingerprint(initialRecSession.segments)
+        );
+      }
+    }
 
     this.unsubscribeHistoryUpdate = addHistoryTranscriptUpdateListener((historyId, segments) => {
       this.rebaseline(historyId, segments);
     });
-    this.unsubscribe = useTranscriptSessionStore.subscribe((state, prevState) => {
-      const currentId = state.sourceHistoryId;
-      const prevId = prevState.sourceHistoryId;
 
-      if (prevId !== currentId) {
-        if (this.timeout && prevId) {
-          clearTimeout(this.timeout);
-          this.timeout = null;
-          this.enqueueSave(prevId, prevState.segments);
+    this.unsubscribe = useTranscriptStore.subscribe((state, prevState) => {
+      const processedHistoryIds = new Set<string>();
+
+      // Flush pending debounce when active session navigates away from a tracked document
+      if (state.activeSessionId !== prevState.activeSessionId) {
+        const prevActiveSession = prevState.sessions[prevState.activeSessionId];
+        const prevActiveHistoryId = prevActiveSession?.sourceHistoryId;
+        if (prevActiveHistoryId && this.timeouts.has(prevActiveHistoryId)) {
+          this.clearTimeout(prevActiveHistoryId);
+          if (prevActiveSession?.segments) {
+            this.enqueueSave(prevActiveHistoryId, prevActiveSession.segments);
+          }
         }
-        if (currentId) this.beginSession(currentId, state.segments);
-        this.lastFingerprint = computeSegmentsFingerprint(state.segments);
-        return;
       }
 
-      if (!currentId || state.segments === prevState.segments) return;
-      const currentFingerprint = computeSegmentsFingerprint(state.segments);
-      if (currentFingerprint === this.lastFingerprint) return;
+      // Track all mounted history-backed sessions (both foreground and background hosts)
+      for (const [sessionId, prevSession] of Object.entries(prevState.sessions)) {
+        const prevHistoryId = prevSession?.sourceHistoryId;
+        if (!prevHistoryId) continue;
 
-      const llmState = useTranscriptSidecarStore.getState().llmStates[currentId];
-      if (llmState?.isPolishing || llmState?.isTranslating || llmState?.isRetranscribing) {
-        this.lastFingerprint = currentFingerprint;
-        return;
+        const currSession = state.sessions[sessionId];
+        const currHistoryId = currSession?.sourceHistoryId;
+        if (prevHistoryId !== currHistoryId) {
+          if (this.timeouts.has(prevHistoryId)) {
+            this.clearTimeout(prevHistoryId);
+            if (prevSession.segments) {
+              this.enqueueSave(prevHistoryId, prevSession.segments);
+            }
+          }
+        }
       }
 
-      this.lastFingerprint = currentFingerprint;
-      const runtimeState = useTranscriptRuntimeStore.getState();
-      const isLiveIngestion =
-        (runtimeState.isRecording &&
-          state.sourceHistoryId === useTranscriptStore.getState().recordingSessionId) ||
-        (runtimeState.mode === 'create' && runtimeState.ingestionFocus === 'live');
-      const delayMs = isLiveIngestion ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
-      this.queueSave(currentId, state.segments, delayMs);
+      for (const [sessionId, currSession] of Object.entries(state.sessions)) {
+        const currHistoryId = currSession?.sourceHistoryId;
+        if (!currHistoryId) continue;
+
+        const prevSession = prevState.sessions[sessionId];
+        const prevHistoryId = prevSession?.sourceHistoryId;
+
+        if (prevHistoryId !== currHistoryId) {
+          if (!this.editSessionIds.has(currHistoryId)) {
+            this.beginSession(currHistoryId, currSession.segments);
+          }
+          this.lastFingerprints.set(
+            currHistoryId,
+            computeSegmentsFingerprint(currSession.segments)
+          );
+          processedHistoryIds.add(currHistoryId);
+        } else if (currSession.segments !== prevSession?.segments) {
+          const isLive = state.isRecording
+            ? currHistoryId === state.recordingSessionId || sessionId === state.recordingSessionId
+            : state.mode === 'create' && state.ingestionFocus === 'live';
+          this.handleSessionUpdate(currHistoryId, currSession.segments, isLive, sessionId);
+          processedHistoryIds.add(currHistoryId);
+        }
+      }
+
+      // Track active recording session (even before/across draft metadata binding)
+      const prevRecId = prevState.recordingSessionId;
+      const currRecId = state.recordingSessionId;
+      const prevRecSession = prevRecId ? prevState.sessions[prevRecId] : null;
+      const currRecSession = currRecId ? state.sessions[currRecId] : null;
+      const prevRecHistoryId = prevRecSession?.sourceHistoryId || prevRecId;
+      const currRecHistoryId = currRecSession?.sourceHistoryId || currRecId;
+
+      if (prevRecHistoryId !== currRecHistoryId) {
+        if (prevRecHistoryId && this.timeouts.has(prevRecHistoryId)) {
+          this.clearTimeout(prevRecHistoryId);
+          if (prevRecSession?.segments) {
+            this.enqueueSave(prevRecHistoryId, prevRecSession.segments);
+          }
+        }
+        if (currRecHistoryId && currRecSession) {
+          if (!this.editSessionIds.has(currRecHistoryId)) {
+            this.beginSession(currRecHistoryId, currRecSession.segments);
+          }
+          this.lastFingerprints.set(
+            currRecHistoryId,
+            computeSegmentsFingerprint(currRecSession.segments)
+          );
+        }
+      }
+
+      if (
+        currRecId &&
+        currRecHistoryId &&
+        !processedHistoryIds.has(currRecHistoryId) &&
+        currRecSession &&
+        currRecSession.segments !== prevRecSession?.segments
+      ) {
+        this.handleSessionUpdate(currRecHistoryId, currRecSession.segments, true, currRecId);
+      }
     });
   }
 
@@ -256,11 +492,13 @@ class TranscriptAutoSaveRuntime {
     this.unsubscribe = null;
     this.unsubscribeHistoryUpdate?.();
     this.unsubscribeHistoryUpdate = null;
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
+    this.clearAllTimeouts();
   }
 }
 
 export const transcriptAutoSaveRuntime = new TranscriptAutoSaveRuntime();
+
+registerAutoSaveLifecycleHooks({
+  cancelPending: (historyIds) => transcriptAutoSaveRuntime.cancelPending(historyIds),
+  rebaseline: (historyId, segments) => transcriptAutoSaveRuntime.rebaseline(historyId, segments),
+});

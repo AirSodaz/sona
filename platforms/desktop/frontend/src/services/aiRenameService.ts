@@ -5,7 +5,7 @@ import type { TranscriptSegment } from '../types/transcript';
 import { normalizeError } from '../utils/errorUtils';
 import { historyService } from './historyService';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
-import { generateLlmText } from './tauri/llm';
+import { generateLlmText } from './llmOperations';
 
 /**
  * Constructs a prompt for the AI to generate a title based on a transcript snippet.

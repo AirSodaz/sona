@@ -243,5 +243,34 @@ describe('AudioPlayer', () => {
       expect(useTranscriptStore.getState().isPlaying).toBe(false);
       expect(audio?.play).not.toHaveBeenCalled();
     });
+
+    it('ignores shortcuts when isActive is false', () => {
+      const { container } = render(<AudioPlayer isActive={false} />);
+      const audio = container.querySelector('audio');
+      if (audio) {
+        Object.defineProperty(audio, 'paused', { value: true, writable: true });
+        audio.play = vi.fn().mockResolvedValue(undefined);
+      }
+
+      fireEvent.keyDown(window, { key: ' ' });
+      expect(useTranscriptStore.getState().isPlaying).toBe(false);
+      expect(audio?.play).not.toHaveBeenCalled();
+    });
+
+    it('restores stored currentTime across remount without jumping back to an older seekRequest', () => {
+      useTranscriptStore.setState({
+        audioUrl: 'test-audio.mp3',
+        currentTime: 42,
+        seekRequest: { time: 5, timestamp: 1000 },
+      });
+
+      const { container } = render(<AudioPlayer />);
+      const audio = container.querySelector('audio') as HTMLAudioElement;
+      expect(audio).not.toBeNull();
+      Object.defineProperty(audio, 'duration', { value: 120, writable: true });
+
+      fireEvent.loadedMetadata(audio);
+      expect(audio.currentTime).toBe(42);
+    });
   });
 });

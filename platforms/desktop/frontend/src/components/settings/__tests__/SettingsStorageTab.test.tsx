@@ -119,6 +119,25 @@ vi.mock('../../../stores/transcriptSessionStore', () => ({
     }),
 }));
 
+vi.mock('../../../stores/transcriptStore', () => ({
+  useTranscriptStore: Object.assign(
+    (selector: any) =>
+      selector({
+        sourceHistoryId: mocks.sourceHistoryId,
+      }),
+    {
+      getState: () => ({
+        activeSessionId: 'default',
+        sessions: mocks.sourceHistoryId
+          ? { default: { sourceHistoryId: mocks.sourceHistoryId } }
+          : {},
+        sourceHistoryId: mocks.sourceHistoryId,
+        recordingSessionId: null,
+      }),
+    }
+  ),
+}));
+
 function report(
   overrides: Partial<{
     eligibleCount: number;
@@ -373,14 +392,16 @@ describe('SettingsStorageTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
     await waitFor(() => {
-      expect(mocks.previewAudioCleanup).toHaveBeenCalledWith(30, 'active-history');
+      expect(mocks.previewAudioCleanup).toHaveBeenCalledWith(30, 'active-history', [
+        'active-history',
+      ]);
     });
     await waitFor(() => {
       expect(mocks.confirm).toHaveBeenCalled();
     });
 
     await waitFor(() => {
-      expect(mocks.cleanupAudio).toHaveBeenCalledWith(30, 'active-history');
+      expect(mocks.cleanupAudio).toHaveBeenCalledWith(30, 'active-history', ['active-history']);
     });
     expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain(
@@ -401,7 +422,9 @@ describe('SettingsStorageTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
     await waitFor(() => {
-      expect(mocks.previewAudioCleanup).toHaveBeenCalledWith(7, 'active-history');
+      expect(mocks.previewAudioCleanup).toHaveBeenCalledWith(7, 'active-history', [
+        'active-history',
+      ]);
     });
     await waitFor(() => {
       expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain(

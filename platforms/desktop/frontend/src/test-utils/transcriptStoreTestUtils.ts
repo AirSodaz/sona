@@ -1,3 +1,5 @@
+import { llmJobScheduler } from '../services/llm/llmJobScheduler';
+import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -187,6 +189,15 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
   const sidecarPatch: SidecarPatch = {};
 
   Object.entries(patch).forEach(([rawKey, value]) => {
+    if (
+      rawKey === 'sessions' ||
+      rawKey === 'activeSessionId' ||
+      rawKey === 'createLiveSessionId' ||
+      rawKey === 'createBatchAdhocSessionId'
+    ) {
+      useRealTranscriptStore.setState({ [rawKey]: value } as unknown as Partial<TranscriptStore>);
+      return;
+    }
     if (rawKey === 'config') {
       useConfigStore.setState((state) => ({
         ...state,
@@ -199,7 +210,6 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
       syncEffectiveConfig();
       return;
     }
-
     if (SESSION_KEYS.has(rawKey as keyof SessionPatch)) {
       sessionPatch[rawKey as keyof SessionPatch] = value as never;
       return;
@@ -244,6 +254,8 @@ export function resetTranscriptStores(): void {
 
   store.setState({
     activeSessionId: 'default',
+    createLiveSessionId: 'default',
+    createBatchAdhocSessionId: null,
     sessions: {
       default: {
         ...DEFAULT_SESSION_DATA,
@@ -265,6 +277,8 @@ export function resetTranscriptStores(): void {
 
   setActiveEditor(null);
   resetSessionStoreCache();
+  documentMutationCoordinator.resetForTests();
+  llmJobScheduler.resetForTests();
   syncEffectiveConfig();
 }
 
@@ -284,6 +298,8 @@ export function getTranscriptTestState() {
     ...playbackStore,
     ...runtimeStore,
     ...sidecarStore,
+    createLiveSessionId: useRealTranscriptStore.getState().createLiveSessionId,
+    createBatchAdhocSessionId: useRealTranscriptStore.getState().createBatchAdhocSessionId,
     config,
     setSourceHistoryId: (id: string | null) => {
       useTranscriptSessionStore.getState().setSourceHistoryId(id);

@@ -79,6 +79,7 @@ export interface IHistoryOperations {
   cleanupAudio: (request: {
     retentionDays: number | null;
     excludeHistoryId: string | null;
+    excludeHistoryIds?: string[] | null;
   }) => Promise<HistoryAudioCleanupReport>;
   deleteItems: (ids: string[]) => Promise<void>;
   purgeItems: (ids: string[]) => Promise<void>;
@@ -111,6 +112,7 @@ export interface IHistoryOperations {
   previewAudioCleanup: (request: {
     retentionDays: number | null;
     excludeHistoryId: string | null;
+    excludeHistoryIds?: string[] | null;
   }) => Promise<HistoryAudioCleanupReport>;
   reassignProject: (currentProjectId: string, nextProjectId: string | null) => Promise<void>;
   restoreTranscriptDiffRows: (
@@ -145,6 +147,7 @@ export interface HistoryServiceLegacyPorts {
   historyCleanupAudio: (request: {
     retentionDays: number | null;
     excludeHistoryId: string | null;
+    excludeHistoryIds?: string[] | null;
   }) => Promise<HistoryAudioCleanupReport>;
   historyDeleteItems: (ids: string[]) => Promise<void>;
   historyPurgeItems: (ids: string[]) => Promise<void>;
@@ -185,6 +188,7 @@ export interface HistoryServiceLegacyPorts {
   historyPreviewAudioCleanup: (request: {
     retentionDays: number | null;
     excludeHistoryId: string | null;
+    excludeHistoryIds?: string[] | null;
   }) => Promise<HistoryAudioCleanupReport>;
   historyReassignProject: (currentProjectId: string, nextProjectId: string | null) => Promise<void>;
   historyRestoreTranscriptDiffRows: (
@@ -769,16 +773,42 @@ export class HistoryService {
 
   async previewAudioCleanup(
     retentionDays: number | null,
-    excludeHistoryId: string | null = null
+    excludeHistoryId: string | null = null,
+    excludeHistoryIds?: string[] | null
   ): Promise<HistoryAudioCleanupReport> {
-    return this.ops.previewAudioCleanup({ retentionDays, excludeHistoryId });
+    const normalizedIds =
+      excludeHistoryIds && excludeHistoryIds.length > 0
+        ? Array.from(
+            new Set(
+              [excludeHistoryId, ...excludeHistoryIds].filter((id): id is string => Boolean(id))
+            )
+          )
+        : null;
+    return this.ops.previewAudioCleanup({
+      retentionDays,
+      excludeHistoryId,
+      ...(normalizedIds && normalizedIds.length > 0 ? { excludeHistoryIds: normalizedIds } : {}),
+    });
   }
 
   async cleanupAudio(
     retentionDays: number | null,
-    excludeHistoryId: string | null = null
+    excludeHistoryId: string | null = null,
+    excludeHistoryIds?: string[] | null
   ): Promise<HistoryAudioCleanupReport> {
-    return this.ops.cleanupAudio({ retentionDays, excludeHistoryId });
+    const normalizedIds =
+      excludeHistoryIds && excludeHistoryIds.length > 0
+        ? Array.from(
+            new Set(
+              [excludeHistoryId, ...excludeHistoryIds].filter((id): id is string => Boolean(id))
+            )
+          )
+        : null;
+    return this.ops.cleanupAudio({
+      retentionDays,
+      excludeHistoryId,
+      ...(normalizedIds && normalizedIds.length > 0 ? { excludeHistoryIds: normalizedIds } : {}),
+    });
   }
 
   async openHistoryFolder(): Promise<void> {

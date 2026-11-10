@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  createTaskTarget,
+  resolveLatestSegmentsForTarget,
+  runWithDocumentLock,
+} from '../services/task/taskTarget';
 import { transcriptSnapshotService } from '../services/transcriptSnapshotService';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { setTranscriptSegments } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
   TranscriptDiffRow,
@@ -15,14 +20,21 @@ import type {
 interface UseVersionPanelProps {
   isOpen: boolean;
   historyId: string | null;
+  sessionId?: string | null;
 }
 
-export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
+export function useVersionPanel({ isOpen, historyId, sessionId }: UseVersionPanelProps) {
   const { t } = useTranslation();
   const confirm = useDialogStore((state) => state.confirm);
   const showError = useDialogStore((state) => state.showError);
-  const updateTranscript = useHistoryStore((state) => state.updateTranscript);
-  const currentSegments = useTranscriptSessionStore((state) => state.segments);
+  const commitSystemTranscriptUpdate = useHistoryStore(
+    (state) => state.commitSystemTranscriptUpdate
+  );
+  const boundSessionSegments = useTranscriptStore((state) =>
+    sessionId ? state.sessions[sessionId]?.segments : undefined
+  );
+  const activeSessionSegments = useTranscriptSessionStore((state) => state.segments);
+  const currentSegments = boundSessionSegments ?? activeSessionSegments;
 
   const [snapshots, setSnapshots] = useState<TranscriptSnapshotMetadata[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
@@ -204,10 +216,9 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
         return;
       }
 
-      await updateTranscript(historyId, nextSegments);
-      setTranscriptSegments(nextSegments);
+      await commitSystemTranscriptUpdate(historyId, nextSegments);
     },
-    [historyId, updateTranscript]
+    [commitSystemTranscriptUpdate, historyId]
   );
 
   const handleRestoreSelected = useCallback(async (): Promise<boolean> => {
@@ -230,17 +241,20 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     setIsBusy(true);
     setError(null);
     try {
-      const latestSegments = useTranscriptSessionStore.getState().segments;
-      const latestDiff = await transcriptSnapshotService.buildDiff(
-        selectedRecord.segments,
-        latestSegments
-      );
-      await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
-      const restoredSegments = await transcriptSnapshotService.restoreDiffRows(
-        latestDiff.rows,
-        selectedRowIds
-      );
-      await persistRestoredSegments(restoredSegments);
+      const target = createTaskTarget({ sessionId: sessionId ?? null, historyId });
+      await runWithDocumentLock(target, { taskType: 'versionRestore' }, async () => {
+        const latestSegments = await resolveLatestSegmentsForTarget(target, currentSegments);
+        const latestDiff = await transcriptSnapshotService.buildDiff(
+          selectedRecord.segments,
+          latestSegments
+        );
+        await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
+        const restoredSegments = await transcriptSnapshotService.restoreDiffRows(
+          latestDiff.rows,
+          selectedRowIds
+        );
+        await persistRestoredSegments(restoredSegments);
+      });
       await loadSnapshots();
       return true;
     } catch (restoreError) {
@@ -255,11 +269,13 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     }
   }, [
     confirm,
+    currentSegments,
     historyId,
     loadSnapshots,
     persistRestoredSegments,
     selectedRecord,
     selectedRowIds,
+    sessionId,
     showError,
     t,
   ]);
@@ -281,9 +297,12 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     setIsBusy(true);
     setError(null);
     try {
-      const latestSegments = useTranscriptSessionStore.getState().segments;
-      await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
-      await persistRestoredSegments(selectedRecord.segments);
+      const target = createTaskTarget({ sessionId: sessionId ?? null, historyId });
+      await runWithDocumentLock(target, { taskType: 'versionRestore' }, async () => {
+        const latestSegments = await resolveLatestSegmentsForTarget(target, currentSegments);
+        await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
+        await persistRestoredSegments(selectedRecord.segments);
+      });
       await loadSnapshots();
       return true;
     } catch (restoreError) {
@@ -296,7 +315,17 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     } finally {
       setIsBusy(false);
     }
-  }, [confirm, historyId, loadSnapshots, persistRestoredSegments, selectedRecord, showError, t]);
+  }, [
+    confirm,
+    currentSegments,
+    historyId,
+    loadSnapshots,
+    persistRestoredSegments,
+    selectedRecord,
+    sessionId,
+    showError,
+    t,
+  ]);
 
   return {
     snapshots,

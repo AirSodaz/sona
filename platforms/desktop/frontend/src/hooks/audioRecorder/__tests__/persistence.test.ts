@@ -230,4 +230,138 @@ describe('createRecordingPersistence', () => {
     expect(writeFile).not.toHaveBeenCalled();
     expect(removeFile).toHaveBeenCalledWith('native.wav');
   });
+
+  it('detaches pipeline and background speaker annotation after draft archival under quitGuard while merging speaker labels without clobbering edits', async () => {
+    const { hasActiveBackgroundQuitTasks } = await import('../../../services/quitGuard');
+    const { selectIsDocumentEditorLocked, useDocumentMutationLockStore } = await import(
+      '../../../services/task/documentMutationCoordinator'
+    );
+    const { resetTranscriptStores, useTranscriptStore } = await import(
+      '../../../test-utils/transcriptStoreTestUtils'
+    );
+
+    resetTranscriptStores();
+    const initialSegments = [
+      { id: 'seg-1', start: 0, end: 3, text: 'Initial raw text', isFinal: true },
+    ];
+    useTranscriptStore.setState({
+      activeSessionId: 'native-history',
+      sessions: {
+        default: { ...useTranscriptStore.getState().sessions.default },
+        'native-history': {
+          ...useTranscriptStore.getState().sessions.default,
+          sourceHistoryId: 'native-history',
+          segments: initialSegments,
+        },
+      },
+    });
+
+    const postProcessDeferred = Promise.withResolvers<void>();
+    const annotateDeferred = Promise.withResolvers<any[]>();
+    const commitTranscriptUpdate = vi.fn().mockResolvedValue(undefined);
+
+    const draftItem: HistoryItem = {
+      id: 'native-history',
+      timestamp: 1000,
+      duration: 5,
+      audioPath: 'history/native-history.wav',
+      transcriptPath: 'transcripts/native-history.json',
+      previewText: '',
+      title: 'Recording native-history',
+      type: 'recording',
+      icon: 'system:mic',
+      status: 'complete',
+      projectId: 'proj-1',
+      tagIds: ['proj-1'],
+    };
+
+    const persistence = createRecordingPersistence({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      history: {
+        createLiveRecordingDraft: vi.fn(),
+        completeLiveRecordingDraft: vi.fn().mockResolvedValue({
+          ...draftItem,
+          status: 'complete',
+        }),
+        discardLiveRecordingDraft: vi.fn(),
+        saveNativeRecordingAudio: vi.fn().mockResolvedValue({
+          ...draftItem,
+          status: 'complete',
+        }),
+        loadTranscript: vi.fn().mockResolvedValue(null),
+      } as any,
+      getTranscriptState: () =>
+        useTranscriptStore.getState() as unknown as RecordingPersistenceTranscriptState,
+      getActiveProjectId: () => 'proj-1',
+      setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+      addHistoryItem: vi.fn(),
+      upsertHistoryItem: vi.fn(),
+      removeHistoryItem: vi.fn(),
+      persistSummary: vi.fn().mockResolvedValue(undefined),
+      postProcessSavedItem: vi.fn(async (_id, segments) => {
+        await postProcessDeferred.promise;
+        return segments;
+      }),
+      commitTranscriptUpdate,
+      annotateSegmentsForFile: vi.fn(() => annotateDeferred.promise),
+      syncSavedRecordingMeta: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      removeFile: vi.fn().mockResolvedValue(undefined),
+      fileSrcFromPath: (p) => `file://${p}`,
+    });
+
+    const draft: LiveRecordingDraftHandle = {
+      item: draftItem,
+      audioAbsolutePath: 'C:/audio/native-history.wav',
+    };
+
+    // persistNativeRecording settles immediately after archival even while postProcess & annotate are pending
+    await persistence.persistNativeRecording(draft, 'temp-native.wav', 5);
+
+    expect(hasActiveBackgroundQuitTasks()).toBe(true);
+    expect(
+      selectIsDocumentEditorLocked(
+        useDocumentMutationLockStore.getState().locks,
+        'native-history',
+        'native-history'
+      )
+    ).toBe(false);
+
+    // Simulate manual/post-process text edit while slow speaker inference runs outside lock
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('native-history', [
+        { id: 'seg-1', start: 0, end: 3, text: 'Manually edited hello', isFinal: true },
+      ]);
+
+    annotateDeferred.resolve([
+      {
+        id: 'seg-1',
+        start: 0,
+        end: 3,
+        text: 'Initial raw text',
+        isFinal: true,
+        speakerAttribution: {
+          speakerId: 'spk-1',
+          speakerName: 'Alice',
+          source: 'auto',
+        },
+      },
+    ]);
+    postProcessDeferred.resolve();
+
+    await vi.waitFor(() => {
+      expect(commitTranscriptUpdate).toHaveBeenCalledWith('native-history', [
+        expect.objectContaining({
+          id: 'seg-1',
+          text: 'Manually edited hello',
+          speakerAttribution: expect.objectContaining({
+            speakerId: 'spk-1',
+            speakerName: 'Alice',
+          }),
+        }),
+      ]);
+      expect(hasActiveBackgroundQuitTasks()).toBe(false);
+    });
+  });
 });

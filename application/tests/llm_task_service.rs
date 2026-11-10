@@ -433,6 +433,7 @@ async fn structured_chunks_run_two_at_a_time_and_merge_in_input_order() {
                 source_language: None,
                 context: None,
                 keywords: None,
+                post_process_replacements: None,
             },
             &(),
         )
@@ -472,6 +473,7 @@ async fn google_translate_free_uses_core_concurrency_per_segment() {
                 source_language: None,
                 context: None,
                 keywords: None,
+                post_process_replacements: None,
             },
             &(),
         )
@@ -482,6 +484,94 @@ async fn google_translate_free_uses_core_concurrency_per_segment() {
     assert_eq!(result.len(), 4);
     assert_eq!(requests.len(), 4);
     assert!(requests.iter().all(|request| request.texts.len() == 1));
+}
+
+#[tokio::test]
+async fn translate_applies_post_process_replacements_and_cjk_typography_consistently() {
+    let fake = FakeRuntime::new(Vec::new());
+    let mut local_nmt_config = config();
+    local_nmt_config.provider = LlmProvider::Builtin(BuiltinLlmProvider::Local);
+    local_nmt_config.strategy = LlmProviderStrategy::LocalNmt;
+
+    let observer = RecordingObserver::default();
+    let result = LlmTaskService::new(fake)
+        .translate(
+            TranslateSegmentsRequest {
+                task_id: "nmt-post".to_string(),
+                config: local_nmt_config,
+                segments: vec![LlmSegmentInput {
+                    id: "s1".to_string(),
+                    text: "AI,你好世界!".to_string(),
+                }],
+                chunk_size: None,
+                target_language: "zh".to_string(),
+                target_language_name: Some("Chinese".to_string()),
+                source_language: Some("en".to_string()),
+                context: None,
+                keywords: None,
+                post_process_replacements: Some(vec![
+                    sona_core::transcription::postprocess::TranscriptTextReplacementRuleSet {
+                        enabled: true,
+                        ignore_case: false,
+                        rules: vec![
+                            sona_core::transcription::postprocess::TranscriptTextReplacementRule {
+                                from: "translated ".to_string(),
+                                to: String::new(),
+                            },
+                            sona_core::transcription::postprocess::TranscriptTextReplacementRule {
+                                from: "AI".to_string(),
+                                to: "人工智能".to_string(),
+                            },
+                        ],
+                    },
+                ]),
+            },
+            &observer,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result[0].translation, "人工智能，你好世界！");
+    let events = observer.0.lock().unwrap();
+    let chunk_item = events
+        .iter()
+        .find_map(|event| match event {
+            LlmTaskEvent::TranslateChunk(payload) => Some(&payload.items[0]),
+            _ => None,
+        })
+        .expect("expected TranslateChunk event");
+    assert_eq!(chunk_item.translation, "人工智能，你好世界！");
+}
+
+#[tokio::test]
+async fn local_strategy_clamps_internal_chunk_concurrency_to_one() {
+    let fake = FakeRuntime::new(Vec::new());
+    let mut local_config = config();
+    local_config.provider = LlmProvider::Builtin(BuiltinLlmProvider::Local);
+    local_config.strategy = LlmProviderStrategy::Local;
+
+    let mut input = segments(4);
+    for segment in &mut input {
+        segment.text = "x".repeat(500);
+    }
+
+    LlmTaskService::new(fake.clone())
+        .polish(
+            PolishSegmentsRequest {
+                task_id: "local-polish".to_string(),
+                config: local_config,
+                segments: input,
+                chunk_size: Some(4),
+                context: None,
+                keywords: None,
+                mode: None,
+            },
+            &(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(fake.state.max_active.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

@@ -7,6 +7,7 @@ import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAu
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { polishService } from '../services/polishService';
 import { useConfigStore } from '../stores/configStore';
+import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import {
   applyTranscriptUpdateToSession,
@@ -152,25 +153,27 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     peakLevelRef,
     isPaused,
   });
-  // Automatically stop visualizer and clear session when recording stops (e.g. from tray or shortcut)
-  const prevIsRecordingRef = useRef(isRecording);
+  // Stop visualizer cleanly when recording ends without mutating `recordingSessionId`
+  // prematurely (owned by `recordController` stop lifecycle).
   useEffect(() => {
-    if (prevIsRecordingRef.current && !isRecording) {
+    if (!isRecording) {
       stopVisualizer();
-      setRecordingSessionId(null);
     }
-    prevIsRecordingRef.current = isRecording;
   }, [isRecording, stopVisualizer]);
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording();
       stopVisualizer();
-      setRecordingSessionId(null);
     } else {
-      if (isAgentRecording) {
+      if (isAgentRecording || isInitializing || isTransitioning) {
         return;
       }
-      useTranscriptStore.getState().setIngestionFocus('live');
+      const transcriptState = useTranscriptStore.getState();
+      if (transcriptState.mode !== 'create') {
+        transcriptState.setMode('create', 'live');
+      } else {
+        transcriptState.setIngestionFocus('live');
+      }
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],
@@ -188,7 +191,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
   }, [
     isAgentRecording,
+    isInitializing,
     isRecording,
+    isTransitioning,
     startRecording,
     stopRecording,
     startVisualizer,
@@ -250,8 +255,18 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       const isPlainSpaceStartStop =
         !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space';
 
+      const isModalOpen = Boolean(
+        document.querySelector('.settings-overlay, .panel-modal-overlay, .shared-modal-overlay')
+      );
+      if (isModalOpen || isAnyDialogOpen()) {
+        return;
+      }
+
       if (isStartStopMatch) {
         e.preventDefault();
+        if (isInitializing || isTransitioning) {
+          return;
+        }
         void handleToggleRecording();
       } else if (
         e.code === 'Space' &&
@@ -262,6 +277,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         !isPlainSpaceStartStop &&
         isRecordingRef.current
       ) {
+        const { mode, ingestionFocus } = useTranscriptStore.getState();
+        if (mode !== 'create' || ingestionFocus !== 'live') {
+          return;
+        }
         e.preventDefault();
         void handleTogglePause();
       }
@@ -269,7 +288,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleRecording, handleTogglePause, config.liveRecordShortcut]);
+  }, [
+    handleToggleRecording,
+    handleTogglePause,
+    config.liveRecordShortcut,
+    isInitializing,
+    isTransitioning,
+  ]);
 
   return (
     <div className={`live-record-container ${className}`}>

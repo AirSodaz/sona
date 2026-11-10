@@ -2,11 +2,7 @@ import { Calendar, Clock } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
-import {
-  type HistoryItem as HistoryItemType,
-  isHistoryItemDraft,
-  isLiveRecordDraftHistoryItem,
-} from '../../types/history';
+import { type HistoryItem as HistoryItemType, isHistoryItemDraft } from '../../types/history';
 import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
 import { Checkbox } from '../Checkbox';
 import {
@@ -186,12 +182,11 @@ export function HistoryItem({
       ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
       : t('projects.filter_recordings', { defaultValue: 'Recordings' });
   const isDraft = isHistoryItemDraft(item);
-  const isLiveDraft = isLiveRecordDraftHistoryItem(item);
   const previewText = item.previewText
     ? item.previewText
-    : isLiveDraft
-      ? t('history.live_record_draft_description', {
-          defaultValue: 'Interrupted live recording draft',
+    : isDraft
+      ? t('history.draft_description', {
+          defaultValue: 'Unfinished draft',
         })
       : null;
 

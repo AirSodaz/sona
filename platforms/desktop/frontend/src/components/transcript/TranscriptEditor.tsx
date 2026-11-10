@@ -2,17 +2,12 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useStore } from 'zustand';
 import { useTranscriptScrollFollow } from '../../hooks/useTranscriptScrollFollow';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
 import { resolveCurrentSessionAudioPath } from '../../services/sessionAudioService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSearchStore } from '../../stores/searchStore';
-import {
-  deleteTranscriptSegment,
-  mergeTranscriptSegments,
-  splitTranscriptSegment,
-  updateTranscriptSegment,
-} from '../../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { areSpeakerTagsEqual } from '../../types/speakerNormalization';
@@ -56,6 +51,11 @@ interface TranscriptContext {
   onEnrollSample: (segment: TranscriptSegment) => void;
 }
 
+interface TranscriptEditorProps {
+  /** Whether this editor's shell is currently visible and owns keyboard shortcuts/search UI. */
+  isActive?: boolean;
+}
+
 /**
  * Editor component for displaying and managing transcript segments.
  *
@@ -64,7 +64,7 @@ interface TranscriptContext {
  *
  * @return The transcript editor interface.
  */
-export function TranscriptEditor(): React.JSX.Element {
+export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): React.JSX.Element {
   const { t } = useTranslation();
   const { confirm } = useDialogStore();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -72,10 +72,24 @@ export function TranscriptEditor(): React.JSX.Element {
   const segments = useTranscriptSessionStore((state) => state.segments);
   const editingSegmentId = useTranscriptSessionStore((state) => state.editingSegmentId);
   const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
+  const updateSegment = useTranscriptSessionStore((state) => state.updateSegment);
+  const deleteSegment = useTranscriptSessionStore((state) => state.deleteSegment);
+  const mergeSegments = useTranscriptSessionStore((state) => state.mergeSegments);
+  const splitTranscriptSegment = useTranscriptSessionStore((state) => state.splitTranscriptSegment);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
   // Hooks for UI state and alignment
   const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
+  const isDocumentLocked = useStore(
+    uiStore,
+    useCallback((state) => Boolean(state.isDocumentLocked), [])
+  );
+
+  useEffect(() => {
+    if (isDocumentLocked && editingSegmentId) {
+      setEditingSegmentId(null);
+    }
+  }, [editingSegmentId, isDocumentLocked, setEditingSegmentId]);
 
   const [enrollTargetSegment, setEnrollTargetSegment] = useState<TranscriptSegment | null>(null);
   const [resolvedAudioPath, setResolvedAudioPath] = useState<string | null>(null);
@@ -109,25 +123,31 @@ export function TranscriptEditor(): React.JSX.Element {
 
   const handleEdit = useCallback(
     (id: string) => {
+      if (isDocumentLocked) return;
       setEditingSegmentId(id);
     },
-    [setEditingSegmentId]
+    [isDocumentLocked, setEditingSegmentId]
   );
 
   const handleSave = useCallback(
     (id: string, text: string) => {
-      updateTranscriptSegment(id, { text });
+      updateSegment(id, { text });
       setEditingSegmentId(null);
     },
-    [setEditingSegmentId]
+    [setEditingSegmentId, updateSegment]
   );
 
-  const handleSaveTranslation = useCallback((id: string, translation: string) => {
-    updateTranscriptSegment(id, { translation, draftTranslation: undefined });
-  }, []);
+  const handleSaveTranslation = useCallback(
+    (id: string, translation: string) => {
+      if (isDocumentLocked) return;
+      updateSegment(id, { translation, draftTranslation: undefined });
+    },
+    [isDocumentLocked, updateSegment]
+  );
 
   const handleDelete = useCallback(
     async (id: string) => {
+      if (isDocumentLocked) return;
       const confirmed = await confirm(
         t('editor.delete_confirm_message', {
           defaultValue: 'Are you sure you want to delete this segment?',
@@ -139,14 +159,15 @@ export function TranscriptEditor(): React.JSX.Element {
       );
 
       if (confirmed) {
-        deleteTranscriptSegment(id);
+        deleteSegment(id);
       }
     },
-    [t, confirm]
+    [t, confirm, deleteSegment, isDocumentLocked]
   );
 
   const handleMergeWithNext = useCallback(
     async (id: string) => {
+      if (isDocumentLocked) return;
       const confirmed = await confirm(
         t('editor.merge_confirm_message', {
           defaultValue: 'Merge this segment with the next one?',
@@ -161,16 +182,20 @@ export function TranscriptEditor(): React.JSX.Element {
         const currentSegments = segmentsRef.current;
         const index = currentSegments.findIndex((s) => s.id === id);
         if (index !== -1 && index < currentSegments.length - 1) {
-          mergeTranscriptSegments(id, currentSegments[index + 1].id);
+          mergeSegments(id, currentSegments[index + 1].id);
         }
       }
     },
-    [confirm, t]
+    [confirm, isDocumentLocked, mergeSegments, t]
   );
 
-  const handleSplit = useCallback((id: string, leftText: string, rightText: string) => {
-    splitTranscriptSegment(id, leftText, rightText);
-  }, []);
+  const handleSplit = useCallback(
+    (id: string, leftText: string, rightText: string) => {
+      if (isDocumentLocked) return;
+      splitTranscriptSegment(id, leftText, rightText);
+    },
+    [isDocumentLocked, splitTranscriptSegment]
+  );
 
   // Stable context for Virtuoso items (callbacks only)
   const contextValue = useMemo<TranscriptContext>(
@@ -236,11 +261,22 @@ export function TranscriptEditor(): React.JSX.Element {
   const {
     isOpen: isSearchOpen,
     open: openSearch,
+    close: closeSearch,
     matches: searchMatches,
     currentMatchIndex: searchMatchIndex,
   } = useSearchStore();
+  const prevIsActiveRef = useRef(isActive);
 
   useEffect(() => {
+    if (prevIsActiveRef.current && !isActive && isSearchOpen) {
+      closeSearch();
+    }
+    prevIsActiveRef.current = isActive;
+  }, [isActive, isSearchOpen, closeSearch]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         const activeElement = document.activeElement;
@@ -248,7 +284,8 @@ export function TranscriptEditor(): React.JSX.Element {
         if (
           !isBodyFocus &&
           (!(activeElement instanceof HTMLElement) ||
-            !activeElement.closest('.projects-detail-pane'))
+            (!activeElement.closest('.projects-detail-pane') &&
+              !activeElement.closest('.panel-right')))
         ) {
           return;
         }
@@ -260,7 +297,7 @@ export function TranscriptEditor(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openSearch]);
+  }, [isActive, openSearch]);
 
   // Calculate total words/characters
   const wordCount = useMemo(() => {
@@ -296,7 +333,7 @@ export function TranscriptEditor(): React.JSX.Element {
 
   // Scroll to active match
   useEffect(() => {
-    if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
+    if (isActive && isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
       const match = searchMatches[searchMatchIndex];
       const segmentIndex = segmentsRef.current.findIndex((s) => s.id === match.segmentId);
 
@@ -308,7 +345,7 @@ export function TranscriptEditor(): React.JSX.Element {
         });
       }
     }
-  }, [isSearchOpen, searchMatchIndex, searchMatches]);
+  }, [isActive, isSearchOpen, searchMatchIndex, searchMatches]);
 
   if (segments.length === 0) {
     return (
@@ -341,7 +378,7 @@ export function TranscriptEditor(): React.JSX.Element {
           atBottomThreshold={60}
         />
       </TranscriptUIContext.Provider>
-      <SearchUI />
+      {isActive && <SearchUI />}
       <EnrollSpeakerSampleModal
         isOpen={Boolean(enrollTargetSegment)}
         onClose={() => setEnrollTargetSegment(null)}

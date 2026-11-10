@@ -236,6 +236,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             source_language: None,
             context: None,
             keywords: None,
+            post_process_replacements: None,
         };
 
         let translated_items = crate::integrations::llm::translate_transcript_segments_command(
