@@ -4,13 +4,13 @@ use serde::Serialize;
 use sona_application::llm::{
     LlmRuntimeService, LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskService,
 };
-use sona_sqlite::Database;
 use sona_core::llm::runtime::LlmStreamDelta;
 use sona_core::ports::event::EventEmitterPort;
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmStreamingPort, LlmTaskDelayPort,
     LlmTranslationPort, LlmTranslationRequest,
 };
+use sona_sqlite::Database;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
@@ -80,8 +80,8 @@ impl UsageRecorder {
 
     fn record_usage(&self, usage: Option<TokenUsage>) {
         let occurred_at = crate::platform::time::utc_now_rfc3339();
-        if let Some(db) = &self.database {
-            if let Err(error) = crate::platform::llm_usage::record_usage(
+        if let Some(db) = &self.database
+            && let Err(error) = crate::platform::llm_usage::record_usage(
                 db.as_ref(),
                 &UsageRecord {
                     occurred_at: occurred_at.clone(),
@@ -89,14 +89,14 @@ impl UsageRecorder {
                     category: self.category,
                     usage: usage.clone(),
                 },
-            ) {
-                log::warn!(
-                    "[LLM] failed to persist usage: provider={:?} category={:?} error={}",
-                    self.config.provider,
-                    self.category,
-                    error
-                );
-            }
+            )
+        {
+            log::warn!(
+                "[LLM] failed to persist usage: provider={:?} category={:?} error={}",
+                self.config.provider,
+                self.category,
+                error
+            );
         }
 
         emit_llm_usage_event(
@@ -310,11 +310,8 @@ pub(super) async fn polish_transcript_segments_with_observer<F>(
 where
     F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
 {
-    let runtime = DesktopTaskRuntime::new(
-        services,
-        request.config.clone(),
-        LlmUsageCategory::Polish,
-    );
+    let runtime =
+        DesktopTaskRuntime::new(services, request.config.clone(), LlmUsageCategory::Polish);
     let observer = CommandTaskObserver::polish(services.emitter.clone(), on_chunk_items);
     LlmTaskService::new(runtime)
         .polish(request, &observer)
@@ -353,11 +350,8 @@ pub(crate) async fn summarize_transcript_command(
     services: &crate::services::DesktopServices,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
-    let runtime = DesktopTaskRuntime::new(
-        services,
-        request.config.clone(),
-        LlmUsageCategory::Summary,
-    );
+    let runtime =
+        DesktopTaskRuntime::new(services, request.config.clone(), LlmUsageCategory::Summary);
     let observer = CommandTaskObserver::summary(services.emitter.clone());
     LlmTaskService::new(runtime)
         .summarize(request, &observer)

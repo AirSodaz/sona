@@ -245,8 +245,7 @@ pub fn get_cuda_addon_status(
 pub fn get_cuda_addon_status_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    let active_data_dir =
-        crate::platform::storage_location::resolve_active_data_dir_for_app(app)?;
+    let active_data_dir = crate::platform::storage_location::resolve_active_data_dir_for_app(app)?;
     get_cuda_addon_status(&active_data_dir)
 }
 
@@ -282,11 +281,11 @@ pub async fn activate_cuda_addon(
 pub async fn activate_cuda_addon_for_app<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    let active_data_dir =
-        crate::platform::storage_location::resolve_active_data_dir_for_app(&app)?;
+    let active_data_dir = crate::platform::storage_location::resolve_active_data_dir_for_app(&app)?;
     activate_cuda_addon(&active_data_dir).await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn download_and_install_cuda_addon(
     emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
     active_data_dir: &std::path::Path,
@@ -359,8 +358,7 @@ pub async fn download_and_install_cuda_addon_for_app<R: tauri::Runtime>(
     custom_url: Option<String>,
     expected_sha256: Option<String>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    let active_data_dir =
-        crate::platform::storage_location::resolve_active_data_dir_for_app(&app)?;
+    let active_data_dir = crate::platform::storage_location::resolve_active_data_dir_for_app(&app)?;
     let emitter = Arc::new(crate::platform::event::TauriEventEmitter(app))
         as Arc<dyn crate::platform::event::EventEmitterPort>;
     download_and_install_cuda_addon(

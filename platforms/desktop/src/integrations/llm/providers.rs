@@ -362,12 +362,12 @@ pub(crate) fn emit_llm_usage_event(
         usage,
     };
 
-    if let Ok(value) = serde_json::to_value(payload) {
-        if let Err(error) = emitter.emit(LLM_USAGE_RECORDED_EVENT, value) {
-            warn!(
-                "[LLM] failed to emit usage event: provider={:?} category={:?} error={}",
-                config.provider, category, error
-            );
-        }
+    if let Ok(value) = serde_json::to_value(payload)
+        && let Err(error) = emitter.emit(LLM_USAGE_RECORDED_EVENT, value)
+    {
+        warn!(
+            "[LLM] failed to emit usage event: provider={:?} category={:?} error={}",
+            config.provider, category, error
+        );
     }
 }

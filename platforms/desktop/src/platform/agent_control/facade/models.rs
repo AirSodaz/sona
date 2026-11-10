@@ -2,10 +2,7 @@ use crate::services::DesktopServices;
 
 use super::types::DownloadPresetModelRequest;
 
-pub async fn get_model_catalog(
-    services: &DesktopServices,
-    _app_handle: Option<&tauri::AppHandle>,
-) -> Result<serde_json::Value, String> {
+pub async fn get_model_catalog(services: &DesktopServices) -> Result<serde_json::Value, String> {
     let models_dir = services.active_models_dir();
     let snapshot = tokio::task::spawn_blocking(move || {
         let _ = sona_runtime_fs::ensure_directory_exists(&models_dir);
@@ -18,7 +15,6 @@ pub async fn get_model_catalog(
 
 pub async fn download_preset_model(
     services: &DesktopServices,
-    _app_handle: Option<&tauri::AppHandle>,
     req: DownloadPresetModelRequest,
 ) -> Result<String, String> {
     let download_id = req
@@ -69,10 +65,7 @@ pub async fn delete_preset_model(
     services: &DesktopServices,
     model_id: String,
 ) -> Result<bool, String> {
-    crate::platform::model_downloads::delete_preset_model(
-        &services.active_models_dir(),
-        &model_id,
-    )
-    .await?;
+    crate::platform::model_downloads::delete_preset_model(&services.active_models_dir(), &model_id)
+        .await?;
     Ok(true)
 }

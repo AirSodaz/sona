@@ -32,16 +32,13 @@ pub async fn get_diagnostics_core_snapshot(
     get_diagnostics_core_snapshot_with_models_dir(provider, models_dir, asr, input).await
 }
 
-pub async fn get_diagnostics_core_snapshot_with_models_dir(
-    provider: &dyn PathPort,
+pub async fn get_diagnostics_core_snapshot_with_dirs(
+    log_dir: std::path::PathBuf,
     models_dir: std::path::PathBuf,
     asr: &AsrState,
     mut input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     validate_diagnostics_input(&input)?;
-    let log_dir = provider
-        .resolve_path(PathKind::AppLogData)
-        .map_err(|error| error.to_string())?;
     input.asr_runtime_metrics = asr.metrics_snapshot().await;
     let live = asr.live_coordinator().metrics().await;
     input.live_transcription = LiveTranscriptionDiagnosticsSnapshot {
@@ -52,7 +49,7 @@ pub async fn get_diagnostics_core_snapshot_with_models_dir(
         avoided_feed_count: live.avoided_feed_count,
     };
 
-    let snapshot = tauri::async_runtime::spawn_blocking(move || {
+    let snapshot = tokio::task::spawn_blocking(move || {
         let custom_ffmpeg = input.config.ffmpeg_path.as_str();
         input.runtime_environment =
             crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(
@@ -68,6 +65,31 @@ pub async fn get_diagnostics_core_snapshot_with_models_dir(
     .map_err(|error| error.to_string())??;
     validate_diagnostics_snapshot(&snapshot)?;
     Ok(snapshot)
+}
+
+pub async fn get_diagnostics_core_snapshot_for_services(
+    services: &crate::services::DesktopServices,
+    input: DiagnosticsCoreInput,
+) -> Result<DiagnosticsCoreSnapshot, String> {
+    get_diagnostics_core_snapshot_with_dirs(
+        services.app_log_dir().to_path_buf(),
+        services.active_models_dir(),
+        &services.asr,
+        input,
+    )
+    .await
+}
+
+pub async fn get_diagnostics_core_snapshot_with_models_dir(
+    provider: &dyn PathPort,
+    models_dir: std::path::PathBuf,
+    asr: &AsrState,
+    input: DiagnosticsCoreInput,
+) -> Result<DiagnosticsCoreSnapshot, String> {
+    let log_dir = provider
+        .resolve_path(PathKind::AppLogData)
+        .map_err(|error| error.to_string())?;
+    get_diagnostics_core_snapshot_with_dirs(log_dir, models_dir, asr, input).await
 }
 
 pub async fn get_diagnostics_core_snapshot_for_app<R: tauri::Runtime>(

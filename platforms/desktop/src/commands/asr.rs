@@ -133,12 +133,7 @@ pub async fn start_native_live_transcription(
     let audio_arc = services.audio.clone();
     let asr_arc = services.asr.clone();
     let emitter = services.emitter.clone();
-    let app_data_dir = services
-        .sqlite
-        .current_context()
-        .map_err(AsrPortError::runtime)?
-        .app_data_dir()
-        .to_path_buf();
+    let app_data_dir = services.active_data_dir();
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
     configure_realtime_translation(&services);
@@ -590,22 +585,18 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices) {
         ) {
             Ok(engine) => {
                 let coordinator = match engine_kind {
-                    sona_core::ports::translation::TranslationEngineKind::LlamaCpp => {
-                        Arc::new(
-                            sona_application::live_transcription::StreamingTranslationCoordinator::new(
-                                engine, src, tgt,
-                            )
-                            .with_debounce(1000, 3),
+                    sona_core::ports::translation::TranslationEngineKind::LlamaCpp => Arc::new(
+                        sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                            engine, src, tgt,
                         )
-                    }
-                    sona_core::ports::translation::TranslationEngineKind::OnnxNmt => {
-                        Arc::new(
-                            sona_application::live_transcription::StreamingTranslationCoordinator::new(
-                                engine, src, tgt,
-                            )
-                            .with_debounce(300, 3),
+                        .with_debounce(1000, 3),
+                    ),
+                    sona_core::ports::translation::TranslationEngineKind::OnnxNmt => Arc::new(
+                        sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                            engine, src, tgt,
                         )
-                    }
+                        .with_debounce(300, 3),
+                    ),
                 };
                 services
                     .asr

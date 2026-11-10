@@ -97,6 +97,7 @@ impl DesktopRecordingSessionTracker {
 #[derive(Clone)]
 pub struct DesktopServices {
     pub app_local_data_dir: PathBuf,
+    pub app_log_dir: PathBuf,
     pub sqlite: DesktopSqliteState,
     pub projects: Arc<ProjectService>,
     pub history: Arc<HistoryService>,
@@ -116,6 +117,7 @@ pub struct DesktopServices {
 #[derive(Default)]
 pub struct DesktopServicesBuilder {
     app_local_data_dir: Option<PathBuf>,
+    app_log_dir: Option<PathBuf>,
     sqlite: Option<DesktopSqliteState>,
     sync_config_path: Option<PathBuf>,
     emitter: Option<Arc<dyn EventEmitterPort>>,
@@ -134,6 +136,11 @@ impl DesktopServicesBuilder {
 
     pub fn app_local_data_dir(mut self, path: PathBuf) -> Self {
         self.app_local_data_dir = Some(path);
+        self
+    }
+
+    pub fn app_log_dir(mut self, path: PathBuf) -> Self {
+        self.app_log_dir = Some(path);
         self
     }
 
@@ -199,6 +206,10 @@ impl DesktopServicesBuilder {
                 .unwrap_or_else(|_| PathBuf::from("."))
         });
 
+        let app_log_dir = self
+            .app_log_dir
+            .unwrap_or_else(|| app_local_data_dir.join("logs"));
+
         let sync_config_path = self
             .sync_config_path
             .unwrap_or_else(|| app_local_data_dir.join(crate::platform::sync::SYNC_CONFIG_FILE));
@@ -230,6 +241,7 @@ impl DesktopServicesBuilder {
 
         Ok(DesktopServices {
             app_local_data_dir,
+            app_log_dir,
             sqlite,
             projects,
             history,
@@ -255,6 +267,10 @@ impl DesktopServices {
 
     pub fn app_local_data_dir(&self) -> &std::path::Path {
         &self.app_local_data_dir
+    }
+
+    pub fn app_log_dir(&self) -> &std::path::Path {
+        &self.app_log_dir
     }
 
     pub fn active_data_dir(&self) -> PathBuf {
@@ -323,11 +339,18 @@ mod tests {
 
         // Verify decoupled storage path resolution
         assert_eq!(services.app_local_data_dir(), temp.path());
+        assert_eq!(services.app_log_dir(), temp.path().join("logs"));
         assert_eq!(services.active_data_dir(), temp.path());
         assert_eq!(services.active_models_dir(), temp.path().join("models"));
         let dirs_info = services.storage_directories_info();
-        assert_eq!(std::path::Path::new(&dirs_info.data_dir), services.active_data_dir());
-        assert_eq!(std::path::Path::new(&dirs_info.models_dir), services.active_models_dir());
+        assert_eq!(
+            std::path::Path::new(&dirs_info.data_dir),
+            services.active_data_dir()
+        );
+        assert_eq!(
+            std::path::Path::new(&dirs_info.models_dir),
+            services.active_models_dir()
+        );
     }
 
     #[tokio::test]

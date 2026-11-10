@@ -55,7 +55,7 @@ pub async fn resolve_model_catalog_selected_ids_for_models_dir(
 pub async fn build_model_catalog_snapshot_for_models_dir(
     models_dir: PathBuf,
 ) -> Result<ModelCatalogSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         sona_runtime_fs::ensure_directory_exists(&models_dir).map_err(|error| error.to_string())?;
 
         Ok(build_model_catalog_snapshot(&models_dir))

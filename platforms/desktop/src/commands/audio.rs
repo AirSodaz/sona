@@ -30,11 +30,7 @@ pub async fn start_system_audio_capture(
     let audio_state = services.audio.clone();
     let asr_state = services.asr.clone();
     let emitter = services.emitter.clone();
-    let app_data_dir = services
-        .sqlite
-        .current_context()?
-        .app_data_dir()
-        .to_path_buf();
+    let app_data_dir = services.active_data_dir();
     let res = crate::integrations::audio::start_system_audio_capture(
         audio_state,
         asr_state,
@@ -62,11 +58,7 @@ pub async fn start_microphone_capture(
     let audio_state = services.audio.clone();
     let asr_state = services.asr.clone();
     let emitter = services.emitter.clone();
-    let app_data_dir = services
-        .sqlite
-        .current_context()?
-        .app_data_dir()
-        .to_path_buf();
+    let app_data_dir = services.active_data_dir();
     let res = crate::integrations::audio::start_microphone_capture(
         audio_state,
         asr_state,

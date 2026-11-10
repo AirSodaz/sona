@@ -21,7 +21,8 @@ fn validate_automation_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<
 pub async fn automation_load_repository_state(
     services: State<'_, DesktopServices>,
 ) -> Result<crate::platform::automation_repository::AutomationRepositoryState, String> {
-    crate::platform::automation_repository::load_repository_state_from_sqlite(&services.sqlite).await
+    crate::platform::automation_repository::load_repository_state_from_sqlite(&services.sqlite)
+        .await
 }
 
 #[tauri::command]

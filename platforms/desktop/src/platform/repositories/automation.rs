@@ -55,14 +55,18 @@ pub async fn persist_rules_with_sqlite(
     sqlite: &crate::platform::database::DesktopSqliteState,
     rules: Vec<AutomationRuleInput>,
 ) -> Result<(), String> {
-    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_rules(rules)).await
+    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_rules(rules))
+        .await
 }
 
 pub async fn persist_profiles_with_sqlite(
     sqlite: &crate::platform::database::DesktopSqliteState,
     profiles: Vec<AutomationProfileInput>,
 ) -> Result<(), String> {
-    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_profiles(profiles)).await
+    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| {
+        adapter.replace_profiles(profiles)
+    })
+    .await
 }
 
 pub async fn persist_processed_entries_with_sqlite(
@@ -79,7 +83,8 @@ pub async fn persist_repository_state_with_sqlite(
     sqlite: &crate::platform::database::DesktopSqliteState,
     input: AutomationRepositoryInput,
 ) -> Result<(), String> {
-    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_state(input)).await
+    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_state(input))
+        .await
 }
 
 async fn run_automation_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>

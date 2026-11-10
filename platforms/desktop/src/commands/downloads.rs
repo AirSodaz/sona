@@ -57,11 +57,8 @@ pub async fn delete_preset_model(
     services: State<'_, DesktopServices>,
     model_id: String,
 ) -> Result<(), String> {
-    crate::platform::model_downloads::delete_preset_model(
-        &services.active_models_dir(),
-        &model_id,
-    )
-    .await
+    crate::platform::model_downloads::delete_preset_model(&services.active_models_dir(), &model_id)
+        .await
 }
 
 #[tauri::command]

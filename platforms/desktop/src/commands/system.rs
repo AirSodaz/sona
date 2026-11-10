@@ -167,9 +167,11 @@ pub async fn open_log_folder(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_runtime_environment_status(
-    app: AppHandle,
+    services: State<'_, crate::services::DesktopServices>,
 ) -> Result<crate::platform::runtime_status::RuntimeEnvironmentStatus, String> {
-    crate::platform::runtime_status::get_runtime_environment_status(app).await
+    crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir(
+        services.app_log_dir().to_path_buf(),
+    )
 }
 
 #[tauri::command]
@@ -203,12 +205,10 @@ pub async fn resolve_model_catalog_selected_ids_command(
 
 #[tauri::command]
 pub async fn get_diagnostics_core_snapshot(
-    app: AppHandle,
     services: State<'_, crate::services::DesktopServices>,
     input: crate::platform::diagnostics::DiagnosticsCoreInput,
 ) -> Result<crate::platform::diagnostics::DiagnosticsCoreSnapshot, String> {
-    crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app(&app, &services.asr, input)
-        .await
+    crate::platform::diagnostics::get_diagnostics_core_snapshot_for_services(&services, input).await
 }
 
 #[tauri::command]

@@ -1,11 +1,15 @@
-use tauri::{AppHandle, State};
 use crate::services::DesktopServices;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn storage_get_usage_snapshot(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<crate::platform::storage_usage::StorageUsageSnapshot, String> {
-    crate::platform::storage_usage::get_usage_snapshot(&app).await
+    crate::platform::storage_usage::get_usage_snapshot_with_sqlite_and_models_dir(
+        &services.sqlite,
+        services.active_models_dir(),
+    )
+    .await
 }
 
 #[tauri::command]
