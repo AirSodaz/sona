@@ -248,7 +248,8 @@ export function TranscriptEditor(): React.JSX.Element {
         if (
           !isBodyFocus &&
           (!(activeElement instanceof HTMLElement) ||
-            !activeElement.closest('.projects-detail-pane'))
+            (!activeElement.closest('.projects-detail-pane') &&
+              !activeElement.closest('.panel-right')))
         ) {
           return;
         }

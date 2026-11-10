@@ -19,16 +19,22 @@ export interface LiveDraftLockState {
 export function getLiveDraftLockState(
   isRecording = useTranscriptRuntimeStore.getState().isRecording,
   sourceHistoryId = useTranscriptSessionStore.getState().sourceHistoryId,
-  historyItems = useHistoryStore.getState().items
+  historyItems = useHistoryStore.getState().items,
+  recordingSessionId = useTranscriptStore.getState().recordingSessionId
 ): LiveDraftLockState {
-  const sourceItem = sourceHistoryId
-    ? historyItems.find((item) => item.id === sourceHistoryId)
+  const activeDraftHistoryId = recordingSessionId ?? sourceHistoryId;
+  const sourceItem = activeDraftHistoryId
+    ? historyItems.find((item) => item.id === activeDraftHistoryId)
     : null;
 
+  const isLocked = Boolean(
+    isRecording && (recordingSessionId || (sourceItem && isLiveRecordDraftHistoryItem(sourceItem)))
+  );
+
   return {
-    isLocked: isRecording && !!sourceItem && isLiveRecordDraftHistoryItem(sourceItem),
+    isLocked,
     isRecording,
-    sourceHistoryId,
+    sourceHistoryId: activeDraftHistoryId,
   };
 }
 

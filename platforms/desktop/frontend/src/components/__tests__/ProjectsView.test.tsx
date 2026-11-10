@@ -466,6 +466,8 @@ describe('ProjectsView', () => {
       sourceHistoryId: null,
       audioUrl: null,
       segments: [],
+      isRecording: false,
+      recordingSessionId: null,
     });
 
     useConfigStore.setState({
@@ -2431,5 +2433,73 @@ describe('ProjectsView', () => {
     expect(useTranscriptStore.getState().sessions['live-draft-1'].segments[0].text).toBe(
       'Live transcription...'
     );
+  });
+
+  it('keeps project switching disabled during background recording even when detail pane is open for completed record', async () => {
+    const { projectService } = await import('../../services/projectService');
+    vi.mocked(projectService.setActiveProjectId).mockClear();
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Live Recording Draft',
+          timestamp: Date.now(),
+          duration: 30,
+          audioPath: 'draft.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Live recording in progress',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'hist-completed',
+          title: 'Completed Call',
+          timestamp: Date.now() - 5000,
+          duration: 120,
+          audioPath: 'completed.wav',
+          transcriptPath: 'hist-completed.json',
+          previewText: 'Meeting notes',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'live-draft-1',
+      activeSessionId: 'live-draft-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-draft-1',
+          segments: [
+            { id: 'seg-1', text: 'Live transcription...', start: 0, end: 1, isFinal: false },
+          ],
+        },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    // 1. Open completed record in projects detail
+    await clickAsync(screen.getByRole('button', { name: 'Completed Call' }));
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-completed');
+    });
+
+    vi.mocked(projectService.setActiveProjectId).mockClear();
+
+    // 2. Attempt to switch project scope while completed item is open in detail
+    const projectButton = getButtonByContent('Alpha');
+    await clickAsync(projectButton);
+
+    // Switching project must remain disabled during active recording session
+    expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
   });
 });

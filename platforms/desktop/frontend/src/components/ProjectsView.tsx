@@ -229,7 +229,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           audioUrl: url,
         });
         setSelectedHistoryId(item.id);
-        await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
+        const store = useTranscriptStore.getState();
+        if (!store.isRecording && !store.recordingSessionId) {
+          await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
+        }
       } catch (error) {
         await showError({
           code: 'history.load_failed',
@@ -338,7 +341,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    const lockState = getLiveDraftLockState(isRecording, sourceHistoryId, historyItems);
+    const lockState = getLiveDraftLockState(
+      isRecording,
+      sourceHistoryId,
+      historyItems,
+      recordingSessionId
+    );
     const latestRevision = createWorkspaceMenuRevision(
       activeContextId,
       browseState.browseScope,
@@ -360,6 +368,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     isActive,
     isRecording,
     projects,
+    recordingSessionId,
     selectionState.isSelectionMode,
     sourceHistoryId,
     viewMode,
