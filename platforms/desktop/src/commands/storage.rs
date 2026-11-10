@@ -1,4 +1,5 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
+use crate::services::DesktopServices;
 
 #[tauri::command]
 pub async fn storage_get_usage_snapshot(
@@ -16,9 +17,9 @@ pub async fn storage_clear_webview_browsing_data(
 
 #[tauri::command]
 pub async fn storage_get_directories(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<crate::platform::storage_location::StorageDirectoriesInfo, String> {
-    crate::platform::storage_location::get_storage_directories_info(&app)
+    Ok(services.storage_directories_info())
 }
 
 #[tauri::command]
