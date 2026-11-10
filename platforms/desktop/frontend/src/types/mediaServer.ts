@@ -2,6 +2,7 @@ export type MediaServerType = 'emby' | 'jellyfin';
 
 export type MediaServerSubtitleMode = 'pure_translation' | 'bilingual' | 'separate_tracks';
 
+/** Media-server copy of an ASR selection. Kept local so this module stays a leaf. */
 export interface MediaServerAsrSelection {
   engine: 'local' | 'online';
   mode: 'streaming' | 'batch';

@@ -154,7 +154,7 @@ describe('ModelCard mode tags', () => {
     );
 
     expect(screen.getByText('Live')).toBeTruthy();
-    expect(screen.getByText('Batch')).toBeTruthy();
+    expect(screen.getByText('Files')).toBeTruthy();
     expect(screen.queryByText('Streaming')).toBeNull();
   });
 
@@ -163,6 +163,43 @@ describe('ModelCard mode tags', () => {
     expect(formatModelModeTag('live')).toBe('Live');
     expect(formatModelModeTag('batch')).toBe('Batch');
     expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
+  });
+
+  it('applies an installed version when its row is clicked', () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set([mockModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onSelect={onSelect}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'SenseVoice Int8' }));
+    expect(onSelect).toHaveBeenCalledWith(mockModel);
+  });
+
+  it('renders in-use badge when model is selected', () => {
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set([mockModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onSelect={vi.fn()}
+        selectedModelId={mockModel.id}
+      />
+    );
+
+    expect(screen.getByText('In use')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
   });
 });
 

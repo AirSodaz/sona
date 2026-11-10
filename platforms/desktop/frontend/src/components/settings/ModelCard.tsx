@@ -27,6 +27,8 @@ interface ModelCardProps {
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
   onDiscardDownload?: (model: ModelInfo) => void;
+  onSelect?: (model: ModelInfo) => void;
+  selectedModelId?: string;
   actionsDisabled?: boolean;
   isAsr?: boolean;
 }
@@ -39,6 +41,8 @@ interface ModelCardActionsProps {
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: () => void;
   onDiscardDownload?: (model: ModelInfo) => void;
+  onSelect?: (model: ModelInfo) => void;
+  isSelected?: boolean;
   disabled?: boolean;
 }
 
@@ -163,7 +167,11 @@ function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolea
     <div className="model-tags">
       {resolveUniqueModeTags(model.modes).map((tag) => (
         <span key={tag} className="model-tag model-tag-mode">
-          {tag}
+          {tag === 'Live'
+            ? t('settings.model_mode_live', { defaultValue: 'Live' })
+            : tag === 'Batch'
+              ? t('settings.model_mode_batch', { defaultValue: 'Files' })
+              : tag}
         </span>
       ))}
       {showEngine && (
@@ -224,22 +232,37 @@ function ModelCardActions({
   onDownload,
   onCancelDownload,
   onDiscardDownload,
+  onSelect,
+  isSelected = false,
   disabled = false,
 }: ModelCardActionsProps): React.JSX.Element {
   const { t } = useTranslation();
 
   if (isInstalled) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-delete"
-        onClick={() => onDelete(model)}
-        disabled={disabled}
-        aria-label={`${t('common.delete')} ${model.name}`}
-        data-tooltip={t('common.delete')}
+      <div
+        className="model-actions-installed"
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        <TrashIcon />
-      </button>
+        {onSelect && isSelected ? (
+          <span
+            className="model-status-chip model-status-installed"
+            style={{ padding: '2px 8px', fontSize: '11px' }}
+          >
+            {t('settings.speech_ai.in_use', { defaultValue: 'In use' })}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="model-action-icon model-action-delete"
+          onClick={() => onDelete(model)}
+          disabled={disabled}
+          aria-label={`${t('common.delete')} ${model.name}`}
+          data-tooltip={t('common.delete')}
+        >
+          <TrashIcon />
+        </button>
+      </div>
     );
   }
 
@@ -315,6 +338,42 @@ function ModelCardActions({
   );
 }
 
+function VersionSelectTarget({
+  model,
+  enabled,
+  onSelect,
+  className,
+  children,
+}: {
+  model: ModelInfo;
+  enabled: boolean;
+  onSelect?: (model: ModelInfo) => void;
+  className: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const label = [model.name, model.versionLabel].filter(Boolean).join(' ');
+  if (!enabled || !onSelect) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <div
+      className={className}
+      role="button"
+      tabIndex={0}
+      aria-label={t('settings.speech_ai.use_version', { name: label, defaultValue: label })}
+      onClick={() => onSelect(model)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onSelect(model);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function ModelCard({
   models,
   installedModels,
@@ -323,6 +382,8 @@ export function ModelCard({
   onDownload,
   onCancelDownload,
   onDiscardDownload,
+  onSelect,
+  selectedModelId,
   actionsDisabled = false,
   isAsr: isAsrProp,
 }: ModelCardProps): React.JSX.Element | null {
@@ -409,10 +470,15 @@ export function ModelCard({
             />
           )}
           <div className="model-card-footer">
-            <div className="model-card-meta">
+            <VersionSelectTarget
+              model={baseModel}
+              enabled={Boolean(onSelect) && installedModels.has(baseModel.id)}
+              onSelect={onSelect}
+              className="model-card-meta"
+            >
               <ModelTags model={baseModel} showEngine />
               <RatingMeters model={baseModel} />
-            </div>
+            </VersionSelectTarget>
             <div className="model-card-side">
               <span className="model-size">{baseModel.size}</span>
               <ModelCardActions
@@ -423,6 +489,8 @@ export function ModelCard({
                 onDownload={onDownload}
                 onCancelDownload={() => onCancelDownload(baseModel.id)}
                 onDiscardDownload={onDiscardDownload}
+                onSelect={onSelect}
+                isSelected={selectedModelId === baseModel.id}
                 disabled={actionsDisabled}
               />
             </div>
@@ -440,7 +508,12 @@ export function ModelCard({
             return (
               <div key={model.id} className="model-version-row">
                 <div className="model-version-main">
-                  <div className="model-version-info">
+                  <VersionSelectTarget
+                    model={model}
+                    enabled={Boolean(onSelect) && isInstalled}
+                    onSelect={onSelect}
+                    className="model-version-info"
+                  >
                     <span className="model-version-label">{model.versionLabel || model.name}</span>
                     <span className="model-tag model-tag-engine">{ENGINE_LABEL[model.engine]}</span>
                     {isInstalled && <CheckIcon className="model-version-check" />}
@@ -456,7 +529,7 @@ export function ModelCard({
                             })}
                       </span>
                     )}
-                  </div>
+                  </VersionSelectTarget>
                   <div className="model-card-side">
                     <span className="model-size">{model.size}</span>
                     <ModelCardActions
@@ -467,6 +540,8 @@ export function ModelCard({
                       onDownload={onDownload}
                       onCancelDownload={() => onCancelDownload(model.id)}
                       onDiscardDownload={onDiscardDownload}
+                      onSelect={onSelect}
+                      isSelected={selectedModelId === model.id}
                       disabled={actionsDisabled}
                     />
                   </div>

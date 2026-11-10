@@ -171,6 +171,16 @@ export interface ModelConfig {
   batchSpeakerDiarizationEnabled?: boolean;
   /** Speaker diarization and recognition sensitivity: 'permissive' | 'balanced' | 'strict'. */
   speakerDiarizationSensitivity?: 'permissive' | 'balanced' | 'strict';
+  /**
+   * Expected speaker count for diarization. Null or omitted means Detect.
+   * Stored with settings; clustering still follows sensitivity until the engine reads this count.
+   */
+  speakerExpectedCount?: number | null;
+  /**
+   * When true, recording and file recognition stay mirrored.
+   * When false, they are edited separately. Omit to derive from whether the two sides match.
+   */
+  speechModesLinked?: boolean | null;
   /** Download mirror to use for preset models. */
   modelDownloadMirror?: string;
 }

@@ -84,11 +84,17 @@ const CUSTOM_PROVIDER_MODES: Array<{
 interface SettingsLLMServiceTabProps {
   isActive?: boolean;
   onOpenProviderDetails?: (provider: LlmProvider) => void;
+  /** Hide the page title when this tab is shown inside Speech & AI. */
+  embedded?: boolean;
+  /** Feature binding selected when this tab opens. */
+  initialFeature?: LlmFeature;
 }
 
 export function SettingsLLMServiceTab({
   isActive = true,
   onOpenProviderDetails,
+  embedded = false,
+  initialFeature = 'polish',
 }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -96,7 +102,7 @@ export function SettingsLLMServiceTab({
   const [expandedProvider, setExpandedProvider] = useState<LlmProvider | null>(null);
   const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
   const [providerToAdd, setProviderToAdd] = useState<LlmProvider | null>(null);
-  const [activeFeature, setActiveFeature] = useState<LlmFeature>('polish');
+  const [activeFeature, setActiveFeature] = useState<LlmFeature>(initialFeature);
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [editProviderName, setEditProviderName] = useState('');
   const [editProviderStrategy, setEditProviderStrategy] =
@@ -273,15 +279,21 @@ export function SettingsLLMServiceTab({
   };
 
   return (
-    <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
-      <SettingsPageHeader
-        icon={<RobotIcon width={28} height={28} />}
-        title={t('settings.llm.title')}
-        description={t('settings.llm.description', {
-          defaultValue:
-            'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
-        })}
-      />
+    <SettingsTabContainer
+      id="settings-panel-llm_service"
+      ariaLabelledby={embedded ? undefined : 'settings-tab-llm_service'}
+      className={embedded ? 'speech-ai-embedded-pane' : ''}
+    >
+      {embedded ? null : (
+        <SettingsPageHeader
+          icon={<RobotIcon width={28} height={28} />}
+          title={t('settings.llm.title')}
+          description={t('settings.llm.description', {
+            defaultValue:
+              'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
+          })}
+        />
+      )}
 
       <SettingsSection
         id="settings-llm-models-config"

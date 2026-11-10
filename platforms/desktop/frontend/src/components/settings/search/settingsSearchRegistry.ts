@@ -17,7 +17,11 @@ type SearchItemBase = {
 
 export type SettingsSearchItem =
   | (SearchItemBase & { tab: 'subtitle'; subTab?: SubtitleSubTab })
-  | (SearchItemBase & { tab: 'models'; subTab?: ModelScenario })
+  | (SearchItemBase & {
+      tab: 'models';
+      subTab?: ModelScenario;
+      speechView?: 'home' | 'recognition' | 'speakers' | 'ai' | 'downloads' | 'picker' | 'live';
+    })
   | (SearchItemBase & {
       tab: 'vocabulary';
       subTab?: VocabularySubTab;
@@ -30,6 +34,7 @@ export type SettingsSearchItem =
     });
 
 export function groupKeyForTab(tab: SettingsTab): string {
+  if (tab === 'llm_service') return 'settings.group.audio';
   return (
     SETTINGS_TAB_GROUPS.find((group) => group.tabs.includes(tab))?.labelKey ??
     'settings.group.general'
@@ -447,8 +452,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'models',
     targetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
-    titleKey: 'settings.model_hub',
-    hintKey: 'settings.model_settings_description',
+    titleKey: 'settings.speech_ai.title',
+    hintKey: 'settings.speech_ai.description',
     keywords: [
       'model',
       'models',
@@ -466,12 +471,13 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'models',
+    speechView: 'home',
     subTab: 'live',
     targetId: 'settings-vad-path',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
-    titleKey: 'settings.vad_models',
-    hintKey: 'settings.vad_rule_hint',
+    titleKey: 'settings.speech_ai.detect_pauses',
+    hintKey: 'settings.speech_ai.detect_pauses_hint',
     keywords: [
       'vad',
       'silero',
@@ -488,27 +494,31 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-batch-vad',
     tab: 'models',
+    speechView: 'home',
     subTab: 'batch',
     targetId: 'settings-batch-vad',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
-    titleKey: 'settings.batch_vad_enabled',
-    hintKey: 'settings.batch_vad_enabled_hint',
+    titleKey: 'settings.speech_ai.detect_pauses',
+    hintKey: 'settings.speech_ai.detect_pauses_hint',
     keywords: ['batch vad', 'segmentation', 'split', '分段', '批量分段', '静音切分', '批量vad'],
   },
   {
     id: 'models-punctuation',
     tab: 'models',
+    speechView: 'home',
     subTab: 'live',
     targetId: 'settings-punctuation-path',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
-    titleKey: 'settings.punctuation_models',
+    titleKey: 'settings.speech_ai.add_punctuation',
+    hintKey: 'settings.speech_ai.add_punctuation_hint',
     keywords: ['punct', 'punctuation', 'punc', '标点', '标点模型', '标点符号', 'biaodian'],
   },
   {
     id: 'models-mirror',
     tab: 'models',
+    speechView: 'home',
     targetId: 'settings-download-mirror',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
@@ -526,8 +536,29 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     ],
   },
   {
+    id: 'models-speakers',
+    tab: 'models',
+    speechView: 'home',
+    targetId: 'settings-speech-speakers',
+    fallbackTargetId: 'settings-model-hub',
+    tabKey: 'settings.model_hub',
+    titleKey: 'settings.speech_ai.speakers',
+    hintKey: 'settings.speech_ai.speakers_hint',
+    keywords: [
+      'speaker',
+      'speakers',
+      'diarization',
+      'voice',
+      'who said',
+      '说话人',
+      '区分说话人',
+      '声纹',
+    ],
+  },
+  {
     id: 'models-gpu',
     tab: 'models',
+    speechView: 'home',
     targetId: 'settings-gpu-acceleration',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.gpu_acceleration_label',
@@ -844,9 +875,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-providers',
     tab: 'llm_service',
     targetId: 'settings-llm-provider-list',
-    tabKey: 'settings.llm.title',
-    titleKey: 'settings.llm.credentials_section',
-    hintKey: 'settings.llm.credentials_hint',
+    tabKey: 'settings.model_hub',
+    titleKey: 'settings.speech_ai.ai_services',
+    hintKey: 'settings.speech_ai.ai_services_hint',
     keywords: [
       'llm',
       'provider',
@@ -874,8 +905,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-api-keys',
     tab: 'llm_service',
     targetId: 'settings-llm-provider-list',
-    tabKey: 'settings.llm.title',
-    titleKey: 'settings.llm.api_key',
+    tabKey: 'settings.model_hub',
+    titleKey: 'settings.speech_ai.api_key',
     keywords: [
       'api key',
       'base url',
@@ -893,7 +924,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-models-config',
     tab: 'llm_service',
     targetId: 'settings-llm-models-config',
-    tabKey: 'settings.llm.title',
+    tabKey: 'settings.model_hub',
     titleKey: 'settings.llm.feature_models',
     hintKey: 'settings.llm.feature_models_runtime_hint',
     keywords: [
@@ -913,8 +944,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-custom-provider',
     tab: 'llm_service',
     targetId: 'settings-llm-custom-provider',
-    tabKey: 'settings.llm.title',
-    titleKey: 'settings.llm.custom_provider',
+    tabKey: 'settings.model_hub',
+    titleKey: 'settings.speech_ai.other_service',
     keywords: [
       'custom provider',
       'add provider',
