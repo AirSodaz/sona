@@ -409,7 +409,7 @@ impl AgentControlFacade {
     }
 
     pub async fn delete_preset_model(&self, model_id: String) -> Result<bool, String> {
-        models::delete_preset_model(self.app_handle.as_ref(), model_id).await
+        models::delete_preset_model(&self.services, model_id).await
     }
 
     pub async fn get_sync_status(&self) -> Result<serde_json::Value, String> {

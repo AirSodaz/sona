@@ -35,15 +35,15 @@ pub async fn download_file(
 }
 
 #[tauri::command]
-pub async fn download_preset_model<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn download_preset_model(
     services: State<'_, DesktopServices>,
     model_id: String,
     download_id: String,
     mirror: Option<String>,
 ) -> Result<String, String> {
     crate::platform::model_downloads::download_preset_model(
-        app,
+        services.emitter.clone(),
+        &services.active_models_dir(),
         &services.downloads,
         model_id,
         download_id,
@@ -53,19 +53,23 @@ pub async fn download_preset_model<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn delete_preset_model<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn delete_preset_model(
+    services: State<'_, DesktopServices>,
     model_id: String,
 ) -> Result<(), String> {
-    crate::platform::model_downloads::delete_preset_model(&app, &model_id).await
+    crate::platform::model_downloads::delete_preset_model(
+        &services.active_models_dir(),
+        &model_id,
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn check_interrupted_download<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn check_interrupted_download(
+    services: State<'_, DesktopServices>,
     model_id: String,
 ) -> Result<Option<sona_core::models::downloads::InterruptedDownloadInfo>, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let models_dir = services.active_models_dir();
     tokio::task::spawn_blocking(move || {
         sona_core::models::downloads::inspect_interrupted_download(&models_dir, &model_id)
     })
@@ -74,11 +78,11 @@ pub async fn check_interrupted_download<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn clean_interrupted_download<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn clean_interrupted_download(
+    services: State<'_, DesktopServices>,
     model_id: String,
 ) -> Result<bool, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let models_dir = services.active_models_dir();
     tokio::task::spawn_blocking(move || {
         sona_core::models::downloads::clean_interrupted_download(&models_dir, &model_id)
             .map_err(|e| e.to_string())
@@ -88,22 +92,21 @@ pub async fn clean_interrupted_download<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn get_cuda_addon_status<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn get_cuda_addon_status(
+    services: State<'_, DesktopServices>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    crate::platform::model_downloads::get_cuda_addon_status(&app)
+    crate::platform::model_downloads::get_cuda_addon_status(&services.active_data_dir())
 }
 
 #[tauri::command]
-pub async fn activate_cuda_addon<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn activate_cuda_addon(
+    services: State<'_, DesktopServices>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    crate::platform::model_downloads::activate_cuda_addon(app).await
+    crate::platform::model_downloads::activate_cuda_addon(&services.active_data_dir()).await
 }
 
 #[tauri::command]
-pub async fn download_cuda_addon<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn download_cuda_addon(
     services: State<'_, DesktopServices>,
     download_id: String,
     mirror: Option<String>,
@@ -112,7 +115,8 @@ pub async fn download_cuda_addon<R: tauri::Runtime>(
     expected_sha256: Option<String>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     crate::platform::model_downloads::download_and_install_cuda_addon(
-        app,
+        services.emitter.clone(),
+        &services.active_data_dir(),
         &services.downloads,
         download_id,
         mirror,

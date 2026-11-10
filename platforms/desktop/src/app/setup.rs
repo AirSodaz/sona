@@ -82,6 +82,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     )) as Arc<dyn crate::platform::event::EventEmitterPort>;
 
     let desktop_services = crate::services::DesktopServices::builder()
+        .app_local_data_dir(app_local_data_dir.clone())
         .sqlite(sqlite_for_services)
         .event_emitter(event_emitter)
         .sync_config_path(sync_config_path)
