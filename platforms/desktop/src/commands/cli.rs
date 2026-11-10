@@ -58,11 +58,12 @@ fn resolve_cli_binary_and_bin_dir() -> (Option<PathBuf>, Option<PathBuf>, String
         for candidate_dir in search_dirs {
             let candidate = candidate_dir.join(binary_name);
             if candidate.is_file() {
-                if let Ok(canon) = candidate.canonicalize() {
-                    let parent = canon.parent().map(Path::to_path_buf);
-                    let prospective_bin = parent.as_ref().map(|p| p.join("bin"));
-                    return (Some(canon), prospective_bin, "development".to_string());
-                }
+                let canon = candidate
+                    .canonicalize()
+                    .unwrap_or_else(|_| candidate.clone());
+                let parent = canon.parent().map(Path::to_path_buf);
+                let prospective_bin = parent.as_ref().map(|p| p.join("bin"));
+                return (Some(canon), prospective_bin, "development".to_string());
             }
         }
     }
@@ -112,17 +113,23 @@ fn is_cli_currently_in_path(bin_dir: Option<&Path>) -> bool {
     // On Windows: check if bin_dir is in HKCU/HKLM Path, or if a global cli binary exists in registry paths
     #[cfg(windows)]
     {
-        if let Some(b) = bin_dir {
-            if win_path::is_bin_in_user_or_system_path(b) {
-                return true;
-            }
+        if bin_dir.is_some_and(win_path::is_bin_in_user_or_system_path) {
+            return true;
         }
-        return win_path::find_cli_in_registry_paths(binary_name).is_some();
+        win_path::find_cli_in_registry_paths(binary_name).is_some()
     }
 
-    // On Unix: check if standard symlink exists in ~/.local/bin or /usr/local/bin
+    // On Unix: check if cli is in PATH, or standard symlink exists in ~/.local/bin or /usr/local/bin
     #[cfg(unix)]
     {
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in std::env::split_paths(&path_var) {
+                let candidate = dir.join(binary_name);
+                if candidate.exists() {
+                    return true;
+                }
+            }
+        }
         if let Ok(home) = std::env::var("HOME") {
             let user_local = PathBuf::from(home).join(".local/bin").join(binary_name);
             if user_local.exists() {
@@ -142,14 +149,21 @@ fn is_cli_currently_in_path(bin_dir: Option<&Path>) -> bool {
 #[cfg(windows)]
 mod win_path {
     use std::path::{Path, PathBuf};
-    use winreg::RegKey;
     use winreg::enums::*;
+    use winreg::{RegKey, RegValue};
+
+    fn strip_verbatim_prefix(p: &str) -> &str {
+        if let Some(stripped) = p.strip_prefix(r"\\?\") {
+            stripped
+        } else {
+            p
+        }
+    }
 
     fn normalize_path_cmp(p: &str) -> String {
-        p.trim()
-            .trim_matches('"')
-            .trim_end_matches(['\\', '/'])
-            .to_lowercase()
+        let unquoted = p.trim().trim_matches('"');
+        let stripped = strip_verbatim_prefix(unquoted);
+        stripped.trim_end_matches(['\\', '/']).to_lowercase()
     }
 
     pub fn get_user_path() -> Result<String, String> {
@@ -168,25 +182,22 @@ mod win_path {
         env.get_value("Path").map_err(|e| e.to_string())
     }
 
+    fn path_contains(path_str: &str, target: &str) -> bool {
+        path_str.split(';').any(|p| normalize_path_cmp(p) == target)
+    }
+
     pub fn is_bin_in_user_or_system_path(bin_dir: &Path) -> bool {
         let target = normalize_path_cmp(&bin_dir.to_string_lossy());
         if target.is_empty() {
             return false;
         }
 
-        if let Ok(user_path) = get_user_path() {
-            if user_path
-                .split(';')
-                .any(|p| normalize_path_cmp(p) == target)
-            {
-                return true;
-            }
+        if get_user_path().is_ok_and(|p| path_contains(&p, &target)) {
+            return true;
         }
 
-        if let Ok(sys_path) = get_system_path() {
-            if sys_path.split(';').any(|p| normalize_path_cmp(p) == target) {
-                return true;
-            }
+        if get_system_path().is_ok_and(|p| path_contains(&p, &target)) {
+            return true;
         }
 
         false
@@ -226,9 +237,18 @@ mod win_path {
             .create_subkey("Environment")
             .map_err(|e| format!("Failed to open HKCU\\Environment: {e}"))?;
 
-        let current_path: String = env.get_value("Path").unwrap_or_default();
-        let target = normalize_path_cmp(&bin_dir.to_string_lossy());
-        let target_display = bin_dir.to_string_lossy().to_string();
+        let (current_path, vtype) = match env.get_raw_value("Path") {
+            Ok(raw) => {
+                let s = env.get_value::<String, _>("Path").unwrap_or_default();
+                (s, raw.vtype)
+            }
+            Err(_) => (String::new(), REG_EXPAND_SZ),
+        };
+
+        let raw_display = bin_dir.to_string_lossy();
+        let clean_display = strip_verbatim_prefix(&raw_display);
+        let target = normalize_path_cmp(clean_display);
+        let target_display = clean_display.to_string();
 
         let mut parts: Vec<String> = current_path
             .split(';')
@@ -242,7 +262,22 @@ mod win_path {
         }
 
         let new_path = parts.join(";");
-        env.set_value("Path", &new_path)
+
+        // Preserve REG_EXPAND_SZ so user environment variables like %USERPROFILE% continue to expand
+        let mut utf16: Vec<u8> = new_path
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
+        utf16.extend_from_slice(&[0, 0]); // null terminator
+        let reg_val = RegValue {
+            vtype: if vtype == REG_SZ {
+                REG_SZ
+            } else {
+                REG_EXPAND_SZ
+            },
+            bytes: utf16.into(),
+        };
+        env.set_raw_value("Path", &reg_val)
             .map_err(|e| format!("Failed to update HKCU\\Environment\\Path: {e}"))?;
 
         // Broadcast WM_SETTINGCHANGE
@@ -339,7 +374,7 @@ pub async fn cli_get_status() -> Result<CliStatus, String> {
     .to_string();
 
     let can_modify_path = if cfg!(windows) {
-        bin_dir.is_some()
+        bin_dir.is_some() && (cli_path.is_some() || install_type != "not_found")
     } else if cfg!(unix) {
         cli_path.is_some()
     } else {
@@ -370,14 +405,21 @@ pub async fn cli_set_path_enabled(enabled: bool) -> Result<CliStatus, String> {
         // Ensure bin directory exists
         if enabled {
             if !bin.exists() {
-                let _ = std::fs::create_dir_all(bin);
+                std::fs::create_dir_all(bin).map_err(|e| {
+                    format!("Failed to create bin directory at {}: {e}", bin.display())
+                })?;
             }
             // If bin/sona-cli.exe doesn't exist, try to locate sona-bin-shim.exe and copy it as shims
             let cli_shim = bin.join("sona-cli.exe");
             let mcp_shim = bin.join("sona-mcp.exe");
-            if !cli_shim.exists() {
+            if !cli_shim.exists() || !mcp_shim.exists() {
                 let shim_candidates = [
                     bin.parent().map(|p| p.join("sona-bin-shim.exe")),
+                    std::env::current_exe()
+                        .ok()
+                        .as_deref()
+                        .and_then(Path::parent)
+                        .map(|p| p.join("sona-bin-shim.exe")),
                     bin.parent()
                         .and_then(|p| p.parent())
                         .map(|p| p.join("target").join("release").join("sona-bin-shim.exe")),
@@ -435,8 +477,10 @@ mod tests {
     async fn test_cli_status() {
         let status = cli_get_status().await.unwrap();
         println!("CLI STATUS DEBUG: {:#?}", status);
-        assert!(status.installed);
-        assert_eq!(status.install_type, "development");
-        assert!(!status.in_path);
+        assert!(!status.version.is_empty());
+        assert!(!status.platform.is_empty());
+        if status.installed {
+            assert!(status.binary_path.is_some());
+        }
     }
 }

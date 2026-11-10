@@ -40,6 +40,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-uniffi-bind', 'host'],
   ['sona-mcp', 'host'],
   ['sona-uniffi-bindgen', 'tool'],
+  ['sona-bin-shim', 'tool'],
 ]);
 
 export const ALLOWED_TARGET_ROLES = new Map([
