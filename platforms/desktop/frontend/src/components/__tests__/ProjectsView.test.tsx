@@ -2338,15 +2338,21 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    // Click live draft -> switches to create mode with live focus
+    // Click live draft -> switches to create mode with live focus and binds the draft session
     await clickAsync(screen.getByRole('button', { name: 'Live Recording Draft' }));
     expect(setModeSpy).toHaveBeenCalledWith('create', 'live');
     expect(getDetailPlaceholder()).toBeNull();
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('live-draft-1');
+    });
 
-    // Click batch draft -> switches to create mode with batch focus
+    // Click batch draft -> switches to create mode with batch focus and binds the draft session
     await clickAsync(screen.getByRole('button', { name: 'Batch Draft' }));
     expect(setModeSpy).toHaveBeenCalledWith('create', 'batch');
     expect(getDetailPlaceholder()).toBeNull();
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('batch-draft-1');
+    });
   });
 
   it('keeps projects-main visible during background recording and allows opening completed records', async () => {
@@ -2383,7 +2389,7 @@ describe('ProjectsView', () => {
     useTranscriptStore.setState({
       isRecording: true,
       recordingSessionId: 'live-draft-1',
-      sourceHistoryId: 'live-draft-1',
+      activeSessionId: 'live-draft-1',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'live-draft-1': {

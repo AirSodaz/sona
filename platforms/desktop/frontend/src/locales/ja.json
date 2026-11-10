@@ -545,7 +545,7 @@
     "empty_trash": "ゴミ箱を空にする",
     "empty_trash_confirm": "ゴミ箱の {{count}} 件をすべて完全に削除しますか？元に戻せません。",
     "draft_badge": "草案",
-    "live_record_draft_description": "Live Record のドラフト",
+    "draft_description": "未完了の下書き",
     "no_transcript": "文字起こしなし",
     "delete_tooltip": "削除",
     "search_placeholder": "検索履歴...",

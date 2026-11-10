@@ -149,18 +149,7 @@ export function resetSessionStoreCache(): void {
 }
 
 export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
-  const rawSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  const legacyRoot = state as unknown as Partial<SessionData>;
-  const activeSession: SessionData = {
-    ...rawSession,
-    sourceHistoryId: rawSession.sourceHistoryId ?? legacyRoot.sourceHistoryId ?? null,
-    segments:
-      rawSession.segments && rawSession.segments.length > 0
-        ? rawSession.segments
-        : (legacyRoot.segments ?? rawSession.segments),
-    title: rawSession.title || legacyRoot.title || '',
-    icon: rawSession.icon ?? legacyRoot.icon ?? null,
-  };
+  const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
   if (
     sessionCacheState &&
     sessionCacheState.sessionId === state.activeSessionId &&

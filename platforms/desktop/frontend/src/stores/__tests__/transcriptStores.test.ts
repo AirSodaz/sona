@@ -497,7 +497,6 @@ describe('Transcript Stores', () => {
     realStore.setState({
       activeSessionId: 'create-session-123',
       createSessionId: 'create-session-123',
-      projectsSessionId: null,
       recordingSessionId: null,
       mode: 'create',
       ingestionFocus: 'live',
@@ -594,6 +593,159 @@ describe('Transcript Stores', () => {
     expect(bgSession.segments).toHaveLength(1);
     expect(bgSession.segments[0].text).toBe('Recorded segment');
   });
+
+  it('clearActiveTranscriptSession is a no-op while the active session is the recording session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'rec-1',
+      recordingSessionId: 'rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-1',
+          segments: [{ id: 'r1', text: 'Live', start: 0, end: 1, isFinal: false }],
+        },
+      },
+    });
+
+    realStore.getState().clearActiveTranscriptSession({ clearAudio: true });
+
+    expect(realStore.getState().sessions['rec-1'].segments).toHaveLength(1);
+    expect(realStore.getState().sessions['rec-1'].sourceHistoryId).toBe('rec-1');
+  });
+
+  it('clearActiveTranscriptSession clears a foreground detail while a background recording continues', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'detail-1',
+      recordingSessionId: 'rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'detail-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'detail-1',
+          segments: [{ id: 'd1', text: 'Detail', start: 0, end: 1, isFinal: true }],
+        },
+        'rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-1',
+          segments: [{ id: 'r1', text: 'Live', start: 0, end: 1, isFinal: false }],
+        },
+      },
+    });
+
+    realStore.getState().clearActiveTranscriptSession({ clearAudio: true });
+
+    expect(realStore.getState().sessions['detail-1'].segments).toHaveLength(0);
+    expect(realStore.getState().sessions['rec-1'].segments).toHaveLength(1);
+  });
+
+  it('openSession does not clobber the in-progress recording session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'rec-1',
+      recordingSessionId: 'rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-1',
+          segments: [{ id: 'r1', text: 'Live', start: 0, end: 1, isFinal: false }],
+        },
+      },
+    });
+
+    realStore.getState().openSession({
+      sourceHistoryId: 'rec-1',
+      segments: [{ id: 'disk', text: 'Stale disk copy', start: 0, end: 1, isFinal: true }],
+    });
+
+    expect(realStore.getState().sessions['rec-1'].segments).toHaveLength(1);
+    expect(realStore.getState().sessions['rec-1'].segments[0].text).toBe('Live');
+  });
+
+  it('finalizeLastSegmentForSession finalizes only the targeted session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'detail-1',
+      recordingSessionId: 'rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'detail-1': {
+          ...DEFAULT_SESSION_DATA,
+          segments: [{ id: 'd1', text: 'Detail', start: 0, end: 1, isFinal: false }],
+        },
+        'rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          segments: [{ id: 'r1', text: 'Live', start: 0, end: 1, isFinal: false }],
+        },
+      },
+    });
+
+    realStore.getState().finalizeLastSegmentForSession('rec-1');
+
+    expect(realStore.getState().sessions['rec-1'].segments[0].isFinal).toBe(true);
+    expect(realStore.getState().sessions['detail-1'].segments[0].isFinal).toBe(false);
+  });
+
+  it('activateSession rebinds the active pointer without disturbing the create pointer', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'create-1',
+      createSessionId: 'create-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'create-1': { ...DEFAULT_SESSION_DATA, title: 'Create' },
+        'detail-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'detail-1', title: 'Detail' },
+      },
+    });
+
+    realStore.getState().activateSession('detail-1');
+    expect(realStore.getState().activeSessionId).toBe('detail-1');
+    expect(realStore.getState().createSessionId).toBe('create-1');
+
+    realStore.getState().activateSession('missing');
+    expect(realStore.getState().activeSessionId).toBe('detail-1');
+  });
+
+  it('keeps recording intact across projects detail open/close and tab switches', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'rec-1',
+      createSessionId: 'rec-1',
+      recordingSessionId: 'rec-1',
+      mode: 'create',
+      ingestionFocus: 'live',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'rec-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'rec-1',
+          segments: [{ id: 'r1', text: 'Live', start: 0, end: 1, isFinal: false }],
+        },
+      },
+    });
+
+    // Switch to projects and open a completed detail.
+    realStore.getState().setMode('projects');
+    realStore.getState().openSession({
+      sourceHistoryId: 'detail-1',
+      segments: [{ id: 'd1', text: 'Detail', start: 0, end: 1, isFinal: true }],
+    });
+    expect(realStore.getState().activeSessionId).toBe('detail-1');
+
+    // Closing the detail must not wipe the background recording.
+    realStore.getState().clearActiveTranscriptSession({ clearAudio: true });
+    expect(realStore.getState().sessions['rec-1'].segments).toHaveLength(1);
+
+    // Returning to create restores the recording session and live focus.
+    realStore.getState().setMode('create');
+    expect(realStore.getState().activeSessionId).toBe('rec-1');
+    expect(realStore.getState().ingestionFocus).toBe('live');
+    expect(realStore.getState().sessions['rec-1'].segments[0].text).toBe('Live');
+  });
+
   describe('mergeSegments translation preservation', () => {
     it('merges two segments with English translations with a space separator', () => {
       const sessionStore = useTranscriptSessionStore.getState();

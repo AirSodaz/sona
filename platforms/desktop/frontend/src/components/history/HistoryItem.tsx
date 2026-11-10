@@ -185,8 +185,8 @@ export function HistoryItem({
   const previewText = item.previewText
     ? item.previewText
     : isDraft
-      ? t('history.live_record_draft_description', {
-          defaultValue: 'Draft recording',
+      ? t('history.draft_description', {
+          defaultValue: 'Unfinished draft',
         })
       : null;
 

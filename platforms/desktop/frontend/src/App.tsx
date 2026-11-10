@@ -316,7 +316,10 @@ function App(): React.JSX.Element | null {
 
             {/* Right Panel - Editor */}
             <div className="panel panel-right">
-              <TranscriptWorkbench onClose={closeTranscriptSession} />
+              <TranscriptWorkbench
+                onClose={closeTranscriptSession}
+                isActive={!isProjectsMode && !isToolsMode}
+              />
             </div>
           </div>
         </div>

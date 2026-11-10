@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { syncEmbySubtitles } from '../services/emby/embyService';
 import { historyService } from '../services/historyService';
 import { storageOpenPath } from '../services/tauri/storage';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -105,16 +106,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const refreshHistory = useHistoryStore((state) => state.refresh);
 
   const sourceHistoryId = useTranscriptStore(
-    (state) =>
-      state.sessions[state.activeSessionId]?.sourceHistoryId ??
-      ('sourceHistoryId' in state && typeof state.sourceHistoryId === 'string'
-        ? state.sourceHistoryId
-        : null)
-  );
-  const segmentsLength = useTranscriptStore(
-    (state) =>
-      state.sessions[state.activeSessionId]?.segments?.length ??
-      ('segments' in state && Array.isArray(state.segments) ? state.segments.length : 0)
+    (state) => state.sessions[state.activeSessionId]?.sourceHistoryId ?? null
   );
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
@@ -167,7 +159,36 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       }
       if (isHistoryItemDraft(item)) {
         const isBatch = item.type === 'batch';
-        useTranscriptRuntimeStore.getState().setMode('create', isBatch ? 'batch' : 'live');
+        if (isBatch) {
+          const queueItem = useBatchQueueStore
+            .getState()
+            .queueItems.find((candidate) => candidate.historyId === item.id);
+          if (queueItem) {
+            useBatchQueueStore.getState().setActiveItem(queueItem.id);
+            useTranscriptRuntimeStore.getState().setMode('create', 'batch');
+            return;
+          }
+        }
+        // Bind the Create pane to this specific draft instead of whatever content
+        // was left active, loading its persisted transcript and audio.
+        try {
+          const segments = (await historyService.loadTranscript(item.id)) ?? [];
+          const url = await historyService.getAudioUrl(item.id);
+          useTranscriptRuntimeStore.getState().setMode('create', isBatch ? 'batch' : 'live');
+          openTranscriptSession({
+            segments,
+            sourceHistoryId: item.id,
+            title: item.title,
+            icon: item.icon,
+            audioUrl: url,
+          });
+        } catch (error) {
+          await showError({
+            code: 'history.load_failed',
+            messageKey: 'errors.history.load_failed',
+            cause: error,
+          });
+        }
         return;
       }
       const initialItem = useHistoryStore
@@ -208,7 +229,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           audioUrl: url,
         });
         setSelectedHistoryId(item.id);
-        useTranscriptStore.setState({ projectsSessionId: item.id });
         await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
       } catch (error) {
         await showError({
@@ -245,6 +265,27 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
     return browseState.filteredAndSortedItems.filter((item) => item.id !== recordingSessionId);
   }, [browseState.filteredAndSortedItems, isRecording, recordingSessionId]);
+
+  // The backend workspace query still counts the in-progress recording draft even
+  // though it is hidden from the browse list; decrement its bucket so rail badges
+  // match the visible items.
+  const railItemCounts = useMemo(() => {
+    if (!isRecording || !recordingSessionId) {
+      return browseState.itemCounts;
+    }
+    const draftItem = historyItems.find((item) => item.id === recordingSessionId);
+    if (!draftItem || draftItem.deletedAt != null) {
+      return browseState.itemCounts;
+    }
+    const bucketKey = draftItem.projectId || null;
+    const current = browseState.itemCounts.get(bucketKey) ?? 0;
+    if (current <= 0) {
+      return browseState.itemCounts;
+    }
+    const adjusted = new Map(browseState.itemCounts);
+    adjusted.set(bucketKey, current - 1);
+    return adjusted;
+  }, [browseState.itemCounts, historyItems, isRecording, recordingSessionId]);
   const projectSettingsDraft = useProjectSettingsDraft({
     browseProject: browseState.browseProject,
     confirm,
@@ -272,7 +313,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     sourceHistoryId,
     selectedIds: selectionState.selectedIds,
     trashCount: browseState.itemCounts.get('trash') || 0,
-    filteredAndSortedItems: browseState.filteredAndSortedItems,
+    filteredAndSortedItems: visibleFilteredAndSortedItems,
     clearOpenedItem,
     clearSelection: selectionState.clearSelection,
     refreshHistory,
@@ -329,8 +370,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    syncVisibleItems(browseState.filteredAndSortedItems);
-  }, [browseState.filteredAndSortedItems, isActive, syncVisibleItems]);
+    syncVisibleItems(visibleFilteredAndSortedItems);
+  }, [visibleFilteredAndSortedItems, isActive, syncVisibleItems]);
 
   const itemMatchesBrowseScope = useCallback(
     (item: HistoryItemType) => {
@@ -356,6 +397,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     ]
   );
 
+  const selectedSessionHasContent = useTranscriptStore((state) => {
+    if (!selectedHistoryId) {
+      return false;
+    }
+    const session = state.sessions[selectedHistoryId];
+    return Boolean(session?.sourceHistoryId) || (session?.segments.length ?? 0) > 0;
+  });
+  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
+  const activateSession = useTranscriptStore((state) => state.activateSession);
+
   const effectiveSelectedHistoryId = useMemo(() => {
     if (!selectedHistoryId) {
       return null;
@@ -368,16 +419,28 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return null;
     }
 
-    if (!sourceHistoryId && segmentsLength === 0) {
+    if (!selectedSessionHasContent) {
       return null;
     }
 
     return selectedHistoryId;
-  }, [historyItems, itemMatchesBrowseScope, segmentsLength, selectedHistoryId, sourceHistoryId]);
+  }, [historyItems, itemMatchesBrowseScope, selectedHistoryId, selectedSessionHasContent]);
   const selectedItem = useMemo(
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
     [effectiveSelectedHistoryId, historyItems]
   );
+
+  // The Create workbench shares the active-session pointer; when returning to the
+  // Projects tab, re-bind it to the open detail so the workbench shows that item's
+  // transcript instead of whatever the Create pane left active.
+  useEffect(() => {
+    if (!isActive || !effectiveSelectedHistoryId) {
+      return;
+    }
+    if (activeSessionId !== effectiveSelectedHistoryId) {
+      activateSession(effectiveSelectedHistoryId);
+    }
+  }, [isActive, effectiveSelectedHistoryId, activeSessionId, activateSession]);
   const projectAssignmentItems = useMemo(() => {
     const candidates = new Map<string, HistoryItemType>();
     historyItems.forEach((item) => {
@@ -781,12 +844,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         activeContextId={activeContextId}
         browseProjectId={browseState.browseProjectId}
         historyItemsCount={browseHistoryItems.length}
-        inboxCount={browseState.itemCounts.get(null) || 0}
+        inboxCount={railItemCounts.get(null) || 0}
         isAllItemsScope={browseState.isAllItemsScope}
         isInboxScope={browseState.isInboxScope}
         isTrashScope={browseState.isTrashScope}
-        trashCount={browseState.itemCounts.get('trash') || 0}
-        itemCounts={browseState.itemCounts}
+        trashCount={railItemCounts.get('trash') || 0}
+        itemCounts={railItemCounts}
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onReorderProjects={reorderProjects}
         onSwitchScope={handleSwitchBrowseScope}

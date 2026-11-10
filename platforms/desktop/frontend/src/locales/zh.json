@@ -545,7 +545,7 @@
     "empty_trash": "清空回收站",
     "empty_trash_confirm": "永久删除回收站中的全部 {{count}} 条记录？此操作无法撤销。",
     "draft_badge": "草稿",
-    "live_record_draft_description": "实时录音草稿",
+    "draft_description": "未完成的草稿",
     "no_transcript": "无转录文本",
     "delete_tooltip": "删除",
     "search_placeholder": "搜索历史记录...",

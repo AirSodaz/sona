@@ -6,6 +6,7 @@ import { useHistoryStore } from '../../../stores/historyStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../../../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import { isLiveRecordDraftHistoryItem } from '../../../types/history';
 
@@ -66,7 +67,11 @@ export function useWorkspaceItemMutations({
       useHistoryStore.getState().items.find((item) => item.id === id) ??
       filteredAndSortedItems.find((item) => item.id === id);
     const initialLockState = getLiveDraftLockState();
-    if (!initialItem || (initialLockState.isLocked && id === initialLockState.sourceHistoryId)) {
+    if (
+      !initialItem ||
+      id === useTranscriptStore.getState().recordingSessionId ||
+      (initialLockState.isLocked && id === initialLockState.sourceHistoryId)
+    ) {
       return;
     }
 
@@ -117,7 +122,11 @@ export function useWorkspaceItemMutations({
       useHistoryStore.getState().items.find((item) => item.id === id) ??
       filteredAndSortedItems.find((item) => item.id === id);
     const latestLockState = getLiveDraftLockState();
-    if (!latestItem || (latestLockState.isLocked && id === latestLockState.sourceHistoryId)) {
+    if (
+      !latestItem ||
+      id === useTranscriptStore.getState().recordingSessionId ||
+      (latestLockState.isLocked && id === latestLockState.sourceHistoryId)
+    ) {
       return;
     }
 
@@ -138,10 +147,12 @@ export function useWorkspaceItemMutations({
     }
 
     const initialLockState = getLiveDraftLockState();
-    const candidateIds =
-      initialLockState.isLocked && initialLockState.sourceHistoryId
-        ? ids.filter((id) => id !== initialLockState.sourceHistoryId)
-        : ids;
+    const initialRecordingSessionId = useTranscriptStore.getState().recordingSessionId;
+    const candidateIds = ids.filter(
+      (id) =>
+        id !== initialRecordingSessionId &&
+        !(initialLockState.isLocked && id === initialLockState.sourceHistoryId)
+    );
 
     if (candidateIds.length === 0) {
       return;
@@ -192,10 +203,12 @@ export function useWorkspaceItemMutations({
       return;
     }
     const latestLockState = getLiveDraftLockState();
-    const targetIds =
-      latestLockState.isLocked && latestLockState.sourceHistoryId
-        ? candidateIds.filter((id) => id !== latestLockState.sourceHistoryId)
-        : candidateIds;
+    const latestRecordingSessionId = useTranscriptStore.getState().recordingSessionId;
+    const targetIds = candidateIds.filter(
+      (id) =>
+        id !== latestRecordingSessionId &&
+        !(latestLockState.isLocked && id === latestLockState.sourceHistoryId)
+    );
 
     if (targetIds.length === 0) {
       return;

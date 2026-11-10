@@ -46,6 +46,9 @@ interface TranscriptWorkbenchProps {
   title?: string;
   /** Optional default type for the icon if the item has no icon set. */
   defaultIconType?: 'recording' | 'batch';
+  /** Whether this workbench's shell is visible. Hidden shells keep the editor mounted but
+   * must not own global audio playback or keyboard shortcuts. Defaults to true. */
+  isActive?: boolean;
 }
 
 /**
@@ -83,6 +86,7 @@ export function TranscriptWorkbench({
   onClose,
   title: propsTitle,
   defaultIconType,
+  isActive = true,
 }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -175,13 +179,20 @@ export function TranscriptWorkbench({
     }
   };
 
+  const isCurrentSessionRecording = Boolean(
+    isRecording &&
+      (recordingSessionId
+        ? activeSessionId === recordingSessionId
+        : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+
   useEscapeKey(
     (event) => {
       event.preventDefault();
       onClose();
     },
     {
-      enabled: !isRecording,
+      enabled: isActive && !isCurrentSessionRecording,
       checkTopMost: true,
     }
   );
@@ -214,12 +225,6 @@ export function TranscriptWorkbench({
       ? t('panel.batch_import', { defaultValue: 'Batch Import' })
       : t('panel.live_record', { defaultValue: 'Live Record' });
   const displayTitle = propsTitle || storeTitle || fallbackTitle;
-  const isCurrentSessionRecording = Boolean(
-    isRecording &&
-      (recordingSessionId
-        ? activeSessionId === recordingSessionId
-        : sourceHistoryId === 'current' || !sourceHistoryId)
-  );
   const isManualHeaderActionsDisabled = isCurrentSessionRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
@@ -395,7 +400,7 @@ export function TranscriptWorkbench({
         </ErrorBoundary>
       </div>
 
-      {audioUrl && <AudioPlayer />}
+      {isActive && audioUrl && <AudioPlayer />}
 
       <TranscriptSummaryPanel isOpen={isSummaryOpen} onClose={() => setIsSummaryOpen(false)} />
 

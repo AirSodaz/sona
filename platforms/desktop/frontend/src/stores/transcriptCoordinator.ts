@@ -30,6 +30,7 @@ export {
 
 export {
   applyTranscriptUpdateToSession,
+  finalizeLastSegmentForSession,
   setRecordingSessionId,
   updateTranscriptSegmentForSession,
 } from './transcriptStore';

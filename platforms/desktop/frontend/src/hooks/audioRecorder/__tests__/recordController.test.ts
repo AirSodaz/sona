@@ -5,7 +5,7 @@ import {
   registerActiveRecorderStopHandler,
   stopActiveRecording,
 } from '../../../stores/transcriptCoordinator';
-import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../../../stores/transcriptStore';
 import { createRecordController } from '../recordController';
 import type { MutableRefLike } from '../types';
 
@@ -52,13 +52,24 @@ function createDraftHandle(id: string): LiveRecordingDraftHandle {
 describe('recordController stopRecording and coordinator delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useTranscriptSessionStore.setState({
-      segments: [{ id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true }],
+    useTranscriptStore.setState({
+      activeSessionId: 'default',
+      recordingSessionId: null,
+      sessions: { default: { ...DEFAULT_SESSION_DATA } },
     });
   });
 
   it('finalizes native recording draft with WAV path when stopped normally', async () => {
     const liveDraft = createDraftHandle('draft-1');
+    useTranscriptStore.setState({
+      activeSessionId: 'rec-session-1',
+      recordingSessionId: 'rec-session-1',
+    });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('rec-session-1', [
+        { id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true },
+      ]);
     const usingNativeCaptureRef = createRef(true);
     const liveDraftRef = createRef<LiveRecordingDraftHandle | null>(liveDraft);
     const persistNativeRecording = vi.fn().mockResolvedValue(undefined);
@@ -120,6 +131,15 @@ describe('recordController stopRecording and coordinator delegation', () => {
 
   it('discards native recording draft when discard option is requested via coordinator', async () => {
     const liveDraft = createDraftHandle('draft-2');
+    useTranscriptStore.setState({
+      activeSessionId: 'rec-session-2',
+      recordingSessionId: 'rec-session-2',
+    });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('rec-session-2', [
+        { id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true },
+      ]);
     const usingNativeCaptureRef = createRef(true);
     const liveDraftRef = createRef<LiveRecordingDraftHandle | null>(liveDraft);
     const persistNativeRecording = vi.fn().mockResolvedValue(undefined);

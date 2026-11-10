@@ -88,7 +88,6 @@ export interface TranscriptStore {
   // --- Core State ---
   activeSessionId: string;
   createSessionId: string;
-  projectsSessionId: string | null;
   recordingSessionId: string | null;
   sessions: Record<string, SessionData>;
   // --- Runtime (Global) ---
@@ -126,6 +125,7 @@ export interface TranscriptStore {
     title?: string | null,
     icon?: string | null
   ) => void;
+  activateSession: (sessionId: string) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
   clearTranscriptSegments: () => void;
   clearSegments: () => void;
@@ -171,6 +171,7 @@ export interface TranscriptStore {
     rightTranslation?: string
   ) => string | null;
   finalizeLastSegment: () => void;
+  finalizeLastSegmentForSession: (sessionId: string) => void;
   applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
   applyTranscriptUpdateToSession: (
     sessionId: string,
@@ -269,7 +270,6 @@ function calculateSegmentUpdate(
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   activeSessionId: 'default',
   createSessionId: 'default',
-  projectsSessionId: null,
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
   mode: 'create',
@@ -323,23 +323,29 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const recId = get().recordingSessionId;
       if (focus === undefined) {
         const createId = get().createSessionId;
+        const recordingSessionExists = Boolean(recId && get().sessions[recId]);
         const targetSessionId =
-          recId && get().sessions[recId]
+          recId && recordingSessionExists
             ? recId
             : createId && get().sessions[createId]
               ? createId
               : 'default';
-        set({ mode: 'create', activeSessionId: targetSessionId, createSessionId: targetSessionId });
+        set({
+          mode: 'create',
+          activeSessionId: targetSessionId,
+          createSessionId: targetSessionId,
+          // Recording controls live in the live pane; never restore behind a stale batch focus.
+          ...(recordingSessionExists ? { ingestionFocus: 'live' as const } : {}),
+        });
         return;
       }
       const nextFocus = focus;
-      let targetSessionId = 'default';
-      if (nextFocus === 'live') {
-        targetSessionId = recId && get().sessions[recId] ? recId : 'default';
-      } else if (nextFocus === 'batch') {
-        const activeItemId = activeBatchItemIdResolver?.();
-        targetSessionId = activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
-      }
+      const focusItemId =
+        nextFocus === 'live' ? recId : nextFocus === 'batch' ? activeBatchItemIdResolver?.() : null;
+      // An explicit focus selects that ingestion surface fresh: the recording session
+      // (live) or active batch item, otherwise the empty default pane. Only a focus-less
+      // tab switch restores the previous create session.
+      const targetSessionId = focusItemId && get().sessions[focusItemId] ? focusItemId : 'default';
       set({
         mode: 'create',
         ingestionFocus: nextFocus,
@@ -399,18 +405,21 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return;
     }
     const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const sessionId = sourceHistoryId || uuidv4();
+    // Never clobber the in-progress recording (e.g. backup import reloading the draft from disk).
+    if (get().recordingSessionId === sessionId) {
+      return;
+    }
     if (sourceHistoryId) {
       const autoSaveStates = { ...get().autoSaveStates };
       delete autoSaveStates[sourceHistoryId];
       delete autoSaveStates.current;
       set({ autoSaveStates });
     }
-    const sessionId = sourceHistoryId || uuidv4();
     const currentMode = get().mode;
     set((state) => ({
       activeSessionId: sessionId,
       createSessionId: currentMode === 'create' ? sessionId : state.createSessionId,
-      projectsSessionId: currentMode === 'projects' ? sessionId : state.projectsSessionId,
       sessions: {
         ...state.sessions,
         [sessionId]: {
@@ -427,7 +436,19 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   loadTranscriptSession: (segments, sourceHistoryId, title, icon) => {
     get().openSession({ segments, sourceHistoryId, title, icon });
   },
+  activateSession: (sessionId) => {
+    if (!get().sessions[sessionId]) {
+      return;
+    }
+    set({ activeSessionId: sessionId });
+  },
   clearActiveTranscriptSession: (options) => {
+    const state = get();
+    // The recording session is off-limits while a record session owns it; callers like
+    // backup import and history deletion must not wipe the in-progress transcript.
+    if (state.recordingSessionId && state.activeSessionId === state.recordingSessionId) {
+      return;
+    }
     updateActiveSession(set, (session) => ({
       ...DEFAULT_SESSION_DATA,
       title: options?.title ?? session.title,
@@ -615,6 +636,22 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const segments = [...session.segments];
       segments[lastIndex] = { ...lastSegment, isFinal: true };
       return { segments };
+    }),
+  finalizeLastSegmentForSession: (sessionId) =>
+    set((state: TranscriptStore) => {
+      const session = state.sessions[sessionId];
+      if (!session || session.segments.length === 0) return state;
+      const lastIndex = session.segments.length - 1;
+      const lastSegment = session.segments[lastIndex];
+      if (lastSegment.isFinal) return state;
+      const segments = [...session.segments];
+      segments[lastIndex] = { ...lastSegment, isFinal: true };
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...session, segments },
+        },
+      };
     }),
   applyTranscriptUpdate: (update, activeSegmentIdParam) => {
     updateActiveSession(set, (session) => {
@@ -878,6 +915,10 @@ export const updateTranscriptSegmentForSession = (
   updates: Partial<Omit<TranscriptSegment, 'id'>>
 ): void => {
   useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
+};
+
+export const finalizeLastSegmentForSession = (sessionId: string): void => {
+  useTranscriptStore.getState().finalizeLastSegmentForSession(sessionId);
 };
 
 export const patchSegmentTranslation = (id: string, translation: string): void => {
