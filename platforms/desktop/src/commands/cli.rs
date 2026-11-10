@@ -152,6 +152,29 @@ mod win_path {
     use winreg::enums::*;
     use winreg::{RegKey, RegValue};
 
+    fn expand_env_vars(raw: &str) -> String {
+        let wide: Vec<u16> = raw.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            unsafe extern "system" {
+                fn ExpandEnvironmentStringsW(lpSrc: *const u16, lpDst: *mut u16, nSize: u32)
+                -> u32;
+            }
+            let needed = ExpandEnvironmentStringsW(wide.as_ptr(), std::ptr::null_mut(), 0);
+            if needed == 0 {
+                return raw.to_string();
+            }
+            let mut buf = vec![0u16; needed as usize];
+            let written = ExpandEnvironmentStringsW(wide.as_ptr(), buf.as_mut_ptr(), needed);
+            if written == 0 || written > needed {
+                return raw.to_string();
+            }
+            if let Some(&0) = buf.last() {
+                buf.pop();
+            }
+            String::from_utf16_lossy(&buf)
+        }
+    }
+
     fn strip_verbatim_prefix(p: &str) -> &str {
         if let Some(stripped) = p.strip_prefix(r"\\?\") {
             stripped
@@ -161,7 +184,8 @@ mod win_path {
     }
 
     fn normalize_path_cmp(p: &str) -> String {
-        let unquoted = p.trim().trim_matches('"');
+        let expanded = expand_env_vars(p);
+        let unquoted = expanded.trim().trim_matches('"');
         let stripped = strip_verbatim_prefix(unquoted);
         stripped.trim_end_matches(['\\', '/']).to_lowercase()
     }
@@ -209,7 +233,8 @@ mod win_path {
             for p in user_path.split(';') {
                 let trimmed = p.trim().trim_matches('"');
                 if !trimmed.is_empty() {
-                    paths.push(PathBuf::from(trimmed));
+                    let expanded = expand_env_vars(trimmed);
+                    paths.push(PathBuf::from(expanded));
                 }
             }
         }
@@ -217,7 +242,8 @@ mod win_path {
             for p in sys_path.split(';') {
                 let trimmed = p.trim().trim_matches('"');
                 if !trimmed.is_empty() {
-                    paths.push(PathBuf::from(trimmed));
+                    let expanded = expand_env_vars(trimmed);
+                    paths.push(PathBuf::from(expanded));
                 }
             }
         }
@@ -427,12 +453,20 @@ pub async fn cli_set_path_enabled(enabled: bool) -> Result<CliStatus, String> {
                         .and_then(|p| p.parent())
                         .map(|p| p.join("target").join("debug").join("sona-bin-shim.exe")),
                 ];
+                let mut copied = false;
                 for candidate in shim_candidates.into_iter().flatten() {
                     if candidate.is_file() {
                         let _ = std::fs::copy(&candidate, &cli_shim);
                         let _ = std::fs::copy(&candidate, &mcp_shim);
+                        copied = true;
                         break;
                     }
+                }
+                if !copied && !cli_shim.exists() {
+                    return Err(format!(
+                        "Cannot initialize CLI in {}: sona-bin-shim.exe was not found. The shim trampoline is required to run CLI tools without DLL search conflicts.",
+                        bin.display()
+                    ));
                 }
             }
         }

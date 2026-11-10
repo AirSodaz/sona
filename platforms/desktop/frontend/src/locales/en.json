@@ -258,7 +258,7 @@
       "remove_from_path": "Remove from PATH",
       "system_managed_path": "Managed by system package manager or desktop bundle.",
       "path_updated_title": "Environment Variable Updated",
-      "path_restart_tip": "Please reopen your terminal, CMD, PowerShell, or code editor to load the updated PATH.",
+      "path_restart_tip": "Please reopen your terminal, CMD, PowerShell, or code editor to load the updated PATH. On Linux/macOS, ensure ~/.local/bin is in your PATH.",
       "path_toggle_aria": "Toggle Sona CLI in PATH",
       "completions_title": "Shell Auto-Completion",
       "shell_picker_title": "Terminal Shell",

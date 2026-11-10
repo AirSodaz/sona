@@ -258,7 +258,7 @@
       "remove_from_path": "PATH에서 제거",
       "system_managed_path": "시스템 패키지 관리자 또는 데스크톱 번들에 의해 관리됩니다.",
       "path_updated_title": "환경 변수가 업데이트되었습니다",
-      "path_restart_tip": "터미널, PowerShell 또는 코드 편집기를 다시 시작하여 최신 PATH를 적용하세요.",
+      "path_restart_tip": "터미널, PowerShell 또는 코드 편집기를 다시 시작하여 최신 PATH를 적용하세요. Linux/macOS의 경우 ~/.local/bin이 PATH에 포함되어 있는지 확인하세요.",
       "path_toggle_aria": "Sona CLI의 시스템 PATH 상태 전환",
       "completions_title": "셸 자동 완성 (Completions)",
       "shell_picker_title": "터미널 Shell 선택",

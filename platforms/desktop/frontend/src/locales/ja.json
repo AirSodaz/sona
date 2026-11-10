@@ -258,7 +258,7 @@
       "remove_from_path": "PATH から削除",
       "system_managed_path": "システムパッケージマネージャーまたはデスクトップバンドルにより管理されています。",
       "path_updated_title": "環境変数が更新されました",
-      "path_restart_tip": "ターミナル、PowerShell、またはエディターを再起動して最新の PATH を反映させてください。",
+      "path_restart_tip": "ターミナル、PowerShell、またはエディターを再起動して最新の PATH を反映させてください。Linux/macOS では ~/.local/bin が PATH に含まれていることを確認してください。",
       "path_toggle_aria": "Sona CLI の PATH 状態を切り替え",
       "completions_title": "シェル自動補完 (Completions)",
       "shell_picker_title": "ターミナル Shell の選択",

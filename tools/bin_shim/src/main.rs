@@ -11,7 +11,11 @@ pub fn resolve_target_exe(shim_exe: &Path) -> Result<PathBuf, String> {
     let file_name = shim_exe
         .file_name()
         .ok_or_else(|| "cannot determine executable file name".to_string())?;
-    Ok(root_dir.join(file_name))
+    let target = root_dir.join(file_name);
+    if target == shim_exe {
+        return Err("target executable resolves to the shim binary itself".to_string());
+    }
+    Ok(target)
 }
 
 fn main() -> ExitCode {
@@ -30,6 +34,16 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    if target_exe == current_exe
+        || target_exe.canonicalize().ok() == current_exe.canonicalize().ok()
+    {
+        eprintln!(
+            "sona-bin-shim: target executable resolves to the shim binary itself: {}",
+            target_exe.display()
+        );
+        return ExitCode::FAILURE;
+    }
 
     if !target_exe.is_file() {
         eprintln!(
@@ -82,5 +96,11 @@ mod tests {
         let fake_mcp = Path::new("/opt/sona/bin/sona-mcp");
         let target_mcp = resolve_target_exe(fake_mcp).unwrap();
         assert_eq!(target_mcp, PathBuf::from("/opt/sona/sona-mcp"));
+    }
+
+    #[test]
+    fn test_resolve_target_exe_rejects_self() {
+        let root_shim = Path::new("C:\\sona-cli.exe");
+        assert!(resolve_target_exe(root_shim).is_err());
     }
 }

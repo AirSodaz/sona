@@ -258,7 +258,7 @@
       "remove_from_path": "从系统 PATH 移除",
       "system_managed_path": "由系统包管理器或系统目录自动管理。",
       "path_updated_title": "环境变量已更新",
-      "path_restart_tip": "请重新打开终端、PowerShell 或代码编辑器窗口以加载最新生效的 PATH。",
+      "path_restart_tip": "请重新打开终端、PowerShell 或代码编辑器窗口以加载最新生效的 PATH。在 Linux/macOS 上，请确保 ~/.local/bin 在您的 PATH 中。",
       "path_toggle_aria": "切换 Sona CLI 的系统 PATH 状态",
       "completions_title": "Shell 自动补全 (Completions)",
       "shell_picker_title": "选择终端 Shell",

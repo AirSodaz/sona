@@ -94,6 +94,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
   fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
+  fs.writeFileSync(path.join(releaseDir, 'sona-bin-shim.exe'), 'shim');
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
   fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');
@@ -124,12 +125,14 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   assert.deepEqual(cargoCalls, [
     ['cargo', ['build', '-p', 'sona-cli', '--release', '--target', target]],
     ['cargo', ['build', '-p', 'sona-mcp', '--release', '--target', target]],
+    ['cargo', ['build', '-p', 'sona-bin-shim', '--release', '--target', target]],
   ]);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-cli-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-mcp-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'optional-runtime.dll')), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'llama.dll')), true);
+  assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'sona-bin-shim.exe')), true);
 
   const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
   assert.deepEqual(generatedConfig.bundle.externalBin, [
@@ -153,6 +156,7 @@ test('desktop bundle preparer excludes FFmpeg when includeFfmpeg is false', asyn
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
   fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
+  fs.writeFileSync(path.join(releaseDir, 'sona-bin-shim.exe'), 'shim');
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
   fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');

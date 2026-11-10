@@ -179,7 +179,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 </strong>{' '}
                 {t('tools.cli.path_restart_tip', {
                   defaultValue:
-                    'Please restart your terminal, CMD, PowerShell, or code editor to load the updated PATH.',
+                    'Please restart your terminal, CMD, PowerShell, or code editor to load the updated PATH. On Linux/macOS, ensure ~/.local/bin is in your PATH.',
                 })}
               </div>
             </div>
