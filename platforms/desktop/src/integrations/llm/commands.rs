@@ -4,31 +4,34 @@ use serde::Serialize;
 use sona_application::llm::{
     LlmRuntimeService, LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskService,
 };
+use sona_sqlite::Database;
 use sona_core::llm::runtime::LlmStreamDelta;
+use sona_core::ports::event::EventEmitterPort;
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmStreamingPort, LlmTaskDelayPort,
     LlmTranslationPort, LlmTranslationRequest,
 };
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 #[derive(Clone)]
 struct CommandEventEmitter {
-    app: AppHandle,
+    emitter: Arc<dyn EventEmitterPort>,
 }
 
 impl CommandEventEmitter {
-    fn new(app: AppHandle) -> Self {
-        Self { app }
+    fn new(emitter: Arc<dyn EventEmitterPort>) -> Self {
+        Self { emitter }
     }
 
     fn emit<T>(&self, event: &str, payload: T) -> Result<(), String>
     where
         T: Serialize + Clone,
     {
-        self.app
-            .emit(event, payload)
+        let value = serde_json::to_value(payload).map_err(|error| error.to_string())?;
+        self.emitter
+            .emit(event, value)
             .map_err(|error| error.to_string())
     }
 
@@ -50,15 +53,22 @@ impl CommandEventEmitter {
 
 #[derive(Clone)]
 struct UsageRecorder {
-    app: AppHandle,
+    emitter: Arc<dyn EventEmitterPort>,
+    database: Option<Arc<Database>>,
     config: LlmConfig,
     category: LlmUsageCategory,
 }
 
 impl UsageRecorder {
-    fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
+    fn new(
+        emitter: Arc<dyn EventEmitterPort>,
+        database: Option<Arc<Database>>,
+        config: LlmConfig,
+        category: LlmUsageCategory,
+    ) -> Self {
         Self {
-            app,
+            emitter,
+            database,
             config,
             category,
         }
@@ -70,24 +80,32 @@ impl UsageRecorder {
 
     fn record_usage(&self, usage: Option<TokenUsage>) {
         let occurred_at = crate::platform::time::utc_now_rfc3339();
-        if let Err(error) = crate::platform::llm_usage::record_usage_for_app(
-            &self.app,
-            &UsageRecord {
-                occurred_at: occurred_at.clone(),
-                provider: self.config.provider.as_str(),
-                category: self.category,
-                usage: usage.clone(),
-            },
-        ) {
-            log::warn!(
-                "[LLM] failed to persist usage: provider={:?} category={:?} error={}",
-                self.config.provider,
-                self.category,
-                error
-            );
+        if let Some(db) = &self.database {
+            if let Err(error) = crate::platform::llm_usage::record_usage(
+                db.as_ref(),
+                &UsageRecord {
+                    occurred_at: occurred_at.clone(),
+                    provider: self.config.provider.as_str(),
+                    category: self.category,
+                    usage: usage.clone(),
+                },
+            ) {
+                log::warn!(
+                    "[LLM] failed to persist usage: provider={:?} category={:?} error={}",
+                    self.config.provider,
+                    self.category,
+                    error
+                );
+            }
         }
 
-        emit_llm_usage_event(&self.app, &self.config, self.category, occurred_at, usage);
+        emit_llm_usage_event(
+            self.emitter.as_ref(),
+            &self.config,
+            self.category,
+            occurred_at,
+            usage,
+        );
     }
 }
 
@@ -98,14 +116,17 @@ struct DesktopTaskRuntime {
 }
 
 impl DesktopTaskRuntime {
-    fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
-        let models_dir =
-            crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-        let cache_dir = app.path().app_cache_dir().ok();
-        let services = app.try_state::<crate::services::DesktopServices>();
+    fn new(
+        services: &crate::services::DesktopServices,
+        config: LlmConfig,
+        category: LlmUsageCategory,
+    ) -> Self {
+        let models_dir = Some(services.active_models_dir());
+        let cache_dir = Some(services.active_data_dir().join("cache"));
+        let db = services.sqlite.current_database().ok();
         Self {
-            inner: DesktopLlmAdapter::with_services(models_dir, cache_dir, services.as_deref()),
-            usage: UsageRecorder::new(app, config, category),
+            inner: DesktopLlmAdapter::with_services(models_dir, cache_dir, Some(services)),
+            usage: UsageRecorder::new(services.emitter.clone(), db, config, category),
         }
     }
 }
@@ -176,31 +197,31 @@ struct CommandTaskObserver {
 }
 
 impl CommandTaskObserver {
-    fn polish<F>(app: AppHandle, on_chunk: F) -> Self
+    fn polish<F>(emitter: Arc<dyn EventEmitterPort>, on_chunk: F) -> Self
     where
         F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
     {
         Self {
-            events: CommandEventEmitter::new(app),
+            events: CommandEventEmitter::new(emitter),
             polish_chunk: Some(Mutex::new(Box::new(on_chunk))),
             translate_chunk: None,
         }
     }
 
-    fn translate<F>(app: AppHandle, on_chunk: F) -> Self
+    fn translate<F>(emitter: Arc<dyn EventEmitterPort>, on_chunk: F) -> Self
     where
         F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
     {
         Self {
-            events: CommandEventEmitter::new(app),
+            events: CommandEventEmitter::new(emitter),
             polish_chunk: None,
             translate_chunk: Some(Mutex::new(Box::new(on_chunk))),
         }
     }
 
-    fn summary(app: AppHandle) -> Self {
+    fn summary(emitter: Arc<dyn EventEmitterPort>) -> Self {
         Self {
-            events: CommandEventEmitter::new(app),
+            events: CommandEventEmitter::new(emitter),
             polish_chunk: None,
             translate_chunk: None,
         }
@@ -248,37 +269,41 @@ where
 }
 
 pub(crate) async fn complete_llm_command(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: LlmCompletionRequest,
 ) -> Result<LlmCompletionResponse, String> {
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
-    let usage = UsageRecorder::new(app.clone(), request.config.clone(), category);
-    let models_dir =
-        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    let cache_dir = app.path().app_cache_dir().ok();
-    let services = app.try_state::<crate::services::DesktopServices>();
-    let adapter = DesktopLlmAdapter::with_services(models_dir, cache_dir, services.as_deref());
+    let db = services.sqlite.current_database().ok();
+    let usage = UsageRecorder::new(
+        services.emitter.clone(),
+        db,
+        request.config.clone(),
+        category,
+    );
+    let models_dir = Some(services.active_models_dir());
+    let cache_dir = Some(services.active_data_dir().join("cache"));
+    let adapter = DesktopLlmAdapter::with_services(models_dir, cache_dir, Some(services));
     let response = complete_llm_with_port(request, adapter).await?;
     usage.record_usage(response.usage.clone());
     Ok(response)
 }
 
 pub(crate) async fn generate_llm_text_command(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
-    Ok(complete_llm_command(app, request.into()).await?.text)
+    Ok(complete_llm_command(services, request.into()).await?.text)
 }
 
 pub(crate) async fn polish_transcript_segments_command(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: PolishSegmentsRequest,
 ) -> Result<Vec<PolishedSegment>, String> {
-    polish_transcript_segments_with_observer(app, request, |_| Ok(())).await
+    polish_transcript_segments_with_observer(services, request, |_| Ok(())).await
 }
 
 pub(super) async fn polish_transcript_segments_with_observer<F>(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: PolishSegmentsRequest,
     on_chunk_items: F,
 ) -> Result<Vec<PolishedSegment>, String>
@@ -286,11 +311,11 @@ where
     F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
 {
     let runtime = DesktopTaskRuntime::new(
-        app.clone(),
+        services,
         request.config.clone(),
         LlmUsageCategory::Polish,
     );
-    let observer = CommandTaskObserver::polish(app, on_chunk_items);
+    let observer = CommandTaskObserver::polish(services.emitter.clone(), on_chunk_items);
     LlmTaskService::new(runtime)
         .polish(request, &observer)
         .await
@@ -298,14 +323,14 @@ where
 }
 
 pub(crate) async fn translate_transcript_segments_command(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: TranslateSegmentsRequest,
 ) -> Result<Vec<TranslatedSegment>, String> {
-    translate_transcript_segments_with_observer(app, request, |_| Ok(())).await
+    translate_transcript_segments_with_observer(services, request, |_| Ok(())).await
 }
 
 pub(super) async fn translate_transcript_segments_with_observer<F>(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: TranslateSegmentsRequest,
     on_chunk_items: F,
 ) -> Result<Vec<TranslatedSegment>, String>
@@ -313,11 +338,11 @@ where
     F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
 {
     let runtime = DesktopTaskRuntime::new(
-        app.clone(),
+        services,
         request.config.clone(),
         LlmUsageCategory::Translation,
     );
-    let observer = CommandTaskObserver::translate(app, on_chunk_items);
+    let observer = CommandTaskObserver::translate(services.emitter.clone(), on_chunk_items);
     LlmTaskService::new(runtime)
         .translate(request, &observer)
         .await
@@ -325,19 +350,37 @@ where
 }
 
 pub(crate) async fn summarize_transcript_command(
-    app: AppHandle,
+    services: &crate::services::DesktopServices,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
     let runtime = DesktopTaskRuntime::new(
-        app.clone(),
+        services,
         request.config.clone(),
         LlmUsageCategory::Summary,
     );
-    let observer = CommandTaskObserver::summary(app);
+    let observer = CommandTaskObserver::summary(services.emitter.clone());
     LlmTaskService::new(runtime)
         .summarize(request, &observer)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[allow(dead_code)]
+pub(crate) async fn polish_transcript_segments_command_for_app(
+    app: AppHandle,
+    request: PolishSegmentsRequest,
+) -> Result<Vec<PolishedSegment>, String> {
+    let services = app.state::<crate::services::DesktopServices>();
+    polish_transcript_segments_command(&services, request).await
+}
+
+#[allow(dead_code)]
+pub(crate) async fn translate_transcript_segments_command_for_app(
+    app: AppHandle,
+    request: TranslateSegmentsRequest,
+) -> Result<Vec<TranslatedSegment>, String> {
+    let services = app.state::<crate::services::DesktopServices>();
+    translate_transcript_segments_command(&services, request).await
 }
 
 #[allow(dead_code)]

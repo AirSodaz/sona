@@ -188,7 +188,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             mode: None,
         };
 
-        let polished_items = crate::integrations::llm::polish_transcript_segments_command(
+        let polished_items = crate::integrations::llm::polish_transcript_segments_command_for_app(
             app_handle.clone(),
             request,
         )
@@ -239,7 +239,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             post_process_replacements: None,
         };
 
-        let translated_items = crate::integrations::llm::translate_transcript_segments_command(
+        let translated_items = crate::integrations::llm::translate_transcript_segments_command_for_app(
             app_handle.clone(),
             request,
         )

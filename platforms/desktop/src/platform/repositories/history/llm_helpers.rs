@@ -28,6 +28,7 @@ where
     .await
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_llm_db_task_with_app<R, T, F, E>(
     app: &AppHandle<R>,
     task: F,

@@ -5,55 +5,54 @@ use crate::integrations::llm::{
     TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::services::DesktopServices;
-use tauri::{AppHandle, State};
+use tauri::State;
 
 #[tauri::command]
 pub async fn generate_llm_text(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
-    crate::integrations::llm::generate_llm_text_command(app, request).await
+    crate::integrations::llm::generate_llm_text_command(&services, request).await
 }
 
 #[tauri::command]
 pub async fn complete_llm(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: LlmCompletionRequest,
 ) -> Result<LlmCompletionResponse, String> {
-    crate::integrations::llm::complete_llm_command(app, request).await
+    crate::integrations::llm::complete_llm_command(&services, request).await
 }
 
 #[tauri::command]
 pub async fn polish_transcript_segments(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: PolishSegmentsRequest,
 ) -> Result<Vec<PolishedSegment>, String> {
-    crate::integrations::llm::polish_transcript_segments_command(app, request).await
+    crate::integrations::llm::polish_transcript_segments_command(&services, request).await
 }
 
 #[tauri::command]
 pub async fn translate_transcript_segments(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: TranslateSegmentsRequest,
 ) -> Result<Vec<TranslatedSegment>, String> {
-    crate::integrations::llm::translate_transcript_segments_command(app, request).await
+    crate::integrations::llm::translate_transcript_segments_command(&services, request).await
 }
 
 #[tauri::command]
 pub async fn summarize_transcript(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
-    crate::integrations::llm::summarize_transcript_command(app, request).await
+    crate::integrations::llm::summarize_transcript_command(&services, request).await
 }
 
 #[tauri::command]
 pub async fn run_transcript_llm_job(
-    app: AppHandle,
     services: State<'_, DesktopServices>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
-    crate::integrations::llm::run_transcript_llm_job_command(app, services, request).await
+    crate::integrations::llm::run_transcript_llm_job_command(&services, request).await
 }
 
 #[tauri::command]
@@ -77,7 +76,7 @@ pub async fn describe_llm_model(
 }
 
 #[tauri::command]
-pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
+pub async fn llm_usage_ensure_storage() -> Result<(), String> {
     Ok(())
 }
 
