@@ -20,7 +20,9 @@ import {
   setTranscriptSegments,
   updateTranscriptSegment,
 } from '../../stores/transcriptCoordinator';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../../stores/transcriptStore';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
 import { historyService, type TranscriptEditCommitResult } from '../historyService';
 import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
@@ -240,5 +242,167 @@ describe('transcriptAutoSaveRuntime', () => {
     // Stale conflict should NOT overwrite the newly rebaselined 'saved' state
     const state = useTranscriptSidecarStore.getState().autoSaveStates['history-1'];
     expect(state?.status).toBe('saved');
+  });
+
+  it('auto-saves background recording segments while user is active on another document', async () => {
+    // 1. Setup foreground session
+    openTranscriptSession({
+      sourceHistoryId: 'foreground-doc',
+      segments: [{ id: 'fg-1', text: 'Foreground Base', start: 0, end: 1, isFinal: true }],
+    });
+
+    // 2. Setup background recording session
+    useTranscriptStore.setState((state) => ({
+      ...state,
+      recordingSessionId: 'background-rec',
+      sessions: {
+        ...state.sessions,
+        'background-rec': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'background-rec',
+          segments: [],
+        },
+      },
+    }));
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+
+    transcriptAutoSaveRuntime.start();
+
+    // 3. New segment arrives for background recording
+    const bgSegment = { id: 'bg-1', text: 'Live audio chunk', start: 0, end: 2, isFinal: true };
+    useTranscriptStore.getState().setSegmentsForSession('background-rec', [bgSegment]);
+
+    // Background recording uses LIVE_DRAFT_AUTO_SAVE_DELAY_MS (500ms)
+    await vi.advanceTimersByTimeAsync(300);
+    expect(historyService.commitTranscriptEdit).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(250); // total 550ms
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledTimes(1);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'background-rec',
+      expect.any(String),
+      expect.any(Array),
+      [expect.objectContaining({ id: 'bg-1', text: 'Live audio chunk' })]
+    );
+  });
+
+  it('handles concurrent foreground editing and background recording without timer collision', async () => {
+    openTranscriptSession({
+      sourceHistoryId: 'foreground-doc',
+      segments: [{ id: 'fg-1', text: 'Foreground Base', start: 0, end: 1, isFinal: true }],
+    });
+
+    useTranscriptStore.setState((state) => ({
+      ...state,
+      recordingSessionId: 'background-rec',
+      sessions: {
+        ...state.sessions,
+        'background-rec': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'background-rec',
+          segments: [],
+        },
+      },
+    }));
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+
+    transcriptAutoSaveRuntime.start();
+
+    // At t=0: Foreground edit occurs (delay = 2000ms)
+    updateTranscriptSegment('fg-1', { text: 'Foreground Edited' });
+
+    // At t=100: Background recording segment arrives (delay = 500ms)
+    await vi.advanceTimersByTimeAsync(100);
+    const bgSegment = { id: 'bg-1', text: 'Background speech', start: 0, end: 1, isFinal: true };
+    useTranscriptStore.getState().setSegmentsForSession('background-rec', [bgSegment]);
+
+    // At t=650: Background 500ms debounce expires (100 + 500 = 600ms)
+    await vi.advanceTimersByTimeAsync(550);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledTimes(1);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'background-rec',
+      expect.any(String),
+      expect.any(Array),
+      [expect.objectContaining({ text: 'Background speech' })]
+    );
+
+    // At t=2100: Foreground 2000ms debounce expires
+    await vi.advanceTimersByTimeAsync(1450);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledTimes(2);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'foreground-doc',
+      expect.any(String),
+      expect.any(Array),
+      [expect.objectContaining({ text: 'Foreground Edited' })]
+    );
+  });
+
+  it('flushes pending changes across all sessions when flushPending is called with no arguments', async () => {
+    openTranscriptSession({
+      sourceHistoryId: 'foreground-doc',
+      segments: [{ id: 'fg-1', text: 'Foreground Base', start: 0, end: 1, isFinal: true }],
+    });
+
+    useTranscriptStore.setState((state) => ({
+      ...state,
+      recordingSessionId: 'background-rec',
+      sessions: {
+        ...state.sessions,
+        'background-rec': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'background-rec',
+          segments: [],
+        },
+      },
+    }));
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+
+    transcriptAutoSaveRuntime.start();
+
+    // Trigger changes in both
+    updateTranscriptSegment('fg-1', { text: 'Foreground Unflushed' });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('background-rec', [
+        { id: 'bg-1', text: 'Background Unflushed', start: 0, end: 1, isFinal: true },
+      ]);
+
+    // Immediately call flushPending() with no arguments (e.g. app quit / quitGuard)
+    await transcriptAutoSaveRuntime.flushPending();
+
+    const commitCalls = vi.mocked(historyService.commitTranscriptEdit).mock.calls;
+    expect(commitCalls.length).toBe(2);
+    const committedHistoryIds = commitCalls.map((c) => c[0]);
+    expect(committedHistoryIds).toContain('foreground-doc');
+    expect(committedHistoryIds).toContain('background-rec');
+  });
+
+  it('flushes active session when user switches away', async () => {
+    openTranscriptSession({
+      sourceHistoryId: 'session-1',
+      segments: [{ id: 'seg-1', text: 'Original', start: 0, end: 1, isFinal: true }],
+    });
+
+    transcriptAutoSaveRuntime.start();
+
+    // User edits session-1
+    updateTranscriptSegment('seg-1', { text: 'Unsaved Edit Before Switch' });
+
+    // User switches immediately to session-2 before 2000ms timer completes
+    await vi.advanceTimersByTimeAsync(200);
+    openTranscriptSession({
+      sourceHistoryId: 'session-2',
+      segments: [{ id: 'seg-2', text: 'Doc 2', start: 0, end: 1, isFinal: true }],
+    });
+
+    // Switching away should have immediately enqueued and drained the edit for session-1
+    await vi.waitFor(() => {
+      expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+        'session-1',
+        expect.any(String),
+        expect.any(Array),
+        [expect.objectContaining({ text: 'Unsaved Edit Before Switch' })]
+      );
+    });
   });
 });

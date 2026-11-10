@@ -1,8 +1,6 @@
 import i18next from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/historyStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
@@ -30,9 +28,9 @@ function getI18nText(key: string, defaultValue: string): string {
 }
 
 class TranscriptAutoSaveRuntime {
-  private timeout: ReturnType<typeof setTimeout> | null = null;
+  private timeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-  private lastFingerprint = '';
+  private lastFingerprints = new Map<string, string>();
 
   private pendingByHistoryId = new Map<string, PendingSave>();
 
@@ -48,6 +46,21 @@ class TranscriptAutoSaveRuntime {
 
   private unsubscribe: (() => void) | null = null;
   private unsubscribeHistoryUpdate: (() => void) | null = null;
+
+  private clearTimeout(historyId: string): void {
+    const timer = this.timeouts.get(historyId);
+    if (timer) {
+      clearTimeout(timer);
+      this.timeouts.delete(historyId);
+    }
+  }
+
+  private clearAllTimeouts(): void {
+    for (const timer of this.timeouts.values()) {
+      clearTimeout(timer);
+    }
+    this.timeouts.clear();
+  }
 
   private beginSession(historyId: string, segments: TranscriptSegment[]): string {
     const editSessionId = uuidv4();
@@ -161,36 +174,89 @@ class TranscriptAutoSaveRuntime {
   }
 
   private queueSave(historyId: string, segments: TranscriptSegment[], delayMs: number) {
-    if (this.timeout) clearTimeout(this.timeout);
+    this.clearTimeout(historyId);
     useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saving');
-    this.timeout = setTimeout(() => {
-      this.timeout = null;
+    const timer = setTimeout(() => {
+      this.timeouts.delete(historyId);
       this.enqueueSave(historyId, segments);
     }, delayMs);
+    this.timeouts.set(historyId, timer);
+  }
+
+  private handleSessionUpdate(historyId: string, segments: TranscriptSegment[], isLive: boolean) {
+    const currentFingerprint = computeSegmentsFingerprint(segments);
+    const lastFingerprint = this.lastFingerprints.get(historyId);
+    if (currentFingerprint === lastFingerprint) return;
+
+    const llmState = useTranscriptSidecarStore.getState().llmStates[historyId];
+    if (llmState?.isPolishing || llmState?.isTranslating || llmState?.isRetranscribing) {
+      this.lastFingerprints.set(historyId, currentFingerprint);
+      return;
+    }
+
+    this.lastFingerprints.set(historyId, currentFingerprint);
+    const delayMs = isLive ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
+    this.queueSave(historyId, segments, delayMs);
   }
 
   async flushPending(
     historyId?: string | null,
     segments?: TranscriptSegment[] | null
   ): Promise<void> {
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
+    const storeState = useTranscriptStore.getState();
 
-    const targetHistoryId = historyId ?? useTranscriptSessionStore.getState().sourceHistoryId;
-    const targetSegments = segments ?? useTranscriptSessionStore.getState().segments;
-    if (targetHistoryId && targetSegments) {
-      this.enqueueSave(targetHistoryId, targetSegments);
+    if (historyId) {
+      this.clearTimeout(historyId);
+      const targetSegments =
+        segments ??
+        storeState.sessions[historyId]?.segments ??
+        (storeState.activeSessionId === historyId
+          ? storeState.sessions[storeState.activeSessionId]?.segments
+          : null);
+      if (targetSegments) {
+        this.enqueueSave(historyId, targetSegments);
+      }
+    } else {
+      const flushedHistoryIds = new Set<string>();
+
+      // Flush any pending debounce timeouts across all sessions
+      for (const pendingHistId of Array.from(this.timeouts.keys())) {
+        this.clearTimeout(pendingHistId);
+        const session =
+          storeState.sessions[pendingHistId] ??
+          (storeState.activeSessionId === pendingHistId
+            ? storeState.sessions[storeState.activeSessionId]
+            : null);
+        if (session?.segments) {
+          this.enqueueSave(pendingHistId, session.segments);
+          flushedHistoryIds.add(pendingHistId);
+        }
+      }
+
+      // Check activeSessionId
+      const activeSession = storeState.sessions[storeState.activeSessionId];
+      const activeHistoryId = activeSession?.sourceHistoryId;
+      if (activeHistoryId && !flushedHistoryIds.has(activeHistoryId) && activeSession.segments) {
+        this.enqueueSave(activeHistoryId, activeSession.segments);
+        flushedHistoryIds.add(activeHistoryId);
+      }
+
+      // Check recordingSessionId
+      const recId = storeState.recordingSessionId;
+      if (recId) {
+        const recSession = storeState.sessions[recId];
+        const recHistoryId = recSession?.sourceHistoryId || recId;
+        if (!flushedHistoryIds.has(recHistoryId) && recSession?.segments) {
+          this.enqueueSave(recHistoryId, recSession.segments);
+          flushedHistoryIds.add(recHistoryId);
+        }
+      }
     }
     await this.ensureDrain();
   }
 
   rebaseline(historyId: string, segments: TranscriptSegment[]): void {
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
+    this.clearTimeout(historyId);
     this.pendingByHistoryId.delete(historyId);
     this.pendingOrder = this.pendingOrder.filter((id) => id !== historyId);
 
@@ -201,53 +267,107 @@ class TranscriptAutoSaveRuntime {
     }
 
     this.beginSession(historyId, segments);
-    this.lastFingerprint = computeSegmentsFingerprint(segments);
+    this.lastFingerprints.set(historyId, computeSegmentsFingerprint(segments));
     useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
   }
 
   start() {
     if (this.unsubscribe) return;
 
-    const initial = useTranscriptSessionStore.getState();
-    this.lastFingerprint = computeSegmentsFingerprint(initial.segments);
-    if (initial.sourceHistoryId) this.beginSession(initial.sourceHistoryId, initial.segments);
+    const initial = useTranscriptStore.getState();
+    const initialActive = initial.sessions[initial.activeSessionId];
+    if (initialActive?.sourceHistoryId) {
+      this.beginSession(initialActive.sourceHistoryId, initialActive.segments);
+      this.lastFingerprints.set(
+        initialActive.sourceHistoryId,
+        computeSegmentsFingerprint(initialActive.segments)
+      );
+    }
+
+    const initialRecId = initial.recordingSessionId;
+    if (initialRecId && initialRecId !== initial.activeSessionId) {
+      const initialRecSession = initial.sessions[initialRecId];
+      const recHistoryId = initialRecSession?.sourceHistoryId || initialRecId;
+      if (initialRecSession) {
+        this.beginSession(recHistoryId, initialRecSession.segments);
+        this.lastFingerprints.set(
+          recHistoryId,
+          computeSegmentsFingerprint(initialRecSession.segments)
+        );
+      }
+    }
 
     this.unsubscribeHistoryUpdate = addHistoryTranscriptUpdateListener((historyId, segments) => {
       this.rebaseline(historyId, segments);
     });
-    this.unsubscribe = useTranscriptSessionStore.subscribe((state, prevState) => {
-      const currentId = state.sourceHistoryId;
-      const prevId = prevState.sourceHistoryId;
 
-      if (prevId !== currentId) {
-        if (this.timeout && prevId) {
-          clearTimeout(this.timeout);
-          this.timeout = null;
-          this.enqueueSave(prevId, prevState.segments);
+    this.unsubscribe = useTranscriptStore.subscribe((state, prevState) => {
+      const prevActiveSession = prevState.sessions[prevState.activeSessionId];
+      const currActiveSession = state.sessions[state.activeSessionId];
+      const prevActiveHistoryId = prevActiveSession?.sourceHistoryId;
+      const currActiveHistoryId = currActiveSession?.sourceHistoryId;
+
+      // A. Handle active session / history transition
+      if (prevActiveHistoryId !== currActiveHistoryId) {
+        if (prevActiveHistoryId && this.timeouts.has(prevActiveHistoryId)) {
+          this.clearTimeout(prevActiveHistoryId);
+          if (prevActiveSession?.segments) {
+            this.enqueueSave(prevActiveHistoryId, prevActiveSession.segments);
+          }
         }
-        if (currentId) this.beginSession(currentId, state.segments);
-        this.lastFingerprint = computeSegmentsFingerprint(state.segments);
-        return;
+        if (currActiveHistoryId && currActiveSession) {
+          if (!this.editSessionIds.has(currActiveHistoryId)) {
+            this.beginSession(currActiveHistoryId, currActiveSession.segments);
+          }
+          this.lastFingerprints.set(
+            currActiveHistoryId,
+            computeSegmentsFingerprint(currActiveSession.segments)
+          );
+        }
+      } else if (
+        currActiveHistoryId &&
+        currActiveSession &&
+        currActiveSession.segments !== prevActiveSession?.segments
+      ) {
+        const isLive = state.isRecording
+          ? currActiveHistoryId === state.recordingSessionId
+          : state.mode === 'create' && state.ingestionFocus === 'live';
+        this.handleSessionUpdate(currActiveHistoryId, currActiveSession.segments, isLive);
       }
 
-      if (!currentId || state.segments === prevState.segments) return;
-      const currentFingerprint = computeSegmentsFingerprint(state.segments);
-      if (currentFingerprint === this.lastFingerprint) return;
+      // B. Handle recording session transition
+      const prevRecId = prevState.recordingSessionId;
+      const currRecId = state.recordingSessionId;
+      const prevRecSession = prevRecId ? prevState.sessions[prevRecId] : null;
+      const currRecSession = currRecId ? state.sessions[currRecId] : null;
+      const prevRecHistoryId = prevRecSession?.sourceHistoryId || prevRecId;
+      const currRecHistoryId = currRecSession?.sourceHistoryId || currRecId;
 
-      const llmState = useTranscriptSidecarStore.getState().llmStates[currentId];
-      if (llmState?.isPolishing || llmState?.isTranslating || llmState?.isRetranscribing) {
-        this.lastFingerprint = currentFingerprint;
-        return;
+      if (prevRecHistoryId !== currRecHistoryId) {
+        if (prevRecHistoryId && this.timeouts.has(prevRecHistoryId)) {
+          this.clearTimeout(prevRecHistoryId);
+          if (prevRecSession?.segments) {
+            this.enqueueSave(prevRecHistoryId, prevRecSession.segments);
+          }
+        }
+        if (currRecHistoryId && currRecSession) {
+          if (!this.editSessionIds.has(currRecHistoryId)) {
+            this.beginSession(currRecHistoryId, currRecSession.segments);
+          }
+          this.lastFingerprints.set(
+            currRecHistoryId,
+            computeSegmentsFingerprint(currRecSession.segments)
+          );
+        }
       }
 
-      this.lastFingerprint = currentFingerprint;
-      const runtimeState = useTranscriptRuntimeStore.getState();
-      const isLiveIngestion =
-        (runtimeState.isRecording &&
-          state.sourceHistoryId === useTranscriptStore.getState().recordingSessionId) ||
-        (runtimeState.mode === 'create' && runtimeState.ingestionFocus === 'live');
-      const delayMs = isLiveIngestion ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
-      this.queueSave(currentId, state.segments, delayMs);
+      // C. Handle background recording updates
+      if (currRecId && currRecId !== state.activeSessionId) {
+        if (currRecSession && currRecSession.segments !== prevRecSession?.segments) {
+          const recHistoryId = currRecSession.sourceHistoryId || currRecId;
+          this.handleSessionUpdate(recHistoryId, currRecSession.segments, true);
+        }
+      }
     });
   }
 
@@ -256,10 +376,7 @@ class TranscriptAutoSaveRuntime {
     this.unsubscribe = null;
     this.unsubscribeHistoryUpdate?.();
     this.unsubscribeHistoryUpdate = null;
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
+    this.clearAllTimeouts();
   }
 }
 
