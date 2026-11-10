@@ -1,4 +1,4 @@
-import { Bot, Keyboard, Server, Subtitles, Tv } from 'lucide-react';
+import { Bot, Keyboard, Server, Subtitles, Terminal, Tv } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import {
   listMediaServerProfiles,
   testMediaServerConnection,
 } from '../../services/mediaServer/mediaServerService';
+import { useCliStore } from '../../stores/cliStore';
 import {
   useApiServerConfig,
   useConfigStore,
@@ -59,6 +60,12 @@ export function ToolsSidebar(): React.JSX.Element {
       void useMcpStore.getState().fetchStatus();
     }
   }, [mcpStatus]);
+  const cliStatus = useCliStore((state) => state.status);
+  useEffect(() => {
+    if (!cliStatus) {
+      void useCliStore.getState().fetchStatus();
+    }
+  }, [cliStatus]);
   const embyServerName = useToolsStore((state) => state.embyServerName);
   const setEmbyServerName = useToolsStore((state) => state.setEmbyServerName);
   const hasCheckedRef = useRef(false);
@@ -187,6 +194,18 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
     {
+      id: 'cli',
+      nameKey: 'tools.cli.title',
+      defaultName: 'Sona CLI',
+      descKey: 'tools.cli.desc',
+      defaultDesc: 'Standalone command line interface and PATH integration',
+      Icon: Terminal,
+      statusText: cliStatus?.inPath
+        ? t('tools.cli.status_in_path', { defaultValue: 'In PATH' })
+        : t('tools.cli.status_not_in_path', { defaultValue: 'Not in PATH' }),
+      statusType: cliStatus?.inPath ? 'active' : 'inactive',
+    },
+    {
       id: 'emby_sync',
       nameKey: 'tools.media_server.title',
       defaultName: 'Media Server Subtitle Assistant',
@@ -204,6 +223,7 @@ export function ToolsSidebar(): React.JSX.Element {
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
     activeTool === 'mcp' ||
+    activeTool === 'cli' ||
     activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';

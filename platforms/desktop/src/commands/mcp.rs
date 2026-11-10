@@ -73,6 +73,10 @@ pub(crate) fn resolve_sona_mcp_binary_path_with_env<F: Fn(&str) -> Option<String
         if candidate.exists() {
             return (Some(candidate.to_string_lossy().to_string()), true);
         }
+        let in_bin = parent.join("bin").join(binary_name);
+        if in_bin.exists() {
+            return (Some(in_bin.to_string_lossy().to_string()), true);
+        }
         for rel in &[
             "../debug",
             "../release",

@@ -2,6 +2,7 @@ pub mod archive;
 pub mod asr;
 pub mod audio;
 pub mod automation;
+pub mod cli;
 pub mod config;
 pub mod downloads;
 pub mod emby;
@@ -237,5 +238,8 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::media_server::media_server_upload_subtitle,
         crate::commands::media_server::media_server_get_processing_settings,
         crate::commands::media_server::media_server_save_processing_settings,
+        crate::commands::cli::cli_get_status,
+        crate::commands::cli::cli_set_path_enabled,
+        crate::commands::cli::cli_get_completion_script,
     ]
 }

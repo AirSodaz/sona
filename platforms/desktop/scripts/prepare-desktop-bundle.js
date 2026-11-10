@@ -54,6 +54,7 @@ export async function prepareDesktopBundle({
   stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir);
   buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
   buildStandaloneMcp(repoRoot, target, runCommand);
+  buildStandaloneBinShim(repoRoot, target, runCommand);
   stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir);
   cleanupDanglingRuntimeSymlinks(repoRoot, target);
   if (target.includes('apple')) {
@@ -61,6 +62,7 @@ export async function prepareDesktopBundle({
   }
   stageCliSidecar(repoRoot, target, sidecarsDir);
   stageMcpSidecar(repoRoot, target, sidecarsDir);
+  stageBinShim(repoRoot, target, runtimeLibDir);
   if (includeFfmpeg) {
     await stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand);
   }
@@ -108,6 +110,13 @@ function buildStandaloneMcp(repoRoot, target, runCommand) {
   runCommand('cargo', cargoArgs, options);
 }
 
+function buildStandaloneBinShim(repoRoot, target, runCommand) {
+  if (!target.includes('windows')) return;
+  const options = { cwd: repoRoot };
+  const cargoArgs = ['build', '-p', 'sona-bin-shim', '--release', '--target', target];
+  runCommand('cargo', cargoArgs, options);
+}
+
 function stageMcpSidecar(repoRoot, target, sidecarsDir) {
   const sourcePath = path.join(repoRoot, 'target', target, 'release', mcpBinaryName(target));
   if (!fs.existsSync(sourcePath)) {
@@ -120,6 +129,21 @@ function stageMcpSidecar(repoRoot, target, sidecarsDir) {
 
 function mcpBinaryName(target) {
   return target.includes('windows') ? 'sona-mcp.exe' : 'sona-mcp';
+}
+
+function stageBinShim(repoRoot, target, runtimeLibDir) {
+  if (!target.includes('windows')) return;
+  const sourceCandidates = [
+    path.join(repoRoot, 'target', target, 'release', 'sona-bin-shim.exe'),
+    path.join(repoRoot, 'target', 'release', 'sona-bin-shim.exe'),
+  ];
+  for (const candidate of sourceCandidates) {
+    if (fs.existsSync(candidate)) {
+      fs.copyFileSync(candidate, path.join(runtimeLibDir, 'sona-bin-shim.exe'));
+      return;
+    }
+  }
+  throw new Error(`Missing release sona-bin-shim binary for ${target}: ${sourceCandidates[0]}`);
 }
 
 async function stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand) {
