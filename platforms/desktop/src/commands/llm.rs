@@ -5,7 +5,7 @@ use crate::integrations::llm::{
     TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::services::DesktopServices;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn generate_llm_text(
@@ -58,23 +58,21 @@ pub async fn run_transcript_llm_job(
 
 #[tauri::command]
 pub async fn list_llm_models(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let models_dir =
-        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    let cache_dir = app.path().app_cache_dir().ok();
+    let models_dir = Some(services.active_models_dir());
+    let cache_dir = Some(services.active_data_dir().join("cache"));
     crate::integrations::llm::list_llm_models_with_dirs(request, models_dir, cache_dir).await
 }
 
 #[tauri::command]
 pub async fn describe_llm_model(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {
-    let models_dir =
-        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    let cache_dir = app.path().app_cache_dir().ok();
+    let models_dir = Some(services.active_models_dir());
+    let cache_dir = Some(services.active_data_dir().join("cache"));
     crate::integrations::llm::describe_llm_model_with_dirs(config, models_dir, cache_dir).await
 }
 
@@ -84,28 +82,36 @@ pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
-    crate::platform::llm_usage::read_raw(&app)
+pub async fn llm_usage_read_raw(services: State<'_, DesktopServices>) -> Result<String, String> {
+    let db = services.sqlite.current_database()?;
+    crate::platform::llm_usage::read_raw(db.as_ref())
 }
 
 #[tauri::command]
-pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
-    crate::platform::llm_usage::replace_raw(&app, content)
+pub async fn llm_usage_replace_raw(
+    services: State<'_, DesktopServices>,
+    content: String,
+) -> Result<(), String> {
+    let db = services.sqlite.current_database()?;
+    crate::platform::llm_usage::replace_raw(db.as_ref(), content)
 }
 
 #[tauri::command]
 pub async fn list_local_llm_cards(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<sona_core::llm::local_models::LocalLlmCardsResponse, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let models_dir = services.active_models_dir();
     Ok(sona_core::llm::local_models::discover_local_llm_cards(
         &models_dir,
     ))
 }
 
 #[tauri::command]
-pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Result<String, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+pub async fn import_local_llm_file(
+    services: State<'_, DesktopServices>,
+    source_path: String,
+) -> Result<String, String> {
+    let models_dir = services.active_models_dir();
     let source = std::path::PathBuf::from(source_path);
 
     tokio::task::spawn_blocking(move || {
@@ -119,9 +125,9 @@ pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Resul
 
 #[tauri::command(async)]
 pub async fn list_local_nmt_cards(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
 ) -> Result<sona_core::llm::local_models::LocalLlmCardsResponse, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let models_dir = services.active_models_dir();
     crate::platform::blocking::spawn_blocking_map(move || {
         Ok::<_, String>(sona_core::llm::local_models::discover_local_nmt_cards(
             &models_dir,
@@ -132,12 +138,11 @@ pub async fn list_local_nmt_cards(
 
 #[tauri::command(async)]
 pub async fn test_local_nmt_model(
-    app: AppHandle,
     services: State<'_, DesktopServices>,
     model_id: String,
     text: String,
 ) -> Result<String, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let models_dir = services.active_models_dir();
     let lower_id = model_id.trim().to_lowercase();
     let stripped = lower_id.strip_prefix("opus-mt-").unwrap_or(&lower_id);
     let parts: Vec<&str> = stripped.split('-').collect();

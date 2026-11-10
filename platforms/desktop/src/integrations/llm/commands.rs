@@ -70,7 +70,7 @@ impl UsageRecorder {
 
     fn record_usage(&self, usage: Option<TokenUsage>) {
         let occurred_at = crate::platform::time::utc_now_rfc3339();
-        if let Err(error) = crate::platform::llm_usage::record_usage(
+        if let Err(error) = crate::platform::llm_usage::record_usage_for_app(
             &self.app,
             &UsageRecord {
                 occurred_at: occurred_at.clone(),
