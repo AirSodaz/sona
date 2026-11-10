@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Keyboard, Server, Subtitles, Tv, Wrench } from 'lucide-react';
+import { ArrowRight, Bot, Keyboard, Server, Subtitles, Terminal, Tv, Wrench } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
@@ -38,6 +38,11 @@ const TOOL_META_MAP: Record<
     titleKey: 'tools.media_server.title',
     defaultTitle: 'Media Server Subtitle Assistant',
     icon: <Tv width={28} height={28} />,
+  },
+  cli: {
+    titleKey: 'tools.cli.title',
+    defaultTitle: 'Sona CLI',
+    icon: <Terminal width={28} height={28} />,
   },
 };
 

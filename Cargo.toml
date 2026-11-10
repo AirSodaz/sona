@@ -28,6 +28,7 @@ members = [
     "platforms/uniffi",
     "platforms/mcp",
     "tools/uniffi_bindgen",
+    "tools/bin_shim",
 ]
 
 [workspace.package]

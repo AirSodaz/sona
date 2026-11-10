@@ -6427,6 +6427,7 @@ dependencies = [
  "tower",
  "uuid",
  "windows 0.62.2",
+ "winreg",
 ]
 
 [[package]]
@@ -6500,6 +6501,10 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "sona-bin-shim"
+version = "0.10.3"
 
 [[package]]
 name = "sona-cli"

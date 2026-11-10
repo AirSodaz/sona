@@ -1,0 +1,203 @@
+/* =========================================================================
+   Tool CLI Panel - Warm Minimalism & Unified Design System
+   ========================================================================= */
+
+.tool-cli-alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 16px);
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 12px);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 24%, transparent);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.8125rem);
+  line-height: 1.5;
+  box-shadow: var(--shadow-xs);
+  animation: fadeIn var(--transition-normal, 0.2s) ease-in-out;
+}
+
+.tool-cli-alert-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-cli-alert-icon {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+.tool-cli-alert-message {
+  flex: 1;
+  color: var(--color-text-primary);
+}
+
+.tool-cli-alert-message strong {
+  font-weight: 600;
+}
+
+/* Actions cluster in settings items */
+.tool-cli-actions-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+}
+
+/* Inline code with copy button */
+.tool-cli-inline-code-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tool-cli-inline-code-group .settings-code-inline {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .tool-cli-inline-code-group .settings-code-inline {
+    max-width: 220px;
+  }
+}
+
+/* Completion Container */
+.tool-cli-completion-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+  width: 100%;
+}
+
+/* Terminal Window Card */
+.tool-cli-terminal-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast, 0.15s) ease;
+}
+
+.tool-cli-terminal-card:hover {
+  border-color: var(--color-border-hover);
+}
+
+.tool-cli-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-bg-tertiary) 45%, var(--color-bg-secondary));
+  border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-sm, 8px);
+}
+
+.tool-cli-terminal-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-cli-terminal-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-red {
+  background-color: #ff5f56;
+}
+
+.dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.dot-green {
+  background-color: #27c93f;
+}
+
+.tool-cli-terminal-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.tool-cli-terminal-body {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  background: var(--color-bg-primary);
+  min-width: 0;
+}
+
+.tool-cli-prompt {
+  color: var(--color-text-muted);
+  user-select: none;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tool-cli-command {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Compact snippet style for cheat sheet */
+.tool-cli-terminal-card.snippet-compact {
+  margin-top: 4px;
+  border-radius: var(--radius-sm, 10px);
+}
+
+.tool-cli-terminal-card.snippet-compact .tool-cli-terminal-body {
+  padding: 9px 12px;
+  background: var(--color-bg-secondary);
+}
+
+.tool-cli-terminal-copy {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Header pill for reference items */
+.tool-cli-ref-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-cli-cmd-pill {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

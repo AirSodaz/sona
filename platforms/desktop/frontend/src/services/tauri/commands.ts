@@ -239,6 +239,11 @@ export const TauriCommand = {
     getToolsCatalog: 'mcp_get_tools_catalog',
     getClientConfigs: 'mcp_get_client_configs',
   },
+  cli: {
+    getStatus: 'cli_get_status',
+    setPathEnabled: 'cli_set_path_enabled',
+    getCompletionScript: 'cli_get_completion_script',
+  },
   emby: {
     login: 'emby_login',
     testConnection: 'emby_test_connection',

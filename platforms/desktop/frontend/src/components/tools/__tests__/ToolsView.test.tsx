@@ -93,7 +93,7 @@ describe('ToolsView', () => {
 
     // Check sidebar tabs
     const sidebarTabs = screen.getAllByRole('tab');
-    expect(sidebarTabs).toHaveLength(5);
+    expect(sidebarTabs).toHaveLength(6);
     expect(sidebarTabs[0].textContent).toContain('Live Subtitles');
     expect(sidebarTabs[0].getAttribute('id')).toBe('tools-tab-subtitles');
     expect(sidebarTabs[0].getAttribute('aria-controls')).toBe('tools-panel-subtitles');
@@ -113,10 +113,16 @@ describe('ToolsView', () => {
     expect(sidebarTabs[3].getAttribute('id')).toBe('tools-tab-mcp');
     expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-mcp');
     expect(sidebarTabs[3].getAttribute('tabindex')).toBe('-1');
-    expect(sidebarTabs[4].textContent).toContain('Media Server Subtitle Assistant');
-    expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-emby_sync');
-    expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
+
+    expect(sidebarTabs[4].textContent).toContain('Sona CLI');
+    expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-cli');
+    expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-cli');
     expect(sidebarTabs[4].getAttribute('tabindex')).toBe('-1');
+
+    expect(sidebarTabs[5].textContent).toContain('Media Server Subtitle Assistant');
+    expect(sidebarTabs[5].getAttribute('id')).toBe('tools-tab-emby_sync');
+    expect(sidebarTabs[5].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
+    expect(sidebarTabs[5].getAttribute('tabindex')).toBe('-1');
 
     // Check default subtitles panel is visible and unselected panels are hidden
     expect(
@@ -178,14 +184,38 @@ describe('ToolsView', () => {
       )?.style.display
     ).toBe('none');
   });
+  it('switches to cli panel when clicking Sona CLI in sidebar', () => {
+    render(<ToolsView />);
+
+    const sidebarTabs = screen.getAllByRole('tab');
+    fireEvent.click(sidebarTabs[4]); // cli is index 4
+
+    expect(useToolsStore.getState().activeTool).toBe('cli');
+    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('0');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-cli')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
+  });
+
   it('switches to emby sync panel when clicking emby sync in sidebar', () => {
     render(<ToolsView />);
 
     const sidebarTabs = screen.getAllByRole('tab');
-    fireEvent.click(sidebarTabs[4]); // emby sync is index 4
+    fireEvent.click(sidebarTabs[5]); // emby sync is index 5
 
     expect(useToolsStore.getState().activeTool).toBe('emby_sync');
-    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('0');
+    expect(sidebarTabs[5].getAttribute('tabindex')).toBe('0');
     expect(
       (
         document
