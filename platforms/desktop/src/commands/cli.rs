@@ -103,7 +103,7 @@ fn resolve_cli_binary_and_bin_dir() -> (Option<PathBuf>, Option<PathBuf>, String
     (None, fallback_bin_dir, "not_found".to_string())
 }
 
-fn is_cli_currently_in_path(bin_dir: Option<&Path>) -> bool {
+fn is_cli_currently_in_path(_bin_dir: Option<&Path>) -> bool {
     let binary_name = if cfg!(windows) {
         "sona-cli.exe"
     } else {
@@ -113,7 +113,7 @@ fn is_cli_currently_in_path(bin_dir: Option<&Path>) -> bool {
     // On Windows: check if bin_dir is in HKCU/HKLM Path, or if a global cli binary exists in registry paths
     #[cfg(windows)]
     {
-        if bin_dir.is_some_and(win_path::is_bin_in_user_or_system_path) {
+        if _bin_dir.is_some_and(win_path::is_bin_in_user_or_system_path) {
             return true;
         }
         win_path::find_cli_in_registry_paths(binary_name).is_some()
@@ -425,11 +425,11 @@ pub async fn cli_get_status() -> Result<CliStatus, String> {
 
 #[tauri::command]
 pub async fn cli_set_path_enabled(enabled: bool) -> Result<CliStatus, String> {
-    let (_cli_path, bin_dir, _) = resolve_cli_binary_and_bin_dir();
+    let (_cli_path, _bin_dir, _) = resolve_cli_binary_and_bin_dir();
 
     #[cfg(windows)]
     {
-        let bin = bin_dir
+        let bin = _bin_dir
             .as_deref()
             .ok_or_else(|| "Cannot determine Sona bin directory".to_string())?;
         // Ensure bin directory exists
