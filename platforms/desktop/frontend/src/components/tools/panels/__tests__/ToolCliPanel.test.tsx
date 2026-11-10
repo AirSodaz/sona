@@ -3,7 +3,7 @@ import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cliService } from '../../../../services/cliService';
 import { useCliStore } from '../../../../stores/cliStore';
-import { ToolCliPanel } from '../ToolCliPanel';
+import { defaultShellForPlatform, ToolCliPanel } from '../ToolCliPanel';
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>();
@@ -89,6 +89,34 @@ describe('ToolCliPanel', () => {
     fireEvent.click(dismissBtn);
 
     expect(useCliStore.getState().error).toBeNull();
+  });
+
+  it('resolves default shell by platform correctly', () => {
+    expect(defaultShellForPlatform('macos')).toBe('zsh');
+    expect(defaultShellForPlatform('linux')).toBe('bash');
+    expect(defaultShellForPlatform('windows')).toBe('powershell');
+    expect(defaultShellForPlatform(undefined)).toBe('powershell');
+  });
+
+  it('defaults shell tab to Zsh on macOS and Bash on Linux', () => {
+    useCliStore.setState({
+      status: {
+        ...mockStatus,
+        platform: 'macos',
+      },
+    });
+    const { unmount } = render(<ToolCliPanel />);
+    expect(screen.getByText(/~\/\.zfunc\/_sona-cli/)).toBeDefined();
+    unmount();
+
+    useCliStore.setState({
+      status: {
+        ...mockStatus,
+        platform: 'linux',
+      },
+    });
+    render(<ToolCliPanel />);
+    expect(screen.getByText(/bash-completion\/completions\/sona-cli/)).toBeDefined();
   });
 
   it('switches shell completions tabs', () => {

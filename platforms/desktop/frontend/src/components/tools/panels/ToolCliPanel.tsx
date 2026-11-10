@@ -15,6 +15,16 @@ import './ToolCliPanel.css';
 
 type ShellKind = 'powershell' | 'zsh' | 'bash' | 'fish';
 
+export function defaultShellForPlatform(platform?: 'windows' | 'macos' | 'linux'): ShellKind {
+  if (platform === 'macos') {
+    return 'zsh';
+  }
+  if (platform === 'linux') {
+    return 'bash';
+  }
+  return 'powershell';
+}
+
 export function ToolCliPanel(): React.JSX.Element {
   const { t } = useTranslation();
   const {
@@ -30,11 +40,20 @@ export function ToolCliPanel(): React.JSX.Element {
   } = useCliStore();
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [selectedShell, setSelectedShell] = useState<ShellKind>('powershell');
+  const [hasManuallySelectedShell, setHasManuallySelectedShell] = useState(false);
+  const [selectedShell, setSelectedShell] = useState<ShellKind>(() =>
+    defaultShellForPlatform(status?.platform)
+  );
 
   useEffect(() => {
     void fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (!hasManuallySelectedShell && status?.platform) {
+      setSelectedShell(defaultShellForPlatform(status.platform));
+    }
+  }, [hasManuallySelectedShell, status?.platform]);
 
   const copyToClipboard = (text: string, key: string) => {
     void navigator.clipboard.writeText(text);
@@ -338,7 +357,10 @@ export function ToolCliPanel(): React.JSX.Element {
               <SegmentedSubTabs
                 items={shellTabItems}
                 activeTab={selectedShell}
-                onChange={(val) => setSelectedShell(val as ShellKind)}
+                onChange={(val) => {
+                  setHasManuallySelectedShell(true);
+                  setSelectedShell(val as ShellKind);
+                }}
                 size="sm"
               />
 
