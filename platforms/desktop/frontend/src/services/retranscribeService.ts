@@ -1,6 +1,6 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { setTranscriptSegments } from '../stores/transcriptCoordinator';
+import { setSegmentsForHistory } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
@@ -14,7 +14,7 @@ export interface RetranscribeServicePorts {
   getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
   getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
   getHistoryStore: typeof useHistoryStore.getState;
-  setTranscriptSegments: typeof setTranscriptSegments;
+  setSegmentsForHistory: typeof setSegmentsForHistory;
   historyService: typeof historyService;
   transcriptSnapshotService: typeof transcriptSnapshotService;
   transcriptionService: TranscriptionService;
@@ -74,7 +74,7 @@ export class RetranscribeService {
     );
 
     // Update Store
-    this.ports.setTranscriptSegments(segments);
+    this.ports.setSegmentsForHistory(historyId, segments);
 
     // Save to History File
     await this.ports.getHistoryStore().updateTranscript(historyId, segments);
@@ -92,7 +92,7 @@ export const retranscribeService = createRetranscribeService({
   getEffectiveConfigSnapshot,
   getTranscriptSessionStore: useTranscriptSessionStore.getState,
   getHistoryStore: useHistoryStore.getState,
-  setTranscriptSegments,
+  setSegmentsForHistory,
   historyService,
   transcriptSnapshotService,
   transcriptionService,

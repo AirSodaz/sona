@@ -38,11 +38,12 @@ export function usePolishActions() {
 
     if (onPreStart) onPreStart();
 
-    updateLlmState({ isRetranscribing: true, retranscribeProgress: 0 });
+    const targetHistoryId = sourceHistoryId || 'current';
+    updateLlmState({ isRetranscribing: true, retranscribeProgress: 0 }, targetHistoryId);
 
     try {
       await retranscribeService.retranscribeCurrentRecord((progress) => {
-        updateLlmState({ retranscribeProgress: progress });
+        updateLlmState({ retranscribeProgress: progress }, targetHistoryId);
       });
 
       // Clear old polish undo/redo states only after successful re-transcription
@@ -55,7 +56,7 @@ export function usePolishActions() {
         cause: error,
       });
     } finally {
-      updateLlmState({ isRetranscribing: false, retranscribeProgress: 0 });
+      updateLlmState({ isRetranscribing: false, retranscribeProgress: 0 }, targetHistoryId);
     }
   };
 

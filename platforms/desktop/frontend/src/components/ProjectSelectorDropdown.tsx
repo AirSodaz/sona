@@ -123,6 +123,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { ProjectRecord } from '../types/project';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectVisual } from './projects/ProjectVisual';
@@ -140,6 +141,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const historyItems = useHistoryStore((state) => state.items);
 
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -151,18 +153,20 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const [createIcon, setCreateIcon] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
-  const countInbox = historyItems.filter((i) => !i.deletedAt && !i.projectId).length;
+  const countInbox = historyItems.filter(
+    (i) => !i.deletedAt && !i.projectId && !(isRecording && recordingSessionId === i.id)
+  ).length;
   const projectCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of historyItems) {
-      if (!item.deletedAt && item.projectId) {
+      if (!item.deletedAt && item.projectId && !(isRecording && recordingSessionId === item.id)) {
         map.set(item.projectId, (map.get(item.projectId) || 0) + 1);
       }
     }
     return map;
-  }, [historyItems]);
+  }, [historyItems, isRecording, recordingSessionId]);
 
-  const locked = isRecording && !!sourceHistoryId;
+  const locked = isRecording && Boolean(recordingSessionId || sourceHistoryId);
   const active = projects.find((project) => project.id === activeProjectId) ?? null;
   const filtered = useMemo(
     () =>
@@ -181,7 +185,16 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  useEffect(() => {
+    if (locked && open) {
+      setOpen(false);
+    }
+  }, [locked, open]);
+
   const choose = (id: string | null) => {
+    if (locked) {
+      return;
+    }
     void setActiveProjectId(id);
     setOpen(false);
     setQuery('');

@@ -3,7 +3,10 @@ import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
 import { buildEmbyStreamUrl, deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
-import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
+import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useRealTranscriptStore,
+} from '../transcriptStore';
 
 const taskLedgerContext = vi.hoisted(() => ({
   upsertTaskLedgerRecord: vi.fn(),
@@ -1174,6 +1177,115 @@ describe('batchQueueStore', () => {
       expect(item.errorMessage).toBeUndefined();
       expect(item.errorStage).toBeUndefined();
       expect(item.progress).toBe(100);
+    });
+  });
+
+  describe('tab and background recording session isolation', () => {
+    it('does not overwrite batch item segments with an unrelated active Projects detail session on switch', () => {
+      const batchSeg = { id: 'b1', text: 'Batch content', start: 0, end: 1, isFinal: true };
+      const projectSeg = { id: 'p1', text: 'Project content', start: 0, end: 1, isFinal: true };
+
+      useRealTranscriptStore.setState({
+        mode: 'projects',
+        activeSessionId: 'hist-project',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'hist-project': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-project',
+            segments: [projectSeg],
+            audioUrl: 'asset:///project.wav',
+          },
+          'batch-1': {
+            ...DEFAULT_SESSION_DATA,
+            segments: [batchSeg],
+          },
+        },
+      });
+
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'batch-1',
+            filename: 'b1.wav',
+            filePath: '/b1.wav',
+            status: 'complete',
+            progress: 100,
+            segments: [batchSeg],
+            audioUrl: null,
+            projectId: null,
+          },
+          {
+            id: 'batch-2',
+            filename: 'b2.wav',
+            filePath: '/b2.wav',
+            status: 'pending',
+            progress: 0,
+            segments: [],
+            audioUrl: null,
+            projectId: null,
+          },
+        ],
+        activeItemId: 'batch-1',
+      });
+
+      useBatchQueueStore.getState().setActiveItem('batch-2');
+
+      const batch1 = useBatchQueueStore.getState().queueItems.find((i) => i.id === 'batch-1');
+      expect(batch1?.segments).toEqual([batchSeg]);
+      expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
+      expect(useRealTranscriptStore.getState().sessions['hist-project'].segments).toEqual([
+        projectSeg,
+      ]);
+      expect(useRealTranscriptStore.getState().sessions['hist-project'].audioUrl).toBe(
+        'asset:///project.wav'
+      );
+    });
+
+    it('does not wipe an active Projects detail or recording session on clearQueue or setActiveItem(null)', () => {
+      const projectSeg = { id: 'p1', text: 'Project content', start: 0, end: 1, isFinal: true };
+
+      useRealTranscriptStore.setState({
+        mode: 'projects',
+        activeSessionId: 'hist-project',
+        sessions: {
+          default: { ...DEFAULT_SESSION_DATA },
+          'hist-project': {
+            ...DEFAULT_SESSION_DATA,
+            sourceHistoryId: 'hist-project',
+            segments: [projectSeg],
+            audioUrl: 'asset:///project.wav',
+          },
+        },
+      });
+
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'batch-1',
+            filename: 'b1.wav',
+            filePath: '/b1.wav',
+            status: 'complete',
+            progress: 100,
+            segments: [],
+            audioUrl: null,
+            projectId: null,
+          },
+        ],
+        activeItemId: 'batch-1',
+      });
+
+      useBatchQueueStore.getState().setActiveItem(null);
+      expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
+      expect(useRealTranscriptStore.getState().sessions['hist-project'].segments).toEqual([
+        projectSeg,
+      ]);
+
+      useBatchQueueStore.getState().clearQueue();
+      expect(useRealTranscriptStore.getState().activeSessionId).toBe('hist-project');
+      expect(useRealTranscriptStore.getState().sessions['hist-project'].segments).toEqual([
+        projectSeg,
+      ]);
     });
   });
 });

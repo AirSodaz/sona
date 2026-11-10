@@ -746,6 +746,87 @@ describe('Transcript Stores', () => {
     expect(realStore.getState().sessions['rec-1'].segments[0].text).toBe('Live');
   });
 
+  it('updates background sessions via setSegmentsForHistory and patchSegmentTranslationsForHistory', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'create-1',
+      createSessionId: 'create-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'create-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'create-1',
+          segments: [{ id: 'c1', text: 'Create text', start: 0, end: 1, isFinal: true }],
+        },
+        'batch-item-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'hist-bg',
+          segments: [{ id: 'b1', text: 'Before polish', start: 0, end: 1, isFinal: true }],
+        },
+      },
+    });
+
+    realStore
+      .getState()
+      .setSegmentsForHistory('hist-bg', [
+        { id: 'b1', text: 'After polish', start: 0, end: 1, isFinal: true },
+      ]);
+    expect(realStore.getState().sessions['batch-item-1'].segments[0].text).toBe('After polish');
+    expect(realStore.getState().sessions['create-1'].segments[0].text).toBe('Create text');
+
+    realStore
+      .getState()
+      .patchSegmentTranslationsForHistory('hist-bg', [{ id: 'b1', translation: '润色后' }]);
+    expect(realStore.getState().sessions['batch-item-1'].segments[0].translation).toBe('润色后');
+    expect(realStore.getState().sessions['create-1'].segments[0].translation).toBeUndefined();
+  });
+
+  it('evicts deleted history sessions without disturbing an active recording session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'detail-1',
+      createSessionId: 'hist-create',
+      recordingSessionId: 'rec-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'detail-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'detail-1' },
+        'hist-create': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'hist-create' },
+        'rec-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'rec-1' },
+      },
+    });
+
+    realStore.getState().evictSessionsByHistoryIds(['hist-create', 'detail-1', 'rec-1']);
+
+    expect(realStore.getState().sessions['hist-create']).toBeUndefined();
+    expect(realStore.getState().sessions['detail-1']).toBeUndefined();
+    expect(realStore.getState().sessions['rec-1']).toBeDefined();
+    expect(realStore.getState().activeSessionId).toBe('default');
+    expect(realStore.getState().createSessionId).toBe('default');
+  });
+
+  it('pauses playback on the leaving session when switching tabs or activating another session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      mode: 'create',
+      activeSessionId: 'create-1',
+      createSessionId: 'create-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'create-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'create-1', isPlaying: true },
+        'detail-1': { ...DEFAULT_SESSION_DATA, sourceHistoryId: 'detail-1', isPlaying: true },
+      },
+    });
+
+    realStore.getState().setMode('projects');
+    expect(realStore.getState().sessions['create-1'].isPlaying).toBe(false);
+
+    realStore.getState().activateSession('detail-1');
+    expect(realStore.getState().sessions['detail-1'].isPlaying).toBe(true);
+
+    realStore.getState().activateSession('create-1');
+    expect(realStore.getState().sessions['detail-1'].isPlaying).toBe(false);
+  });
+
   describe('mergeSegments translation preservation', () => {
     it('merges two segments with English translations with a space separator', () => {
       const sessionStore = useTranscriptSessionStore.getState();

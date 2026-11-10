@@ -56,6 +56,11 @@ interface TranscriptContext {
   onEnrollSample: (segment: TranscriptSegment) => void;
 }
 
+interface TranscriptEditorProps {
+  /** Whether this editor's shell is currently visible and owns keyboard shortcuts/search UI. */
+  isActive?: boolean;
+}
+
 /**
  * Editor component for displaying and managing transcript segments.
  *
@@ -64,7 +69,7 @@ interface TranscriptContext {
  *
  * @return The transcript editor interface.
  */
-export function TranscriptEditor(): React.JSX.Element {
+export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): React.JSX.Element {
   const { t } = useTranslation();
   const { confirm } = useDialogStore();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -241,6 +246,8 @@ export function TranscriptEditor(): React.JSX.Element {
   } = useSearchStore();
 
   useEffect(() => {
+    if (!isActive) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         const activeElement = document.activeElement;
@@ -261,7 +268,7 @@ export function TranscriptEditor(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openSearch]);
+  }, [isActive, openSearch]);
 
   // Calculate total words/characters
   const wordCount = useMemo(() => {
@@ -297,7 +304,7 @@ export function TranscriptEditor(): React.JSX.Element {
 
   // Scroll to active match
   useEffect(() => {
-    if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
+    if (isActive && isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
       const match = searchMatches[searchMatchIndex];
       const segmentIndex = segmentsRef.current.findIndex((s) => s.id === match.segmentId);
 
@@ -309,7 +316,7 @@ export function TranscriptEditor(): React.JSX.Element {
         });
       }
     }
-  }, [isSearchOpen, searchMatchIndex, searchMatches]);
+  }, [isActive, isSearchOpen, searchMatchIndex, searchMatches]);
 
   if (segments.length === 0) {
     return (
@@ -342,7 +349,7 @@ export function TranscriptEditor(): React.JSX.Element {
           atBottomThreshold={60}
         />
       </TranscriptUIContext.Provider>
-      <SearchUI />
+      {isActive && <SearchUI />}
       <EnrollSpeakerSampleModal
         isOpen={Boolean(enrollTargetSegment)}
         onClose={() => setEnrollTargetSegment(null)}

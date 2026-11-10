@@ -2,6 +2,7 @@ import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { patchSegmentTranslationsForHistory } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -57,6 +58,7 @@ export interface TranslationServicePorts {
   getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
   getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
   getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  patchSegmentTranslationsForHistory: typeof patchSegmentTranslationsForHistory;
   runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
@@ -313,21 +315,31 @@ export class TranslationService {
       return;
     }
 
-    const currentHistoryId = this.ports.getTranscriptSessionStore().sourceHistoryId || 'current';
     const payloadHistoryId = payload.jobHistoryId || 'current';
-    if (currentHistoryId !== payloadHistoryId) {
-      return;
-    }
-
-    const sessionStore = this.ports.getTranscriptSessionStore();
     const updates = payload.segments
       .filter((seg): seg is typeof seg & { translation: string } => Boolean(seg.translation))
       .map((seg) => ({ id: seg.id, translation: seg.translation }));
-    if (updates.length > 0) {
-      sessionStore.patchSegmentTranslations(updates);
+
+    if (payloadHistoryId === 'current') {
+      const sessionStore = this.ports.getTranscriptSessionStore();
+      if (sessionStore.sourceHistoryId) {
+        return;
+      }
+      if (updates.length > 0) {
+        sessionStore.patchSegmentTranslations(updates);
+      }
+      this.ports
+        .getTranscriptSidecarStore()
+        .updateLlmState({ isTranslationVisible: true }, 'current');
+      return;
     }
-    const sidecarStore = this.ports.getTranscriptSidecarStore();
-    sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
+
+    if (updates.length > 0) {
+      this.ports.patchSegmentTranslationsForHistory(payloadHistoryId, updates);
+    }
+    this.ports
+      .getTranscriptSidecarStore()
+      .updateLlmState({ isTranslationVisible: true }, payloadHistoryId);
   }
 }
 
@@ -339,6 +351,7 @@ export const translationService = createTranslationService({
   getEffectiveConfigSnapshot,
   getTranscriptSessionStore: useTranscriptSessionStore.getState,
   getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  patchSegmentTranslationsForHistory,
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,

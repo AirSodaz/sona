@@ -396,7 +396,7 @@ export function TranscriptWorkbench({
 
       <div className="panel-content">
         <ErrorBoundary>
-          <TranscriptEditor />
+          <TranscriptEditor isActive={isActive} />
         </ErrorBoundary>
       </div>
 

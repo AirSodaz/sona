@@ -2502,4 +2502,103 @@ describe('ProjectsView', () => {
     // Switching project must remain disabled during active recording session
     expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
   });
+
+  it('preserves Create tab session when switching browse scope with no Projects detail open', async () => {
+    useTranscriptStore.setState({
+      mode: 'projects',
+      activeSessionId: 'create-1',
+      createSessionId: 'create-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'create-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'create-1',
+          segments: [{ id: 'seg-c1', text: 'Create draft text', start: 0, end: 1, isFinal: true }],
+        },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(getButtonByContent('Alpha'));
+
+    expect(useTranscriptStore.getState().sessions['create-1'].segments).toHaveLength(1);
+    expect(useTranscriptStore.getState().sessions['create-1'].segments[0].text).toBe(
+      'Create draft text'
+    );
+  });
+
+  it('keeps rail context menu and selection mode locked during background recording even after closing a detail pane', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'live-draft-1',
+          title: 'Live Recording Draft',
+          timestamp: Date.now(),
+          duration: 30,
+          audioPath: 'draft.wav',
+          transcriptPath: 'live-draft-1.json',
+          previewText: 'Live recording in progress',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'hist-completed',
+          title: 'Completed Call',
+          timestamp: Date.now() - 5000,
+          duration: 120,
+          audioPath: 'completed.wav',
+          transcriptPath: 'hist-completed.json',
+          previewText: 'Meeting notes',
+          type: 'recording',
+          projectId: null,
+          status: 'complete',
+        },
+      ],
+    } as any);
+
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'live-draft-1',
+      activeSessionId: 'live-draft-1',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-draft-1',
+          segments: [
+            { id: 'seg-1', text: 'Live transcription...', start: 0, end: 1, isFinal: false },
+          ],
+        },
+      },
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    // Open and close a completed record
+    await clickAsync(screen.getByRole('button', { name: 'Completed Call' }));
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).not.toBeNull();
+    });
+    await clickAsync(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => {
+      expect(getDetailPlaceholder()).toBeNull();
+    });
+
+    // Rail context menu must still lock project switching during active recording
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
+    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+  });
 });

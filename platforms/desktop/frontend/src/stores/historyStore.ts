@@ -4,9 +4,10 @@ import type { HistoryItem } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { clearActiveTranscriptSession } from './transcriptCoordinator';
+import { evictTranscriptSessionsByHistoryIds } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptSidecarStore } from './transcriptSidecarStore';
+import { useTranscriptStore } from './transcriptStore';
 
 export type HistoryTranscriptUpdateListener = (id: string, segments: TranscriptSegment[]) => void;
 
@@ -122,11 +123,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       await historyService.deleteRecording(id);
       useTranscriptSidecarStore.getState().clearSummaryState(id);
 
-      // Clear current transcript if it matches the deleted item
-      const transcriptSession = useTranscriptSessionStore.getState();
-      if (transcriptSession.sourceHistoryId === id) {
-        clearActiveTranscriptSession({ clearAudio: true });
-      }
+      // Evict matching active or background transcript sessions
+      evictTranscriptSessionsByHistoryIds([id]);
     } catch (error) {
       logger.error('Failed to delete history item:', error);
       // Revert
@@ -146,11 +144,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         useTranscriptSidecarStore.getState().clearSummaryState(id);
       });
 
-      // Clear current transcript if it matches any of the deleted items
-      const transcriptSession = useTranscriptSessionStore.getState();
-      if (transcriptSession.sourceHistoryId && ids.includes(transcriptSession.sourceHistoryId)) {
-        clearActiveTranscriptSession({ clearAudio: true });
-      }
+      // Evict matching active or background transcript sessions
+      evictTranscriptSessionsByHistoryIds(ids);
     } catch (error) {
       logger.error('Failed to delete history items:', error);
       set({ items: originalItems, error: 'Failed to delete items' });
@@ -168,7 +163,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       set((state) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
       }));
-      if (useTranscriptSessionStore.getState().sourceHistoryId === id) {
+      const hasOpenSession =
+        useTranscriptSessionStore.getState().sourceHistoryId === id ||
+        Object.values(useTranscriptStore.getState().sessions).some(
+          (session) => session.sourceHistoryId === id
+        );
+      if (hasOpenSession) {
         for (const listener of get().transcriptUpdateListeners) {
           listener(id, segments);
         }

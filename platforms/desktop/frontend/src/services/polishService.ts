@@ -1,6 +1,7 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { setSegmentsForHistory } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
@@ -50,6 +51,7 @@ export interface PolishServicePorts {
   getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
   getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
   getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  setSegmentsForHistory: typeof setSegmentsForHistory;
   runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
@@ -208,14 +210,17 @@ export class PolishService {
       return;
     }
 
-    const sessionStore = this.ports.getTranscriptSessionStore();
-    const currentHistoryId = sessionStore.sourceHistoryId || 'current';
     const payloadHistoryId = payload.jobHistoryId || 'current';
-    if (currentHistoryId !== payloadHistoryId) {
+    if (payloadHistoryId === 'current') {
+      const sessionStore = this.ports.getTranscriptSessionStore();
+      if (sessionStore.sourceHistoryId) {
+        return;
+      }
+      sessionStore.setSegments(payload.segments);
       return;
     }
 
-    sessionStore.setSegments(payload.segments);
+    this.ports.setSegmentsForHistory(payloadHistoryId, payload.segments);
   }
 }
 
@@ -227,6 +232,7 @@ export const polishService = createPolishService({
   getEffectiveConfigSnapshot,
   getTranscriptSessionStore: useTranscriptSessionStore.getState,
   getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  setSegmentsForHistory,
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,

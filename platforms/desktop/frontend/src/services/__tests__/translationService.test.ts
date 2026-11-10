@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
+import {
   buildTestConfig as buildBaseTestConfig,
   type DeepPartial,
 } from '../../test-utils/configTestUtils';
@@ -532,5 +536,60 @@ describe('TranslationService', () => {
     expect(segments[0].translation).toBe('分段 1');
     expect(segments[0].draftTranslation).toBeUndefined();
     expect(segments[1].text).toBe('Segment 2 (newly arrived)');
+  });
+
+  it('patches translations into the originating background session when switching tabs mid-job', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'history-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'history-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'history-a',
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        },
+        'create-b': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'create-b',
+          segments: [{ id: '2', start: 0, end: 1, text: 'Other tab', isFinal: true }],
+        },
+      },
+    });
+
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      useCanonicalTranscriptStore.getState().activateSession('create-b');
+      await onUpdate({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: 'history-a',
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: '你好' },
+        ],
+      });
+      return vi.fn();
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-a',
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: '你好' }],
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['history-a'].segments[0].translation
+    ).toBe('你好');
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['create-b'].segments[0].translation
+    ).toBeUndefined();
+    expect(
+      useCanonicalTranscriptStore.getState().getLlmState('history-a').isTranslationVisible
+    ).toBe(true);
   });
 });

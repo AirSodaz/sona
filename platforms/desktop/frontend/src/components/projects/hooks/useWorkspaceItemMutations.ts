@@ -141,6 +141,7 @@ export function useWorkspaceItemMutations({
       if (sourceHistoryId === id) {
         clearOpenedItem();
       }
+      useTranscriptStore.getState().evictSessionsByHistoryIds([id]);
     } else {
       await useHistoryStore.getState().deleteItem(id);
     }
@@ -225,6 +226,7 @@ export function useWorkspaceItemMutations({
       if (sourceHistoryId && targetIds.includes(sourceHistoryId)) {
         clearOpenedItem();
       }
+      useTranscriptStore.getState().evictSessionsByHistoryIds(targetIds);
     } else {
       await useHistoryStore.getState().deleteItems(targetIds);
     }
@@ -281,6 +283,7 @@ export function useWorkspaceItemMutations({
       offset += page.filteredItems.length;
     }
     await historyService.purgeRecordings(ids);
+    useTranscriptStore.getState().evictSessionsByHistoryIds(ids);
     await refreshHistory();
   };
 

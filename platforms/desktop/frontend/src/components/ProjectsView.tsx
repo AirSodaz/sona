@@ -9,16 +9,13 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
-import {
-  clearActiveTranscriptSession,
-  openTranscriptSession,
-} from '../stores/transcriptCoordinator';
+import { openTranscriptSession } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { EmbyTaskContext } from '../types/batchQueue';
 import type { HistoryItem as HistoryItemType } from '../types/history';
-import { isHistoryItemDraft, isLiveRecordDraftHistoryItem } from '../types/history';
+import { isHistoryItemDraft } from '../types/history';
 import type { ProjectRecord } from '../types/project';
 import { logger } from '../utils/logger';
 import { useContextMenu } from './context-menu/useContextMenu';
@@ -134,24 +131,28 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
   const browseScopeRef = useRef('inbox');
   const syncingEmbyIdsRef = useRef<Set<string>>(new Set());
-  const activeHistoryItem = useMemo(
-    () => historyItems.find((item) => item.id === sourceHistoryId) || null,
-    [historyItems, sourceHistoryId]
+  const isLiveDraftSessionLocked = useMemo(
+    () =>
+      getLiveDraftLockState(isRecording, sourceHistoryId, historyItems, recordingSessionId)
+        .isLocked,
+    [isRecording, sourceHistoryId, historyItems, recordingSessionId]
   );
-  const isLiveDraftSessionLocked =
-    isRecording && !!activeHistoryItem && isLiveRecordDraftHistoryItem(activeHistoryItem);
 
   useEffect(() => {
     void loadHistoryItems();
   }, [loadHistoryItems]);
 
   const clearOpenedItem = useCallback(() => {
+    const closingHistoryId = selectedHistoryId;
     setSelectedHistoryId(null);
-    const store = useTranscriptStore.getState();
-    if (!store.isRecording || store.activeSessionId !== store.recordingSessionId) {
-      clearActiveTranscriptSession({ clearAudio: true });
+    if (!closingHistoryId) {
+      return;
     }
-  }, []);
+    const store = useTranscriptStore.getState();
+    if (closingHistoryId !== store.recordingSessionId) {
+      store.evictSession(closingHistoryId);
+    }
+  }, [selectedHistoryId]);
   const handleOpenItem = useCallback(
     async (item: HistoryItemType) => {
       if (item.deletedAt != null) {
@@ -605,8 +606,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     setNewProjectColor('#64748b');
     setNewProjectIcon('');
     setIsCreateModalOpen(false);
-    browseState.setBrowseScope(project.id);
-    await setActiveProjectId(project.id);
+    const lockState = getLiveDraftLockState();
+    if (!lockState.isLocked) {
+      browseState.setBrowseScope(project.id);
+      await setActiveProjectId(project.id);
+    }
   };
 
   const handleSaveProject = async () => {

@@ -126,6 +126,8 @@ export interface TranscriptStore {
     icon?: string | null
   ) => void;
   activateSession: (sessionId: string) => void;
+  evictSession: (sessionId: string) => void;
+  evictSessionsByHistoryIds: (historyIds: string[]) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
   clearTranscriptSegments: () => void;
   clearSegments: () => void;
@@ -151,11 +153,16 @@ export interface TranscriptStore {
   setIcon: (icon: string | null) => void;
   setSegments: (segments: TranscriptSegment[]) => void;
   setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => void;
+  setSegmentsForHistory: (historyId: string, segments: TranscriptSegment[]) => void;
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
   patchSegmentTranslation: (id: string, translation: string) => void;
   patchSegmentTranslations: (updates: Array<{ id: string; translation: string }>) => void;
+  patchSegmentTranslationsForHistory: (
+    historyId: string,
+    updates: Array<{ id: string; translation: string }>
+  ) => void;
   updateSegmentForSession: (
     sessionId: string,
     id: string,
@@ -233,6 +240,42 @@ function updateActiveSession(
   });
 }
 
+function pauseSessionIfPlaying(
+  sessions: Record<string, SessionData>,
+  sessionId: string
+): Record<string, SessionData> {
+  const session = sessions[sessionId];
+  if (!session?.isPlaying) {
+    return sessions;
+  }
+  return {
+    ...sessions,
+    [sessionId]: { ...session, isPlaying: false },
+  };
+}
+
+function revokeBlobAudioUrl(audioUrl: string | null | undefined): void {
+  if (audioUrl?.startsWith('blob:')) {
+    URL.revokeObjectURL(audioUrl);
+  }
+}
+
+function applyTranslationPatchToSegments(
+  segments: TranscriptSegment[],
+  translationMap: Map<string, string>
+): TranscriptSegment[] | null {
+  let changed = false;
+  const nextSegments = segments.map((s) => {
+    const tr = translationMap.get(s.id);
+    if (tr !== undefined && (s.translation !== tr || s.draftTranslation !== undefined)) {
+      changed = true;
+      return { ...s, translation: tr, draftTranslation: undefined };
+    }
+    return s;
+  });
+  return changed ? nextSegments : null;
+}
+
 function resolveHistoryKey(historyId: string | undefined, get: StoreGet): string {
   const activeSession = getActiveSession(get());
   return resolveTranscriptHistoryKey(historyId, activeSession.sourceHistoryId);
@@ -287,104 +330,111 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
 
   // --- Runtime ---
   setMode: (mode, focus) => {
-    if ((mode as string) === 'live') {
-      const recId = get().recordingSessionId;
-      const targetSessionId =
-        recId && get().sessions[recId]
-          ? recId
-          : get().createSessionId && get().sessions[get().createSessionId]
-            ? get().createSessionId
-            : 'default';
-      set({
-        mode: 'create',
-        ingestionFocus: 'live',
-        activeSessionId: targetSessionId,
-        createSessionId: targetSessionId,
-      });
-      return;
-    }
-    if ((mode as string) === 'batch') {
-      const activeItemId = activeBatchItemIdResolver?.();
-      const targetSessionId =
-        activeItemId && get().sessions[activeItemId]
-          ? activeItemId
-          : get().createSessionId && get().sessions[get().createSessionId]
-            ? get().createSessionId
-            : 'default';
-      set({
-        mode: 'create',
-        ingestionFocus: 'batch',
-        activeSessionId: targetSessionId,
-        createSessionId: targetSessionId,
-      });
-      return;
-    }
-    if (mode === 'create') {
-      const recId = get().recordingSessionId;
-      if (focus === undefined) {
-        const createId = get().createSessionId;
-        const recordingSessionExists = Boolean(recId && get().sessions[recId]);
+    set((state) => {
+      let nextMode: AppMode = state.mode;
+      let nextFocus: IngestionFocus | undefined;
+      let nextActiveSessionId = state.activeSessionId;
+      let nextCreateSessionId = state.createSessionId;
+
+      if ((mode as string) === 'live') {
+        const recId = state.recordingSessionId;
         const targetSessionId =
-          recId && recordingSessionExists
+          recId && state.sessions[recId]
             ? recId
-            : createId && get().sessions[createId]
-              ? createId
+            : state.createSessionId && state.sessions[state.createSessionId]
+              ? state.createSessionId
               : 'default';
-        set({
-          mode: 'create',
-          activeSessionId: targetSessionId,
-          createSessionId: targetSessionId,
+        nextMode = 'create';
+        nextFocus = 'live';
+        nextActiveSessionId = targetSessionId;
+        nextCreateSessionId = targetSessionId;
+      } else if ((mode as string) === 'batch') {
+        const activeItemId = activeBatchItemIdResolver?.();
+        const targetSessionId =
+          activeItemId && state.sessions[activeItemId]
+            ? activeItemId
+            : state.createSessionId && state.sessions[state.createSessionId]
+              ? state.createSessionId
+              : 'default';
+        nextMode = 'create';
+        nextFocus = 'batch';
+        nextActiveSessionId = targetSessionId;
+        nextCreateSessionId = targetSessionId;
+      } else if (mode === 'create') {
+        const recId = state.recordingSessionId;
+        nextMode = 'create';
+        if (focus === undefined) {
+          const createId = state.createSessionId;
+          const recordingSessionExists = Boolean(recId && state.sessions[recId]);
+          const targetSessionId =
+            recId && recordingSessionExists
+              ? recId
+              : createId && state.sessions[createId]
+                ? createId
+                : 'default';
+          nextActiveSessionId = targetSessionId;
+          nextCreateSessionId = targetSessionId;
           // Recording controls live in the live pane; never restore behind a stale batch focus.
-          ...(recordingSessionExists ? { ingestionFocus: 'live' as const } : {}),
-        });
-        return;
+          if (recordingSessionExists) {
+            nextFocus = 'live';
+          }
+        } else {
+          nextFocus = focus;
+          const focusItemId =
+            focus === 'live' ? recId : focus === 'batch' ? activeBatchItemIdResolver?.() : null;
+          // An explicit focus selects that ingestion surface fresh: the recording session
+          // (live) or active batch item, otherwise the empty default pane. Only a focus-less
+          // tab switch restores the previous create session.
+          const targetSessionId =
+            focusItemId && state.sessions[focusItemId] ? focusItemId : 'default';
+          nextActiveSessionId = targetSessionId;
+          nextCreateSessionId = targetSessionId;
+        }
+      } else if (mode === 'projects' || mode === 'tools') {
+        nextMode = mode;
+        nextCreateSessionId =
+          state.mode === 'create' ? state.activeSessionId : state.createSessionId;
+      } else {
+        return state;
       }
-      const nextFocus = focus;
-      const focusItemId =
-        nextFocus === 'live' ? recId : nextFocus === 'batch' ? activeBatchItemIdResolver?.() : null;
-      // An explicit focus selects that ingestion surface fresh: the recording session
-      // (live) or active batch item, otherwise the empty default pane. Only a focus-less
-      // tab switch restores the previous create session.
-      const targetSessionId = focusItemId && get().sessions[focusItemId] ? focusItemId : 'default';
-      set({
-        mode: 'create',
-        ingestionFocus: nextFocus,
-        activeSessionId: targetSessionId,
-        createSessionId: targetSessionId,
-      });
-      return;
-    }
-    if (mode === 'projects' || mode === 'tools') {
-      const isCurrentlyCreate = get().mode === 'create';
-      set((state) => ({
-        mode,
-        createSessionId: isCurrentlyCreate ? state.activeSessionId : state.createSessionId,
-      }));
-      return;
-    }
+
+      const shouldPause = nextMode !== state.mode || nextActiveSessionId !== state.activeSessionId;
+      const nextSessions = shouldPause
+        ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
+        : state.sessions;
+
+      return {
+        mode: nextMode,
+        ...(nextFocus !== undefined ? { ingestionFocus: nextFocus } : {}),
+        activeSessionId: nextActiveSessionId,
+        createSessionId: nextCreateSessionId,
+        ...(nextSessions !== state.sessions ? { sessions: nextSessions } : {}),
+      };
+    });
   },
   setIngestionFocus: (ingestionFocus) => {
-    const isCreateMode = get().mode === 'create';
-    if (ingestionFocus === 'live') {
-      const recId = get().recordingSessionId;
-      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
-      set({
+    set((state) => {
+      const isCreateMode = state.mode === 'create';
+      let targetSessionId = state.activeSessionId;
+      if (ingestionFocus === 'live') {
+        const recId = state.recordingSessionId;
+        targetSessionId = recId && state.sessions[recId] ? recId : 'default';
+      } else if (ingestionFocus === 'batch') {
+        const activeItemId = activeBatchItemIdResolver?.();
+        targetSessionId = activeItemId && state.sessions[activeItemId] ? activeItemId : 'default';
+      } else {
+        return { ingestionFocus };
+      }
+      const nextSessions =
+        isCreateMode && targetSessionId !== state.activeSessionId
+          ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
+          : state.sessions;
+      return {
         ingestionFocus,
         ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
-      });
-      return;
-    }
-    if (ingestionFocus === 'batch') {
-      const activeItemId = activeBatchItemIdResolver?.();
-      const targetSessionId =
-        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
-      set({
-        ingestionFocus,
-        ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
-      });
-      return;
-    }
-    set({ ingestionFocus });
+        ...(nextSessions !== state.sessions ? { sessions: nextSessions } : {}),
+      };
+    });
   },
   setProcessingStatus: (processingStatus) => set({ processingStatus }),
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
@@ -417,30 +467,130 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       set({ autoSaveStates });
     }
     const currentMode = get().mode;
-    set((state) => ({
-      activeSessionId: sessionId,
-      createSessionId: currentMode === 'create' ? sessionId : state.createSessionId,
-      sessions: {
-        ...state.sessions,
-        [sessionId]: {
-          ...DEFAULT_SESSION_DATA,
-          segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
-          sourceHistoryId,
-          title: title || '',
-          icon: icon || null,
-          audioUrl: audioUrl !== undefined ? audioUrl : null,
+    set((state) => {
+      const nextSessions =
+        state.activeSessionId !== sessionId
+          ? pauseSessionIfPlaying(state.sessions, state.activeSessionId)
+          : state.sessions;
+      return {
+        activeSessionId: sessionId,
+        createSessionId: currentMode === 'create' ? sessionId : state.createSessionId,
+        sessions: {
+          ...nextSessions,
+          [sessionId]: {
+            ...DEFAULT_SESSION_DATA,
+            segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
+            sourceHistoryId,
+            title: title || '',
+            icon: icon || null,
+            audioUrl: audioUrl !== undefined ? audioUrl : null,
+          },
         },
-      },
-    }));
+      };
+    });
   },
   loadTranscriptSession: (segments, sourceHistoryId, title, icon) => {
     get().openSession({ segments, sourceHistoryId, title, icon });
   },
   activateSession: (sessionId) => {
-    if (!get().sessions[sessionId]) {
-      return;
-    }
-    set({ activeSessionId: sessionId });
+    set((state) => {
+      if (!state.sessions[sessionId]) {
+        return state;
+      }
+      if (state.activeSessionId === sessionId) {
+        return state;
+      }
+      const nextSessions = pauseSessionIfPlaying(state.sessions, state.activeSessionId);
+      return {
+        activeSessionId: sessionId,
+        ...(nextSessions !== state.sessions ? { sessions: nextSessions } : {}),
+      };
+    });
+  },
+  evictSession: (sessionId) => {
+    set((state) => {
+      if (!sessionId || state.recordingSessionId === sessionId) {
+        return state;
+      }
+      const existing = state.sessions[sessionId];
+      if (!existing) {
+        return state;
+      }
+      revokeBlobAudioUrl(existing.audioUrl);
+      if (sessionId === 'default') {
+        return {
+          sessions: {
+            ...state.sessions,
+            default: { ...DEFAULT_SESSION_DATA },
+          },
+        };
+      }
+      const nextSessions = { ...state.sessions };
+      delete nextSessions[sessionId];
+      return {
+        sessions: nextSessions,
+        activeSessionId: state.activeSessionId === sessionId ? 'default' : state.activeSessionId,
+        createSessionId: state.createSessionId === sessionId ? 'default' : state.createSessionId,
+      };
+    });
+  },
+  evictSessionsByHistoryIds: (historyIds) => {
+    if (historyIds.length === 0) return;
+    const idSet = new Set(historyIds);
+    set((state) => {
+      let changed = false;
+      const nextSessions = { ...state.sessions };
+      let nextActiveSessionId = state.activeSessionId;
+      let nextCreateSessionId = state.createSessionId;
+
+      for (const [sessionId, session] of Object.entries(state.sessions)) {
+        if (sessionId === state.recordingSessionId) {
+          continue;
+        }
+        const matchesHistory =
+          (sessionId !== 'default' && idSet.has(sessionId)) ||
+          Boolean(session.sourceHistoryId && idSet.has(session.sourceHistoryId));
+        if (!matchesHistory) {
+          continue;
+        }
+        changed = true;
+        revokeBlobAudioUrl(session.audioUrl);
+        if (sessionId === 'default') {
+          nextSessions.default = { ...DEFAULT_SESSION_DATA };
+        } else {
+          delete nextSessions[sessionId];
+          if (nextActiveSessionId === sessionId) {
+            nextActiveSessionId = 'default';
+          }
+          if (nextCreateSessionId === sessionId) {
+            nextCreateSessionId = 'default';
+          }
+        }
+      }
+
+      const nextAutoSaveStates = { ...state.autoSaveStates };
+      let autoSaveChanged = false;
+      for (const id of idSet) {
+        if (nextAutoSaveStates[id]) {
+          delete nextAutoSaveStates[id];
+          autoSaveChanged = true;
+        }
+      }
+
+      if (!changed && !autoSaveChanged) {
+        return state;
+      }
+      return {
+        ...(changed
+          ? {
+              sessions: nextSessions,
+              activeSessionId: nextActiveSessionId,
+              createSessionId: nextCreateSessionId,
+            }
+          : {}),
+        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+      };
+    });
   },
   clearActiveTranscriptSession: (options) => {
     const state = get();
@@ -498,6 +648,32 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       },
     }));
   },
+  setSegmentsForHistory: (historyId, segments) => {
+    const normalized = normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start);
+    set((state) => {
+      if (!historyId || historyId === 'current') {
+        const activeSession = state.sessions[state.activeSessionId];
+        if (!activeSession || activeSession.sourceHistoryId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [state.activeSessionId]: { ...activeSession, segments: normalized },
+          },
+        };
+      }
+      let changed = false;
+      const nextSessions = { ...state.sessions };
+      for (const [sessionId, session] of Object.entries(state.sessions)) {
+        if (sessionId === historyId || session.sourceHistoryId === historyId) {
+          nextSessions[sessionId] = { ...session, segments: normalized };
+          changed = true;
+        }
+      }
+      return changed ? { sessions: nextSessions } : state;
+    });
+  },
   addSegment: (segment) => {
     const id = uuidv4();
     const newSegment = normalizeTranscriptSegment({ ...segment, id });
@@ -526,16 +702,43 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     if (updates.length === 0) return;
     const translationMap = new Map(updates.map((u) => [u.id, u.translation]));
     updateActiveSession(set, (session) => {
-      let changed = false;
-      const nextSegments = session.segments.map((s) => {
-        const tr = translationMap.get(s.id);
-        if (tr !== undefined && (s.translation !== tr || s.draftTranslation !== undefined)) {
-          changed = true;
-          return { ...s, translation: tr, draftTranslation: undefined };
+      const nextSegments = applyTranslationPatchToSegments(session.segments, translationMap);
+      return nextSegments ? { segments: nextSegments } : {};
+    });
+  },
+  patchSegmentTranslationsForHistory: (historyId, updates) => {
+    if (updates.length === 0) return;
+    const translationMap = new Map(updates.map((u) => [u.id, u.translation]));
+    set((state) => {
+      if (!historyId || historyId === 'current') {
+        const activeSession = state.sessions[state.activeSessionId];
+        if (!activeSession || activeSession.sourceHistoryId) {
+          return state;
         }
-        return s;
-      });
-      return changed ? { segments: nextSegments } : {};
+        const nextSegments = applyTranslationPatchToSegments(
+          activeSession.segments,
+          translationMap
+        );
+        if (!nextSegments) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [state.activeSessionId]: { ...activeSession, segments: nextSegments },
+          },
+        };
+      }
+      let changed = false;
+      const nextSessions = { ...state.sessions };
+      for (const [sessionId, session] of Object.entries(state.sessions)) {
+        if (sessionId === historyId || session.sourceHistoryId === historyId) {
+          const nextSegments = applyTranslationPatchToSegments(session.segments, translationMap);
+          if (nextSegments) {
+            nextSessions[sessionId] = { ...session, segments: nextSegments };
+            changed = true;
+          }
+        }
+      }
+      return changed ? { sessions: nextSessions } : state;
     });
   },
   updateSegmentForSession: (sessionId, id, updates) => {
@@ -932,4 +1135,19 @@ export const patchSegmentTranslations = (
 
 export const setRecordingSessionId = (id: string | null): void => {
   useTranscriptStore.getState().setRecordingSessionId(id);
+};
+
+export const evictTranscriptSessionsByHistoryIds = (historyIds: string[]): void => {
+  useTranscriptStore.getState().evictSessionsByHistoryIds(historyIds);
+};
+
+export const setSegmentsForHistory = (historyId: string, segments: TranscriptSegment[]): void => {
+  useTranscriptStore.getState().setSegmentsForHistory(historyId, segments);
+};
+
+export const patchSegmentTranslationsForHistory = (
+  historyId: string,
+  updates: Array<{ id: string; translation: string }>
+): void => {
+  useTranscriptStore.getState().patchSegmentTranslationsForHistory(historyId, updates);
 };

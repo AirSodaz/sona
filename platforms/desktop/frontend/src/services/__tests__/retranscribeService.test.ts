@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type HistoryState, useHistoryStore } from '../../stores/historyStore';
 import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
+import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
@@ -126,6 +130,50 @@ describe('RetranscribeService', () => {
       undefined,
       undefined,
       'ja'
+    );
+  });
+
+  it('writes retranscribed segments only to the originating history session when switching tabs mid-job', async () => {
+    const originalSegments: TranscriptSegment[] = [
+      { id: 'old-1', start: 0, end: 1, text: 'old text', isFinal: true },
+    ];
+    const nextSegments: TranscriptSegment[] = [
+      { id: 'new-1', start: 0, end: 1, text: 'new text', isFinal: true },
+    ];
+    const otherSegments: TranscriptSegment[] = [
+      { id: 'rec-1', start: 0, end: 1, text: 'live recording', isFinal: false },
+    ];
+    const updateTranscript = vi.fn().mockResolvedValue(undefined);
+
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'history-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'history-a': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'history-a',
+          segments: originalSegments,
+        },
+        'live-rec': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-rec',
+          segments: otherSegments,
+        },
+      },
+    });
+    useHistoryStore.setState({ updateTranscript } as Partial<HistoryState>);
+    vi.mocked(transcriptionService.transcribeFile).mockImplementation(async () => {
+      useCanonicalTranscriptStore.getState().activateSession('live-rec');
+      return nextSegments;
+    });
+
+    await retranscribeService.retranscribeCurrentRecord();
+
+    expect(useCanonicalTranscriptStore.getState().sessions['history-a'].segments).toEqual(
+      normalizeTranscriptSegments(nextSegments)
+    );
+    expect(useCanonicalTranscriptStore.getState().sessions['live-rec'].segments).toEqual(
+      otherSegments
     );
   });
 });

@@ -288,4 +288,21 @@ describe('TranscriptEditor', () => {
     document.body.removeChild(outsideInput);
     document.body.removeChild(wrapper);
   });
+
+  it('ignores Ctrl+F and does not render SearchUI when isActive is false', () => {
+    useSearchStore.setState({ isOpen: false });
+    useTranscriptStore.setState({
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+
+    const { container } = render(<TranscriptEditor isActive={false} />);
+    document.body.focus();
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    expect(useSearchStore.getState().isOpen).toBe(false);
+
+    act(() => {
+      useSearchStore.setState({ isOpen: true });
+    });
+    expect(container.querySelector('.search-ui-container')).toBeNull();
+  });
 });
