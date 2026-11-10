@@ -78,6 +78,19 @@ describe('ToolCliPanel', () => {
     });
   });
 
+  it('renders error banner when store contains error and dismisses it', async () => {
+    vi.mocked(cliService.getStatus).mockRejectedValueOnce(new Error('Failed to access registry'));
+    render(<ToolCliPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to access registry/i)).toBeDefined();
+    });
+    const dismissBtn = screen.getByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismissBtn);
+
+    expect(useCliStore.getState().error).toBeNull();
+  });
+
   it('switches shell completions tabs', () => {
     render(<ToolCliPanel />);
 

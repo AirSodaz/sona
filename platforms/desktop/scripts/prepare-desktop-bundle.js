@@ -143,6 +143,7 @@ function stageBinShim(repoRoot, target, runtimeLibDir) {
       return;
     }
   }
+  throw new Error(`Missing release sona-bin-shim binary for ${target}: ${sourceCandidates[0]}`);
 }
 
 async function stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand) {

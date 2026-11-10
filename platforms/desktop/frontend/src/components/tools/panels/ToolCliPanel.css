@@ -40,6 +40,31 @@
   font-weight: 600;
 }
 
+.tool-cli-alert-banner.alert-error {
+  background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-error) 24%, transparent);
+}
+
+.tool-cli-alert-banner.alert-error .tool-cli-alert-icon {
+  color: var(--color-error);
+}
+
+/* Pulsing status dot */
+.tool-cli-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-text-muted);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.tool-cli-status-dot.active {
+  background-color: var(--color-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 24%, transparent);
+}
+
 /* Actions cluster in settings items */
 .tool-cli-actions-row {
   display: flex;

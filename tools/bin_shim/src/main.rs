@@ -64,7 +64,7 @@ fn main() -> ExitCode {
     match command.status() {
         Ok(status) => {
             if let Some(code) = status.code() {
-                ExitCode::from(code as u8)
+                std::process::exit(code);
             } else {
                 ExitCode::FAILURE
             }

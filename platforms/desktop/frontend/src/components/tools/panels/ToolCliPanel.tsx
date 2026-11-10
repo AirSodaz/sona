@@ -21,10 +21,12 @@ export function ToolCliPanel(): React.JSX.Element {
     status,
     isLoading,
     isTogglingPath,
+    error,
     pathJustUpdated,
     fetchStatus,
     setPathEnabled,
     resetPathJustUpdated,
+    resetError,
   } = useCliStore();
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -166,6 +168,31 @@ export function ToolCliPanel(): React.JSX.Element {
       />
 
       <div className="tools-panel-body">
+        {error && (
+          <div className="tool-cli-alert-banner alert-error" role="alert">
+            <div className="tool-cli-alert-content">
+              <AlertCircle size={16} className="tool-cli-alert-icon" />
+              <div className="tool-cli-alert-message">
+                <strong>
+                  {t('common.error', {
+                    defaultValue: 'Error',
+                  })}
+                  :
+                </strong>{' '}
+                {error}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-icon-sm"
+              onClick={resetError}
+              aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {pathJustUpdated && (
           <div className="tool-cli-alert-banner" role="alert">
             <div className="tool-cli-alert-content">
@@ -220,7 +247,7 @@ export function ToolCliPanel(): React.JSX.Element {
           >
             <div className="tool-cli-actions-row">
               <span className={`badge ${inPath ? 'badge-completed' : 'badge-pending'}`}>
-                <span className={`mcp-status-dot ${inPath ? 'active' : ''}`} />
+                <span className={`tool-cli-status-dot ${inPath ? 'active' : ''}`} />
                 {statusText}
               </span>
               {status?.canModifyPath ? (

@@ -24,25 +24,25 @@ fn resolve_cli_binary_and_bin_dir() -> (Option<PathBuf>, Option<PathBuf>, String
     let current_exe = std::env::current_exe().ok();
     let current_dir = current_exe.as_deref().and_then(Path::parent);
 
-    // 1. Check bin/ next to current exe (Standard Windows/Linux layout)
+    // 1. Check next to current exe (Canonical root sidecar binary)
     if let Some(dir) = current_dir {
         let bin_candidate = dir.join("bin");
-        let cli_in_bin = bin_candidate.join(binary_name);
-        if cli_in_bin.is_file() {
-            return (
-                Some(cli_in_bin),
-                Some(bin_candidate),
-                "installed_with_bin".to_string(),
-            );
-        }
-
-        // 2. Check next to current exe (Root sidecar)
         let cli_next_to_exe = dir.join(binary_name);
         if cli_next_to_exe.is_file() {
             return (
                 Some(cli_next_to_exe),
                 Some(bin_candidate),
                 "installed_root".to_string(),
+            );
+        }
+
+        // 2. Check bin/ next to current exe (Standard Windows/Linux layout fallback)
+        let cli_in_bin = bin_candidate.join(binary_name);
+        if cli_in_bin.is_file() {
+            return (
+                Some(cli_in_bin),
+                Some(bin_candidate),
+                "installed_with_bin".to_string(),
             );
         }
 
@@ -168,10 +168,12 @@ mod win_path {
             if written == 0 || written > needed {
                 return raw.to_string();
             }
-            if let Some(&0) = buf.last() {
-                buf.pop();
-            }
-            String::from_utf16_lossy(&buf)
+            let valid_len = if written > 0 && buf[written as usize - 1] == 0 {
+                (written - 1) as usize
+            } else {
+                written as usize
+            };
+            String::from_utf16_lossy(&buf[..valid_len])
         }
     }
 
@@ -400,9 +402,11 @@ pub async fn cli_get_status() -> Result<CliStatus, String> {
     .to_string();
 
     let can_modify_path = if cfg!(windows) {
-        bin_dir.is_some() && (cli_path.is_some() || install_type != "not_found")
+        install_type != "system_path"
+            && bin_dir.is_some()
+            && (cli_path.is_some() || install_type != "not_found")
     } else if cfg!(unix) {
-        cli_path.is_some()
+        install_type != "system_path" && cli_path.is_some()
     } else {
         false
     };

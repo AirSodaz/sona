@@ -371,6 +371,7 @@ test('desktop bundle preparer fails when a llama.cpp shared library is missing',
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
   fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
+  fs.writeFileSync(path.join(releaseDir, 'sona-bin-shim.exe'), 'shim');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.rmSync(path.join(releaseDir, 'llama.dll'));
@@ -399,6 +400,7 @@ test('desktop bundle preparer stages and requires ggml-vulkan when the Vulkan bu
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
   fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
+  fs.writeFileSync(path.join(releaseDir, 'sona-bin-shim.exe'), 'shim');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(releaseDir, 'ggml-vulkan.dll'), 'vulkan');
@@ -430,6 +432,7 @@ test('desktop bundle preparer fails when the Vulkan build is enabled but ggml-vu
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
   fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
+  fs.writeFileSync(path.join(releaseDir, 'sona-bin-shim.exe'), 'shim');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));

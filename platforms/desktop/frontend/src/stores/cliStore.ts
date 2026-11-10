@@ -11,6 +11,7 @@ interface CliState {
   fetchStatus: () => Promise<void>;
   setPathEnabled: (enabled: boolean) => Promise<void>;
   resetPathJustUpdated: () => void;
+  resetError: () => void;
 }
 
 export const useCliStore = create<CliState>((set) => ({
@@ -47,4 +48,5 @@ export const useCliStore = create<CliState>((set) => ({
   },
 
   resetPathJustUpdated: () => set({ pathJustUpdated: false }),
+  resetError: () => set({ error: null }),
 }));
