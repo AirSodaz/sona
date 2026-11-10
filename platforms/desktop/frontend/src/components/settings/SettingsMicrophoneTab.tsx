@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { Dropdown } from '../Dropdown';
 import { MicIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { FfmpegInstallGuide } from './FfmpegInstallGuide';
 import {
   SettingsItem,
   SettingsLocationCard,
@@ -70,35 +71,47 @@ export function SettingsMicrophoneTab({
 
   const displayFfmpegPath = isCustomFfmpeg ? ffmpegPath : runtimeEnv?.ffmpegPath || '';
 
-  useEffect(() => {
-    let isMounted = true;
-    const checkFfmpegStatus = async () => {
-      try {
-        const env = await getRuntimeEnvironmentStatus();
-        if (!isMounted) return;
-        setRuntimeEnv(env);
+  const checkFfmpegStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      setIsFfmpegBusy(true);
+      const env = await getRuntimeEnvironmentStatus();
+      setRuntimeEnv(env);
 
-        if (isCustomFfmpeg) {
-          const statuses = await getPathStatuses([ffmpegPath.trim()]);
-          if (!isMounted) return;
-          setIsFfmpegValid(statuses[0]?.kind === 'file');
-        } else {
-          setIsFfmpegValid(env.ffmpegExists);
-        }
-      } catch (err) {
-        logger.warn('Failed to check FFmpeg runtime status:', err);
-        if (isMounted) {
-          setIsFfmpegValid(false);
-        }
+      if (isCustomFfmpeg) {
+        const statuses = await getPathStatuses([ffmpegPath.trim()]);
+        const valid = statuses[0]?.kind === 'file';
+        setIsFfmpegValid(valid);
+        return valid;
+      } else {
+        const valid = Boolean(env.ffmpegExists);
+        setIsFfmpegValid(valid);
+        return valid;
       }
-    };
-
-    void checkFfmpegStatus();
-
-    return () => {
-      isMounted = false;
-    };
+    } catch (err) {
+      logger.warn('Failed to check FFmpeg runtime status:', err);
+      setIsFfmpegValid(false);
+      return false;
+    } finally {
+      setIsFfmpegBusy(false);
+    }
   }, [ffmpegPath, isCustomFfmpeg]);
+
+  useEffect(() => {
+    void checkFfmpegStatus();
+  }, [checkFfmpegStatus]);
+
+  useEffect(() => {
+    if (!isOpen || !isActiveTab || !ffmpegEnabled) return;
+
+    const handleWindowFocus = () => {
+      void checkFfmpegStatus();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [isOpen, isActiveTab, ffmpegEnabled, checkFfmpegStatus]);
 
   const handleBrowseFfmpeg = async () => {
     try {
@@ -648,46 +661,54 @@ export function SettingsMicrophoneTab({
         </SettingsItem>
 
         {ffmpegEnabled && (
-          <SettingsLocationCard
-            testId="settings-microphone-ffmpeg-card"
-            title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
-            hint={t('settings.ffmpeg_path_hint', {
-              defaultValue:
-                'Specify a local FFmpeg executable on your system. Leave empty to use system PATH or auto-detected version.',
-            })}
-            path={displayFfmpegPath}
-            isCustom={isCustomFfmpeg}
-            isValid={isFfmpegValid}
-            isBusy={isFfmpegBusy}
-            changeLabel={t('common.change_path', { defaultValue: 'Change Path...' })}
-            onChangePath={handleBrowseFfmpeg}
-            openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
-            onOpenFolder={handleOpenFfmpegFolder}
-            restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
-            onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
-            bottomHint={
-              isCustomFfmpeg
-                ? isFfmpegValid
-                  ? t('settings.ffmpeg_hint_ready', {
-                      defaultValue: 'A valid FFmpeg executable is detected and ready.',
-                    })
-                  : t('settings.ffmpeg_hint_custom_missing', {
-                      defaultValue:
-                        'The specified custom FFmpeg executable was not found. Please verify the file path.',
-                    })
-                : isFfmpegValid
-                  ? t('settings.ffmpeg_hint_ready', {
-                      defaultValue: 'A valid FFmpeg executable is detected and ready.',
-                    })
-                  : t('settings.ffmpeg_hint_missing', {
-                      defaultValue:
-                        'FFmpeg is not installed. Please install FFmpeg or specify a valid executable path, or disable FFmpeg to use the built-in decoder.',
-                    })
-            }
-            bottomHintColor={
-              isCustomFfmpeg && !isFfmpegValid ? 'var(--color-danger, #ef4444)' : undefined
-            }
-          />
+          <>
+            <SettingsLocationCard
+              testId="settings-microphone-ffmpeg-card"
+              title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
+              hint={t('settings.ffmpeg_path_hint', {
+                defaultValue:
+                  'Specify a local FFmpeg executable on your system. Leave empty to use system PATH or auto-detected version.',
+              })}
+              path={displayFfmpegPath}
+              isCustom={isCustomFfmpeg}
+              isValid={isFfmpegValid}
+              isBusy={isFfmpegBusy}
+              changeLabel={t('common.change_path', { defaultValue: 'Change Path...' })}
+              onChangePath={handleBrowseFfmpeg}
+              openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
+              onOpenFolder={handleOpenFfmpegFolder}
+              restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
+              onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
+              bottomHint={
+                isCustomFfmpeg
+                  ? isFfmpegValid
+                    ? t('settings.ffmpeg_hint_ready', {
+                        defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                      })
+                    : t('settings.ffmpeg_hint_custom_missing', {
+                        defaultValue:
+                          'The specified custom FFmpeg executable was not found. Please verify the file path.',
+                      })
+                  : isFfmpegValid
+                    ? t('settings.ffmpeg_hint_ready', {
+                        defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                      })
+                    : t('settings.ffmpeg_hint_missing', {
+                        defaultValue:
+                          'FFmpeg is not installed. Please install FFmpeg or specify a valid executable path, or disable FFmpeg to use the built-in decoder.',
+                      })
+              }
+              bottomHintColor={
+                isCustomFfmpeg && !isFfmpegValid ? 'var(--color-danger, #ef4444)' : undefined
+              }
+            />
+
+            <FfmpegInstallGuide
+              isValid={isFfmpegValid}
+              onRecheck={checkFfmpegStatus}
+              isRechecking={isFfmpegBusy}
+            />
+          </>
         )}
       </SettingsSection>
     </SettingsTabContainer>

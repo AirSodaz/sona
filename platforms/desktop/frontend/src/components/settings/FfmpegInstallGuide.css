@@ -1,0 +1,205 @@
+.ffmpeg-install-guide {
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-secondary, var(--color-bg-elevated));
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.ffmpeg-install-guide.missing {
+  border-color: color-mix(in srgb, var(--color-primary, #6366f1) 40%, var(--color-border));
+}
+
+.ffmpeg-install-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.ffmpeg-install-guide-header:hover {
+  background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.04));
+}
+
+.ffmpeg-install-guide-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.ffmpeg-install-guide-header-title svg {
+  color: var(--color-text-secondary);
+}
+
+.ffmpeg-install-guide-os-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.ffmpeg-install-guide-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ffmpeg-install-guide-chevron {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.ffmpeg-install-guide-content {
+  padding: 0 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ffmpeg-install-guide-desc {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.ffmpeg-install-guide-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ffmpeg-install-guide-command-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.ffmpeg-install-guide-command-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ffmpeg-install-guide-command-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ffmpeg-install-guide-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82rem;
+  color: var(--color-text-primary);
+  background: transparent;
+  padding: 0;
+  border: none;
+  word-break: break-all;
+  user-select: all;
+}
+
+.ffmpeg-install-guide-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.ffmpeg-install-guide-copy-btn.btn-copied {
+  color: var(--color-success, #10b981);
+  border-color: var(--color-success-border, rgba(16, 185, 129, 0.3));
+  background: var(--color-success-bg, rgba(16, 185, 129, 0.1));
+}
+
+.ffmpeg-install-guide-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.ffmpeg-install-guide-manual-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ffmpeg-install-guide-manual-link:hover {
+  opacity: 0.85;
+}
+
+.ffmpeg-install-guide-status-banner {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ffmpeg-install-guide-status-banner.success {
+  background: var(--color-success-bg, rgba(16, 185, 129, 0.12));
+  color: var(--color-success, #10b981);
+  border: 1px solid var(--color-success-border, rgba(16, 185, 129, 0.25));
+}
+
+.ffmpeg-install-guide-status-banner.failed {
+  background: var(--color-danger-bg, rgba(239, 68, 68, 0.12));
+  color: var(--color-danger, #ef4444);
+  border: 1px solid var(--color-danger-border, rgba(239, 68, 68, 0.25));
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -12,6 +12,7 @@ const mockListMicrophoneDeviceOptions = vi.fn();
 const mockListSystemAudioDeviceOptions = vi.fn();
 const mockVisualizerPeakRefs = vi.hoisted(() => [] as Array<{ current: number }>);
 const mockOpen = vi.fn();
+const mockOpenUrl = vi.fn();
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -43,6 +44,9 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: (...args: unknown[]) => mockOpen(...args),
 }));
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: (...args: unknown[]) => mockOpenUrl(...args),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -57,6 +61,12 @@ vi.mock('lucide-react', () => ({
   FolderOpen: () => null,
   ExternalLink: () => null,
   RotateCcw: () => null,
+  HelpCircle: () => null,
+  ChevronDown: () => null,
+  ChevronRight: () => null,
+  Copy: () => null,
+  Check: () => null,
+  RefreshCw: () => null,
 }));
 
 vi.mock('../Icons', () => ({
@@ -519,5 +529,29 @@ describe('SettingsMicrophoneTab', () => {
 
     fireEvent.click(ffmpegSwitch);
     expect(useConfigStore.getState().config.ffmpegEnabled).toBe(true);
+  });
+
+  it('renders FFmpeg install guide and triggers re-check on window focus when tab is active', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        ffmpegEnabled: true,
+      },
+    });
+
+    render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ffmpeg-install-guide')).toBeDefined();
+    });
+
+    const initialCalls = getInvokeCalls('get_runtime_environment_status').length;
+
+    // Simulate window focus
+    fireEvent(window, new Event('focus'));
+
+    await waitFor(() => {
+      expect(getInvokeCalls('get_runtime_environment_status').length).toBeGreaterThan(initialCalls);
+    });
   });
 });
