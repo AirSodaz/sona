@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::State;
 
 use crate::integrations::asr::{
     AsrPortError, AsrRuntimeMetricsSnapshot, AsrTranscriptionRequest, TauriAsrRuntimeObserver,
@@ -39,7 +39,6 @@ pub async fn create_external_live_source(
 
 #[tauri::command(async)]
 pub async fn start_external_live_transcription(
-    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_token: String,
@@ -66,7 +65,7 @@ pub async fn start_external_live_transcription(
         );
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
-    configure_realtime_translation(&services, &app);
+    configure_realtime_translation(&services);
     let acquire_res = services
         .asr
         .live_coordinator()
@@ -142,7 +141,7 @@ pub async fn start_native_live_transcription(
         .to_path_buf();
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
-    configure_realtime_translation(&services, &app);
+    configure_realtime_translation(&services);
     let lease = match crate::integrations::audio::start_native_live_capture(
         audio_arc,
         asr_arc,
@@ -354,7 +353,6 @@ pub async fn pause_native_live_transcription(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn resume_native_live_transcription(
-    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
@@ -372,7 +370,7 @@ pub async fn resume_native_live_transcription(
         services.emitter.clone(),
         services.asr.metrics_store(),
     )) as Arc<dyn AsrRuntimeObserver>;
-    configure_realtime_translation(&services, &app);
+    configure_realtime_translation(&services);
     match services
         .asr
         .live_coordinator()
@@ -535,7 +533,7 @@ pub async fn test_online_asr_provider(
     sona_online_asr::test_online_asr_provider(&provider_id, &config).await
 }
 
-pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &tauri::AppHandle) {
+pub(crate) fn configure_realtime_translation(services: &DesktopServices) {
     let realtime_translation_enabled = services
         .config
         .get_setting("realtimeTranslationEnabled")
@@ -581,65 +579,52 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &t
             .flatten()
             .and_then(|v| v.as_str().map(String::from));
 
-        if let Ok(models_dir) =
-            crate::platform::storage_location::resolve_active_models_dir_for_app(app)
-        {
-            match crate::integrations::translation::TranslationEngineFactory::create_engine(
-                services,
-                engine_kind,
-                model_id.as_deref(),
-                &src,
-                &tgt,
-                &models_dir,
-            ) {
-                Ok(engine) => {
-                    let coordinator = match engine_kind {
-                        sona_core::ports::translation::TranslationEngineKind::LlamaCpp => {
-                            Arc::new(
-                                sona_application::live_transcription::StreamingTranslationCoordinator::new(
-                                    engine, src, tgt,
-                                )
-                                .with_debounce(1000, 3),
+        let models_dir = services.active_models_dir();
+        match crate::integrations::translation::TranslationEngineFactory::create_engine(
+            services,
+            engine_kind,
+            model_id.as_deref(),
+            &src,
+            &tgt,
+            &models_dir,
+        ) {
+            Ok(engine) => {
+                let coordinator = match engine_kind {
+                    sona_core::ports::translation::TranslationEngineKind::LlamaCpp => {
+                        Arc::new(
+                            sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                                engine, src, tgt,
                             )
-                        }
-                        sona_core::ports::translation::TranslationEngineKind::OnnxNmt => {
-                            Arc::new(
-                                sona_application::live_transcription::StreamingTranslationCoordinator::new(
-                                    engine, src, tgt,
-                                )
-                                .with_debounce(300, 3),
+                            .with_debounce(1000, 3),
+                        )
+                    }
+                    sona_core::ports::translation::TranslationEngineKind::OnnxNmt => {
+                        Arc::new(
+                            sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                                engine, src, tgt,
                             )
-                        }
-                    };
-                    services
-                        .asr
-                        .live_coordinator()
-                        .set_translation(Some(coordinator));
-                }
-                Err(e) => {
-                    log::warn!(
-                        "[ASR] Realtime translation model could not be loaded ({engine_str}): {e}"
-                    );
-                    services.asr.live_coordinator().set_translation(None);
-                    let _ = app.emit(
-                        "realtime-translation-error",
-                        serde_json::json!({
-                            "error": e.to_string(),
-                            "engine": engine_str,
-                        }),
-                    );
-                }
+                            .with_debounce(300, 3),
+                        )
+                    }
+                };
+                services
+                    .asr
+                    .live_coordinator()
+                    .set_translation(Some(coordinator));
             }
-        } else {
-            log::warn!("[ASR] Failed to resolve active models directory for realtime translation");
-            services.asr.live_coordinator().set_translation(None);
-            let _ = app.emit(
-                "realtime-translation-error",
-                serde_json::json!({
-                    "error": "Failed to resolve active models directory".to_string(),
-                    "engine": engine_str,
-                }),
-            );
+            Err(e) => {
+                log::warn!(
+                    "[ASR] Realtime translation model could not be loaded ({engine_str}): {e}"
+                );
+                services.asr.live_coordinator().set_translation(None);
+                let _ = services.emitter.emit(
+                    "realtime-translation-error",
+                    serde_json::json!({
+                        "error": e.to_string(),
+                        "engine": engine_str,
+                    }),
+                );
+            }
         }
     } else {
         services.asr.live_coordinator().set_translation(None);
@@ -649,7 +634,6 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &t
 #[tauri::command(async)]
 pub async fn toggle_live_translation(
     services: State<'_, DesktopServices>,
-    app: tauri::AppHandle,
     enabled: bool,
     source_lang: Option<String>,
     target_lang: Option<String>,
@@ -725,14 +709,7 @@ pub async fn toggle_live_translation(
         src.clone()
     };
 
-    let models_dir =
-        match crate::platform::storage_location::resolve_active_models_dir_for_app(&app) {
-            Ok(dir) => dir,
-            Err(e) => {
-                services.asr.live_coordinator().set_translation(None);
-                return Err(format!("Failed to resolve models directory: {e}"));
-            }
-        };
+    let models_dir = services.active_models_dir();
 
     let engine = match crate::integrations::translation::TranslationEngineFactory::create_engine(
         &services,
