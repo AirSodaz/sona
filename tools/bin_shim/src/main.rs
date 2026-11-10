@@ -85,7 +85,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_target_exe() {
+    #[cfg(windows)]
+    fn test_resolve_target_exe_windows() {
         let fake_shim = Path::new("C:\\Program Files\\Sona\\bin\\sona-cli.exe");
         let target = resolve_target_exe(fake_shim).unwrap();
         assert_eq!(
@@ -93,14 +94,28 @@ mod tests {
             PathBuf::from("C:\\Program Files\\Sona\\sona-cli.exe")
         );
 
-        let fake_mcp = Path::new("/opt/sona/bin/sona-mcp");
-        let target_mcp = resolve_target_exe(fake_mcp).unwrap();
-        assert_eq!(target_mcp, PathBuf::from("/opt/sona/sona-mcp"));
+        let root_shim = Path::new("C:\\sona-cli.exe");
+        assert!(resolve_target_exe(root_shim).is_err());
     }
 
     #[test]
-    fn test_resolve_target_exe_rejects_self() {
-        let root_shim = Path::new("C:\\sona-cli.exe");
+    #[cfg(unix)]
+    fn test_resolve_target_exe_unix() {
+        let fake_mcp = Path::new("/opt/sona/bin/sona-mcp");
+        let target_mcp = resolve_target_exe(fake_mcp).unwrap();
+        assert_eq!(target_mcp, PathBuf::from("/opt/sona/sona-mcp"));
+
+        let root_shim = Path::new("/sona-cli");
+        assert!(resolve_target_exe(root_shim).is_err());
+    }
+
+    #[test]
+    fn test_resolve_target_exe_relative() {
+        let fake_shim = Path::new("app").join("bin").join("sona-cli");
+        let target = resolve_target_exe(&fake_shim).unwrap();
+        assert_eq!(target, Path::new("app").join("sona-cli"));
+
+        let root_shim = Path::new("sona-cli");
         assert!(resolve_target_exe(root_shim).is_err());
     }
 }
