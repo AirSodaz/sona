@@ -17,6 +17,7 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 import { isHistoryItemDraft } from '../../types/history';
 import { AudioPlayer } from '../AudioPlayer';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -97,11 +98,12 @@ export function TranscriptWorkbench({
   const storeIcon = useTranscriptSessionStore((state) => state.icon);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
+  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
   const setTitle = useTranscriptSessionStore((state) => state.setTitle);
   const setIcon = useTranscriptSessionStore((state) => state.setIcon);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
-
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
   const currentHistoryItem = useHistoryStore((state) =>
     sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
@@ -212,7 +214,13 @@ export function TranscriptWorkbench({
       ? t('panel.batch_import', { defaultValue: 'Batch Import' })
       : t('panel.live_record', { defaultValue: 'Live Record' });
   const displayTitle = propsTitle || storeTitle || fallbackTitle;
-  const isManualHeaderActionsDisabled = isRecording;
+  const isCurrentSessionRecording = Boolean(
+    isRecording &&
+      (recordingSessionId
+        ? activeSessionId === recordingSessionId
+        : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+  const isManualHeaderActionsDisabled = isCurrentSessionRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {

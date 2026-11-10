@@ -10,13 +10,22 @@ import { formatDisplayTime } from '../../utils/exportFormats';
 export function TranscriptAnticipationIndicator(): React.JSX.Element | null {
   const isRecording = useTranscriptStore((state) => state.isRecording);
   const isPaused = useTranscriptStore((state) => state.isPaused);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
+  const activeSessionId = useTranscriptStore((state) => state.activeSessionId);
   const segments = useTranscriptSessionStore((state) => state.segments);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
 
-  // Only render when recording is active, not paused, and we have existing segments
-  if (!isRecording || isPaused || segments.length === 0) {
+  const isCurrentSessionRecording = Boolean(
+    isRecording &&
+      (recordingSessionId
+        ? activeSessionId === recordingSessionId
+        : sourceHistoryId === 'current' || !sourceHistoryId)
+  );
+
+  // Only render when recording is active for this session, not paused, and we have existing segments
+  if (!isCurrentSessionRecording || isPaused || segments.length === 0) {
     return null;
   }
-
   const lastSegment = segments[segments.length - 1];
   const isLastSegmentPartial = !lastSegment.isFinal;
 

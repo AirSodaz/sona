@@ -87,9 +87,10 @@ export const DEFAULT_SESSION_DATA: SessionData = {
 export interface TranscriptStore {
   // --- Core State ---
   activeSessionId: string;
+  createSessionId: string;
+  projectsSessionId: string | null;
   recordingSessionId: string | null;
   sessions: Record<string, SessionData>;
-
   // --- Runtime (Global) ---
   mode: AppMode;
   ingestionFocus: IngestionFocus;
@@ -267,9 +268,10 @@ function calculateSegmentUpdate(
 
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   activeSessionId: 'default',
+  createSessionId: 'default',
+  projectsSessionId: null,
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
-
   mode: 'create',
   ingestionFocus: 'live',
   processingStatus: 'idle',
@@ -287,39 +289,73 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setMode: (mode, focus) => {
     if ((mode as string) === 'live') {
       const recId = get().recordingSessionId;
-      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      const targetSessionId =
+        recId && get().sessions[recId]
+          ? recId
+          : get().createSessionId && get().sessions[get().createSessionId]
+            ? get().createSessionId
+            : 'default';
       set({
         mode: 'create',
         ingestionFocus: 'live',
         activeSessionId: targetSessionId,
+        createSessionId: targetSessionId,
       });
       return;
     }
     if ((mode as string) === 'batch') {
       const activeItemId = activeBatchItemIdResolver?.();
       const targetSessionId =
-        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
-      set({ mode: 'create', ingestionFocus: 'batch', activeSessionId: targetSessionId });
+        activeItemId && get().sessions[activeItemId]
+          ? activeItemId
+          : get().createSessionId && get().sessions[get().createSessionId]
+            ? get().createSessionId
+            : 'default';
+      set({
+        mode: 'create',
+        ingestionFocus: 'batch',
+        activeSessionId: targetSessionId,
+        createSessionId: targetSessionId,
+      });
       return;
     }
     if (mode === 'create') {
-      const nextFocus = focus ?? get().ingestionFocus;
+      const recId = get().recordingSessionId;
+      if (focus === undefined) {
+        const createId = get().createSessionId;
+        const targetSessionId =
+          recId && get().sessions[recId]
+            ? recId
+            : createId && get().sessions[createId]
+              ? createId
+              : 'default';
+        set({ mode: 'create', activeSessionId: targetSessionId, createSessionId: targetSessionId });
+        return;
+      }
+      const nextFocus = focus;
       let targetSessionId = 'default';
       if (nextFocus === 'live') {
-        const recId = get().recordingSessionId;
         targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       } else if (nextFocus === 'batch') {
         const activeItemId = activeBatchItemIdResolver?.();
         targetSessionId = activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
       }
-      set({ mode: 'create', ingestionFocus: nextFocus, activeSessionId: targetSessionId });
+      set({
+        mode: 'create',
+        ingestionFocus: nextFocus,
+        activeSessionId: targetSessionId,
+        createSessionId: targetSessionId,
+      });
       return;
     }
     if (mode === 'projects' || mode === 'tools') {
-      set({ mode });
+      const isCurrentlyCreate = get().mode === 'create';
+      set((state) => ({
+        mode,
+        createSessionId: isCurrentlyCreate ? state.activeSessionId : state.createSessionId,
+      }));
       return;
     }
-    set({ mode });
   },
   setIngestionFocus: (ingestionFocus) => {
     const isCreateMode = get().mode === 'create';
@@ -352,7 +388,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIsAgentRecording: (isAgentRecording, agentRecordingHistoryId = null) =>
     set({ isAgentRecording, agentRecordingHistoryId }),
   // --- Coordinator / Pointers ---
-  setRecordingSessionId: (id) => set({ recordingSessionId: id }),
+  setRecordingSessionId: (id) =>
+    set((state) => ({
+      recordingSessionId: id,
+      createSessionId: id ? id : state.createSessionId,
+    })),
   openSession: (args) => {
     if (typeof args === 'string') {
       get().setAudioUrl(args);
@@ -366,8 +406,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       set({ autoSaveStates });
     }
     const sessionId = sourceHistoryId || uuidv4();
+    const currentMode = get().mode;
     set((state) => ({
       activeSessionId: sessionId,
+      createSessionId: currentMode === 'create' ? sessionId : state.createSessionId,
+      projectsSessionId: currentMode === 'projects' ? sessionId : state.projectsSessionId,
       sessions: {
         ...state.sessions,
         [sessionId]: {

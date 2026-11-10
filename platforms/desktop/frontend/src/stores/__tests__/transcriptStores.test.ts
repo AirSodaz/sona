@@ -458,6 +458,89 @@ describe('Transcript Stores', () => {
     expect(realStore.getState().activeSessionId).toBe('default');
   });
 
+  it('preserves existing transcript session when switching between create and projects modes without explicit focus', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'saved-transcript-789',
+      recordingSessionId: null,
+      mode: 'create',
+      ingestionFocus: 'live',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'saved-transcript-789': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'saved-transcript-789',
+          title: 'Saved Meeting',
+          segments: [
+            { id: 'seg-1', text: 'Important transcript content', start: 0, end: 1, isFinal: true },
+          ],
+        },
+      },
+    });
+
+    // Switch to projects mode
+    realStore.getState().setMode('projects');
+    expect(realStore.getState().mode).toBe('projects');
+
+    // Switch back to create mode without focus argument (tab switch)
+    realStore.getState().setMode('create');
+    expect(realStore.getState().mode).toBe('create');
+    expect(realStore.getState().activeSessionId).toBe('saved-transcript-789');
+    expect(realStore.getState().sessions['saved-transcript-789'].segments).toHaveLength(1);
+    expect(realStore.getState().sessions['saved-transcript-789'].segments[0].text).toBe(
+      'Important transcript content'
+    );
+  });
+
+  it('does not adopt projects item into create session when returning to create tab', () => {
+    const realStore = useCanonicalTranscriptStore;
+    realStore.setState({
+      activeSessionId: 'create-session-123',
+      createSessionId: 'create-session-123',
+      projectsSessionId: null,
+      recordingSessionId: null,
+      mode: 'create',
+      ingestionFocus: 'live',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'create-session-123': {
+          ...DEFAULT_SESSION_DATA,
+          title: 'Draft in Create',
+          segments: [
+            { id: 'seg-create', text: 'Create draft content', start: 0, end: 1, isFinal: true },
+          ],
+        },
+        'project-item-456': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'project-item-456',
+          title: 'Project Item',
+          segments: [
+            { id: 'seg-proj', text: 'Project history content', start: 0, end: 2, isFinal: true },
+          ],
+        },
+      },
+    });
+
+    // Switch to projects mode and open a project item
+    realStore.getState().setMode('projects');
+    realStore.getState().openSession({
+      sourceHistoryId: 'project-item-456',
+      title: 'Project Item',
+      segments: [
+        { id: 'seg-proj', text: 'Project history content', start: 0, end: 2, isFinal: true },
+      ],
+    });
+    expect(realStore.getState().activeSessionId).toBe('project-item-456');
+    expect(realStore.getState().createSessionId).toBe('create-session-123');
+
+    // Switch back to create mode via tab navigation (no focus arg)
+    realStore.getState().setMode('create');
+    expect(realStore.getState().mode).toBe('create');
+    expect(realStore.getState().activeSessionId).toBe('create-session-123');
+    expect(realStore.getState().sessions['create-session-123'].segments[0].text).toBe(
+      'Create draft content'
+    );
+  });
   it('isolates background recording writes from active foreground session', () => {
     const realStore = useCanonicalTranscriptStore;
     const recSessionId = 'bg-rec-789';

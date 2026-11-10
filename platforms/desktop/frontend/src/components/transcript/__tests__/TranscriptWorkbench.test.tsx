@@ -271,6 +271,30 @@ describe('TranscriptWorkbench', () => {
     );
   });
 
+  it('allows rename and close on non-recording sessions even during background recording', async () => {
+    const onClose = vi.fn();
+    useTranscriptStore.setState({
+      isRecording: true,
+      recordingSessionId: 'background-rec-123',
+      activeSessionId: 'hist-viewing-456',
+      sourceHistoryId: 'hist-viewing-456',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Completed notes', isFinal: true }],
+    });
+
+    render(<TranscriptWorkbench onClose={onClose} />);
+
+    const renameButton = screen.getByRole('button', { name: 'common.rename' });
+    const closeButton = screen.getByRole('button', { name: 'common.close' });
+
+    expect(renameButton.hasAttribute('disabled')).toBe(false);
+    expect(closeButton.hasAttribute('disabled')).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
   it('synchronizes fallback title and icon for recording items in projects mode', () => {
     mockHistoryItems.current = [
       {

@@ -187,6 +187,10 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
   const sidecarPatch: SidecarPatch = {};
 
   Object.entries(patch).forEach(([rawKey, value]) => {
+    if (rawKey === 'sessions' || rawKey === 'activeSessionId') {
+      useRealTranscriptStore.setState({ [rawKey]: value } as unknown as Partial<TranscriptStore>);
+      return;
+    }
     if (rawKey === 'config') {
       useConfigStore.setState((state) => ({
         ...state,
@@ -199,7 +203,6 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
       syncEffectiveConfig();
       return;
     }
-
     if (SESSION_KEYS.has(rawKey as keyof SessionPatch)) {
       sessionPatch[rawKey as keyof SessionPatch] = value as never;
       return;
@@ -244,6 +247,8 @@ export function resetTranscriptStores(): void {
 
   store.setState({
     activeSessionId: 'default',
+    createSessionId: 'default',
+    projectsSessionId: null,
     sessions: {
       default: {
         ...DEFAULT_SESSION_DATA,

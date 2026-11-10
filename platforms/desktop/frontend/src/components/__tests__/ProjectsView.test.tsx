@@ -2399,10 +2399,11 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    // 1. Verify projects-main list is visible, NOT detail pane
+    // 1. Verify projects-main list is visible, NOT detail pane, and in-progress recording is excluded from list
     expect(document.querySelector('.projects-main')).not.toBeNull();
     expect(getDetailPlaceholder()).toBeNull();
-
+    expect(screen.queryByRole('button', { name: 'Live Recording Draft' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Completed Call' })).not.toBeNull();
     // 2. Open completed record in projects
     await clickAsync(screen.getByRole('button', { name: 'Completed Call' }));
 
@@ -2418,5 +2419,11 @@ describe('ProjectsView', () => {
       expect(getDetailPlaceholder()).toBeNull();
       expect(document.querySelector('.projects-main')).not.toBeNull();
     });
+
+    // 5. Verify background recording segments were NOT wiped out by projects interactions
+    expect(useTranscriptStore.getState().sessions['live-draft-1'].segments).toHaveLength(1);
+    expect(useTranscriptStore.getState().sessions['live-draft-1'].segments[0].text).toBe(
+      'Live transcription...'
+    );
   });
 });

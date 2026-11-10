@@ -117,8 +117,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       ('segments' in state && Array.isArray(state.segments) ? state.segments.length : 0)
   );
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
@@ -155,9 +155,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
   const clearOpenedItem = useCallback(() => {
     setSelectedHistoryId(null);
-    clearActiveTranscriptSession({ clearAudio: true });
+    const store = useTranscriptStore.getState();
+    if (!store.isRecording || store.activeSessionId !== store.recordingSessionId) {
+      clearActiveTranscriptSession({ clearAudio: true });
+    }
   }, []);
-
   const handleOpenItem = useCallback(
     async (item: HistoryItemType) => {
       if (item.deletedAt != null) {
@@ -206,6 +208,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           audioUrl: url,
         });
         setSelectedHistoryId(item.id);
+        useTranscriptStore.setState({ projectsSessionId: item.id });
         await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
       } catch (error) {
         await showError({
@@ -218,9 +221,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     [showError]
   );
 
+  const browseHistoryItems = useMemo(() => {
+    if (!isRecording || !recordingSessionId) {
+      return historyItems;
+    }
+    return historyItems.filter((item) => item.id !== recordingSessionId);
+  }, [historyItems, isRecording, recordingSessionId]);
+
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
-    historyItems,
+    historyItems: browseHistoryItems,
     projects,
     filterMenuRef,
     isSelectionMode,
@@ -229,6 +239,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     onOpenItem: handleOpenItem,
   });
 
+  const visibleFilteredAndSortedItems = useMemo(() => {
+    if (!isRecording || !recordingSessionId) {
+      return browseState.filteredAndSortedItems;
+    }
+    return browseState.filteredAndSortedItems.filter((item) => item.id !== recordingSessionId);
+  }, [browseState.filteredAndSortedItems, isRecording, recordingSessionId]);
   const projectSettingsDraft = useProjectSettingsDraft({
     browseProject: browseState.browseProject,
     confirm,
@@ -242,8 +258,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     projects,
     setIsSelectionMode,
   });
-  const clearSelection = selectionState.clearSelection;
-  const workspaceSelectionMode = selectionState.isSelectionMode;
   const syncVisibleItems = selectionState.syncVisibleItems;
 
   const {
@@ -360,7 +374,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     return selectedHistoryId;
   }, [historyItems, itemMatchesBrowseScope, segmentsLength, selectedHistoryId, sourceHistoryId]);
-
   const selectedItem = useMemo(
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
     [effectiveSelectedHistoryId, historyItems]
@@ -383,22 +396,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
       queueMicrotask(() => {
-        setSelectedHistoryId(null);
-        clearActiveTranscriptSession({ clearAudio: true });
+        clearOpenedItem();
       });
     }
-  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive]);
-
-  useEffect(() => {
-    if (!isLiveDraftSessionLocked) {
-      return;
-    }
-
-    if (workspaceSelectionMode) {
-      clearSelection();
-    }
-  }, [clearSelection, isLiveDraftSessionLocked, workspaceSelectionMode]);
-
+  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive, clearOpenedItem]);
   const handleSwitchBrowseScope = async (nextScope: string): Promise<boolean> => {
     const isProjectScope = nextScope !== 'all' && nextScope !== 'untagged' && nextScope !== 'trash';
     const initialLockState = getLiveDraftLockState();
@@ -779,7 +780,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       <ProjectsRail
         activeContextId={activeContextId}
         browseProjectId={browseState.browseProjectId}
-        historyItemsCount={historyItems.length}
+        historyItemsCount={browseHistoryItems.length}
         inboxCount={browseState.itemCounts.get(null) || 0}
         isAllItemsScope={browseState.isAllItemsScope}
         isInboxScope={browseState.isInboxScope}
@@ -861,7 +862,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
               onRestoreSelected={() => void handleRestoreHistoryItems(selectionState.selectedIds)}
               onToggleSelectAll={selectionState.handleToggleSelectAll}
               selectedIds={selectionState.selectedIds}
-              totalVisibleItems={browseState.filteredAndSortedItems.length}
+              totalVisibleItems={visibleFilteredAndSortedItems.length}
               t={t}
             />
           )}
@@ -869,7 +870,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           <ProjectsResults
             activeContextId={activeContextId}
             activeSearchResultId={browseState.activeSearchResultId}
-            filteredAndSortedItems={browseState.filteredAndSortedItems}
+            filteredAndSortedItems={visibleFilteredAndSortedItems}
             handleOpenItem={handleOpenItem}
             initialLoadError={browseState.initialLoadError}
             isAllItemsScope={browseState.isAllItemsScope}
