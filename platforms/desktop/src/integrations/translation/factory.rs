@@ -34,24 +34,33 @@ impl TranslationEnginePort for SemaphoreGuardedTranslationEngine {
     }
 }
 
+pub type ActiveOnnxLease = Option<(
+    (String, String),
+    crate::integrations::models::ModelLease<sona_translation_onnx::OnnxNmtAdapter>,
+)>;
+
 pub struct PooledOnnxTranslationEngine {
     pool: Arc<crate::integrations::models::LocalModelPool>,
     models_dir: PathBuf,
-    lease: parking_lot::Mutex<
-        Option<crate::integrations::models::ModelLease<sona_translation_onnx::OnnxNmtAdapter>>,
-    >,
+    lease: parking_lot::Mutex<ActiveOnnxLease>,
 }
 
 impl PooledOnnxTranslationEngine {
     pub fn new(
         pool: Arc<crate::integrations::models::LocalModelPool>,
         models_dir: PathBuf,
+        source_lang: &str,
+        target_lang: &str,
         lease: crate::integrations::models::ModelLease<sona_translation_onnx::OnnxNmtAdapter>,
     ) -> Self {
+        let src =
+            crate::integrations::translation::normalize_language_code(source_lang).to_string();
+        let tgt =
+            crate::integrations::translation::normalize_language_code(target_lang).to_string();
         Self {
             pool,
             models_dir,
-            lease: parking_lot::Mutex::new(Some(lease)),
+            lease: parking_lot::Mutex::new(Some(((src, tgt), lease))),
         }
     }
 }
@@ -64,15 +73,42 @@ impl TranslationEnginePort for PooledOnnxTranslationEngine {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<String, TranslationPortError> {
-        let adapter_opt = self.lease.lock().as_ref().map(|l| l.model_arc());
-        if let Some(adapter) = adapter_opt {
-            adapter.translate(text, source_lang, target_lang).await
+        let norm_src = crate::integrations::translation::normalize_language_code(source_lang);
+        let norm_tgt = crate::integrations::translation::normalize_language_code(target_lang);
+
+        let cached_adapter = {
+            let guard = self.lease.lock();
+            if let Some(((curr_src, curr_tgt), lease)) = guard.as_ref()
+                && curr_src == norm_src
+                && curr_tgt == norm_tgt
+            {
+                Some(lease.model_arc())
+            } else {
+                None
+            }
+        };
+
+        let adapter = if let Some(adapter) = cached_adapter {
+            adapter
         } else {
-            let lease = self
-                .pool
-                .acquire_onnx_model(source_lang, target_lang, &self.models_dir)?;
-            lease.translate(text, source_lang, target_lang).await
-        }
+            let pool = Arc::clone(&self.pool);
+            let models_dir = self.models_dir.clone();
+            let src_string = norm_src.to_string();
+            let tgt_string = norm_tgt.to_string();
+
+            let new_lease = tokio::task::spawn_blocking(move || {
+                pool.acquire_onnx_model(&src_string, &tgt_string, &models_dir)
+            })
+            .await
+            .map_err(|e| TranslationPortError::engine_failed(e.to_string()))??;
+
+            let model_arc = new_lease.model_arc();
+            let mut guard = self.lease.lock();
+            *guard = Some(((norm_src.to_string(), norm_tgt.to_string()), new_lease));
+            model_arc
+        };
+
+        adapter.translate(text, source_lang, target_lang).await
     }
 
     fn engine_kind(&self) -> TranslationEngineKind {
@@ -102,6 +138,8 @@ impl TranslationEngineFactory {
                 let pooled_engine = Arc::new(PooledOnnxTranslationEngine::new(
                     Arc::clone(&services.local_model_pool),
                     models_dir.to_path_buf(),
+                    source_lang,
+                    target_lang,
                     lease,
                 ));
 
@@ -219,5 +257,22 @@ mod tests {
             err.kind,
             sona_core::ports::translation::TranslationPortErrorKind::ModelNotReady
         );
+    }
+
+    #[test]
+    fn factory_creates_online_engine_successfully() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = create_test_services(temp_dir.path());
+        let engine = TranslationEngineFactory::create_engine(
+            &services,
+            TranslationEngineKind::Online,
+            Some("gpt-4o"),
+            "en",
+            "zh",
+            temp_dir.path(),
+        )
+        .unwrap();
+
+        assert_eq!(engine.engine_kind(), TranslationEngineKind::Online);
     }
 }

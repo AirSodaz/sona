@@ -217,7 +217,7 @@ impl StreamingTranslationCoordinator {
                     }
                     Err(_timeout) => {
                         log::warn!(
-                            "Final translation timed out (5000ms) for segment {}",
+                            "Final translation timed out ({timeout_duration:?}) for segment {}",
                             segment.id
                         );
                         let mut states = self.states.lock();

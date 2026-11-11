@@ -140,6 +140,39 @@ impl LlamaCppLlmEngine {
         self.models_dir.as_deref()
     }
 
+    /// Acquires a handle to the requested LLaMA model from the provider or cache.
+    pub async fn acquire_model_handle(
+        &self,
+        model_name_or_path: &str,
+    ) -> Result<LlamaModelHandle, LlmPortError> {
+        let backend = get_llama_backend().map_err(|error| {
+            LlmPortError::new(
+                LlmPortErrorKind::Unavailable,
+                format!("Failed to initialize llama.cpp backend: {error}"),
+            )
+        })?;
+
+        let model_path = self.resolve_model_path(model_name_or_path, None)?;
+
+        let n_gpu_layers = if gpu_backend_available() {
+            GPU_OFFLOAD_ALL_LAYERS
+        } else {
+            0
+        };
+
+        if let Some(provider) = &self.model_provider {
+            provider
+                .acquire_model(backend, &model_path, n_gpu_layers)
+                .await
+        } else {
+            Ok(LlamaModelHandle::from_model(load_cached_model(
+                backend,
+                &model_path,
+                n_gpu_layers,
+            )?))
+        }
+    }
+
     /// Resolves the candidate GGUF model path from configuration, models directory, and defaults.
     pub fn resolve_model_path(
         &self,

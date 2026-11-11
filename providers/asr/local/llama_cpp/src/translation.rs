@@ -1,6 +1,6 @@
 //! LlamaCpp translation adapter implementing TranslationEnginePort.
 
-use crate::llm::LlamaCppLlmEngine;
+use crate::llm::{LlamaCppLlmEngine, LlamaModelHandle};
 use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
@@ -10,11 +10,12 @@ use sona_core::ports::llm::LlmPortErrorKind;
 use sona_core::ports::translation::{
     TranslationEngineKind, TranslationEnginePort, TranslationPortError,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct LlamaCppTranslationAdapter {
     engine: Arc<LlamaCppLlmEngine>,
     model_name: String,
+    task_lease: Mutex<Option<LlamaModelHandle>>,
 }
 
 impl LlamaCppTranslationAdapter {
@@ -22,6 +23,7 @@ impl LlamaCppTranslationAdapter {
         Self {
             engine,
             model_name: model_name.into(),
+            task_lease: Mutex::new(None),
         }
     }
 }
@@ -45,6 +47,16 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
         let trimmed = text.trim();
         if trimmed.is_empty() || src.eq_ignore_ascii_case(tgt) {
             return Ok(trimmed.to_string());
+        }
+
+        // Retain a task-scoped model lease across sentence translations to eliminate VRAM churn
+        let needs_lease = self.task_lease.lock().map(|g| g.is_none()).unwrap_or(false);
+        if needs_lease
+            && let Ok(handle) = self.engine.acquire_model_handle(&self.model_name).await
+            && let Ok(mut guard) = self.task_lease.lock()
+            && guard.is_none()
+        {
+            *guard = Some(handle);
         }
         let (system_prompt, input) =
             build_specialized_translation_prompt(&self.model_name, trimmed, src, tgt);

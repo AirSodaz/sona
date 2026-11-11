@@ -145,9 +145,9 @@ impl LocalModelPool {
 
         // Spawn background reaper task if a Tokio reactor is active
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let reaper_pool = Arc::clone(&pool);
+            let weak_pool = Arc::downgrade(&pool);
             handle.spawn(async move {
-                reaper_pool.run_reaper_loop().await;
+                Self::run_reaper_loop(weak_pool).await;
             });
         }
 
@@ -171,6 +171,10 @@ impl LocalModelPool {
             .split([',', '\n', '\r'])
             .map(|s| s.trim().to_lowercase())
             .filter(|s| !s.is_empty())
+            .flat_map(|s| {
+                let stripped = s.strip_suffix(".exe").unwrap_or(&s).to_string();
+                vec![s, stripped]
+            })
             .collect();
         *self.game_mode_processes.write() = set;
         if enabled {
@@ -221,6 +225,7 @@ impl LocalModelPool {
                 entry.is_switched_out.store(true, Ordering::Relaxed);
             }
         }
+        self.reaper_notify.notify_one();
     }
 
     pub fn set_idle_ttl(&self, ttl: Duration) {
@@ -596,23 +601,34 @@ impl LocalModelPool {
         }
     }
 
-    async fn run_reaper_loop(&self) {
-        while !self.shutdown.load(Ordering::Relaxed) {
-            // Wake every 3 seconds for game mode check or TTL, or immediately when reaper_notify fires
-            let _ =
-                tokio::time::timeout(Duration::from_secs(3), self.reaper_notify.notified()).await;
+    async fn run_reaper_loop(weak_pool: std::sync::Weak<Self>) {
+        loop {
+            let Some(pool) = weak_pool.upgrade() else {
+                break;
+            };
+            if pool.shutdown.load(Ordering::Relaxed) {
+                break;
+            }
+            let reaper_notify = Arc::clone(&pool.reaper_notify);
+            drop(pool);
 
-            if self.shutdown.load(Ordering::Relaxed) {
+            // Wake every 3 seconds for game mode check or TTL, or immediately when reaper_notify fires
+            let _ = tokio::time::timeout(Duration::from_secs(3), reaper_notify.notified()).await;
+
+            let Some(pool) = weak_pool.upgrade() else {
+                break;
+            };
+            if pool.shutdown.load(Ordering::Relaxed) {
                 break;
             }
 
-            let mode = *self.release_mode.read();
-            let ttl = *self.idle_ttl.read();
-            let is_game_fg = self.check_game_mode_foreground();
+            let mode = *pool.release_mode.read();
+            let ttl = *pool.idle_ttl.read();
+            let is_game_fg = pool.check_game_mode_foreground();
 
             let (llm_dropped, onnx_dropped) = {
-                let mut llm_cache = self.llama_models.lock();
-                let mut onnx_cache = self.onnx_models.lock();
+                let mut llm_cache = pool.llama_models.lock();
+                let mut onnx_cache = pool.onnx_models.lock();
 
                 let mut llm_dropped = Vec::new();
                 let mut onnx_dropped = Vec::new();
@@ -721,14 +737,25 @@ mod tests {
         assert!(pool.is_game_mode_enabled());
         {
             let procs = pool.game_mode_processes.read();
+            // Both with and without .exe are preserved for cross-platform robustness
             assert!(procs.contains("eldenring.exe"));
+            assert!(procs.contains("eldenring"));
             assert!(procs.contains("cs2.exe"));
+            assert!(procs.contains("cs2"));
             assert!(procs.contains("cyberpunk2077.exe"));
+            assert!(procs.contains("cyberpunk2077"));
         }
 
         pool.set_idle_ttl(Duration::from_secs(60));
         assert_eq!(pool.idle_ttl(), Duration::from_secs(60));
 
+        pool.shutdown();
+    }
+
+    #[tokio::test]
+    async fn test_mark_all_switched_out_notifies_reaper() {
+        let pool = LocalModelPool::new();
+        pool.mark_all_switched_out();
         pool.shutdown();
     }
 
