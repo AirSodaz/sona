@@ -260,4 +260,57 @@ describe('PolishButton', () => {
     expect(formalRadio.getAttribute('aria-checked')).toBe('true');
     expect(verbatimRadio.getAttribute('aria-checked')).toBe('false');
   });
+
+  it('updates session pipelineSnapshot and project pipeline when selecting a preset in snapshot session', async () => {
+    const updateProjectPipelineSpy = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.setState({
+      activeProjectId: 'proj-b',
+      updateProjectPipeline: updateProjectPipelineSpy,
+      projects: [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: { ...DEFAULT_PROJECT_PIPELINE, enabled: true, polishPresetId: 'formal' },
+        },
+      ],
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'rec-a',
+      sessions: {
+        ...useCanonicalTranscriptStore.getState().sessions,
+        'rec-a': {
+          ...DEFAULT_SESSION_DATA,
+          projectId: 'proj-a',
+          pipelineSnapshot: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            polishPresetId: 'formal',
+            isProjectPipeline: true,
+          },
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        },
+      },
+    });
+
+    render(
+      <TranscriptSessionProvider sessionId="rec-a" isActive={true}>
+        <PolishButton />
+      </TranscriptSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const verbatimRadio = screen.getByRole('menuitemradio', { name: 'polish.modes.verbatim' });
+    fireEvent.click(verbatimRadio);
+
+    expect(updateProjectPipelineSpy).toHaveBeenCalledWith(
+      'proj-a',
+      expect.objectContaining({ polishPresetId: 'verbatim' })
+    );
+    expect(
+      useCanonicalTranscriptStore.getState().sessions['rec-a']?.pipelineSnapshot?.polishPresetId
+    ).toBe('verbatim');
+    expect(useConfigStore.getState().config.polishPresetId).toBe('verbatim');
+  });
 });

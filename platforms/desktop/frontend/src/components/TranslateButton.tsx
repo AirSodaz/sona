@@ -306,7 +306,10 @@ export function TranslateButton({
       translationLanguage: newTgt,
     });
 
-    if (useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot) {
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
       useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
         ...projectPipeline,
         targetLanguage: newTgt,
@@ -375,7 +378,10 @@ export function TranslateButton({
       realtimeTranslationTargetLanguage: nextTarget,
       translationLanguage: nextTarget,
     });
-    if (useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot) {
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
       useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
         ...projectPipeline,
         targetLanguage: nextTarget,
@@ -418,7 +424,10 @@ export function TranslateButton({
       }
       return updated;
     });
-    if (useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot) {
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
       useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
         ...projectPipeline,
         targetLanguage: langCode,

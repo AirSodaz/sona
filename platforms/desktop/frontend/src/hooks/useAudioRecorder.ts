@@ -239,16 +239,25 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments, explicitProjectId) => {
           const snapshot = recordingAutomationSnapshotRef.current;
-          const resolvedProjectId = explicitProjectId ?? snapshot?.projectId ?? null;
+          const originSessionId =
+            recordSessionIdRef.current ||
+            useTranscriptStore.getState().recordingSessionId ||
+            historyId;
+          const session = originSessionId
+            ? useTranscriptStore.getState().sessions[originSessionId]
+            : undefined;
+          const resolvedProjectId =
+            explicitProjectId ?? session?.projectId ?? snapshot?.projectId ?? null;
           const effectiveConfig = snapshot?.config ?? useConfigStore.getState().config;
           const pipeline =
-            snapshot && resolvedProjectId === snapshot.projectId
+            session?.pipelineSnapshot ??
+            (snapshot && resolvedProjectId === snapshot.projectId
               ? snapshot.pipeline
               : resolveItemPipeline(
                   resolvedProjectId,
                   useProjectStore.getState().projects,
                   effectiveConfig
-                );
+                ));
           const hasAnyPostProcess =
             pipeline.autoPolish ||
             pipeline.autoTranslate ||
@@ -258,10 +267,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return segments;
           }
           try {
-            const originSessionId =
-              recordSessionIdRef.current ||
-              useTranscriptStore.getState().recordingSessionId ||
-              historyId;
             const result = await pipelineExecutionEngine.execute({
               historyId,
               sessionId: originSessionId,

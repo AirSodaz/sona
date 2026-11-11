@@ -14,7 +14,9 @@ import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { isHistoryItemDraft } from '../types/history';
+import { DEFAULT_PROJECT_PIPELINE } from '../types/project';
 import { coercePolishPresetId, getPolishPresetOptions } from '../utils/polishPresets';
 import {
   CheckIcon,
@@ -88,6 +90,24 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
   const handlePresetSelect = (presetId: string) => {
     setConfig({ polishPresetId: presetId });
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
+      useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
+        ...projectPipeline,
+        polishPresetId: presetId,
+      });
+    }
+    if (projectId && projectPipeline.isProjectPipeline) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+      if (project) {
+        void useProjectStore.getState().updateProjectPipeline(projectId, {
+          ...(project.pipeline ?? DEFAULT_PROJECT_PIPELINE),
+          polishPresetId: presetId,
+        });
+      }
+    }
     setIsOpen(false);
     triggerRef.current?.focus();
   };
