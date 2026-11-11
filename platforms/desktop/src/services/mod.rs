@@ -109,6 +109,7 @@ pub struct DesktopServices {
     pub downloads: Arc<DownloadState>,
     pub emitter: Arc<dyn EventEmitterPort>,
     pub recording_session: DesktopRecordingSessionTracker,
+    pub local_model_pool: Arc<crate::integrations::models::LocalModelPool>,
     pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
     pub local_nmt_semaphore: Arc<tokio::sync::Semaphore>,
     pub local_llm_semaphore: Arc<tokio::sync::Semaphore>,
@@ -126,6 +127,7 @@ pub struct DesktopServicesBuilder {
     audio: Option<Arc<AudioState>>,
     asr: Option<Arc<AsrState>>,
     downloads: Option<Arc<DownloadState>>,
+    local_model_pool: Option<Arc<crate::integrations::models::LocalModelPool>>,
     translation_pool: Option<Arc<crate::integrations::translation::TranslationModelPool>>,
 }
 
@@ -184,6 +186,14 @@ impl DesktopServicesBuilder {
         self
     }
 
+    pub fn local_model_pool(
+        mut self,
+        local_model_pool: Arc<crate::integrations::models::LocalModelPool>,
+    ) -> Self {
+        self.local_model_pool = Some(local_model_pool);
+        self
+    }
+
     pub fn translation_pool(
         mut self,
         translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
@@ -233,6 +243,15 @@ impl DesktopServicesBuilder {
             .downloads
             .unwrap_or_else(|| Arc::new(DownloadState::new()));
         let recording_session = DesktopRecordingSessionTracker::new();
+        let local_model_pool = match self.local_model_pool {
+            Some(pool) => pool,
+            None => crate::integrations::models::LocalModelPool::new(),
+        };
+        if let Ok(Some(mode_val)) = config.get_setting("localModelReleaseMode")
+            && let Some(mode_str) = mode_val.as_str()
+        {
+            local_model_pool.set_release_mode(mode_str.into());
+        }
         let translation_pool = self.translation_pool.unwrap_or_else(|| {
             Arc::new(crate::integrations::translation::TranslationModelPool::new())
         });
@@ -253,6 +272,7 @@ impl DesktopServicesBuilder {
             downloads,
             emitter,
             recording_session,
+            local_model_pool,
             translation_pool,
             local_nmt_semaphore,
             local_llm_semaphore,

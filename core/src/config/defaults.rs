@@ -71,6 +71,7 @@ pub fn default_config() -> Value {
         ("realtimeTranslationTargetLanguage", json!("zh")),
         ("realtimeTranslationEngine", json!("onnx")),
         ("realtimeTranslationModelId", Value::Null),
+        ("localModelReleaseMode", json!("standard")),
         ("language", json!("auto")),
         ("batchLanguage", json!("auto")),
         ("enableTimeline", json!(false)),

@@ -76,6 +76,12 @@ pub async fn describe_llm_model(
 }
 
 #[tauri::command]
+pub async fn purge_local_model_cache(services: State<'_, DesktopServices>) -> Result<(), String> {
+    services.local_model_pool.purge_all_idle().await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn llm_usage_ensure_storage() -> Result<(), String> {
     Ok(())
 }

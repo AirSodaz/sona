@@ -25,6 +25,7 @@ pub(crate) struct DesktopLlmAdapter {
     models_dir: Option<PathBuf>,
     #[allow(dead_code)]
     cache_dir: Option<PathBuf>,
+    local_model_pool: Option<std::sync::Arc<crate::integrations::models::LocalModelPool>>,
     translation_pool:
         Option<std::sync::Arc<crate::integrations::translation::TranslationModelPool>>,
     local_nmt_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
@@ -63,7 +64,7 @@ impl DesktopLlmAdapter {
             std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
         >,
     ) -> Self {
-        Self::with_resources(models_dir, cache_dir, translation_pool, None, None)
+        Self::with_resources(models_dir, cache_dir, None, translation_pool, None, None)
     }
 
     pub(crate) fn with_services(
@@ -74,6 +75,7 @@ impl DesktopLlmAdapter {
         Self::with_resources(
             models_dir,
             cache_dir,
+            services.map(|s| std::sync::Arc::clone(&s.local_model_pool)),
             services.map(|s| std::sync::Arc::clone(&s.translation_pool)),
             services.map(|s| std::sync::Arc::clone(&s.local_nmt_semaphore)),
             services.map(|s| std::sync::Arc::clone(&s.local_llm_semaphore)),
@@ -83,6 +85,7 @@ impl DesktopLlmAdapter {
     pub(crate) fn with_resources(
         models_dir: Option<PathBuf>,
         cache_dir: Option<PathBuf>,
+        local_model_pool: Option<std::sync::Arc<crate::integrations::models::LocalModelPool>>,
         translation_pool: Option<
             std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
         >,
@@ -92,11 +95,18 @@ impl DesktopLlmAdapter {
         if let Some(dir) = &cache_dir {
             sona_online_llm::init_models_dev_cache_dir(dir.clone());
         }
+        let local_provider = local_model_pool
+            .as_ref()
+            .map(|p| p.clone() as std::sync::Arc<dyn sona_llama_cpp::LlamaModelProvider>);
         Self {
             online: OnlineLlmAdapter,
-            local: LlamaCppLlmEngine::with_models_dir(models_dir.clone()),
+            local: LlamaCppLlmEngine::with_models_dir_and_provider(
+                models_dir.clone(),
+                local_provider,
+            ),
             models_dir,
             cache_dir,
+            local_model_pool,
             translation_pool,
             local_nmt_semaphore,
             local_llm_semaphore,
@@ -277,19 +287,36 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                     "Models directory not configured for local NMT",
                 ));
             };
-            let pool = self.translation_pool.clone().unwrap_or_else(|| {
-                std::sync::Arc::new(crate::integrations::translation::TranslationModelPool::new())
-            });
-            let adapter = pool
-                .get_or_load(norm_src, norm_tgt, models_dir)
-                .map_err(|e| {
-                    LlmPortError::new(
-                        LlmPortErrorKind::Unavailable,
-                        format!("Failed to load local NMT model for {norm_src}->{norm_tgt}: {e}"),
-                    )
-                })?;
+            let adapter: std::sync::Arc<dyn sona_core::ports::translation::TranslationEnginePort> =
+                if let Some(pool) = &self.local_model_pool {
+                    let lease = pool
+                        .acquire_onnx_model(norm_src, norm_tgt, models_dir)
+                        .map_err(|e| {
+                            LlmPortError::new(
+                                LlmPortErrorKind::Unavailable,
+                                format!(
+                                    "Failed to load local NMT model for {norm_src}->{norm_tgt}: {e}"
+                                ),
+                            )
+                        })?;
+                    std::sync::Arc::new(lease)
+                } else {
+                    let pool = self.translation_pool.clone().unwrap_or_else(|| {
+                        std::sync::Arc::new(
+                            crate::integrations::translation::TranslationModelPool::new(),
+                        )
+                    });
+                    pool.get_or_load(norm_src, norm_tgt, models_dir)
+                        .map_err(|e| {
+                            LlmPortError::new(
+                                LlmPortErrorKind::Unavailable,
+                                format!(
+                                    "Failed to load local NMT model for {norm_src}->{norm_tgt}: {e}"
+                                ),
+                            )
+                        })?
+                };
 
-            use sona_core::ports::translation::TranslationEnginePort;
             let mut results = Vec::with_capacity(request.texts.len());
             for text in &request.texts {
                 let translated =

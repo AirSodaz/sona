@@ -366,5 +366,16 @@ describe('llm runtime', () => {
     patch = buildLlmConfigPatch(llmSettings);
     expect(patch.realtimeTranslationEngine).toBe('onnx');
     expect(patch.realtimeTranslationModelId).toBeNull();
+
+    // Google Translate / Online -> online engine with null model id
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'google_translate',
+      model: 'Google Translate',
+    });
+    const onlineModelId = llmSettings.modelOrder[llmSettings.modelOrder.length - 1];
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', onlineModelId);
+    patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('online');
+    expect(patch.realtimeTranslationModelId).toBeNull();
   });
 });

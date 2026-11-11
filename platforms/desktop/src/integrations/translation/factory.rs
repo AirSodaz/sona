@@ -47,12 +47,13 @@ impl TranslationEngineFactory {
     ) -> Result<Arc<dyn TranslationEnginePort>, TranslationPortError> {
         match engine_kind {
             TranslationEngineKind::OnnxNmt => {
-                let adapter =
-                    services
-                        .translation_pool
-                        .get_or_load(source_lang, target_lang, models_dir)?;
+                let lease = services.local_model_pool.acquire_onnx_model(
+                    source_lang,
+                    target_lang,
+                    models_dir,
+                )?;
                 Ok(Arc::new(SemaphoreGuardedTranslationEngine {
-                    inner: adapter,
+                    inner: Arc::new(lease),
                     semaphore: Arc::clone(&services.local_nmt_semaphore),
                 }))
             }
@@ -61,9 +62,13 @@ impl TranslationEngineFactory {
                     Some(m) if !m.trim().is_empty() => m.trim(),
                     _ => "",
                 };
-                let engine = Arc::new(sona_llama_cpp::LlamaCppLlmEngine::with_models_dir(Some(
-                    models_dir.to_path_buf(),
-                )));
+                let engine = Arc::new(
+                    sona_llama_cpp::LlamaCppLlmEngine::with_models_dir_and_provider(
+                        Some(models_dir.to_path_buf()),
+                        Some(Arc::clone(&services.local_model_pool)
+                            as Arc<dyn sona_llama_cpp::LlamaModelProvider>),
+                    ),
+                );
                 let adapter = Arc::new(
                     sona_llama_cpp::translation::LlamaCppTranslationAdapter::new(
                         engine, model_name,
@@ -74,7 +79,35 @@ impl TranslationEngineFactory {
                     semaphore: Arc::clone(&services.local_llm_semaphore),
                 }))
             }
+            TranslationEngineKind::Online => {
+                let mut config = sona_core::llm::requests::LlmConfig::default();
+                if let Some(id) = model_name_or_id
+                    && !id.trim().is_empty()
+                {
+                    config.model = id.to_string();
+                }
+                Ok(Self::create_online_engine(services, config))
+            }
         }
+    }
+
+    pub fn create_online_engine(
+        services: &DesktopServices,
+        config: sona_core::llm::requests::LlmConfig,
+    ) -> Arc<dyn TranslationEnginePort> {
+        let models_dir = Some(services.active_models_dir());
+        let cache_dir = Some(services.active_data_dir().join("cache"));
+        let desktop_llm = crate::integrations::llm::DesktopLlmAdapter::with_services(
+            models_dir,
+            cache_dir,
+            Some(services),
+        );
+        Arc::new(
+            crate::integrations::translation::OnlineStreamingTranslationAdapter::new(
+                desktop_llm,
+                config,
+            ),
+        )
     }
 }
 

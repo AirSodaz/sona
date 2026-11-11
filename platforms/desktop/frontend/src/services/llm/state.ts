@@ -761,15 +761,20 @@ export function buildLlmConfigPatch(
     { llmSettings: nextLlmSettings },
     'translation'
   );
-  if (translationModelEntry && translationModelEntry.provider === 'local') {
-    const model = translationModelEntry.model ?? '';
-    const lower = model.toLowerCase();
-    if (lower.startsWith('opus-mt-') || lower === 'auto' || lower.includes('nmt')) {
-      patch.realtimeTranslationEngine = 'onnx';
-      patch.realtimeTranslationModelId = lower.startsWith('opus-mt-') ? model : null;
-    } else if (model.trim().length > 0) {
-      patch.realtimeTranslationEngine = 'llama-cpp';
-      patch.realtimeTranslationModelId = model;
+  if (translationModelEntry) {
+    if (translationModelEntry.provider === 'local') {
+      const model = translationModelEntry.model ?? '';
+      const lower = model.toLowerCase();
+      if (lower.startsWith('opus-mt-') || lower === 'auto' || lower.includes('nmt')) {
+        patch.realtimeTranslationEngine = 'onnx';
+        patch.realtimeTranslationModelId = lower.startsWith('opus-mt-') ? model : null;
+      } else if (model.trim().length > 0) {
+        patch.realtimeTranslationEngine = 'llama-cpp';
+        patch.realtimeTranslationModelId = model;
+      }
+    } else {
+      patch.realtimeTranslationEngine = 'online';
+      patch.realtimeTranslationModelId = null;
     }
   }
 

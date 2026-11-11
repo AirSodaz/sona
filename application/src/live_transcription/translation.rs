@@ -120,6 +120,10 @@ impl StreamingTranslationCoordinator {
                         segment.translation = Some(combined);
                     }
                     segment.draft_translation = None;
+                } else if self.engine.engine_kind()
+                    == sona_core::ports::translation::TranslationEngineKind::Online
+                {
+                    segment.draft_translation = None;
                 } else {
                     if segment.translation.is_none() {
                         let frozen = state.stabilizer.frozen_prefix();
@@ -173,10 +177,16 @@ impl StreamingTranslationCoordinator {
             }
 
             if segment.is_final {
+                let timeout_duration = match self.engine.engine_kind() {
+                    sona_core::ports::translation::TranslationEngineKind::Online => {
+                        Duration::from_millis(10_000)
+                    }
+                    _ => Duration::from_millis(5_000),
+                };
                 let translate_fut = self
                     .engine
                     .translate(text, effective_source, effective_target);
-                match tokio::time::timeout(Duration::from_millis(5000), translate_fut).await {
+                match tokio::time::timeout(timeout_duration, translate_fut).await {
                     Ok(Ok(translated_text)) => {
                         let mut states = self.states.lock();
                         let mut stabilizer = states
@@ -228,6 +238,14 @@ impl StreamingTranslationCoordinator {
                     }
                 }
             } else {
+                if self.engine.engine_kind()
+                    == sona_core::ports::translation::TranslationEngineKind::Online
+                {
+                    // Online providers skip intermediate draft partials to prevent HTTP 429 rate limits and high costs
+                    segment.draft_translation = None;
+                    continue;
+                }
+
                 let should_translate = {
                     let mut states = self.states.lock();
                     if let Some(state) = states.get_mut(&segment.id) {

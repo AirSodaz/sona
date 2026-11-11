@@ -316,6 +316,8 @@ export interface LlmAssistantConfig {
   autoPolishFrequency?: number;
   /** Global LLM Request timeout in seconds. */
   llmRequestTimeoutSeconds?: number;
+  /** Local model VRAM release mode: 'standard' (5min idle TTL) or 'game' (immediate release). */
+  localModelReleaseMode?: 'standard' | 'game';
 }
 
 // ---------------------------------------------------------------------------

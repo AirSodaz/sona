@@ -384,6 +384,7 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         || existing.get("realtimeTranslationEngine") != normalized.get("realtimeTranslationEngine")
         || existing.get("realtimeTranslationModelId")
             != normalized.get("realtimeTranslationModelId")
+        || existing.get("localModelReleaseMode") != normalized.get("localModelReleaseMode")
         || existing.get("voiceTypingRealtimePreview")
             != normalized.get("voiceTypingRealtimePreview")
     {
@@ -1207,10 +1208,15 @@ fn sanitize_typed_config_fields(config: &mut Value) {
     repair_field_type(config, &defaults, "realtimeTranslationEngine", |value| {
         value
             .as_str()
-            .is_some_and(|engine| matches!(engine, "onnx" | "llama-cpp"))
+            .is_some_and(|engine| matches!(engine, "onnx" | "llama-cpp" | "online"))
     });
     repair_field_type(config, &defaults, "realtimeTranslationModelId", |value| {
         value.is_null() || value.as_str().is_some_and(|s| !s.trim().is_empty())
+    });
+    repair_field_type(config, &defaults, "localModelReleaseMode", |value| {
+        value
+            .as_str()
+            .is_some_and(|mode| matches!(mode, "standard" | "game"))
     });
 }
 

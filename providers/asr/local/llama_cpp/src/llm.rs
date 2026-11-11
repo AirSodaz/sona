@@ -43,22 +43,97 @@ pub fn clear_all_llm_models() {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+pub struct LlamaModelHandle {
+    model: Arc<LlamaModel>,
+    _guard: Option<Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+impl std::ops::Deref for LlamaModelHandle {
+    type Target = LlamaModel;
+    fn deref(&self) -> &Self::Target {
+        &self.model
+    }
+}
+
+impl LlamaModelHandle {
+    pub fn new(
+        model: Arc<LlamaModel>,
+        guard: Option<Arc<dyn std::any::Any + Send + Sync>>,
+    ) -> Self {
+        Self {
+            model,
+            _guard: guard,
+        }
+    }
+
+    pub fn from_model(model: Arc<LlamaModel>) -> Self {
+        Self {
+            model,
+            _guard: None,
+        }
+    }
+
+    pub fn model_arc(&self) -> Arc<LlamaModel> {
+        Arc::clone(&self.model)
+    }
+}
+
+#[async_trait]
+pub trait LlamaModelProvider: Send + Sync {
+    async fn acquire_model(
+        &self,
+        backend: &'static LlamaBackend,
+        model_path: &Path,
+        n_gpu_layers: u32,
+    ) -> Result<LlamaModelHandle, LlmPortError>;
+}
+
+#[derive(Clone, Default)]
 pub struct LlamaCppLlmEngine {
     models_dir: Option<PathBuf>,
+    model_provider: Option<Arc<dyn LlamaModelProvider>>,
+}
+
+impl std::fmt::Debug for LlamaCppLlmEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlamaCppLlmEngine")
+            .field("models_dir", &self.models_dir)
+            .field("has_custom_provider", &self.model_provider.is_some())
+            .finish()
+    }
 }
 
 impl LlamaCppLlmEngine {
     pub fn new() -> Self {
-        Self { models_dir: None }
+        Self {
+            models_dir: None,
+            model_provider: None,
+        }
     }
 
     pub fn with_models_dir(models_dir: Option<PathBuf>) -> Self {
-        Self { models_dir }
+        Self {
+            models_dir,
+            model_provider: None,
+        }
+    }
+
+    pub fn with_models_dir_and_provider(
+        models_dir: Option<PathBuf>,
+        model_provider: Option<Arc<dyn LlamaModelProvider>>,
+    ) -> Self {
+        Self {
+            models_dir,
+            model_provider,
+        }
     }
 
     pub fn set_models_dir(&mut self, models_dir: Option<PathBuf>) {
         self.models_dir = models_dir;
+    }
+
+    pub fn set_model_provider(&mut self, model_provider: Option<Arc<dyn LlamaModelProvider>>) {
+        self.model_provider = model_provider;
     }
 
     pub fn models_dir(&self) -> Option<&Path> {
@@ -648,7 +723,7 @@ fn format_prompt(
 }
 
 struct GenerationContext {
-    model: Arc<LlamaModel>,
+    model: LlamaModelHandle,
     prompt_tokens: Vec<llama_cpp_2::token::LlamaToken>,
     max_output_tokens: usize,
     temperature: f32,
@@ -855,7 +930,13 @@ impl LlamaCppLlmEngine {
             0
         };
 
-        let model = load_cached_model(backend, &model_path, n_gpu_layers)?;
+        let model = if let Some(provider) = &self.model_provider {
+            provider
+                .acquire_model(backend, &model_path, n_gpu_layers)
+                .await?
+        } else {
+            LlamaModelHandle::from_model(load_cached_model(backend, &model_path, n_gpu_layers)?)
+        };
         let reasoning_enabled = request.effective_reasoning_enabled();
         let thinking_level = request.effective_thinking_level();
         let prompt = format_prompt(

@@ -9,6 +9,7 @@ use specta::Type;
 pub enum TranslationEngineKind {
     OnnxNmt,
     LlamaCpp,
+    Online,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

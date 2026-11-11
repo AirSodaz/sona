@@ -471,6 +471,10 @@ type ManualTauriCommandContractMap = {
     args: { request: CoreTranslateSegmentsRequest };
     result: TranslatedSegment[];
   };
+  [TauriCommand.llm.purgeLocalModelCache]: {
+    args: undefined;
+    result: undefined;
+  };
   [TauriCommand.recognizer.prepareLive]: {
     args: { asrRequest: CoreAsrTranscriptionRequest };
     result: undefined;
