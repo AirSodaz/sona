@@ -1,4 +1,4 @@
-import { AlignLeft, Globe, Plus, Settings2, Sparkles } from 'lucide-react';
+import { AlignLeft, Cpu, Globe, Plus, Settings2, Sparkles } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ import {
   updateCustomProvider,
   updateProviderSetting,
 } from '../../services/llm/state';
+import { purgeLocalModelCache } from '../../services/tauri/llm';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import type { LlmAssistantConfig } from '../../types/config';
 import type {
@@ -24,9 +25,12 @@ import type {
   LlmProvider,
   LlmProviderSetting,
 } from '../../types/transcript';
+import { logger } from '../../utils/logger';
+import { Dropdown } from '../Dropdown';
 import { RobotIcon } from '../Icons';
 import { ProviderLogo } from '../icons/ProviderLogos';
 import { Modal } from '../Modal';
+import { Switch } from '../Switch';
 import { FeatureCard } from './llm/FeatureCard';
 import {
   getCurrentLlmSettings,
@@ -272,6 +276,22 @@ export function SettingsLLMServiceTab({
     setCustomProviderStrategy('openai_compatible');
   };
 
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeSuccess, setPurgeSuccess] = useState(false);
+
+  const handlePurgeCache = useCallback(async () => {
+    try {
+      setIsPurging(true);
+      await purgeLocalModelCache();
+      setPurgeSuccess(true);
+      setTimeout(() => setPurgeSuccess(false), 2000);
+    } catch (err) {
+      logger.error('Failed to purge local model cache:', err);
+    } finally {
+      setIsPurging(false);
+    }
+  }, []);
+
   return (
     <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
       <SettingsPageHeader
@@ -448,6 +468,126 @@ export function SettingsLLMServiceTab({
             max={3600}
             style={{ width: '120px' }}
           />
+        </SettingsItem>
+      </SettingsSection>
+
+      <SettingsSection
+        id="settings-llm-local-pool-management"
+        title={t('settings.llm.local_model_pool_title', {
+          defaultValue: 'Local Model & Memory Management',
+        })}
+        description={t('settings.llm.local_model_pool_description', {
+          defaultValue:
+            'Configure VRAM cache release strategies for local LLM and translation models.',
+        })}
+        icon={<Cpu size={20} />}
+      >
+        <SettingsItem
+          title={t('settings.llm.vram_release_mode_title', {
+            defaultValue: 'VRAM Release Mode',
+          })}
+          hint={t('settings.llm.vram_release_mode_hint', {
+            defaultValue:
+              'Configure how idle local models are released from GPU memory when not in use.',
+          })}
+        >
+          <div style={{ width: '280px', maxWidth: '100%' }}>
+            <Dropdown
+              value={config.localModelReleaseMode || 'standard'}
+              onChange={(val) =>
+                updateConfig({
+                  localModelReleaseMode: val as 'immediate' | 'standard' | 'never',
+                })
+              }
+              options={[
+                {
+                  value: 'immediate',
+                  label: t('settings.llm.release_mode_immediate', {
+                    defaultValue: 'Immediate (Release when task ends)',
+                  }),
+                },
+                {
+                  value: 'standard',
+                  label: t('settings.llm.release_mode_standard', {
+                    defaultValue: 'Standard (5-min Idle TTL)',
+                  }),
+                },
+                {
+                  value: 'never',
+                  label: t('settings.llm.release_mode_never', {
+                    defaultValue: 'Never (Keep in memory)',
+                  }),
+                },
+              ]}
+            />
+          </div>
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.llm.game_mode_title', {
+            defaultValue: 'Game Mode (Auto Release)',
+          })}
+          hint={t('settings.llm.game_mode_hint', {
+            defaultValue:
+              'Automatically release all inactive local models from VRAM when specified games or applications are running in the foreground and no transcription tasks are active.',
+          })}
+        >
+          <Switch
+            checked={config.gameModeEnabled ?? false}
+            onChange={(checked) => updateConfig({ gameModeEnabled: checked })}
+          />
+        </SettingsItem>
+
+        {config.gameModeEnabled && (
+          <SettingsItem
+            title={t('settings.llm.game_mode_processes_title', {
+              defaultValue: 'Game Process Names',
+            })}
+            hint={t('settings.llm.game_mode_processes_hint', {
+              defaultValue:
+                'Comma- or newline-separated executable process names (e.g. eldenring.exe, cs2.exe, cyberpunk2077.exe).',
+            })}
+          >
+            <div style={{ width: '100%', maxWidth: '420px' }}>
+              <textarea
+                className="input"
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  resize: 'vertical',
+                  fontSize: '13px',
+                  lineHeight: '1.4',
+                  fontFamily: 'monospace',
+                }}
+                value={config.gameModeProcessList ?? ''}
+                placeholder="eldenring.exe, cs2.exe, cyberpunk2077.exe"
+                onChange={(e) => updateConfig({ gameModeProcessList: e.target.value })}
+              />
+            </div>
+          </SettingsItem>
+        )}
+
+        <SettingsItem
+          title={t('settings.llm.purge_vram_title', {
+            defaultValue: 'Purge Idle Model Cache',
+          })}
+          hint={t('settings.llm.purge_vram_hint', {
+            defaultValue:
+              'Manually evict all currently inactive local models from memory and GPU VRAM.',
+          })}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={isPurging}
+            onClick={handlePurgeCache}
+          >
+            {isPurging
+              ? t('settings.llm.purging', { defaultValue: 'Purging...' })
+              : purgeSuccess
+                ? t('settings.llm.purged_success', { defaultValue: 'Released!' })
+                : t('settings.llm.purge_now', { defaultValue: 'Purge Now' })}
+          </button>
         </SettingsItem>
       </SettingsSection>
 

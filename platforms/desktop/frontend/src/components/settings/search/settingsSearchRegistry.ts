@@ -925,6 +925,28 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
       '第三方服务商',
     ],
   },
+  {
+    id: 'llm-local-pool-management',
+    tab: 'llm_service',
+    targetId: 'settings-llm-local-pool-management',
+    tabKey: 'settings.llm.title',
+    titleKey: 'settings.llm.local_model_pool_title',
+    hintKey: 'settings.llm.local_model_pool_description',
+    keywords: [
+      'vram',
+      'gpu',
+      'memory',
+      'release mode',
+      'game mode',
+      'purge cache',
+      'ttl',
+      '显存',
+      '内存',
+      '显存释放',
+      '游戏模式',
+      '清理缓存',
+    ],
+  },
 
   // ---------------------------------------------------------------------------
   // Automation Tab

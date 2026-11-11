@@ -76,6 +76,12 @@ pub async fn describe_llm_model(
 }
 
 #[tauri::command]
+pub async fn purge_local_model_cache(services: State<'_, DesktopServices>) -> Result<(), String> {
+    services.local_model_pool.purge_all_idle().await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn llm_usage_ensure_storage() -> Result<(), String> {
     Ok(())
 }
@@ -152,12 +158,12 @@ pub async fn test_local_nmt_model(
     }
     let src = parts[0];
     let tgt = parts[1];
-    let adapter = services
-        .translation_pool
-        .get_or_load(src, tgt, &models_dir)
+    let lease = services
+        .local_model_pool
+        .acquire_onnx_model(src, tgt, &models_dir)
         .map_err(|e| e.to_string())?;
     use sona_core::ports::translation::TranslationEnginePort;
-    adapter
+    lease
         .translate(&text, src, tgt)
         .await
         .map_err(|e| e.to_string())

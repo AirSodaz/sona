@@ -35,6 +35,10 @@ export function useRealtimeTranslationConfig() {
     (state) => state.config.captionDisplayMode || 'bilingual'
   );
   const captionDisplayPriority = useConfigStore((state) => state.config.captionDisplayPriority);
+  const realtimeTranslationEngine = useConfigStore(
+    (state) => state.config.realtimeTranslationEngine || 'onnx'
+  );
+  const isLocalOnnx = realtimeTranslationEngine === 'onnx';
 
   const sourceLanguages = SOURCE_LANGUAGES;
 
@@ -59,6 +63,10 @@ export function useRealtimeTranslationConfig() {
 
   useEffect(() => {
     let active = true;
+    if (!isLocalOnnx) {
+      setIsModelInstalled(true);
+      return;
+    }
     if (typeof modelService?.isModelInstalled === 'function') {
       modelService
         .isModelInstalled(modelId)
@@ -73,7 +81,7 @@ export function useRealtimeTranslationConfig() {
     return () => {
       active = false;
     };
-  }, [modelId]);
+  }, [isLocalOnnx, modelId]);
 
   const handleSourceLanguageChange = useCallback(
     (val: string) => {
@@ -124,31 +132,36 @@ export function useRealtimeTranslationConfig() {
         return;
       }
 
-      let installed = false;
-      try {
-        if (typeof modelService?.isModelInstalled === 'function') {
-          installed = await modelService.isModelInstalled(modelId);
-        } else {
+      if (isLocalOnnx) {
+        let installed = false;
+        try {
+          if (typeof modelService?.isModelInstalled === 'function') {
+            installed = await modelService.isModelInstalled(modelId);
+          } else {
+            installed = true;
+          }
+        } catch (err) {
+          logger.warn(
+            'Failed to check translation model installation status; allowing toggle',
+            err
+          );
           installed = true;
         }
-      } catch (err) {
-        logger.warn('Failed to check translation model installation status; allowing toggle', err);
-        installed = true;
-      }
 
-      setIsModelInstalled(installed);
+        setIsModelInstalled(installed);
 
-      if (!installed) {
-        await useDialogStore.getState().showError({
-          code: 'model.not_installed',
-          messageKey: 'settings.translation_model_not_installed',
-        });
-        return;
+        if (!installed) {
+          await useDialogStore.getState().showError({
+            code: 'model.not_installed',
+            messageKey: 'settings.translation_model_not_installed',
+          });
+          return;
+        }
       }
 
       updateConfig({ realtimeTranslationEnabled: true });
     },
-    [captionDisplayMode, captionDisplayPriority, modelId, updateConfig]
+    [captionDisplayMode, captionDisplayPriority, isLocalOnnx, modelId, updateConfig]
   );
 
   return {

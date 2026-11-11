@@ -161,6 +161,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoPolish: false,
   autoPolishFrequency: 5,
   llmRequestTimeoutSeconds: 180,
+  localModelReleaseMode: 'standard',
+  gameModeEnabled: false,
+  gameModeProcessList: '',
 
   // Voice Typing
   voiceTypingEnabled: false,
@@ -340,6 +343,9 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'autoPolish',
   'autoPolishFrequency',
   'llmRequestTimeoutSeconds',
+  'localModelReleaseMode',
+  'gameModeEnabled',
+  'gameModeProcessList',
 ];
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'textReplacementSets',

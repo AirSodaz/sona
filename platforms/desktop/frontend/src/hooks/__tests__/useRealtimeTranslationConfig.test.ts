@@ -172,4 +172,25 @@ describe('useRealtimeTranslationConfig', () => {
     expect(useConfigStore.getState().config.captionDisplayMode).toBe('bilingual');
     expect(useConfigStore.getState().config.captionDisplayPriority).toBe('original_main');
   });
+
+  it('allows enabling realtime translation without local model check when engine is online', async () => {
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        realtimeTranslationEnabled: false,
+        realtimeTranslationEngine: 'online',
+      },
+    }));
+
+    const { result } = renderHook(() => useRealtimeTranslationConfig());
+    expect(result.current.isModelInstalled).toBe(true);
+
+    await act(async () => {
+      await result.current.handleToggleRealtimeTranslation(true);
+    });
+
+    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(true);
+    expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+  });
 });

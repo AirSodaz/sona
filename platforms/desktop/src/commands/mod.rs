@@ -176,6 +176,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::llm::llm_usage_read_raw,
         crate::commands::llm::llm_usage_replace_raw,
         crate::commands::llm::polish_transcript_segments,
+        crate::commands::llm::purge_local_model_cache,
         crate::commands::llm::run_transcript_llm_job,
         crate::commands::llm::summarize_transcript,
         crate::commands::llm::translate_transcript_segments,

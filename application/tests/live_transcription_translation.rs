@@ -953,3 +953,56 @@ async fn test_final_translation_with_timeline_normalization() {
         "enrichment must not generate duplicate timeline-1 id"
     );
 }
+
+struct MockOnlineTranslationEngine {
+    call_count: Mutex<usize>,
+}
+
+#[async_trait]
+impl TranslationEnginePort for MockOnlineTranslationEngine {
+    async fn translate(
+        &self,
+        text: &str,
+        _source_lang: &str,
+        _target_lang: &str,
+    ) -> Result<String, TranslationPortError> {
+        *self.call_count.lock().unwrap() += 1;
+        Ok(format!("在线译:[{text}]"))
+    }
+
+    fn engine_kind(&self) -> TranslationEngineKind {
+        TranslationEngineKind::Online
+    }
+}
+
+#[tokio::test]
+async fn test_online_streaming_translation_skips_draft_and_translates_final() {
+    let engine = Arc::new(MockOnlineTranslationEngine {
+        call_count: Mutex::new(0),
+    });
+    let coordinator =
+        StreamingTranslationCoordinator::new(engine.clone(), "en", "zh").with_debounce(50, 1);
+
+    // 1. Send draft update (is_final = false)
+    let mut draft_update = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-1", "Hello world", false)],
+        remove_ids: vec![],
+    };
+    coordinator.enrich_update(&mut draft_update).await;
+    // Draft segment must NOT have triggered online translation
+    assert_eq!(*engine.call_count.lock().unwrap(), 0);
+    assert_eq!(draft_update.upsert_segments[0].translation, None);
+
+    // 2. Send final update (is_final = true)
+    let mut final_update = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-1", "Hello world.", true)],
+        remove_ids: vec![],
+    };
+    coordinator.enrich_update(&mut final_update).await;
+    // Finalized segment MUST trigger online translation
+    assert_eq!(*engine.call_count.lock().unwrap(), 1);
+    assert_eq!(
+        final_update.upsert_segments[0].translation.as_deref(),
+        Some("在线译:[Hello world.]")
+    );
+}

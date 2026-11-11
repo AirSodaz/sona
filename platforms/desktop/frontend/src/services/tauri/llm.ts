@@ -425,3 +425,7 @@ export async function testLocalNmtModel(modelId: string, text: string): Promise<
 export async function importLocalLlmFile(sourcePath: string): Promise<string> {
   return invokeTauri(TauriCommand.llm.importLocalLlmFile, { sourcePath });
 }
+
+export async function purgeLocalModelCache(): Promise<void> {
+  return invokeTauri(TauriCommand.llm.purgeLocalModelCache);
+}

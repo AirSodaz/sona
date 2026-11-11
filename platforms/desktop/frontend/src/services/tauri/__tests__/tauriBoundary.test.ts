@@ -64,6 +64,7 @@ import {
   generateLlmText,
   listLlmModels,
   polishTranscriptSegments,
+  purgeLocalModelCache,
   runTranscriptLlmJob,
   summarizeTranscript,
   translateTranscriptSegments,
@@ -1640,6 +1641,9 @@ describe('tauri boundary wrappers', () => {
         chunkCharBudget: null,
       },
     });
+
+    await purgeLocalModelCache();
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.llm.purgeLocalModelCache);
   });
 
   it('rejects unsafe transcript task chunk sizes before invoking Tauri', async () => {

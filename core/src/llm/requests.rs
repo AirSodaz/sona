@@ -78,6 +78,24 @@ impl<'de> Deserialize<'de> for LlmConfig {
     }
 }
 
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: LlmProvider::Builtin(crate::domain::BuiltinLlmProvider::GoogleTranslateFree),
+            strategy: LlmProviderStrategy::GoogleTranslateFree,
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            api_path: None,
+            api_version: None,
+            temperature: None,
+            reasoning_enabled: None,
+            reasoning_level: None,
+            timeout_seconds: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("{reason}")]
 pub struct LlmRequestValidationError {

@@ -133,6 +133,7 @@ export const TauriCommand = {
     runTranscriptJob: 'run_transcript_llm_job',
     summarizeTranscript: 'summarize_transcript',
     translateTranscriptSegments: 'translate_transcript_segments',
+    purgeLocalModelCache: 'purge_local_model_cache',
   },
   recognizer: {
     prepareLive: 'prepare_live_transcription',
