@@ -80,6 +80,10 @@ pub async fn start_external_live_transcription(
         .await;
     if acquire_res.is_err() && !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
+        if services.local_model_pool.should_purge_on_task_end() {
+            services.local_model_pool.purge_all_idle().await;
+            services.asr.clear_model_caches().await;
+        }
         services.translation_pool.unload_all();
     }
     acquire_res
@@ -227,6 +231,12 @@ pub async fn start_native_live_transcription(
         }
         Err(error) => {
             services.asr.live_coordinator().set_translation(None);
+            if !services.asr.live_coordinator().is_active().await
+                && services.local_model_pool.should_purge_on_task_end()
+            {
+                services.local_model_pool.purge_all_idle().await;
+                services.asr.clear_model_caches().await;
+            }
             let _ = crate::integrations::audio::stop_native_live_capture(
                 &services.audio,
                 &source_kind,
@@ -402,6 +412,12 @@ pub async fn resume_native_live_transcription(
             })
         }
         Err(error) => {
+            if !services.asr.live_coordinator().is_active().await
+                && services.local_model_pool.should_purge_on_task_end()
+            {
+                services.local_model_pool.purge_all_idle().await;
+                services.asr.clear_model_caches().await;
+            }
             let _ = crate::integrations::audio::set_native_live_capture_paused(
                 &services.audio,
                 &source_kind,

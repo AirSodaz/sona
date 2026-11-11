@@ -53,6 +53,10 @@ impl<'a> Drop for InFlightGuard<'a> {
     }
 }
 
+/// Legacy ONNX NMT translation model cache pool.
+///
+/// Deprecated: replaced by unified [`LocalModelPool`](crate::integrations::models::LocalModelPool).
+/// Retained for backwards compatibility across older interfaces.
 pub struct TranslationModelPool {
     cache: TranslationModelCache,
     loading: Arc<LoadingNotifier>,

@@ -110,6 +110,10 @@ pub struct DesktopServices {
     pub emitter: Arc<dyn EventEmitterPort>,
     pub recording_session: DesktopRecordingSessionTracker,
     pub local_model_pool: Arc<crate::integrations::models::LocalModelPool>,
+    /// Legacy translation model pool.
+    ///
+    /// Deprecated: superseded by unified [`LocalModelPool`](crate::integrations::models::LocalModelPool).
+    /// Retained for backwards compatibility.
     pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
     pub local_nmt_semaphore: Arc<tokio::sync::Semaphore>,
     pub local_llm_semaphore: Arc<tokio::sync::Semaphore>,

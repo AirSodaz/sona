@@ -43,6 +43,14 @@ pub fn clear_all_llm_models() {
     }
 }
 
+/// A RAII handle to an active LLaMA model instance.
+///
+/// NOTE: This struct intentionally does NOT implement `Clone`.
+/// The `_guard` field holds an opaque RAII lease (such as `ModelLease<LlamaModel>`)
+/// that increments the active lease count on creation and decrements it on `Drop`.
+/// Deriving or implementing `Clone` would duplicate the model reference without
+/// incrementing the underlying pool's lease counter, which would lead to premature
+/// model eviction or lease accounting bugs.
 pub struct LlamaModelHandle {
     model: Arc<LlamaModel>,
     _guard: Option<Arc<dyn std::any::Any + Send + Sync>>,
