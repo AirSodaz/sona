@@ -274,7 +274,10 @@ pub async fn stop_live_transcription(
     };
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
-        services.translation_pool.unload_all();
+        if services.local_model_pool.should_purge_on_task_end() {
+            services.local_model_pool.purge_all_idle().await;
+            services.asr.clear_model_caches().await;
+        }
     }
     {
         let mut guard = services.recording_session.lock().await;
@@ -465,7 +468,10 @@ pub async fn stop_native_live_transcription(
     };
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
-        services.translation_pool.unload_all();
+        if services.local_model_pool.should_purge_on_task_end() {
+            services.local_model_pool.purge_all_idle().await;
+            services.asr.clear_model_caches().await;
+        }
     }
     {
         let mut guard = services.recording_session.lock().await;
@@ -556,29 +562,6 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
         .and_then(|p| p.as_str());
 
     match provider_str {
-        Some("google_translate") | Some("google_translate_free") => {
-            let (provider, strategy) = if provider_str == Some("google_translate_free") {
-                (
-                    sona_core::domain::LlmProvider::Builtin(
-                        sona_core::domain::BuiltinLlmProvider::GoogleTranslateFree,
-                    ),
-                    sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree,
-                )
-            } else {
-                (
-                    sona_core::domain::LlmProvider::Builtin(
-                        sona_core::domain::BuiltinLlmProvider::GoogleTranslate,
-                    ),
-                    sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate,
-                )
-            };
-            let cfg = sona_core::llm::requests::LlmConfig {
-                provider,
-                strategy,
-                ..Default::default()
-            };
-            ResolvedTranslationTarget::Online(cfg)
-        }
         Some("local") => {
             let model_name = model_entry
                 .and_then(|e| e.get("model"))
@@ -591,13 +574,84 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 ResolvedTranslationTarget::LocalLlama(model_name.to_string())
             }
         }
-        Some(_) => {
-            let mut cfg = sona_core::llm::requests::LlmConfig::default();
-            if let Some(entry) = model_entry
-                && let Some(m) = entry.get("model").and_then(|v| v.as_str())
-            {
-                cfg.model = m.to_string();
-            }
+        Some(prov_str) => {
+            let provider_settings = llm_settings
+                .as_ref()
+                .and_then(|s| s.get("providers"))
+                .and_then(|p| p.get(prov_str));
+            let api_host = provider_settings
+                .and_then(|s| s.get("apiHost"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let api_key = provider_settings
+                .and_then(|s| s.get("apiKey"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let model_str = model_entry
+                .and_then(|e| e.get("model"))
+                .and_then(|m| m.as_str())
+                .unwrap_or_default();
+
+            let provider = serde_json::from_value::<sona_core::domain::LlmProvider>(
+                serde_json::Value::String(prov_str.to_string()),
+            )
+            .unwrap_or(sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::GoogleTranslateFree,
+            ));
+
+            let custom_strategy = llm_settings
+                .as_ref()
+                .and_then(|s| s.get("customProviders"))
+                .and_then(|cp| cp.get(prov_str))
+                .and_then(|entry| entry.get("strategy"))
+                .and_then(|strat| strat.as_str())
+                .and_then(|strat_str| {
+                    serde_json::from_value::<sona_core::llm::tasks::LlmProviderStrategy>(
+                        serde_json::Value::String(strat_str.to_string()),
+                    )
+                    .ok()
+                });
+
+            let strategy = custom_strategy.unwrap_or_else(|| {
+                sona_core::llm::tasks::LlmProviderStrategy::from_provider(&provider)
+            });
+
+            let timeout = services
+                .config
+                .get_setting("llmRequestTimeoutSeconds")
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_u64())
+                .or(Some(10));
+
+            let api_path = provider_settings
+                .and_then(|s| s.get("apiPath"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let api_version = provider_settings
+                .and_then(|s| s.get("apiVersion"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let temperature = llm_settings
+                .as_ref()
+                .and_then(|s| s.get("selections"))
+                .and_then(|sel| sel.get("translationTemperature"))
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32);
+
+            let cfg = sona_core::llm::requests::LlmConfig {
+                strategy,
+                provider,
+                base_url: api_host.to_string(),
+                api_key: api_key.to_string(),
+                model: model_str.to_string(),
+                api_path,
+                api_version,
+                temperature,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: timeout,
+            };
             ResolvedTranslationTarget::Online(cfg)
         }
         None => {
@@ -725,6 +779,29 @@ pub(crate) fn build_live_translation_coordinator(
 }
 
 pub(crate) fn configure_realtime_translation(services: &DesktopServices) {
+    if let Ok(Some(mode_val)) = services.config.get_setting("localModelReleaseMode")
+        && let Some(mode_str) = mode_val.as_str()
+    {
+        services.local_model_pool.set_release_mode(mode_str.into());
+    }
+    let game_enabled = services
+        .config
+        .get_setting("gameModeEnabled")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let game_procs = services
+        .config
+        .get_setting("gameModeProcessList")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+    services
+        .local_model_pool
+        .set_game_mode(game_enabled, &game_procs);
+
     let realtime_translation_enabled = services
         .config
         .get_setting("realtimeTranslationEnabled")
@@ -734,6 +811,7 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices) {
         .unwrap_or(false);
 
     if realtime_translation_enabled {
+        services.local_model_pool.mark_all_switched_out();
         match build_live_translation_coordinator(services, None, None) {
             Ok(coordinator) => {
                 services
@@ -767,9 +845,13 @@ pub async fn toggle_live_translation(
 ) -> Result<(), String> {
     if !enabled {
         services.asr.live_coordinator().set_translation(None);
+        if services.local_model_pool.should_purge_on_task_end() {
+            services.local_model_pool.purge_all_idle().await;
+        }
         return Ok(());
     }
 
+    services.local_model_pool.mark_all_switched_out();
     let coordinator = build_live_translation_coordinator(&services, source_lang, target_lang)?;
 
     services

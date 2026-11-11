@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -34,6 +34,52 @@ impl TranslationEnginePort for SemaphoreGuardedTranslationEngine {
     }
 }
 
+pub struct PooledOnnxTranslationEngine {
+    pool: Arc<crate::integrations::models::LocalModelPool>,
+    models_dir: PathBuf,
+    lease: parking_lot::Mutex<
+        Option<crate::integrations::models::ModelLease<sona_translation_onnx::OnnxNmtAdapter>>,
+    >,
+}
+
+impl PooledOnnxTranslationEngine {
+    pub fn new(
+        pool: Arc<crate::integrations::models::LocalModelPool>,
+        models_dir: PathBuf,
+        lease: crate::integrations::models::ModelLease<sona_translation_onnx::OnnxNmtAdapter>,
+    ) -> Self {
+        Self {
+            pool,
+            models_dir,
+            lease: parking_lot::Mutex::new(Some(lease)),
+        }
+    }
+}
+
+#[async_trait]
+impl TranslationEnginePort for PooledOnnxTranslationEngine {
+    async fn translate(
+        &self,
+        text: &str,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String, TranslationPortError> {
+        let adapter_opt = self.lease.lock().as_ref().map(|l| l.model_arc());
+        if let Some(adapter) = adapter_opt {
+            adapter.translate(text, source_lang, target_lang).await
+        } else {
+            let lease = self
+                .pool
+                .acquire_onnx_model(source_lang, target_lang, &self.models_dir)?;
+            lease.translate(text, source_lang, target_lang).await
+        }
+    }
+
+    fn engine_kind(&self) -> TranslationEngineKind {
+        TranslationEngineKind::OnnxNmt
+    }
+}
+
 pub struct TranslationEngineFactory;
 
 impl TranslationEngineFactory {
@@ -52,8 +98,15 @@ impl TranslationEngineFactory {
                     target_lang,
                     models_dir,
                 )?;
+
+                let pooled_engine = Arc::new(PooledOnnxTranslationEngine::new(
+                    Arc::clone(&services.local_model_pool),
+                    models_dir.to_path_buf(),
+                    lease,
+                ));
+
                 Ok(Arc::new(SemaphoreGuardedTranslationEngine {
-                    inner: Arc::new(lease),
+                    inner: pooled_engine,
                     semaphore: Arc::clone(&services.local_nmt_semaphore),
                 }))
             }

@@ -30,6 +30,7 @@ import { Dropdown } from '../Dropdown';
 import { RobotIcon } from '../Icons';
 import { ProviderLogo } from '../icons/ProviderLogos';
 import { Modal } from '../Modal';
+import { Switch } from '../Switch';
 import { FeatureCard } from './llm/FeatureCard';
 import {
   getCurrentLlmSettings,
@@ -487,16 +488,24 @@ export function SettingsLLMServiceTab({
           })}
           hint={t('settings.llm.vram_release_mode_hint', {
             defaultValue:
-              'Standard mode keeps models in VRAM for 5 minutes of idle time. Game mode immediately unloads models when idle to preserve GPU resources.',
+              'Configure how idle local models are released from GPU memory when not in use.',
           })}
         >
           <div style={{ width: '280px', maxWidth: '100%' }}>
             <Dropdown
               value={config.localModelReleaseMode || 'standard'}
               onChange={(val) =>
-                updateConfig({ localModelReleaseMode: val as 'standard' | 'game' })
+                updateConfig({
+                  localModelReleaseMode: val as 'immediate' | 'standard' | 'never',
+                })
               }
               options={[
+                {
+                  value: 'immediate',
+                  label: t('settings.llm.release_mode_immediate', {
+                    defaultValue: 'Immediate (Release when task ends)',
+                  }),
+                },
                 {
                   value: 'standard',
                   label: t('settings.llm.release_mode_standard', {
@@ -504,15 +513,59 @@ export function SettingsLLMServiceTab({
                   }),
                 },
                 {
-                  value: 'game',
-                  label: t('settings.llm.release_mode_game', {
-                    defaultValue: 'Game Mode (Immediate Release)',
+                  value: 'never',
+                  label: t('settings.llm.release_mode_never', {
+                    defaultValue: 'Never (Keep in memory)',
                   }),
                 },
               ]}
             />
           </div>
         </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.llm.game_mode_title', {
+            defaultValue: 'Game Mode (Auto Release)',
+          })}
+          hint={t('settings.llm.game_mode_hint', {
+            defaultValue:
+              'Automatically release all inactive local models from VRAM when specified games or applications are running in the foreground and no transcription tasks are active.',
+          })}
+        >
+          <Switch
+            checked={config.gameModeEnabled ?? false}
+            onChange={(checked) => updateConfig({ gameModeEnabled: checked })}
+          />
+        </SettingsItem>
+
+        {config.gameModeEnabled && (
+          <SettingsItem
+            title={t('settings.llm.game_mode_processes_title', {
+              defaultValue: 'Game Process Names',
+            })}
+            hint={t('settings.llm.game_mode_processes_hint', {
+              defaultValue:
+                'Comma- or newline-separated executable process names (e.g. eldenring.exe, cs2.exe, cyberpunk2077.exe).',
+            })}
+          >
+            <div style={{ width: '100%', maxWidth: '420px' }}>
+              <textarea
+                className="input"
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  resize: 'vertical',
+                  fontSize: '13px',
+                  lineHeight: '1.4',
+                  fontFamily: 'monospace',
+                }}
+                value={config.gameModeProcessList ?? ''}
+                placeholder="eldenring.exe, cs2.exe, cyberpunk2077.exe"
+                onChange={(e) => updateConfig({ gameModeProcessList: e.target.value })}
+              />
+            </div>
+          </SettingsItem>
+        )}
 
         <SettingsItem
           title={t('settings.llm.purge_vram_title', {

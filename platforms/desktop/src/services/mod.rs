@@ -252,6 +252,19 @@ impl DesktopServicesBuilder {
         {
             local_model_pool.set_release_mode(mode_str.into());
         }
+        let game_enabled = config
+            .get_setting("gameModeEnabled")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let game_procs = config
+            .get_setting("gameModeProcessList")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        local_model_pool.set_game_mode(game_enabled, &game_procs);
         let translation_pool = self.translation_pool.unwrap_or_else(|| {
             Arc::new(crate::integrations::translation::TranslationModelPool::new())
         });

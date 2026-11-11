@@ -316,8 +316,12 @@ export interface LlmAssistantConfig {
   autoPolishFrequency?: number;
   /** Global LLM Request timeout in seconds. */
   llmRequestTimeoutSeconds?: number;
-  /** Local model VRAM release mode: 'standard' (5min idle TTL) or 'game' (immediate release). */
-  localModelReleaseMode?: 'standard' | 'game';
+  /** Local model VRAM release mode: 'immediate', 'standard' (5min idle TTL), or 'never'. */
+  localModelReleaseMode?: 'immediate' | 'standard' | 'never';
+  /** Whether Game Mode auto-release is enabled when configured processes are in foreground. */
+  gameModeEnabled?: boolean;
+  /** Comma- or newline-separated executable process names for Game Mode. */
+  gameModeProcessList?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -16,7 +16,7 @@ use sona_llama_cpp::llama_cpp_2::model::LlamaModel;
 use sona_llama_cpp::llama_cpp_2::model::params::LlamaModelParams;
 use sona_llama_cpp::{LlamaModelHandle, LlamaModelProvider};
 use sona_translation_onnx::OnnxNmtAdapter;
-use tokio::sync::{Mutex as TokioMutex, Notify};
+use tokio::sync::Notify;
 
 pub const DEFAULT_IDLE_TTL_SECS: u64 = 300;
 pub const DEFAULT_MAX_IDLE_LLM: usize = 1;
@@ -24,14 +24,17 @@ pub const DEFAULT_MAX_IDLE_NMT: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModelReleaseMode {
+    Immediate,
     Standard,
-    GameMode,
+    Never,
 }
 
 impl From<&str> for ModelReleaseMode {
     fn from(s: &str) -> Self {
-        if s.eq_ignore_ascii_case("game") {
-            ModelReleaseMode::GameMode
+        if s.eq_ignore_ascii_case("immediate") {
+            ModelReleaseMode::Immediate
+        } else if s.eq_ignore_ascii_case("never") {
+            ModelReleaseMode::Never
         } else {
             ModelReleaseMode::Standard
         }
@@ -42,14 +45,16 @@ pub struct ModelEntry<T> {
     pub instance: Arc<T>,
     pub active_leases: Arc<AtomicUsize>,
     pub last_used_at: Arc<Mutex<Instant>>,
+    pub is_switched_out: Arc<AtomicBool>,
 }
 
 pub struct ModelLease<T: Send + Sync + 'static> {
     model: Arc<T>,
     active_leases: Arc<AtomicUsize>,
     last_used_at: Arc<Mutex<Instant>>,
+    is_switched_out: Arc<AtomicBool>,
     reaper_notify: Arc<Notify>,
-    is_game_mode: Arc<AtomicBool>,
+    release_mode: Arc<RwLock<ModelReleaseMode>>,
 }
 
 impl<T: Send + Sync + 'static> ModelLease<T> {
@@ -86,7 +91,8 @@ impl<T: Send + Sync + 'static> Drop for ModelLease<T> {
         let prev = self.active_leases.fetch_sub(1, Ordering::SeqCst);
         if prev == 1 {
             *self.last_used_at.lock() = Instant::now();
-            if self.is_game_mode.load(Ordering::Relaxed) {
+            let mode = *self.release_mode.read();
+            if self.is_switched_out.load(Ordering::Relaxed) || mode == ModelReleaseMode::Immediate {
                 self.reaper_notify.notify_one();
             }
         }
@@ -100,12 +106,13 @@ type OnnxLoadingNotifier = (Mutex<HashSet<OnnxCacheKey>>, Condvar);
 pub struct LocalModelPool {
     llama_models: Mutex<HashMap<LlamaCacheKey, Arc<ModelEntry<LlamaModel>>>>,
     onnx_models: Mutex<HashMap<OnnxCacheKey, Arc<ModelEntry<OnnxNmtAdapter>>>>,
-    llama_in_flight: Arc<TokioMutex<HashSet<String>>>,
+    llama_in_flight: Arc<Mutex<HashSet<String>>>,
     llama_notify: Arc<Notify>,
     onnx_loading: Arc<OnnxLoadingNotifier>,
     reaper_notify: Arc<Notify>,
-    release_mode: RwLock<ModelReleaseMode>,
-    is_game_mode: Arc<AtomicBool>,
+    release_mode: Arc<RwLock<ModelReleaseMode>>,
+    game_mode_enabled: Arc<AtomicBool>,
+    game_mode_processes: Arc<RwLock<HashSet<String>>>,
     idle_ttl: RwLock<Duration>,
     max_idle_llm_count: usize,
     max_idle_nmt_count: usize,
@@ -117,12 +124,13 @@ impl Default for LocalModelPool {
         Self {
             llama_models: Mutex::new(HashMap::new()),
             onnx_models: Mutex::new(HashMap::new()),
-            llama_in_flight: Arc::new(TokioMutex::new(HashSet::new())),
+            llama_in_flight: Arc::new(Mutex::new(HashSet::new())),
             llama_notify: Arc::new(Notify::new()),
             onnx_loading: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             reaper_notify: Arc::new(Notify::new()),
-            release_mode: RwLock::new(ModelReleaseMode::Standard),
-            is_game_mode: Arc::new(AtomicBool::new(false)),
+            release_mode: Arc::new(RwLock::new(ModelReleaseMode::Standard)),
+            game_mode_enabled: Arc::new(AtomicBool::new(false)),
+            game_mode_processes: Arc::new(RwLock::new(HashSet::new())),
             idle_ttl: RwLock::new(Duration::from_secs(DEFAULT_IDLE_TTL_SECS)),
             max_idle_llm_count: DEFAULT_MAX_IDLE_LLM,
             max_idle_nmt_count: DEFAULT_MAX_IDLE_NMT,
@@ -135,26 +143,84 @@ impl LocalModelPool {
     pub fn new() -> Arc<Self> {
         let pool = Arc::new(Self::default());
 
-        // Spawn background reaper task
-        let reaper_pool = Arc::clone(&pool);
-        tokio::spawn(async move {
-            reaper_pool.run_reaper_loop().await;
-        });
+        // Spawn background reaper task if a Tokio reactor is active
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let reaper_pool = Arc::clone(&pool);
+            handle.spawn(async move {
+                reaper_pool.run_reaper_loop().await;
+            });
+        }
 
         pool
     }
 
     pub fn set_release_mode(&self, mode: ModelReleaseMode) {
         *self.release_mode.write() = mode;
-        let is_game = mode == ModelReleaseMode::GameMode;
-        self.is_game_mode.store(is_game, Ordering::Relaxed);
-        if is_game {
+        if mode == ModelReleaseMode::Immediate {
             self.reaper_notify.notify_one();
         }
     }
 
     pub fn release_mode(&self) -> ModelReleaseMode {
         *self.release_mode.read()
+    }
+
+    pub fn set_game_mode(&self, enabled: bool, processes: &str) {
+        self.game_mode_enabled.store(enabled, Ordering::Relaxed);
+        let set: HashSet<String> = processes
+            .split([',', '\n', '\r'])
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        *self.game_mode_processes.write() = set;
+        if enabled {
+            self.reaper_notify.notify_one();
+        }
+    }
+
+    pub fn is_game_mode_enabled(&self) -> bool {
+        self.game_mode_enabled.load(Ordering::Relaxed)
+    }
+
+    pub fn should_purge_on_task_end(&self) -> bool {
+        let mode = *self.release_mode.read();
+        mode == ModelReleaseMode::Immediate || self.check_game_mode_foreground()
+    }
+
+    pub fn check_game_mode_foreground(&self) -> bool {
+        if !self.game_mode_enabled.load(Ordering::Relaxed) {
+            return false;
+        }
+        let list = self.game_mode_processes.read();
+        if list.is_empty() {
+            return false;
+        }
+        if let Ok(Some(fg)) = crate::platform::system::get_foreground_window_info() {
+            let app = fg.app_name.to_lowercase();
+            if list.contains(&app) {
+                return true;
+            }
+            let stripped = app.strip_suffix(".exe").unwrap_or(&app);
+            if list.contains(stripped) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn mark_all_switched_out(&self) {
+        {
+            let cache = self.llama_models.lock();
+            for entry in cache.values() {
+                entry.is_switched_out.store(true, Ordering::Relaxed);
+            }
+        }
+        {
+            let cache = self.onnx_models.lock();
+            for entry in cache.values() {
+                entry.is_switched_out.store(true, Ordering::Relaxed);
+            }
+        }
     }
 
     pub fn set_idle_ttl(&self, ttl: Duration) {
@@ -199,42 +265,49 @@ impl LocalModelPool {
                 let cache = self.llama_models.lock();
                 if let Some(entry) = cache.get(&cache_key) {
                     entry.active_leases.fetch_add(1, Ordering::SeqCst);
+                    entry.is_switched_out.store(false, Ordering::Relaxed);
                     return Ok(ModelLease {
                         model: Arc::clone(&entry.instance),
                         active_leases: Arc::clone(&entry.active_leases),
                         last_used_at: Arc::clone(&entry.last_used_at),
+                        is_switched_out: Arc::clone(&entry.is_switched_out),
                         reaper_notify: Arc::clone(&self.reaper_notify),
-                        is_game_mode: Arc::clone(&self.is_game_mode),
+                        release_mode: Arc::clone(&self.release_mode),
                     });
                 }
             }
 
-            // Single-flight synchronization
-            let mut in_flight = self.llama_in_flight.lock().await;
-            if in_flight.contains(&in_flight_key) {
-                drop(in_flight);
-                self.llama_notify.notified().await;
-                continue;
+            // Single-flight synchronization with pre-registered notification
+            let notified = self.llama_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            let must_wait = {
+                let mut in_flight = self.llama_in_flight.lock();
+                if !in_flight.contains(&in_flight_key) {
+                    in_flight.insert(in_flight_key.clone());
+                    false
+                } else {
+                    true
+                }
+            };
+
+            if !must_wait {
+                break;
             }
-            in_flight.insert(in_flight_key.clone());
-            break;
+
+            let _ = tokio::time::timeout(Duration::from_secs(5), notified).await;
         }
 
         struct InFlightGuard {
-            set: Arc<TokioMutex<HashSet<String>>>,
+            set: Arc<Mutex<HashSet<String>>>,
             key: String,
             notify: Arc<Notify>,
         }
         impl Drop for InFlightGuard {
             fn drop(&mut self) {
-                let key = self.key.clone();
-                let set = Arc::clone(&self.set);
-                let notify = Arc::clone(&self.notify);
-                tokio::spawn(async move {
-                    let mut lock = set.lock().await;
-                    lock.remove(&key);
-                    notify.notify_waiters();
-                });
+                self.set.lock().remove(&self.key);
+                self.notify.notify_waiters();
             }
         }
         let _guard = InFlightGuard {
@@ -266,11 +339,13 @@ impl LocalModelPool {
         let model_arc = Arc::new(loaded_model);
         let active_leases = Arc::new(AtomicUsize::new(1));
         let last_used_at = Arc::new(Mutex::new(Instant::now()));
+        let is_switched_out = Arc::new(AtomicBool::new(false));
 
         let entry = Arc::new(ModelEntry {
             instance: Arc::clone(&model_arc),
             active_leases: Arc::clone(&active_leases),
             last_used_at: Arc::clone(&last_used_at),
+            is_switched_out: Arc::clone(&is_switched_out),
         });
 
         {
@@ -282,8 +357,9 @@ impl LocalModelPool {
             model: model_arc,
             active_leases,
             last_used_at,
+            is_switched_out,
             reaper_notify: Arc::clone(&self.reaper_notify),
-            is_game_mode: Arc::clone(&self.is_game_mode),
+            release_mode: Arc::clone(&self.release_mode),
         })
     }
 
@@ -339,12 +415,14 @@ impl LocalModelPool {
             let cache = self.onnx_models.lock();
             if let Some(entry) = cache.get(&cache_key) {
                 entry.active_leases.fetch_add(1, Ordering::SeqCst);
+                entry.is_switched_out.store(false, Ordering::Relaxed);
                 return Ok(ModelLease {
                     model: Arc::clone(&entry.instance),
                     active_leases: Arc::clone(&entry.active_leases),
                     last_used_at: Arc::clone(&entry.last_used_at),
+                    is_switched_out: Arc::clone(&entry.is_switched_out),
                     reaper_notify: Arc::clone(&self.reaper_notify),
-                    is_game_mode: Arc::clone(&self.is_game_mode),
+                    release_mode: Arc::clone(&self.release_mode),
                 });
             }
         }
@@ -357,12 +435,14 @@ impl LocalModelPool {
                 let cache = self.onnx_models.lock();
                 if let Some(entry) = cache.get(&cache_key) {
                     entry.active_leases.fetch_add(1, Ordering::SeqCst);
+                    entry.is_switched_out.store(false, Ordering::Relaxed);
                     return Ok(ModelLease {
                         model: Arc::clone(&entry.instance),
                         active_leases: Arc::clone(&entry.active_leases),
                         last_used_at: Arc::clone(&entry.last_used_at),
+                        is_switched_out: Arc::clone(&entry.is_switched_out),
                         reaper_notify: Arc::clone(&self.reaper_notify),
-                        is_game_mode: Arc::clone(&self.is_game_mode),
+                        release_mode: Arc::clone(&self.release_mode),
                     });
                 }
             }
@@ -423,11 +503,13 @@ impl LocalModelPool {
 
         let active_leases = Arc::new(AtomicUsize::new(1));
         let last_used_at = Arc::new(Mutex::new(Instant::now()));
+        let is_switched_out = Arc::new(AtomicBool::new(false));
 
         let entry = Arc::new(ModelEntry {
             instance: Arc::clone(&adapter),
             active_leases: Arc::clone(&active_leases),
             last_used_at: Arc::clone(&last_used_at),
+            is_switched_out: Arc::clone(&is_switched_out),
         });
 
         {
@@ -439,26 +521,36 @@ impl LocalModelPool {
             model: adapter,
             active_leases,
             last_used_at,
+            is_switched_out,
             reaper_notify: Arc::clone(&self.reaper_notify),
-            is_game_mode: Arc::clone(&self.is_game_mode),
+            release_mode: Arc::clone(&self.release_mode),
         })
     }
 
     fn evict_excess_idle_onnx_sync(&self) {
-        let mut cache = self.onnx_models.lock();
-        let mut idle_keys: Vec<(OnnxCacheKey, Instant)> = cache
-            .iter()
-            .filter(|(_, entry)| entry.active_leases.load(Ordering::Relaxed) == 0)
-            .map(|(k, entry)| (k.clone(), *entry.last_used_at.lock()))
-            .collect();
+        let dropped = {
+            let mut cache = self.onnx_models.lock();
+            let mut idle_keys: Vec<(OnnxCacheKey, Instant)> = cache
+                .iter()
+                .filter(|(_, entry)| entry.active_leases.load(Ordering::Relaxed) == 0)
+                .map(|(k, entry)| (k.clone(), *entry.last_used_at.lock()))
+                .collect();
 
-        if idle_keys.len() >= self.max_idle_nmt_count {
-            idle_keys.sort_by_key(|(_, t)| *t);
-            let excess = idle_keys.len() - self.max_idle_nmt_count + 1;
-            for (k, _) in idle_keys.into_iter().take(excess) {
-                cache.remove(&k);
+            if idle_keys.len() >= self.max_idle_nmt_count {
+                idle_keys.sort_by_key(|(_, t)| *t);
+                let excess = idle_keys.len() - self.max_idle_nmt_count + 1;
+                let mut dropped = Vec::new();
+                for (k, _) in idle_keys.into_iter().take(excess) {
+                    if let Some(entry) = cache.remove(&k) {
+                        dropped.push(entry);
+                    }
+                }
+                dropped
+            } else {
+                Vec::new()
             }
-        }
+        };
+        drop(dropped);
     }
 
     // ------------------------------------------------------------------------
@@ -506,16 +598,17 @@ impl LocalModelPool {
 
     async fn run_reaper_loop(&self) {
         while !self.shutdown.load(Ordering::Relaxed) {
-            // Wake every 20 seconds, or immediately when reaper_notify fires (e.g. lease drop in GameMode)
+            // Wake every 3 seconds for game mode check or TTL, or immediately when reaper_notify fires
             let _ =
-                tokio::time::timeout(Duration::from_secs(20), self.reaper_notify.notified()).await;
+                tokio::time::timeout(Duration::from_secs(3), self.reaper_notify.notified()).await;
 
             if self.shutdown.load(Ordering::Relaxed) {
                 break;
             }
 
-            let is_game = self.is_game_mode.load(Ordering::Relaxed);
+            let mode = *self.release_mode.read();
             let ttl = *self.idle_ttl.read();
+            let is_game_fg = self.check_game_mode_foreground();
 
             let (llm_dropped, onnx_dropped) = {
                 let mut llm_cache = self.llama_models.lock();
@@ -526,8 +619,14 @@ impl LocalModelPool {
 
                 llm_cache.retain(|_, entry| {
                     if entry.active_leases.load(Ordering::Relaxed) == 0 {
+                        let is_switched = entry.is_switched_out.load(Ordering::Relaxed);
                         let elapsed = entry.last_used_at.lock().elapsed();
-                        if is_game || elapsed >= ttl {
+
+                        if is_switched
+                            || mode == ModelReleaseMode::Immediate
+                            || is_game_fg
+                            || (mode == ModelReleaseMode::Standard && elapsed >= ttl)
+                        {
                             llm_dropped.push(Arc::clone(entry));
                             return false;
                         }
@@ -537,8 +636,14 @@ impl LocalModelPool {
 
                 onnx_cache.retain(|_, entry| {
                     if entry.active_leases.load(Ordering::Relaxed) == 0 {
+                        let is_switched = entry.is_switched_out.load(Ordering::Relaxed);
                         let elapsed = entry.last_used_at.lock().elapsed();
-                        if is_game || elapsed >= ttl {
+
+                        if is_switched
+                            || mode == ModelReleaseMode::Immediate
+                            || is_game_fg
+                            || (mode == ModelReleaseMode::Standard && elapsed >= ttl)
+                        {
                             onnx_dropped.push(Arc::clone(entry));
                             return false;
                         }
@@ -583,8 +688,16 @@ mod tests {
 
     #[test]
     fn test_model_release_mode_from_str() {
-        assert_eq!(ModelReleaseMode::from("game"), ModelReleaseMode::GameMode);
-        assert_eq!(ModelReleaseMode::from("GAME"), ModelReleaseMode::GameMode);
+        assert_eq!(
+            ModelReleaseMode::from("immediate"),
+            ModelReleaseMode::Immediate
+        );
+        assert_eq!(
+            ModelReleaseMode::from("IMMEDIATE"),
+            ModelReleaseMode::Immediate
+        );
+        assert_eq!(ModelReleaseMode::from("never"), ModelReleaseMode::Never);
+        assert_eq!(ModelReleaseMode::from("NEVER"), ModelReleaseMode::Never);
         assert_eq!(
             ModelReleaseMode::from("standard"),
             ModelReleaseMode::Standard
@@ -601,13 +714,28 @@ mod tests {
         assert_eq!(pool.release_mode(), ModelReleaseMode::Standard);
         assert_eq!(pool.idle_ttl(), Duration::from_secs(DEFAULT_IDLE_TTL_SECS));
 
-        pool.set_release_mode(ModelReleaseMode::GameMode);
-        assert_eq!(pool.release_mode(), ModelReleaseMode::GameMode);
-        assert!(pool.is_game_mode.load(Ordering::Relaxed));
+        pool.set_release_mode(ModelReleaseMode::Immediate);
+        assert_eq!(pool.release_mode(), ModelReleaseMode::Immediate);
+
+        pool.set_game_mode(true, "eldenring.exe, cs2.exe\ncyberpunk2077.exe");
+        assert!(pool.is_game_mode_enabled());
+        {
+            let procs = pool.game_mode_processes.read();
+            assert!(procs.contains("eldenring.exe"));
+            assert!(procs.contains("cs2.exe"));
+            assert!(procs.contains("cyberpunk2077.exe"));
+        }
 
         pool.set_idle_ttl(Duration::from_secs(60));
         assert_eq!(pool.idle_ttl(), Duration::from_secs(60));
 
+        pool.shutdown();
+    }
+
+    #[test]
+    fn test_pool_new_outside_tokio_runtime() {
+        let pool = LocalModelPool::new();
+        assert_eq!(pool.release_mode(), ModelReleaseMode::Standard);
         pool.shutdown();
     }
 

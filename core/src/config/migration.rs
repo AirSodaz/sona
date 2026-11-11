@@ -385,6 +385,8 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         || existing.get("realtimeTranslationModelId")
             != normalized.get("realtimeTranslationModelId")
         || existing.get("localModelReleaseMode") != normalized.get("localModelReleaseMode")
+        || existing.get("gameModeEnabled") != normalized.get("gameModeEnabled")
+        || existing.get("gameModeProcessList") != normalized.get("gameModeProcessList")
         || existing.get("voiceTypingRealtimePreview")
             != normalized.get("voiceTypingRealtimePreview")
     {
@@ -1216,7 +1218,13 @@ fn sanitize_typed_config_fields(config: &mut Value) {
     repair_field_type(config, &defaults, "localModelReleaseMode", |value| {
         value
             .as_str()
-            .is_some_and(|mode| matches!(mode, "standard" | "game"))
+            .is_some_and(|mode| matches!(mode, "immediate" | "standard" | "never"))
+    });
+    repair_field_type(config, &defaults, "gameModeEnabled", |value| {
+        value.is_boolean()
+    });
+    repair_field_type(config, &defaults, "gameModeProcessList", |value| {
+        value.is_string()
     });
 }
 
