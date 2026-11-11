@@ -218,7 +218,9 @@
   z-index: 90;
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
@@ -244,7 +246,7 @@
 .transcript-scroll-badge.is-detached {
   pointer-events: auto;
   opacity: 1;
-  padding-left: 6px;
+  padding-left: 3px;
   box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
   border-color: var(--color-primary-light, var(--color-border));
 }
@@ -253,6 +255,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
   overflow: hidden;
   max-width: 0;
   opacity: 0;
@@ -267,6 +270,7 @@
   max-width: 32px;
   opacity: 1;
   margin-right: 6px;
+  overflow: visible;
 }
 
 .scroll-badge-action-btn {
@@ -276,24 +280,33 @@
   width: 22px;
   height: 22px;
   border-radius: var(--radius-full);
-  border: 1px solid var(--color-primary-border, transparent);
-  background: var(--color-primary-subtle, rgba(99, 102, 241, 0.12));
-  color: var(--color-primary, #6366f1);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
+  flex-shrink: 0;
   transition:
     background var(--transition-fast),
+    border-color var(--transition-fast),
     color var(--transition-fast),
+    box-shadow var(--transition-fast),
     transform var(--transition-fast);
 }
 
 .scroll-badge-action-btn:hover {
-  background: var(--color-primary, #6366f1);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+  box-shadow: var(--apple-control-shadow-flat);
+}
+
+:root[data-theme="dark"] .scroll-badge-action-btn:hover {
   color: #ffffff;
-  transform: scale(1.08);
 }
 
 .scroll-badge-action-btn:active {
+  background: var(--color-bg-active);
   transform: scale(0.94);
 }
 

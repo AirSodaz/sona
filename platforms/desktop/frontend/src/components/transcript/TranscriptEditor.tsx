@@ -107,7 +107,7 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
   }, [segments]);
 
   // Unified scroll follow: streaming output auto-scroll + playback active centering
-  const { detachMode, resumeFollow, atBottomStateChange, onUserInteraction } =
+  const { detachMode, resumeFollow, atBottomStateChange, onUserInteraction, scrollerRef } =
     useTranscriptScrollFollow({
       virtuosoRef,
       segments,
@@ -369,6 +369,7 @@ export function TranscriptEditor({ isActive = true }: TranscriptEditorProps): Re
       <TranscriptUIContext.Provider value={uiStore}>
         <Virtuoso<TranscriptSegment, TranscriptContext>
           ref={virtuosoRef}
+          scrollerRef={scrollerRef}
           className="transcript-list"
           data={segments}
           context={contextValue}

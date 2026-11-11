@@ -6,7 +6,10 @@ import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { DEFAULT_SESSION_DATA } from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import type { TranscriptSegment } from '../../types/transcript';
-import { useTranscriptScrollFollow } from '../useTranscriptScrollFollow';
+import {
+  findFirstFullyVisibleSegment,
+  useTranscriptScrollFollow,
+} from '../useTranscriptScrollFollow';
 
 describe('useTranscriptScrollFollow', () => {
   let mockScrollToIndex: ReturnType<typeof vi.fn>;
@@ -496,6 +499,501 @@ describe('useTranscriptScrollFollow', () => {
       });
 
       expect(mockScrollToIndex).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Tri-Modal Segment Anchoring & Translation Anti-Jump', () => {
+    it('follows when an earlier (non-last) segment receives translation during streaming', () => {
+      act(() => {
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
+      });
+
+      const streamingSegments: TranscriptSegment[] = [
+        { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true, tokens: [], timestamps: [] },
+        { id: 'seg-2', start: 1, end: 2, text: 'World', isFinal: true, tokens: [], timestamps: [] },
+        {
+          id: 'seg-3',
+          start: 2,
+          end: 3,
+          text: 'Streaming...',
+          isFinal: false,
+          tokens: [],
+          timestamps: [],
+        },
+      ];
+
+      const { rerender } = renderHook(
+        ({ segments }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments,
+          }),
+        { initialProps: { segments: streamingSegments } }
+      );
+
+      mockScrollToIndex.mockClear();
+
+      // seg-1 (an earlier segment) receives translation
+      const updatedSegments: TranscriptSegment[] = [
+        { ...streamingSegments[0], translation: '你好' },
+        streamingSegments[1],
+        streamingSegments[2],
+      ];
+
+      rerender({ segments: updatedSegments });
+
+      // Must follow to bottom (index 2) so that content expansion does not detach follow
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 2,
+        align: 'end',
+        behavior: 'auto',
+      });
+    });
+
+    it('does not detach streaming follow when atBottomStateChange(false) fires from layout expansion without user interaction', () => {
+      act(() => {
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
+      });
+
+      // Create a mock scroller element
+      const mockScroller = document.createElement('div');
+      Object.defineProperty(mockScroller, 'scrollHeight', { value: 1000, configurable: true });
+      Object.defineProperty(mockScroller, 'clientHeight', { value: 500, configurable: true });
+      Object.defineProperty(mockScroller, 'scrollTop', {
+        value: 450,
+        writable: true,
+        configurable: true,
+      });
+
+      const { result } = renderHook(() =>
+        useTranscriptScrollFollow({
+          virtuosoRef: mockVirtuosoRef,
+          segments: initialSegments,
+        })
+      );
+
+      // Connect scroller ref
+      act(() => {
+        result.current.scrollerRef(mockScroller);
+      });
+
+      mockScrollToIndex.mockClear();
+
+      // Virtuoso signals atBottomStateChange(false) due to translation expansion, but user is NOT scrolling
+      act(() => {
+        result.current.atBottomStateChange(false);
+      });
+
+      // Should NOT detach because user did not scroll!
+      expect(result.current.detachMode).toBeNull();
+      // Should re-scroll to bottom to keep anchored at the bottom
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: initialSegments.length - 1,
+        align: 'end',
+        behavior: 'auto',
+      });
+    });
+
+    it('detaches streaming follow when user scrolls with wheel upwards', () => {
+      act(() => {
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
+      });
+
+      const { result } = renderHook(() =>
+        useTranscriptScrollFollow({
+          virtuosoRef: mockVirtuosoRef,
+          segments: initialSegments,
+        })
+      );
+
+      // User scrolls upwards with mouse wheel (deltaY < 0)
+      act(() => {
+        result.current.onUserInteraction({ deltaY: -100 } as unknown as React.WheelEvent);
+      });
+
+      expect(result.current.detachMode).toBe('streaming');
+    });
+
+    it('re-aligns active segment centered during completed transcript playback when a segment receives translation', () => {
+      act(() => {
+        useTranscriptStore.setState({
+          isPlaying: true,
+          activeSegmentIndex: 1,
+        });
+      });
+
+      const { rerender } = renderHook(
+        ({ segments }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments,
+          }),
+        { initialProps: { segments: initialSegments } }
+      );
+
+      mockScrollToIndex.mockClear();
+
+      // A segment receives translation while audio is playing
+      const translatedSegments: TranscriptSegment[] = [
+        { ...initialSegments[0], translation: '你好' },
+        initialSegments[1],
+      ];
+
+      rerender({ segments: translatedSegments });
+
+      // Must re-center active segment so it stays steady without jumping
+      expect(mockScrollToIndex).toHaveBeenCalledWith({
+        index: 1,
+        align: 'center',
+        behavior: 'auto',
+      });
+    });
+
+    describe('findFirstFullyVisibleSegment', () => {
+      it('skips segments clipped at the top and selects the first fully visible segment', () => {
+        const scroller = document.createElement('div');
+        vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+          top: 100,
+          bottom: 500,
+          left: 0,
+          right: 300,
+          width: 300,
+          height: 400,
+          x: 0,
+          y: 100,
+          toJSON: () => {},
+        });
+
+        // Segment 0: partially clipped at top (top = 80, scroller top = 100)
+        const seg0 = document.createElement('div');
+        seg0.className = 'transcript-segment';
+        seg0.setAttribute('data-segment-id', 'seg-0');
+        seg0.setAttribute('data-segment-index', '0');
+        vi.spyOn(seg0, 'getBoundingClientRect').mockReturnValue({
+          top: 80,
+          bottom: 120,
+          left: 0,
+          right: 300,
+          width: 300,
+          height: 40,
+          x: 0,
+          y: 80,
+          toJSON: () => {},
+        });
+        scroller.appendChild(seg0);
+
+        // Segment 1: fully visible at top (top = 120, >= scroller top 100)
+        const seg1 = document.createElement('div');
+        seg1.className = 'transcript-segment';
+        seg1.setAttribute('data-segment-id', 'seg-1');
+        seg1.setAttribute('data-segment-index', '1');
+        vi.spyOn(seg1, 'getBoundingClientRect').mockReturnValue({
+          top: 120,
+          bottom: 170,
+          left: 0,
+          right: 300,
+          width: 300,
+          height: 50,
+          x: 0,
+          y: 120,
+          toJSON: () => {},
+        });
+        scroller.appendChild(seg1);
+
+        const segments: TranscriptSegment[] = [
+          {
+            id: 'seg-0',
+            start: 0,
+            end: 1,
+            text: 'Top clipped',
+            isFinal: true,
+            tokens: [],
+            timestamps: [],
+          },
+          {
+            id: 'seg-1',
+            start: 1,
+            end: 2,
+            text: 'First fully visible',
+            isFinal: true,
+            tokens: [],
+            timestamps: [],
+          },
+        ];
+
+        const anchor = findFirstFullyVisibleSegment(scroller, segments);
+
+        expect(anchor).not.toBeNull();
+        expect(anchor?.segmentId).toBe('seg-1');
+        expect(anchor?.index).toBe(1);
+        expect(anchor?.offsetFromTop).toBe(20); // 120 - 100
+      });
+    });
+
+    it('compensates scroll position in free browsing mode when an upper segment expands in height', () => {
+      const mockScroller = document.createElement('div');
+      Object.defineProperty(mockScroller, 'scrollTop', {
+        value: 200,
+        writable: true,
+        configurable: true,
+      });
+      vi.spyOn(mockScroller, 'getBoundingClientRect').mockReturnValue({
+        top: 100,
+        bottom: 500,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 400,
+        x: 0,
+        y: 100,
+        toJSON: () => {},
+      });
+
+      const seg1 = document.createElement('div');
+      seg1.className = 'transcript-segment';
+      seg1.setAttribute('data-segment-id', 'seg-1');
+      seg1.setAttribute('data-segment-index', '1');
+      // Initially at top = 150 (offsetFromTop = 50)
+      const seg1RectSpy = vi.spyOn(seg1, 'getBoundingClientRect').mockReturnValue({
+        top: 150,
+        bottom: 200,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 50,
+        x: 0,
+        y: 150,
+        toJSON: () => {},
+      });
+      mockScroller.appendChild(seg1);
+
+      const segments: TranscriptSegment[] = [
+        { id: 'seg-0', start: 0, end: 1, text: 'Seg 0', isFinal: true, tokens: [], timestamps: [] },
+        { id: 'seg-1', start: 1, end: 2, text: 'Seg 1', isFinal: true, tokens: [], timestamps: [] },
+      ];
+
+      const { result, rerender } = renderHook(
+        ({ segs }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments: segs,
+          }),
+        { initialProps: { segs: segments } }
+      );
+
+      act(() => {
+        result.current.scrollerRef(mockScroller);
+      });
+
+      // User scrolls away, establishing seg-1 as anchor
+      act(() => {
+        result.current.onUserInteraction();
+      });
+
+      // Now seg-0 (above seg-1) receives a translation (+40px), pushing seg-1 down to top = 190
+      seg1RectSpy.mockReturnValue({
+        top: 190,
+        bottom: 240,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 50,
+        x: 0,
+        y: 190,
+        toJSON: () => {},
+      });
+
+      const updatedSegments: TranscriptSegment[] = [
+        { ...segments[0], translation: 'Seg 0 translated' },
+        segments[1],
+      ];
+
+      rerender({ segs: updatedSegments });
+
+      // scrollTop should be compensated by delta (190 - 150 = 40): 200 + 40 = 240
+      expect(mockScroller.scrollTop).toBe(240);
+    });
+
+    it('falls back to intersecting segment when an oversized segment spans the viewport and is clipped at top', () => {
+      const scroller = document.createElement('div');
+      vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+        top: 100,
+        bottom: 500,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 400,
+        x: 0,
+        y: 100,
+        toJSON: () => {},
+      });
+
+      // Giant segment: spans from top = 50 (clipped by 50px) to bottom = 700 (past viewport bottom)
+      const giantSeg = document.createElement('div');
+      giantSeg.className = 'transcript-segment';
+      giantSeg.setAttribute('data-segment-id', 'giant-seg');
+      giantSeg.setAttribute('data-segment-index', '0');
+      vi.spyOn(giantSeg, 'getBoundingClientRect').mockReturnValue({
+        top: 50,
+        bottom: 700,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 650,
+        x: 0,
+        y: 50,
+        toJSON: () => {},
+      });
+      scroller.appendChild(giantSeg);
+
+      const segments: TranscriptSegment[] = [
+        {
+          id: 'giant-seg',
+          start: 0,
+          end: 10,
+          text: 'Giant segment text',
+          isFinal: true,
+          tokens: [],
+          timestamps: [],
+        },
+      ];
+
+      const anchor = findFirstFullyVisibleSegment(scroller, segments);
+      expect(anchor).not.toBeNull();
+      expect(anchor?.segmentId).toBe('giant-seg');
+      expect(anchor?.offsetFromTop).toBe(-50); // 50 - 100
+    });
+
+    it('attaches DOM listeners reactively when scrollerRef is provided after initial render', () => {
+      act(() => {
+        useTranscriptStore.setState({ isRecording: true, recordingSessionId: 'session-1' });
+      });
+
+      const mockScroller = document.createElement('div');
+      Object.defineProperty(mockScroller, 'scrollHeight', { value: 1000, configurable: true });
+      Object.defineProperty(mockScroller, 'clientHeight', { value: 500, configurable: true });
+      Object.defineProperty(mockScroller, 'scrollTop', {
+        value: 480, // near bottom (<= 60px from bottom)
+        writable: true,
+        configurable: true,
+      });
+
+      const { result } = renderHook(() =>
+        useTranscriptScrollFollow({
+          virtuosoRef: mockVirtuosoRef,
+          segments: initialSegments,
+        })
+      );
+
+      // Connect scroller after initial render
+      act(() => {
+        result.current.scrollerRef(mockScroller);
+      });
+
+      // Manually detach
+      act(() => {
+        result.current.onUserInteraction({ deltaY: -100 } as unknown as React.WheelEvent);
+      });
+      expect(result.current.detachMode).toBe('streaming');
+
+      // User initiates pointerdown then scrolls back to bottom
+      act(() => {
+        mockScroller.dispatchEvent(new Event('pointerdown'));
+        mockScroller.dispatchEvent(new Event('scroll'));
+      });
+
+      // Streaming follow should re-engage because scroll event was listened to and user is at bottom
+      expect(result.current.detachMode).toBeNull();
+    });
+
+    it('compensates scroll position when earlier segment text (ASR refinement) expands in free browsing mode', () => {
+      const mockScroller = document.createElement('div');
+      Object.defineProperty(mockScroller, 'scrollTop', {
+        value: 200,
+        writable: true,
+        configurable: true,
+      });
+      vi.spyOn(mockScroller, 'getBoundingClientRect').mockReturnValue({
+        top: 100,
+        bottom: 500,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 400,
+        x: 0,
+        y: 100,
+        toJSON: () => {},
+      });
+
+      const seg1 = document.createElement('div');
+      seg1.className = 'transcript-segment';
+      seg1.setAttribute('data-segment-id', 'seg-1');
+      seg1.setAttribute('data-segment-index', '1');
+      const seg1RectSpy = vi.spyOn(seg1, 'getBoundingClientRect').mockReturnValue({
+        top: 150,
+        bottom: 200,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 50,
+        x: 0,
+        y: 150,
+        toJSON: () => {},
+      });
+      mockScroller.appendChild(seg1);
+
+      const segments: TranscriptSegment[] = [
+        {
+          id: 'seg-0',
+          start: 0,
+          end: 1,
+          text: 'Initial short text',
+          isFinal: true,
+          tokens: [],
+          timestamps: [],
+        },
+        { id: 'seg-1', start: 1, end: 2, text: 'Seg 1', isFinal: true, tokens: [], timestamps: [] },
+      ];
+
+      const { result, rerender } = renderHook(
+        ({ segs }) =>
+          useTranscriptScrollFollow({
+            virtuosoRef: mockVirtuosoRef,
+            segments: segs,
+          }),
+        { initialProps: { segs: segments } }
+      );
+
+      act(() => {
+        result.current.scrollerRef(mockScroller);
+      });
+
+      act(() => {
+        result.current.onUserInteraction();
+      });
+
+      // seg-0 text is refined by ASR, expanding height so seg-1 moves down by 30px
+      seg1RectSpy.mockReturnValue({
+        top: 180,
+        bottom: 230,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: 50,
+        x: 0,
+        y: 180,
+        toJSON: () => {},
+      });
+
+      const updatedSegments: TranscriptSegment[] = [
+        { ...segments[0], text: 'Refined much longer speech recognition hypothesis' },
+        segments[1],
+      ];
+
+      rerender({ segs: updatedSegments });
+
+      // scrollTop should be compensated by delta (180 - 150 = 30): 200 + 30 = 230
+      expect(mockScroller.scrollTop).toBe(230);
     });
   });
 });
