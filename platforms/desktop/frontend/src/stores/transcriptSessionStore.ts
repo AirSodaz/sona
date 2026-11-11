@@ -198,6 +198,8 @@ const SESSION_CONTENT_KEYS: (keyof SessionData)[] = [
   'sourceHistoryId',
   'title',
   'icon',
+  'projectId',
+  'pipelineSnapshot',
   'editingSegmentId',
   'aligningSegmentIds',
 ];

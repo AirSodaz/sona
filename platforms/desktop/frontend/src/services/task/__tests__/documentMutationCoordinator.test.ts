@@ -55,9 +55,9 @@ describe('DocumentMutationCoordinator', () => {
       }
     );
 
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(events).toEqual(['flushEditor:A', 'flushAutoSave:A:hist-1', 'start:A:hist-1']);
+    await vi.waitFor(() => {
+      expect(events).toEqual(['flushEditor:A', 'flushAutoSave:A:hist-1', 'start:A:hist-1']);
+    });
 
     gateA.resolve();
     await Promise.all([first, second]);

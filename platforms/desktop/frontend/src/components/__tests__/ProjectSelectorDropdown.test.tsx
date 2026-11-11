@@ -4,6 +4,7 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../../stores/transcriptStore';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import type { HistoryItem } from '../../types/history';
 import { ProjectSelectorDropdown } from '../ProjectSelectorDropdown';
 
 describe('ProjectSelectorDropdown', () => {
@@ -29,7 +30,7 @@ describe('ProjectSelectorDropdown', () => {
     });
   });
 
-  it('stays locked during active recording even when active session has no sourceHistoryId', () => {
+  it('stays enabled during active recording even when active session has no sourceHistoryId', () => {
     useTranscriptStore.setState({
       isRecording: true,
       recordingSessionId: 'rec-draft-1',
@@ -43,39 +44,42 @@ describe('ProjectSelectorDropdown', () => {
     render(<ProjectSelectorDropdown onOpenProjects={vi.fn()} />);
 
     const trigger = screen.getByRole('button');
-    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('closes an open popover when recording starts and displays accurate counts when idle', () => {
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'rec-draft-1',
-          title: 'Live Draft',
-          timestamp: 1000,
-          duration: 5,
-          audioPath: 'draft.wav',
-          transcriptPath: 'draft.json',
-          previewText: '',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-        {
-          id: 'completed-1',
-          title: 'Completed',
-          timestamp: 500,
-          duration: 10,
-          audioPath: 'c1.wav',
-          transcriptPath: 'c1.json',
-          previewText: 'Hello',
-          type: 'recording',
-          projectId: 'proj-1',
-          status: 'complete',
-        },
-      ] as any,
+  it('keeps popover open, preserves counts, and allows setActiveProjectId when recording starts', () => {
+    const setActiveProjectIdMock = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.setState({
+      setActiveProjectId: setActiveProjectIdMock,
     });
+    const items: HistoryItem[] = [
+      {
+        id: 'rec-draft-1',
+        title: 'Live Draft',
+        timestamp: 1000,
+        duration: 5,
+        audioPath: 'draft.wav',
+        transcriptPath: 'draft.json',
+        previewText: '',
+        type: 'recording',
+        projectId: null,
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+      {
+        id: 'completed-1',
+        title: 'Completed',
+        timestamp: 500,
+        duration: 10,
+        audioPath: 'c1.wav',
+        transcriptPath: 'c1.json',
+        previewText: 'Hello',
+        type: 'recording',
+        projectId: 'proj-1',
+        status: 'complete',
+      },
+    ];
+    useHistoryStore.setState({ items });
     useTranscriptStore.setState({
       isRecording: false,
       recordingSessionId: null,
@@ -95,11 +99,15 @@ describe('ProjectSelectorDropdown', () => {
       });
     });
 
-    expect(screen.queryByRole('listbox')).toBeNull();
-    expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+    const openListbox = screen.getByRole('listbox');
+    expect((screen.getByRole('button', { expanded: true }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+    fireEvent.click(within(openListbox).getByRole('option', { name: /Alpha/i }));
+    expect(setActiveProjectIdMock).toHaveBeenCalledWith('proj-1');
   });
 
-  it('does not call setActiveProjectId when creating a project from the modal after recording starts', async () => {
+  it('calls setActiveProjectId when creating a project from the modal even after recording starts', async () => {
     const createdProject = {
       id: 'proj-created',
       name: 'Beta',
@@ -135,6 +143,6 @@ describe('ProjectSelectorDropdown', () => {
     });
 
     expect(createProjectMock).toHaveBeenCalledTimes(1);
-    expect(setActiveProjectIdMock).not.toHaveBeenCalled();
+    expect(setActiveProjectIdMock).toHaveBeenCalledWith('proj-created');
   });
 });

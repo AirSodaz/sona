@@ -293,7 +293,15 @@
 .projects-rail-item-container:hover .projects-rail-count,
 .projects-rail-item-container:focus-within .projects-rail-count,
 .projects-rail-item-container.context-menu-active .projects-rail-count,
-.projects-rail-item.context-menu-active .projects-rail-count {
+.projects-rail-item.context-menu-active .projects-rail-count,
+.projects-rail-item-container:hover .projects-rail-active-badge,
+.projects-rail-item-container:focus-within .projects-rail-active-badge,
+.projects-rail-item-container.context-menu-active .projects-rail-active-badge,
+.projects-rail-item.context-menu-active .projects-rail-active-badge,
+.projects-rail-item-container:hover .projects-rail-pipeline-badge,
+.projects-rail-item-container:focus-within .projects-rail-pipeline-badge,
+.projects-rail-item-container.context-menu-active .projects-rail-pipeline-badge,
+.projects-rail-item.context-menu-active .projects-rail-pipeline-badge {
   opacity: 0;
   pointer-events: none;
 }
@@ -341,11 +349,26 @@
   box-shadow: var(--apple-control-focus-ring);
 }
 
+.projects-rail-active-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent-primary, #0a84ff) 16%, transparent);
+  color: var(--color-accent-primary, #0a84ff);
+  margin-right: 4px;
+  transition: opacity 0.12s ease;
+}
+
 .projects-rail-pipeline-badge {
   display: inline-flex;
   align-items: center;
   color: var(--color-text-secondary, #64748b);
   margin-right: 4px;
+  transition: opacity 0.12s ease;
 }
 
 .projects-rail-empty {

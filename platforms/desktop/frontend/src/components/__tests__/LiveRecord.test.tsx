@@ -5,8 +5,14 @@ import {
   createLiveRecordingDraftHandle as createDraftHandle,
   resetLiveRecordHistoryMocks,
 } from '../../__tests__/testUtils/liveRecord';
+import { pipelineExecutionEngine } from '../../services/pipeline/pipelineExecutionEngine';
+import { polishService } from '../../services/polishService';
+import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptStore as useCanonicalTranscriptStore } from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { LiveRecord } from '../LiveRecord';
 
 // Mock Tauri invoke
@@ -997,5 +1003,214 @@ describe('LiveRecord', () => {
     });
     expect(useTranscriptStore.getState().isRecording).toBe(false);
     expect(useTranscriptStore.getState().mode).toBe('projects');
+  });
+
+  it('isolates live recording project, auto-polish pipeline, and persistence across mid-recording activeProjectId switches', async () => {
+    const polishSpy = vi.spyOn(polishService, 'polishSegmentsWithConfig').mockResolvedValue([]);
+    const setActiveProjectSpy = vi.fn().mockResolvedValue(undefined);
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        autoPolish: false,
+        autoPolishFrequency: 1,
+        polishPresetId: 'clean',
+      },
+    });
+    useProjectStore.setState({
+      activeProjectId: 'proj-a',
+      setActiveProjectId: setActiveProjectSpy,
+      projects: [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoPolish: true,
+            polishPresetId: 'formal',
+          },
+        },
+        {
+          id: 'proj-b',
+          name: 'Project B',
+          createdAt: 2,
+          updatedAt: 2,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoPolish: false,
+            polishPresetId: 'verbatim',
+          },
+        },
+      ],
+    });
+
+    let recordingHistoryId = '';
+    mockCreateLiveRecordingDraft.mockImplementationOnce(
+      (_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) => {
+        recordingHistoryId = id || 'rec-proj-a';
+        return Promise.resolve(createDraftHandle(recordingHistoryId, 'wav'));
+      }
+    );
+    mockCompleteLiveRecordingDraft.mockImplementationOnce((historyId: string) =>
+      Promise.resolve(
+        createCompletedHistoryItem(historyId, 'wav', {
+          id: historyId,
+          title: 'Recording A',
+          projectId: 'proj-a',
+        })
+      )
+    );
+
+    render(<LiveRecord />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(mockCreateLiveRecordingDraft).toHaveBeenCalledWith(
+      'wav',
+      'proj-a',
+      'system:mic',
+      recordingHistoryId
+    );
+    expect(useCanonicalTranscriptStore.getState().sessions[recordingHistoryId]?.projectId).toBe(
+      'proj-a'
+    );
+
+    // Switch activeProjectId to Project B mid-recording
+    act(() => {
+      useProjectStore.setState({ activeProjectId: 'proj-b' });
+    });
+
+    // Emit final segment -> auto-polish must still use Project A's frozen pipeline ('formal')
+    act(() => {
+      capturedOnSegment?.({
+        id: 'seg-a-1',
+        text: 'Hello from project A',
+        start: 0,
+        end: 1,
+        isFinal: true,
+      });
+    });
+
+    expect(polishSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ polishPresetId: 'formal' }),
+      expect.arrayContaining([expect.objectContaining({ id: 'seg-a-1' })]),
+      expect.any(Function)
+    );
+
+    // Stop recording -> saves under Project A without overwriting activeProjectId ('proj-b')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+      await Promise.resolve();
+    });
+
+    expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
+      recordingHistoryId,
+      expect.any(Array),
+      expect.any(Number)
+    );
+    expect(setActiveProjectSpy).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().activeProjectId).toBe('proj-b');
+    polishSpy.mockRestore();
+  });
+
+  it('honors mid-recording updates to session pipelineSnapshot during post-processing', async () => {
+    const executeSpy = vi
+      .spyOn(pipelineExecutionEngine, 'execute')
+      .mockResolvedValue({ segments: [] });
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        autoTranslate: false,
+      },
+    });
+    useProjectStore.setState({
+      activeProjectId: 'proj-a',
+      projects: [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+          },
+        },
+      ],
+    });
+
+    let recordingHistoryId = '';
+    mockCreateLiveRecordingDraft.mockImplementationOnce(
+      (_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) => {
+        recordingHistoryId = id || 'rec-proj-a';
+        return Promise.resolve(createDraftHandle(recordingHistoryId, 'wav'));
+      }
+    );
+    mockCompleteLiveRecordingDraft.mockImplementationOnce((historyId: string) =>
+      Promise.resolve(
+        createCompletedHistoryItem(historyId, 'wav', {
+          id: historyId,
+          title: 'Recording A',
+          projectId: 'proj-a',
+        })
+      )
+    );
+
+    render(<LiveRecord />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    act(() => {
+      capturedOnSegment?.({
+        id: 'seg-1',
+        text: 'Segment 1',
+        start: 0,
+        end: 1,
+        isFinal: true,
+      });
+    });
+
+    act(() => {
+      const currentSnapshot =
+        useCanonicalTranscriptStore.getState().sessions[recordingHistoryId]?.pipelineSnapshot;
+      if (currentSnapshot) {
+        useCanonicalTranscriptStore
+          .getState()
+          .setSessionProjectContext(recordingHistoryId, 'proj-a', {
+            ...currentSnapshot,
+            targetLanguage: 'fr',
+          });
+      }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+      await Promise.resolve();
+    });
+
+    expect(executeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipeline: expect.objectContaining({
+          targetLanguage: 'fr',
+        }),
+      })
+    );
+
+    executeSpy.mockRestore();
   });
 });

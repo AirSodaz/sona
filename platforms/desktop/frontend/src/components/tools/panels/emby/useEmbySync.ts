@@ -17,6 +17,7 @@ import {
   setActiveMediaServerProfile,
 } from '../../../../services/mediaServer/mediaServerService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
+import { useProjectStore } from '../../../../stores/projectStore';
 import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
@@ -686,7 +687,10 @@ export function useEmbySync(): UseEmbySyncReturn {
 
     if (entries.length === 0) return;
 
-    useBatchQueueStore.getState().addEmbyItems({ items: entries });
+    useBatchQueueStore.getState().addEmbyItems({
+      items: entries,
+      projectId: useProjectStore.getState().activeProjectId,
+    });
     setSelectedItemIds(new Set());
     setSubmittedNotice(
       t('emby.submitted_success', {

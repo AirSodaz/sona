@@ -8,12 +8,15 @@ import {
   selectIsDocumentEditorLocked,
   useDocumentMutationLockStore,
 } from '../services/task/documentMutationCoordinator';
+import { useTaskProjectContext } from '../services/task/taskProjectContext';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { isHistoryItemDraft } from '../types/history';
+import { DEFAULT_PROJECT_PIPELINE } from '../types/project';
 import { coercePolishPresetId, getPolishPresetOptions } from '../utils/polishPresets';
 import {
   CheckIcon,
@@ -61,7 +64,6 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const config = useEffectiveConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
 
   const boundSessionId = useBoundSessionId();
@@ -75,8 +77,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const canRetranscribeCurrentHistory =
     !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
-  const projectId = currentHistoryItem?.projectId ?? activeProjectId;
-  const projectPipeline = resolveItemPipeline(projectId, projects, config);
+  const { projectId, pipelineSnapshot } = useTaskProjectContext(boundSessionId, sourceHistoryId);
+  const projectPipeline = pipelineSnapshot ?? resolveItemPipeline(projectId, projects, config);
   const currentPresetId = coercePolishPresetId(
     projectPipeline.polishPresetId || config.polishPresetId,
     config.polishCustomPresets
@@ -88,6 +90,24 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
   const handlePresetSelect = (presetId: string) => {
     setConfig({ polishPresetId: presetId });
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
+      useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
+        ...projectPipeline,
+        polishPresetId: presetId,
+      });
+    }
+    if (projectId && projectPipeline.isProjectPipeline) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+      if (project) {
+        void useProjectStore.getState().updateProjectPipeline(projectId, {
+          ...(project.pipeline ?? DEFAULT_PROJECT_PIPELINE),
+          polishPresetId: presetId,
+        });
+      }
+    }
     setIsOpen(false);
     triggerRef.current?.focus();
   };

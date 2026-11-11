@@ -39,7 +39,6 @@ export interface WorkspaceViewModel {
   itemCounts: Map<string | null, number>;
   moveOptions: Array<{ value: string; label: string }>;
   searchInputLabel: string;
-  showWorkflowActions: boolean;
   sortOptions: Array<{
     value: 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
     label: string;
@@ -148,7 +147,6 @@ export function buildWorkspaceViewModel({
         : t('projects.inbox_description', {
             defaultValue: 'Inbox collects recordings and imports without a project.',
           });
-  const showWorkflowActions = !isAllItemsScope && browseScope !== TRASH_SCOPE;
   const headerIcon = renderScopeIcon(browseScope, browseProject, {
     size: 'lg',
     showBackground: true,
@@ -208,7 +206,6 @@ export function buildWorkspaceViewModel({
     itemCounts,
     moveOptions,
     searchInputLabel,
-    showWorkflowActions,
     sortOptions,
     summaryChips,
   };

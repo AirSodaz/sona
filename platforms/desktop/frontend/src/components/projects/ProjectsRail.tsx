@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Plus, Zap } from 'lucide-react';
+import { Check, MoreHorizontal, Plus, Zap } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import type { ProjectRecord } from '../../types/project';
@@ -34,6 +34,7 @@ import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
 
 interface ProjectsRailProps {
+  activeProjectId: string | null;
   browseProjectId: string | null;
   historyItemsCount: number;
   inboxCount: number;
@@ -53,6 +54,7 @@ interface ProjectsRailProps {
 
 interface SortableProjectItemProps {
   isActive: boolean;
+  isActiveDefault: boolean;
   onSwitchScope: (id: string) => Promise<boolean>;
   project: ProjectRecord;
   projectCount: number;
@@ -63,6 +65,7 @@ interface SortableProjectItemProps {
 
 function SortableProjectItem({
   isActive,
+  isActiveDefault,
   onSwitchScope,
   project,
   projectCount,
@@ -118,6 +121,15 @@ function SortableProjectItem({
       >
         <RailItemContent icon={renderScopeIcon(project.id, project)} title={project.name} />
         <div className="projects-rail-actions">
+          {isActiveDefault && (
+            <span
+              className="projects-rail-active-badge"
+              title={t('projects.active_project_badge', { defaultValue: 'Active project' })}
+              aria-label={t('projects.active_project_badge', { defaultValue: 'Active project' })}
+            >
+              <Check size={10} strokeWidth={2.75} aria-hidden="true" />
+            </span>
+          )}
           {project.pipeline?.enabled && (
             <span
               className="projects-rail-pipeline-badge"
@@ -169,6 +181,7 @@ function SortableProjectItem({
 }
 
 export function ProjectsRail({
+  activeProjectId,
   browseProjectId,
   historyItemsCount,
   inboxCount,
@@ -186,6 +199,10 @@ export function ProjectsRail({
   t,
 }: ProjectsRailProps): React.JSX.Element {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const isInboxContextMenuOpen = activeContextId === 'workspace:scope:untagged';
+  const activeBadgeLabel = t('projects.active_project_badge', {
+    defaultValue: 'Active project',
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -232,6 +249,16 @@ export function ProjectsRail({
           type="button"
           className={`projects-rail-item ${isAllItemsScope ? 'active' : ''} ${activeContextId === 'workspace:scope:all' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(ALL_ITEMS_SCOPE)}
+          onKeyDown={(event) => {
+            if (isContextMenuKeyboardEvent(event)) {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenProjectContextMenu(
+                ALL_ITEMS_SCOPE,
+                createKeyboardContextMenuRequest(event.currentTarget)
+              );
+            }
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -252,6 +279,16 @@ export function ProjectsRail({
           type="button"
           className={`projects-rail-item ${isTrashScope ? 'active' : ''} ${activeContextId === 'workspace:scope:trash' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(TRASH_SCOPE)}
+          onKeyDown={(event) => {
+            if (isContextMenuKeyboardEvent(event)) {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenProjectContextMenu(
+                TRASH_SCOPE,
+                createKeyboardContextMenuRequest(event.currentTarget)
+              );
+            }
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -294,25 +331,84 @@ export function ProjectsRail({
             }
           }}
         >
-          <button
-            type="button"
-            className={`projects-rail-item ${isInboxScope ? 'active' : ''} ${activeContextId === 'workspace:scope:untagged' ? 'context-menu-active' : ''}`}
-            onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenProjectContextMenu(UNTAGGED_SCOPE, createPointerContextMenuRequest(event));
-            }}
-            aria-pressed={isInboxScope}
+          <div
+            className={`projects-rail-item-container ${isInboxContextMenuOpen ? 'context-menu-active' : ''}`}
           >
-            <RailItemContent
-              icon={renderScopeIcon(UNTAGGED_SCOPE)}
-              title={t('projects.inbox', { defaultValue: 'Inbox' })}
-            />
-            <div className="projects-rail-actions">
-              <span className="projects-rail-count">{inboxCount}</span>
-            </div>
-          </button>
+            <button
+              type="button"
+              className={`projects-rail-item ${isInboxScope ? 'active' : ''} ${isInboxContextMenuOpen ? 'context-menu-active' : ''}`}
+              onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
+              onKeyDown={(event) => {
+                if (isContextMenuKeyboardEvent(event)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenProjectContextMenu(
+                    UNTAGGED_SCOPE,
+                    createKeyboardContextMenuRequest(event.currentTarget)
+                  );
+                }
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onOpenProjectContextMenu(UNTAGGED_SCOPE, createPointerContextMenuRequest(event));
+              }}
+              aria-pressed={isInboxScope}
+            >
+              <RailItemContent
+                icon={renderScopeIcon(UNTAGGED_SCOPE)}
+                title={t('projects.inbox', { defaultValue: 'Inbox' })}
+              />
+              <div className="projects-rail-actions">
+                {activeProjectId === null && (
+                  <span
+                    className="projects-rail-active-badge"
+                    title={activeBadgeLabel}
+                    aria-label={activeBadgeLabel}
+                  >
+                    <Check size={10} strokeWidth={2.75} aria-hidden="true" />
+                  </span>
+                )}
+                <span className="projects-rail-count">{inboxCount}</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="projects-rail-menu-btn"
+              aria-label={t('common.more_options', { defaultValue: 'More options' })}
+              aria-haspopup="menu"
+              aria-expanded={isInboxContextMenuOpen}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const isKeyboard =
+                  event.detail === 0 || (event.clientX === 0 && event.clientY === 0);
+                onOpenProjectContextMenu(
+                  UNTAGGED_SCOPE,
+                  isKeyboard
+                    ? createKeyboardContextMenuRequest(event.currentTarget)
+                    : createPointerContextMenuRequest(event)
+                );
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onOpenProjectContextMenu(UNTAGGED_SCOPE, createPointerContextMenuRequest(event));
+              }}
+              onKeyDown={(event) => {
+                if (isContextMenuKeyboardEvent(event)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenProjectContextMenu(
+                    UNTAGGED_SCOPE,
+                    createKeyboardContextMenuRequest(event.currentTarget)
+                  );
+                }
+              }}
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </div>
 
           {projects.length === 0 && (
             <div className="projects-rail-empty">
@@ -338,6 +434,7 @@ export function ProjectsRail({
                   project={project}
                   projectCount={itemCounts.get(project.id) || 0}
                   isActive={browseProjectId === project.id}
+                  isActiveDefault={activeProjectId === project.id}
                   onSwitchScope={onSwitchScope}
                   onOpenContextMenu={onOpenProjectContextMenu}
                   isContextMenuOpen={activeContextId === `workspace:project:${project.id}`}
@@ -374,6 +471,15 @@ export function ProjectsRail({
                       title={activeDragProject?.name || ''}
                     />
                     <div className="projects-rail-actions">
+                      {activeDragProject && activeProjectId === activeDragProject.id && (
+                        <span
+                          className="projects-rail-active-badge"
+                          title={activeBadgeLabel}
+                          aria-label={activeBadgeLabel}
+                        >
+                          <Check size={10} strokeWidth={2.75} aria-hidden="true" />
+                        </span>
+                      )}
                       {activeDragProject?.pipeline?.enabled && (
                         <span
                           className="projects-rail-pipeline-badge"

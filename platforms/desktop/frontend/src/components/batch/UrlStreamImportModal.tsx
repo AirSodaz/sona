@@ -2,7 +2,10 @@ import { Globe } from 'lucide-react';
 import type React from 'react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { resolveItemPipeline } from '../../services/projectPipeline';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
+import { useConfigStore } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { Checkbox } from '../Checkbox';
 import { Modal } from '../Modal';
 
@@ -68,9 +71,18 @@ export function UrlStreamImportModal({
     }
 
     const uniqueUrls = Array.from(new Set(urls));
+    const projectState = useProjectStore.getState();
+    const config = useConfigStore.getState().config;
     useBatchQueueStore.getState().addStreamItems(uniqueUrls, {
       alias: isSingleUrl && alias.trim() ? alias.trim() : undefined,
       retainAudio,
+      projectId: projectState.activeProjectId,
+      resolvedConfigSnapshot: config,
+      pipelineSnapshot: resolveItemPipeline(
+        projectState.activeProjectId,
+        projectState.projects,
+        config
+      ),
     });
     handleModalClose();
   };

@@ -112,7 +112,11 @@ export class RetranscribeService {
         audioAbsolutePath,
         options.onProgress,
         undefined, // We'll just collect the final array
-        language === 'auto' ? undefined : language
+        language === 'auto' ? undefined : language,
+        undefined,
+        undefined,
+        undefined,
+        item.projectId ?? null
       );
 
       const historyStore = this.ports.getHistoryStore();

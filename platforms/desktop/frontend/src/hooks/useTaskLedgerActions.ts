@@ -251,7 +251,7 @@ export function createTaskCenterActionRegistry(
             variant: 'primary',
             run: async () => {
               deps.addBatchFiles([task.filePath as string], {
-                tagIds: task.tagIds ?? (task.projectId ? [task.projectId] : []),
+                projectId: task.projectId ?? task.tagIds?.[0] ?? null,
               });
               await deps.removeTask(task.id);
             },

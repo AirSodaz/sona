@@ -51,7 +51,6 @@ describe('createRecordingPersistence', () => {
     const removeHistoryItem = vi.fn();
     const syncSavedRecordingMeta = vi.fn();
     const persistSummary = vi.fn().mockResolvedValue(undefined);
-    const setActiveProjectId = vi.fn().mockResolvedValue(undefined);
     const createLiveRecordingDraft = vi
       .fn()
       .mockResolvedValueOnce(createDraftHandle('web-history', 'webm'))
@@ -79,7 +78,6 @@ describe('createRecordingPersistence', () => {
       },
       getTranscriptState: () => transcriptState,
       getActiveProjectId: () => 'project-1',
-      setActiveProjectId,
       addHistoryItem,
       upsertHistoryItem,
       removeHistoryItem,
@@ -146,10 +144,20 @@ describe('createRecordingPersistence', () => {
     expect(persistSummary).toHaveBeenNthCalledWith(2, 'native-history');
     expect(persistSummary).toHaveBeenNthCalledWith(3, 'web-history');
     expect(persistSummary).toHaveBeenNthCalledWith(4, 'native-history');
-    expect(setActiveProjectId).toHaveBeenNthCalledWith(1, 'project-1');
-    expect(setActiveProjectId).toHaveBeenNthCalledWith(2, 'project-1');
-    expect(setActiveProjectId).toHaveBeenNthCalledWith(3, 'project-1');
-    expect(setActiveProjectId).toHaveBeenNthCalledWith(4, 'project-1');
+    expect(createLiveRecordingDraft).toHaveBeenNthCalledWith(
+      1,
+      'webm',
+      'project-1',
+      'system:mic',
+      undefined
+    );
+    expect(createLiveRecordingDraft).toHaveBeenNthCalledWith(
+      2,
+      'wav',
+      'project-1',
+      'system:mic',
+      undefined
+    );
     expect(writeFile).toHaveBeenCalledWith('C:/history/web-history.webm', expect.any(Uint8Array));
     expect(discardLiveRecordingDraft).not.toHaveBeenCalled();
     expect(removeHistoryItem).not.toHaveBeenCalled();
@@ -174,7 +182,6 @@ describe('createRecordingPersistence', () => {
     const removeHistoryItem = vi.fn();
     const syncSavedRecordingMeta = vi.fn();
     const persistSummary = vi.fn().mockResolvedValue(undefined);
-    const setActiveProjectId = vi.fn().mockResolvedValue(undefined);
     const createLiveRecordingDraft = vi
       .fn()
       .mockResolvedValueOnce(createDraftHandle('empty-web-history', 'webm'))
@@ -199,7 +206,6 @@ describe('createRecordingPersistence', () => {
       },
       getTranscriptState: () => transcriptState,
       getActiveProjectId: () => 'project-1',
-      setActiveProjectId,
       addHistoryItem,
       upsertHistoryItem,
       removeHistoryItem,
@@ -293,7 +299,6 @@ describe('createRecordingPersistence', () => {
       getTranscriptState: () =>
         useTranscriptStore.getState() as unknown as RecordingPersistenceTranscriptState,
       getActiveProjectId: () => 'proj-1',
-      setActiveProjectId: vi.fn().mockResolvedValue(undefined),
       addHistoryItem: vi.fn(),
       upsertHistoryItem: vi.fn(),
       removeHistoryItem: vi.fn(),

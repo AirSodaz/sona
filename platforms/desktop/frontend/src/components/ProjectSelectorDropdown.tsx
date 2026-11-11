@@ -122,10 +122,8 @@ function ZapIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { ProjectRecord } from '../types/project';
-import { getLiveDraftLockState } from './projects/hooks/useWorkspaceItemMutations';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectVisual } from './projects/ProjectVisual';
 
@@ -143,7 +141,6 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
 
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
-  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
@@ -167,16 +164,6 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
     return map;
   }, [historyItems, isRecording, recordingSessionId]);
 
-  const locked = useMemo(
-    () =>
-      getLiveDraftLockState(
-        Boolean(isRecording),
-        sourceHistoryId ?? null,
-        historyItems,
-        recordingSessionId ?? null
-      ).isLocked,
-    [isRecording, sourceHistoryId, historyItems, recordingSessionId]
-  );
   const active = projects.find((project) => project.id === activeProjectId) ?? null;
   const filtered = useMemo(
     () =>
@@ -195,16 +182,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
-  useEffect(() => {
-    if (locked && open) {
-      setOpen(false);
-    }
-  }, [locked, open]);
-
   const choose = (id: string | null) => {
-    if (locked) {
-      return;
-    }
     void setActiveProjectId(id);
     setOpen(false);
     setQuery('');
@@ -218,17 +196,9 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
         <button
           type="button"
           className="project-selector-trigger"
-          disabled={locked}
           onClick={() => setOpen((value) => !value)}
           aria-haspopup="listbox"
           aria-expanded={open}
-          title={
-            locked
-              ? t('projects.locked_during_recording', {
-                  defaultValue: 'Cannot switch projects during recording',
-                })
-              : undefined
-          }
         >
           {active ? (
             <ProjectVisual icon={active.icon} color={active.color} size="xs" showBackground />
@@ -340,14 +310,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
             color: createColor,
             icon: createIcon,
           });
-          const runtimeState = useTranscriptStore.getState();
-          const isCurrentlyLocked = getLiveDraftLockState(
-            runtimeState.isRecording,
-            runtimeState.sessions[runtimeState.createLiveSessionId]?.sourceHistoryId ?? null,
-            useHistoryStore.getState().items,
-            runtimeState.recordingSessionId
-          ).isLocked;
-          if (project && !isCurrentlyLocked) {
+          if (project) {
             await setActiveProjectId(project.id);
           }
           setCreateIcon('');

@@ -6,10 +6,9 @@ import {
   speakerCorrectionService,
 } from '../services/speakerCorrectionService';
 import { buildSpeakerReviewSnapshot } from '../services/speakerReviewService';
+import { useTaskProjectId } from '../services/task/taskProjectContext';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { useHistoryStore } from '../stores/historyStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type {
@@ -73,17 +72,7 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const currentProjectId = useHistoryStore(
-    useCallback(
-      (state) => {
-        if (!sourceHistoryId) return activeProjectId;
-        const item = state.items.find((entry) => entry.id === sourceHistoryId);
-        return item ? (item.projectId ?? null) : activeProjectId;
-      },
-      [sourceHistoryId, activeProjectId]
-    )
-  );
+  const currentProjectId = useTaskProjectId(boundSessionId, sourceHistoryId);
   const profileSections = useMemo(
     () => buildSpeakerCorrectionProfileSections(speakerProfiles, currentProjectId),
     [speakerProfiles, currentProjectId]

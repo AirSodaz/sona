@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
+import type { ProjectRecord } from '../../types/project';
 import { buildEmbyStreamUrl, deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
 import {
   DEFAULT_SESSION_DATA,
@@ -56,14 +57,26 @@ vi.mock('../../services/modelService', () => ({
     getEnabledITNModelPaths: vi.fn(),
   },
 }));
+const mockProjectState = vi.hoisted(() => ({
+  activeProjectId: null as string | null,
+  projects: [] as ProjectRecord[],
+  setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('../projectStore', () => ({
   useProjectStore: {
     getState: () => ({
-      activeProjectId: null,
-      getActiveProject: vi.fn(() => null),
-      getProjectById: vi.fn(() => null),
-      setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+      activeProjectId: mockProjectState.activeProjectId,
+      projects: mockProjectState.projects,
+      getActiveProject: vi.fn(
+        () =>
+          mockProjectState.projects.find((p) => p.id === mockProjectState.activeProjectId) ?? null
+      ),
+      getProjectById: vi.fn(
+        (id: string | null | undefined) =>
+          mockProjectState.projects.find((p) => p.id === id) ?? null
+      ),
+      setActiveProjectId: mockProjectState.setActiveProjectId,
     }),
   },
 }));
@@ -1373,6 +1386,77 @@ describe('batchQueueStore', () => {
           useBatchQueueStore.getState().activeItemId
         )
       ).toBe('default');
+    });
+  });
+
+  describe('multi-project queue isolation', () => {
+    it('snapshots per-project pipeline at enqueue and never mutates activeProjectId on setActiveItem or applySavedHistory', () => {
+      mockProjectState.setActiveProjectId.mockClear();
+      mockProjectState.projects = [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            enabled: true,
+            autoPolish: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+            autoSummary: false,
+            autoExport: false,
+            customTerms: [],
+          },
+        },
+        {
+          id: 'proj-b',
+          name: 'Project B',
+          createdAt: 2,
+          updatedAt: 2,
+          pipeline: {
+            enabled: true,
+            autoPolish: false,
+            autoTranslate: true,
+            targetLanguage: 'en',
+            autoSummary: false,
+            autoExport: false,
+            customTerms: [],
+          },
+        },
+      ];
+
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null, isQueuePaused: true });
+
+      mockProjectState.activeProjectId = 'proj-a';
+      useBatchQueueStore.getState().addFiles(['/audio/a.wav']);
+
+      mockProjectState.activeProjectId = 'proj-b';
+      useBatchQueueStore.getState().addStreamItems(['https://example.com/b.mp3']);
+
+      const [itemA, itemB] = useBatchQueueStore.getState().queueItems;
+      expect(itemA.projectId).toBe('proj-a');
+      expect(itemA.pipelineSnapshot).toEqual(
+        expect.objectContaining({
+          isProjectPipeline: true,
+          autoPolish: true,
+          targetLanguage: 'ja',
+        })
+      );
+      expect(itemB.projectId).toBe('proj-b');
+      expect(itemB.pipelineSnapshot).toEqual(
+        expect.objectContaining({
+          isProjectPipeline: true,
+          autoPolish: false,
+          targetLanguage: 'en',
+        })
+      );
+
+      useBatchQueueStore.getState().setActiveItem(itemA.id);
+      useBatchQueueStore.getState().setActiveItem(itemB.id);
+      expect(mockProjectState.setActiveProjectId).not.toHaveBeenCalled();
+
+      mockProjectState.activeProjectId = null;
+      mockProjectState.projects = [];
     });
   });
 });

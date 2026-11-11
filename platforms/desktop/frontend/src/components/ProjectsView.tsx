@@ -10,6 +10,10 @@ import {
 import { syncEmbySubtitles } from '../services/emby/embyService';
 import { historyService } from '../services/historyService';
 import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
+import {
+  getProjectsWithActiveTasks,
+  useProjectsWithActiveTasks,
+} from '../services/task/taskProjectContext';
 import { storageOpenPath } from '../services/tauri/storage';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
@@ -65,17 +69,21 @@ function createWorkspaceMenuRevision(
   isActive: boolean,
   historyItems = useHistoryStore.getState().items,
   projects = useProjectStore.getState().projects,
-  lockState?: LiveDraftLockState
+  lockState?: LiveDraftLockState,
+  activeTaskProjects = getProjectsWithActiveTasks()
 ): string {
   const historyPrefix = 'workspace:history:';
   const projectPrefix = 'workspace:project:';
+  const transcriptState = useTranscriptStore.getState();
   const resolvedLockState =
     lockState ??
     getLiveDraftLockState(
       useTranscriptRuntimeStore.getState().isRecording,
-      useTranscriptSessionStore.getState().sourceHistoryId,
-      historyItems
+      transcriptState.sessions[transcriptState.createLiveSessionId]?.sourceHistoryId ?? null,
+      historyItems,
+      transcriptState.recordingSessionId
     );
+  const activeTaskProjectIds = Array.from(activeTaskProjects).sort();
   let target: unknown = null;
 
   if (contextId.startsWith(historyPrefix)) {
@@ -93,6 +101,7 @@ function createWorkspaceMenuRevision(
     isSelectionMode,
     isActive,
     lockState: resolvedLockState,
+    activeTaskProjectIds,
   });
 }
 
@@ -117,7 +126,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   );
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
-  const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
@@ -144,11 +152,22 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const openRequestSeqRef = useRef(0);
   const isActiveRef = useRef(isActive);
   isActiveRef.current = isActive;
-  const isLiveDraftSessionLocked = useMemo(
-    () =>
-      getLiveDraftLockState(isRecording, sourceHistoryId, historyItems, recordingSessionId)
-        .isLocked,
-    [isRecording, sourceHistoryId, historyItems, recordingSessionId]
+  const projectsWithActiveTasks = useProjectsWithActiveTasks();
+
+  const guardProjectDeletionBlocked = useCallback(
+    (projectId: string): boolean => {
+      if (!getProjectsWithActiveTasks().has(projectId)) {
+        return false;
+      }
+      setProjectToDelete(null);
+      void showError({
+        code: 'projects.delete_blocked_active_tasks',
+        messageKey: 'projects.delete_blocked_active_tasks',
+        showCause: false,
+      });
+      return true;
+    },
+    [showError]
   );
 
   useEffect(() => {
@@ -234,6 +253,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
                 title: item.title,
                 icon: item.icon,
                 audioUrl: url,
+                projectId: item.projectId ?? null,
               });
             } else {
               useTranscriptStore.getState().openLiveDraftSession({
@@ -242,6 +262,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
                 title: item.title,
                 icon: item.icon,
                 audioUrl: url,
+                projectId: item.projectId ?? null,
               });
             }
             resetAutoSaveBaselineIfTracked(item.id, segments);
@@ -322,6 +343,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             title: latestItem.title,
             icon: latestItem.icon,
             audioUrl: url,
+            projectId: latestItem.projectId ?? null,
           });
         } else {
           useTranscriptStore.setState((state) => ({
@@ -334,16 +356,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
                 title: latestItem.title || '',
                 icon: latestItem.icon || null,
                 audioUrl: url ?? null,
+                projectId: latestItem.projectId ?? null,
               },
             },
           }));
         }
         resetAutoSaveBaselineIfTracked(item.id, segments);
         setSelectedHistoryId(item.id);
-        const store = useTranscriptStore.getState();
-        if (isActiveRef.current && !store.isRecording && !store.recordingSessionId) {
-          await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
-        }
       } catch (error) {
         await showError({
           code: 'history.load_failed',
@@ -423,12 +442,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const syncVisibleItems = selectionState.syncVisibleItems;
   const clearSelection = selectionState.clearSelection;
 
-  useEffect(() => {
-    if (isLiveDraftSessionLocked && selectionState.isSelectionMode) {
-      clearSelection();
-    }
-  }, [clearSelection, isLiveDraftSessionLocked, selectionState.isSelectionMode]);
-
   const {
     handleDeleteHistoryItem,
     handleDeleteHistoryItems,
@@ -480,7 +493,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       isActive,
       historyItems,
       projects,
-      lockState
+      lockState,
+      projectsWithActiveTasks
     );
     if (latestRevision !== snapshot.revision) {
       closeContextMenu();
@@ -493,6 +507,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     isActive,
     isRecording,
     projects,
+    projectsWithActiveTasks,
     recordingSessionId,
     selectionState.isSelectionMode,
     sourceHistoryId,
@@ -684,11 +699,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, [effectiveSelectedHistoryId, selectedHistoryId, isActive, clearOpenedItem]);
   const handleSwitchBrowseScope = async (nextScope: string): Promise<boolean> => {
     const isProjectScope = nextScope !== 'all' && nextScope !== 'untagged' && nextScope !== 'trash';
-    const initialLockState = getLiveDraftLockState();
     if (
-      initialLockState.isLocked ||
-      (isProjectScope &&
-        !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+      isProjectScope &&
+      !useProjectStore.getState().projects.some((project) => project.id === nextScope)
     ) {
       return false;
     }
@@ -698,11 +711,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return false;
     }
 
-    const latestLockState = getLiveDraftLockState();
     if (
-      latestLockState.isLocked ||
-      (isProjectScope &&
-        !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+      isProjectScope &&
+      !useProjectStore.getState().projects.some((project) => project.id === nextScope)
     ) {
       return false;
     }
@@ -717,24 +728,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     // Auto-close active editor/session on switching browse scope
     clearOpenedItem();
-
-    if (nextScope === 'all') {
-      return true;
-    }
-
-    if (nextScope !== 'trash') {
-      await useProjectStore
-        .getState()
-        .setActiveProjectId(nextScope === 'untagged' ? null : nextScope);
-    }
     return true;
   };
 
   const handleOpenProjectSettings = async (id: string) => {
     let project = useProjectStore.getState().projects.find((item) => item.id === id);
-    const initialLockState = getLiveDraftLockState();
     const isCurrentProject = browseScopeRef.current === id;
-    if (!project || (initialLockState.isLocked && !isCurrentProject)) {
+    if (!project) {
       return;
     }
 
@@ -746,8 +746,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     project = useProjectStore.getState().projects.find((item) => item.id === id);
-    const latestLockState = getLiveDraftLockState();
-    if (!project || (latestLockState.isLocked && !isCurrentProject)) {
+    if (!project) {
       return;
     }
 
@@ -814,11 +813,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     setNewProjectColor('#64748b');
     setNewProjectIcon('');
     setIsCreateModalOpen(false);
-    const lockState = getLiveDraftLockState();
-    if (!lockState.isLocked) {
-      browseState.setBrowseScope(project.id);
-      await setActiveProjectId(project.id);
-    }
+    browseState.setBrowseScope(project.id);
   };
 
   const handleSaveProject = async () => {
@@ -837,12 +832,18 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleDeleteProject = async () => {
-    if (getLiveDraftLockState().isLocked || !browseState.browseProject) {
+    if (!browseState.browseProject) {
       return;
     }
     const project = browseState.browseProject;
+    if (guardProjectDeletionBlocked(project.id)) {
+      return;
+    }
     const shouldDiscard = await projectSettingsDraft.confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
+      return;
+    }
+    if (guardProjectDeletionBlocked(project.id)) {
       return;
     }
 
@@ -853,9 +854,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleToggleSelectionMode = () => {
-    if (isLiveDraftSessionLocked) {
-      return;
-    }
     browseState.setIsFilterMenuOpen(false);
     selectionState.toggleSelectionMode();
   };
@@ -968,8 +966,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const { openRailContextMenu } = useProjectRailContextMenu({
     activeProjectId,
     browseScope: browseState.browseScope,
-    isLockedLiveDraft: isLiveDraftSessionLocked,
+    isProjectDeleteBlocked: (projectId) => projectsWithActiveTasks.has(projectId),
     onDeleteProject: (project) => {
+      if (guardProjectDeletionBlocked(project.id)) {
+        return;
+      }
       setProjectToDelete(project);
     },
     onEmptyTrash: handleEmptyTrash,
@@ -1063,6 +1064,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     <div className={`projects-workbench ${selectedItem ? 'with-detail' : ''}`}>
       <ProjectsRail
         activeContextId={activeContextId}
+        activeProjectId={activeProjectId}
         browseProjectId={browseState.browseProjectId}
         historyItemsCount={browseHistoryItems.length}
         inboxCount={railItemCounts.get(null) || 0}
@@ -1082,19 +1084,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       {!selectedItem && (
         <section className="projects-main">
           <ProjectsHeader
-            browseProject={browseState.browseProject}
             headerDescription={browseState.headerDescription}
             headerIcon={browseState.headerIcon}
             headerTitle={browseState.headerTitle}
             isScrolled={browseState.isScrolled}
-            onOpenBatchImport={() => {
-              setMode('create', 'batch');
-            }}
-            onOpenProjectSettings={() => projectSettingsDraft.setIsSettingsOpen(true)}
-            onStartLiveRecord={() => {
-              setMode('create', 'live');
-            }}
-            showWorkflowActions={browseState.showWorkflowActions}
             isTrashScope={browseState.isTrashScope}
             onEmptyTrash={() => void handleEmptyTrash()}
             trashItemCount={browseState.itemCounts.get('trash') || 0}
@@ -1126,7 +1119,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             onSetSortOrder={browseState.setSortOrder}
             onSetViewMode={(nextViewMode) => setConfig({ projectsViewMode: nextViewMode })}
             onToggleSelectionMode={handleToggleSelectionMode}
-            disableSelectionModeToggle={isLiveDraftSessionLocked}
             scopedItemsCount={adjustedScopeItemCount}
             searchInputLabel={browseState.searchInputLabel}
             searchInputRef={searchInputRef}
@@ -1221,7 +1213,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         onCloseSettings={projectSettingsDraft.handleRequestCloseProjectSettings}
         onSaveProject={handleSaveProject}
         onDeleteProject={handleDeleteProject}
-        disableDeleteProject={isLiveDraftSessionLocked}
+        disableDeleteProject={Boolean(
+          browseState.browseProject && projectsWithActiveTasks.has(browseState.browseProject.id)
+        )}
+        deleteDisabledReason={t('projects.delete_blocked_active_tasks', {
+          defaultValue: 'Cannot delete project while tasks in this project are active or queued',
+        })}
         onDraftNameChange={projectSettingsDraft.setDraftName}
         onDraftDescriptionChange={projectSettingsDraft.setDraftDescription}
         onDraftIconChange={projectSettingsDraft.setDraftIcon}
@@ -1261,8 +1258,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         onConfirmDelete={async (cascadeAction) => {
           if (!projectToDelete) return;
           const pid = projectToDelete.id;
-          clearOpenedItem();
-          browseState.setBrowseScope('untagged');
+          if (guardProjectDeletionBlocked(pid)) {
+            return;
+          }
+          if (selectedItem?.projectId === pid || browseState.browseProjectId === pid) {
+            clearOpenedItem();
+          }
+          if (browseState.browseProjectId === pid) {
+            browseState.setBrowseScope('untagged');
+          }
           await deleteProject(pid, cascadeAction);
           await refreshHistory();
           setProjectToDelete(null);

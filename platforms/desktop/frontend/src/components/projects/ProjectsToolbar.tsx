@@ -41,7 +41,6 @@ interface ProjectsToolbarProps {
   onSetSortOrder: (value: ProjectSortOrder) => void;
   onSetViewMode: (value: 'list' | 'grid' | 'table') => void;
   onToggleSelectionMode: () => void;
-  disableSelectionModeToggle?: boolean;
   scopedItemsCount: number;
   searchInputLabel: string;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
@@ -76,7 +75,6 @@ export function ProjectsToolbar({
   onSetSortOrder,
   onSetViewMode,
   onToggleSelectionMode,
-  disableSelectionModeToggle = false,
   scopedItemsCount,
   searchInputLabel,
   searchInputRef,
@@ -278,7 +276,6 @@ export function ProjectsToolbar({
             aria-label={t('common.select', { defaultValue: 'Select' })}
             data-tooltip={t('common.select', { defaultValue: 'Select' })}
             data-tooltip-pos="bottom"
-            disabled={disableSelectionModeToggle}
           >
             <CheckSquare size={16} />
           </button>

@@ -47,8 +47,8 @@ export function useWorkspaceBrowseControls({
       return browseScopeState;
     }
 
-    return activeProjectId || UNTAGGED_SCOPE;
-  }, [activeProjectId, browseScopeState, projects]);
+    return UNTAGGED_SCOPE;
+  }, [browseScopeState, projects]);
 
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const isInboxScope = browseScope === UNTAGGED_SCOPE;

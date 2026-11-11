@@ -6,7 +6,7 @@ import {
 import type { LiveRecordingDraftHandle } from '../services/historyService';
 import { historyService } from '../services/historyService';
 import { pipelineExecutionEngine } from '../services/pipeline/pipelineExecutionEngine';
-import { resolveItemPipeline } from '../services/projectPipeline';
+import { type EffectivePipelineSnapshot, resolveItemPipeline } from '../services/projectPipeline';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
 import { audioDeleteRecordingFile } from '../services/tauri/audio';
@@ -86,6 +86,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   const recordingAutomationSnapshotRef = useRef<{
     config: ReturnType<typeof getEffectiveConfigSnapshot>;
     projectId: string | null;
+    pipeline: EffectivePipelineSnapshot;
   } | null>(null);
 
   const [isInitializing, setIsInitializing] = useState(false);
@@ -226,8 +227,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             },
           };
         },
-        getActiveProjectId: () => useProjectStore.getState().activeProjectId,
-        setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
+        getActiveProjectId: () =>
+          recordingAutomationSnapshotRef.current?.projectId ??
+          useProjectStore.getState().activeProjectId,
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
         upsertHistoryItem: (item) => useHistoryStore.getState().upsertItem(item),
         removeHistoryItem: (id) =>
@@ -236,16 +238,26 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments, explicitProjectId) => {
-          const activeProjectId =
-            explicitProjectId ??
-            recordingAutomationSnapshotRef.current?.projectId ??
-            useProjectStore.getState().activeProjectId;
-          const effectiveConfig = useConfigStore.getState().config;
-          const pipeline = resolveItemPipeline(
-            activeProjectId,
-            useProjectStore.getState().projects,
-            effectiveConfig
-          );
+          const snapshot = recordingAutomationSnapshotRef.current;
+          const originSessionId =
+            recordSessionIdRef.current ||
+            useTranscriptStore.getState().recordingSessionId ||
+            historyId;
+          const session = originSessionId
+            ? useTranscriptStore.getState().sessions[originSessionId]
+            : undefined;
+          const resolvedProjectId =
+            explicitProjectId ?? session?.projectId ?? snapshot?.projectId ?? null;
+          const effectiveConfig = snapshot?.config ?? useConfigStore.getState().config;
+          const pipeline =
+            session?.pipelineSnapshot ??
+            (snapshot && resolvedProjectId === snapshot.projectId
+              ? snapshot.pipeline
+              : resolveItemPipeline(
+                  resolvedProjectId,
+                  useProjectStore.getState().projects,
+                  effectiveConfig
+                ));
           const hasAnyPostProcess =
             pipeline.autoPolish ||
             pipeline.autoTranslate ||
@@ -255,14 +267,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return segments;
           }
           try {
-            const originSessionId =
-              recordSessionIdRef.current ||
-              useTranscriptStore.getState().recordingSessionId ||
-              historyId;
             const result = await pipelineExecutionEngine.execute({
               historyId,
               sessionId: originSessionId,
-              projectId: activeProjectId,
+              projectId: resolvedProjectId,
               segments,
               pipeline,
               globalConfig: effectiveConfig,
@@ -445,45 +453,59 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     return () => window.clearInterval(interval);
   }, [isPaused, isRecording, timing]);
 
-  const startRecording = useCallback(async () => {
-    const activeProjectId = useProjectStore.getState().activeProjectId;
-    const effectiveConfig = useConfigStore.getState().config;
-    const pipeline = resolveItemPipeline(
-      activeProjectId,
-      useProjectStore.getState().projects,
-      effectiveConfig
-    );
-    recordingAutomationSnapshotRef.current = {
-      projectId: activeProjectId,
-      config: {
-        ...effectiveConfig,
-        autoPolish: pipeline.autoPolish,
-        translationLanguage: pipeline.targetLanguage,
-        summaryEnabled: pipeline.autoSummary,
-        summaryTemplateId: pipeline.summaryTemplateId,
-      },
-    };
-    const asrRequest = resolveAsrTranscriptionRequest(effectiveConfig, 'live');
-    if (!isAsrRequestConfigured(asrRequest)) {
-      if (asrRequest.engine === 'online') {
-        void showError({
-          code: 'asr.not_configured',
-          messageKey: 'batch.no_model_error',
-        });
+  const startRecording = useCallback(
+    async (explicitProjectId?: string | null) => {
+      const targetProjectId =
+        explicitProjectId !== undefined
+          ? explicitProjectId
+          : useProjectStore.getState().activeProjectId;
+      const effectiveConfig = useConfigStore.getState().config;
+      const pipeline = resolveItemPipeline(
+        targetProjectId,
+        useProjectStore.getState().projects,
+        effectiveConfig
+      );
+      recordingAutomationSnapshotRef.current = {
+        projectId: targetProjectId,
+        pipeline,
+        config: {
+          ...effectiveConfig,
+          autoPolish: pipeline.autoPolish,
+          translationLanguage: pipeline.targetLanguage,
+          summaryEnabled: pipeline.autoSummary,
+          summaryTemplateId: pipeline.summaryTemplateId,
+        },
+      };
+      const activeRecSessionId =
+        recordSessionIdRef.current ?? useTranscriptStore.getState().recordingSessionId;
+      if (activeRecSessionId) {
+        useTranscriptStore
+          .getState()
+          .setSessionProjectContext(activeRecSessionId, targetProjectId, pipeline);
+      }
+      const asrRequest = resolveAsrTranscriptionRequest(effectiveConfig, 'live');
+      if (!isAsrRequestConfigured(asrRequest)) {
+        if (asrRequest.engine === 'online') {
+          void showError({
+            code: 'asr.not_configured',
+            messageKey: 'batch.no_model_error',
+          });
+          return false;
+        }
+        const onboardingStore = useOnboardingStore.getState();
+        useTranscriptRuntimeStore.getState().setMode('create', 'live');
+        onboardingStore.reopen(
+          getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
+          'live_record'
+        );
         return false;
       }
-      const onboardingStore = useOnboardingStore.getState();
-      useTranscriptRuntimeStore.getState().setMode('create', 'live');
-      onboardingStore.reopen(
-        getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
-        'live_record'
-      );
-      return false;
-    }
-    transcriptionService.setProjectId(activeProjectId);
-    peakLevelRef.current = 0;
-    return recordController.startRecording();
-  }, [recordController, showError]);
+      transcriptionService.setProjectId(targetProjectId);
+      peakLevelRef.current = 0;
+      return recordController.startRecording();
+    },
+    [recordController, showError]
+  );
 
   const stopRecording = useCallback(
     async (options?: { discard?: boolean }) => {

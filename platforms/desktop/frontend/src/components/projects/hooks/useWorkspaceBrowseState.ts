@@ -204,7 +204,6 @@ export function useWorkspaceBrowseState({
     itemCounts: viewModel.itemCounts,
     headerTitle: viewModel.headerTitle,
     headerDescription: viewModel.headerDescription,
-    showWorkflowActions: viewModel.showWorkflowActions,
     headerIcon: viewModel.headerIcon,
     searchInputLabel: viewModel.searchInputLabel,
     summaryChips: viewModel.summaryChips,

@@ -89,6 +89,7 @@ export class TaskLedgerBuilders {
     jobHistoryId,
     templateId,
     targetLanguage,
+    tagIds,
     status = 'running',
   }: {
     taskId: string;
@@ -96,6 +97,7 @@ export class TaskLedgerBuilders {
     jobHistoryId?: string | null;
     templateId?: string;
     targetLanguage?: string;
+    tagIds?: string[];
     status?: TaskLedgerRecord['status'];
   }): TaskLedgerRecord => {
     const now = this.nowTaskLedgerTimestamp();
@@ -129,6 +131,7 @@ export class TaskLedgerBuilders {
       cancelable: true,
       recoverable: false,
       historyId: normalizedHistoryId,
+      ...(tagIds && tagIds.length > 0 ? { tagIds } : {}),
       templateId,
       targetLanguage,
     };

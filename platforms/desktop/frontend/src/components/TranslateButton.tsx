@@ -14,12 +14,12 @@ import {
   selectIsDocumentEditorLocked,
   useDocumentMutationLockStore,
 } from '../services/task/documentMutationCoordinator';
+import { useTaskProjectContext } from '../services/task/taskProjectContext';
 import { toggleLiveTranslation } from '../services/tauri/recognizer';
 import { translationService } from '../services/translationService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -129,15 +129,9 @@ export function TranslateButton({
   const config = useEffectiveConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const segments = useTranscriptSessionStore((state) => state.segments);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
-  const historyItems = useHistoryStore((state) => state.items);
-  const currentItem =
-    sourceHistoryId && sourceHistoryId !== 'current'
-      ? historyItems.find((i) => i.id === sourceHistoryId)
-      : null;
-  const projectId = currentItem?.projectId ?? activeProjectId;
-  const projectPipeline = resolveItemPipeline(projectId, projects, config);
+  const { projectId, pipelineSnapshot } = useTaskProjectContext(boundSessionId, sourceHistoryId);
+  const projectPipeline = pipelineSnapshot ?? resolveItemPipeline(projectId, projects, config);
   const effectiveTargetLang = projectPipeline.targetLanguage || config.translationLanguage || 'zh';
   const effectiveSourceLang = config.realtimeTranslationSourceLanguage || 'auto';
   const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
@@ -312,6 +306,15 @@ export function TranslateButton({
       translationLanguage: newTgt,
     });
 
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
+      useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
+        ...projectPipeline,
+        targetLanguage: newTgt,
+      });
+    }
     if (projectId && projectPipeline.isProjectPipeline) {
       const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
       if (project) {
@@ -375,6 +378,15 @@ export function TranslateButton({
       realtimeTranslationTargetLanguage: nextTarget,
       translationLanguage: nextTarget,
     });
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
+      useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
+        ...projectPipeline,
+        targetLanguage: nextTarget,
+      });
+    }
     if (projectId && projectPipeline.isProjectPipeline) {
       const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
       if (project) {
@@ -412,6 +424,15 @@ export function TranslateButton({
       }
       return updated;
     });
+    if (
+      boundSessionId &&
+      useTranscriptStore.getState().sessions[boundSessionId]?.pipelineSnapshot
+    ) {
+      useTranscriptStore.getState().setSessionProjectContext(boundSessionId, projectId, {
+        ...projectPipeline,
+        targetLanguage: langCode,
+      });
+    }
     if (projectId && projectPipeline.isProjectPipeline) {
       const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
       if (project) {

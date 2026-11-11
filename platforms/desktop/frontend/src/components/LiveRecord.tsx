@@ -6,9 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { polishService } from '../services/polishService';
+import { resolveItemPipeline } from '../services/projectPipeline';
 import { useConfigStore } from '../stores/configStore';
 import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useProjectStore } from '../stores/projectStore';
 import {
   applyTranscriptUpdateToSession,
   openTranscriptSession,
@@ -94,16 +96,23 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
     // Auto-Polish Logic
-    const config = useConfigStore.getState().config;
-    const autoPolish = config.autoPolish ?? false;
-    const frequency = config.autoPolishFrequency ?? 5;
+    const baseConfig = useConfigStore.getState().config;
+    const targetSessionId = meta.sessionId;
+    const recSession = targetSessionId
+      ? useTranscriptStore.getState().sessions[targetSessionId]
+      : null;
+    const snapshotPipeline =
+      recSession?.pipelineSnapshot ??
+      resolveItemPipeline(
+        recSession?.projectId ?? null,
+        useProjectStore.getState().projects,
+        baseConfig
+      );
+    const autoPolish = snapshotPipeline.autoPolish ?? false;
+    const frequency = baseConfig.autoPolishFrequency ?? 5;
 
     if (autoPolish && frequency > 0) {
-      const targetSessionId = meta.sessionId;
-      const session = targetSessionId
-        ? useTranscriptStore.getState().sessions[targetSessionId]
-        : null;
-      const allSegments = session?.segments || [];
+      const allSegments = recSession?.segments || [];
       const unpolished = allSegments.filter((s) => s.isFinal && !polishedIdsRef.current.has(s.id));
 
       if (unpolished.length >= frequency) {
@@ -113,17 +122,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         });
 
         polishService
-          .polishSegments(toPolish, (chunk) => {
-            chunk.forEach((polishedSegment) => {
-              if (targetSessionId) {
-                updateTranscriptSegmentForSession(targetSessionId, polishedSegment.id, {
-                  text: polishedSegment.text,
-                });
-              } else {
-                updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
-              }
-            });
-          })
+          .polishSegmentsWithConfig(
+            {
+              ...baseConfig,
+              polishPresetId: snapshotPipeline.polishPresetId || baseConfig.polishPresetId,
+            },
+            toPolish,
+            (chunk) => {
+              chunk.forEach((polishedSegment) => {
+                if (targetSessionId) {
+                  updateTranscriptSegmentForSession(targetSessionId, polishedSegment.id, {
+                    text: polishedSegment.text,
+                  });
+                } else {
+                  updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
+                }
+              });
+            }
+          )
           .catch((err) => {
             logger.error('[LiveRecord] Auto-polish failed:', err);
           });
@@ -174,17 +190,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       } else {
         transcriptState.setIngestionFocus('live');
       }
+      const startProjectId = useProjectStore.getState().activeProjectId;
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],
         sourceHistoryId: historyId,
         title: '',
+        projectId: startProjectId,
       });
       setRecordSessionId(historyId);
       setRecordingSessionId(historyId);
 
       polishedIdsRef.current.clear();
-      const success = await startRecording();
+      const success = await startRecording(startProjectId);
       if (success) {
         startVisualizer();
       }

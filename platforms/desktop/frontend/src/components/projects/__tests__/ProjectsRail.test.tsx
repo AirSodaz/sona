@@ -4,6 +4,7 @@ import { ProjectsRail } from '../ProjectsRail';
 
 describe('ProjectsRail', () => {
   const defaultProps = {
+    activeProjectId: null,
     activeContextId: null,
     browseProjectId: null,
     historyItemsCount: 10,
@@ -68,8 +69,8 @@ describe('ProjectsRail', () => {
     const onOpenProjectContextMenu = vi.fn();
     render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
 
-    const menuBtn = screen.getByRole('button', { name: 'More options' });
-    fireEvent.click(menuBtn, { detail: 0, clientX: 0, clientY: 0 });
+    const menuBtns = screen.getAllByRole('button', { name: 'More options' });
+    fireEvent.click(menuBtns[1], { detail: 0, clientX: 0, clientY: 0 });
 
     expect(onOpenProjectContextMenu).toHaveBeenCalledTimes(1);
     expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
@@ -82,8 +83,8 @@ describe('ProjectsRail', () => {
     const onOpenProjectContextMenu = vi.fn();
     render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
 
-    const menuBtn = screen.getByRole('button', { name: 'More options' });
-    fireEvent.click(menuBtn, { detail: 1, clientX: 150, clientY: 200 });
+    const menuBtns = screen.getAllByRole('button', { name: 'More options' });
+    fireEvent.click(menuBtns[1], { detail: 1, clientX: 150, clientY: 200 });
 
     expect(onOpenProjectContextMenu).toHaveBeenCalledTimes(1);
     expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
@@ -96,15 +97,57 @@ describe('ProjectsRail', () => {
     const onOpenProjectContextMenu = vi.fn();
     render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
 
-    const menuBtn = screen.getByRole('button', { name: 'More options' });
-    fireEvent.contextMenu(menuBtn);
+    const menuBtns = screen.getAllByRole('button', { name: 'More options' });
+    fireEvent.contextMenu(menuBtns[1]);
     expect(onOpenProjectContextMenu).toHaveBeenCalledWith('proj-1', expect.anything());
 
     onOpenProjectContextMenu.mockClear();
-    fireEvent.keyDown(menuBtn, { key: 'F10', shiftKey: true });
+    fireEvent.keyDown(menuBtns[1], { key: 'F10', shiftKey: true });
     expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
       'proj-1',
       expect.objectContaining({ invocation: 'keyboard' })
     );
+  });
+
+  it('exposes Inbox hover menu button and moves active project check badge based on activeProjectId', () => {
+    const onOpenProjectContextMenu = vi.fn();
+    const { container, rerender } = render(
+      <ProjectsRail
+        {...defaultProps}
+        activeProjectId={null}
+        onOpenProjectContextMenu={onOpenProjectContextMenu}
+      />
+    );
+
+    const menuBtns = screen.getAllByRole('button', { name: 'More options' });
+    expect(menuBtns).toHaveLength(2);
+    fireEvent.click(menuBtns[0], { detail: 1, clientX: 40, clientY: 80 });
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
+      'untagged',
+      expect.objectContaining({ invocation: 'pointer', point: { x: 40, y: 80 } })
+    );
+
+    const inboxRow = screen.getByRole('button', { name: /Inbox/i });
+    expect(inboxRow.querySelector('.projects-rail-active-badge')).not.toBeNull();
+    const projectRow = screen.getByRole('button', { name: /Test Project/i });
+    expect(projectRow.querySelector('.projects-rail-active-badge')).toBeNull();
+
+    rerender(
+      <ProjectsRail
+        {...defaultProps}
+        activeProjectId="proj-1"
+        onOpenProjectContextMenu={onOpenProjectContextMenu}
+      />
+    );
+
+    expect(container.querySelectorAll('.projects-rail-active-badge')).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: /Inbox/i }).querySelector('.projects-rail-active-badge')
+    ).toBeNull();
+    expect(
+      screen
+        .getByRole('button', { name: /Test Project/i })
+        .querySelector('.projects-rail-active-badge')
+    ).not.toBeNull();
   });
 });

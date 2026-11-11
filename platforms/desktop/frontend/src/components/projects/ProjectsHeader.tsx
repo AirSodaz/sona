@@ -1,19 +1,12 @@
 import { Trash2 } from 'lucide-react';
 import type React from 'react';
-import type { ProjectRecord } from '../../types/project';
-import { FileTextIcon, MicIcon, SettingsIcon } from '../Icons';
 import type { ProjectSummaryChip, TranslationFn } from './types';
 
 interface ProjectsHeaderProps {
-  browseProject: ProjectRecord | null;
   headerDescription: string;
   headerIcon: React.ReactNode;
   headerTitle: string;
   isScrolled: boolean;
-  onOpenBatchImport: () => void;
-  onOpenProjectSettings: () => void;
-  onStartLiveRecord: () => void;
-  showWorkflowActions: boolean;
   isTrashScope?: boolean;
   onEmptyTrash?: () => void;
   trashItemCount?: number;
@@ -22,15 +15,10 @@ interface ProjectsHeaderProps {
 }
 
 export function ProjectsHeader({
-  browseProject,
   headerDescription,
   headerIcon,
   headerTitle,
   isScrolled,
-  onOpenBatchImport,
-  onOpenProjectSettings,
-  onStartLiveRecord,
-  showWorkflowActions,
   isTrashScope = false,
   onEmptyTrash,
   trashItemCount = 0,
@@ -49,48 +37,8 @@ export function ProjectsHeader({
           </div>
           <p>{headerDescription}</p>
         </div>
-        <div className="projects-main-entry-actions" data-testid="projects-main-entry-actions">
-          {showWorkflowActions && (
-            <>
-              <button
-                type="button"
-                className="btn btn-icon projects-header-icon"
-                onClick={onStartLiveRecord}
-                aria-label={t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
-                data-tooltip={t('projects.start_live_record', {
-                  defaultValue: 'Start Live Record',
-                })}
-                data-tooltip-pos="bottom"
-              >
-                <MicIcon width={16} height={16} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon projects-header-icon"
-                onClick={onOpenBatchImport}
-                aria-label={t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
-                data-tooltip={t('projects.open_batch_import', {
-                  defaultValue: 'Open Batch Import',
-                })}
-                data-tooltip-pos="bottom"
-              >
-                <FileTextIcon width={16} height={16} />
-              </button>
-            </>
-          )}
-          {browseProject && (
-            <button
-              type="button"
-              className="btn btn-icon projects-header-icon"
-              onClick={onOpenProjectSettings}
-              aria-label={t('projects.tag_settings', { defaultValue: 'Tag Settings' })}
-              data-tooltip={t('projects.tag_settings', { defaultValue: 'Tag Settings' })}
-              data-tooltip-pos="bottom-left"
-            >
-              <SettingsIcon width={16} height={16} />
-            </button>
-          )}
-          {isTrashScope && onEmptyTrash && (
+        {isTrashScope && onEmptyTrash && (
+          <div className="projects-main-entry-actions" data-testid="projects-main-entry-actions">
             <button
               type="button"
               className="btn btn-icon projects-header-icon btn-danger"
@@ -102,8 +50,8 @@ export function ProjectsHeader({
             >
               <Trash2 size={16} />
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="projects-stats-row" data-testid="projects-summary-chips">
