@@ -36,6 +36,8 @@ export interface UseTranscriptScrollFollowResult {
 /**
  * Finds the first fully visible segment in the scroller viewport,
  * specifically excluding any segment that is partially clipped at the top.
+ * If no segment is fully unclipped at the top (e.g. an oversized segment spanning
+ * the viewport), falls back to the first segment intersecting the viewport.
  */
 export function findFirstFullyVisibleSegment(
   scroller: HTMLElement,
@@ -43,33 +45,47 @@ export function findFirstFullyVisibleSegment(
 ): SegmentAnchor | null {
   const scrollerRect = scroller.getBoundingClientRect();
   const segmentEls = scroller.querySelectorAll<HTMLElement>('.transcript-segment');
+  let fallbackAnchor: SegmentAnchor | null = null;
 
   for (let i = 0; i < segmentEls.length; i++) {
     const el = segmentEls[i];
     const rect = el.getBoundingClientRect();
 
-    // Segment top must not be clipped (rect.top >= scrollerRect.top - 1)
-    // and must start before the bottom edge of the scroller
-    if (rect.top >= scrollerRect.top - 1 && rect.top < scrollerRect.bottom) {
-      const segmentId = el.getAttribute('data-segment-id') || el.dataset.segmentId || '';
-      const indexAttr = el.getAttribute('data-segment-index') || el.dataset.segmentIndex;
-      let index =
-        indexAttr !== undefined && indexAttr !== null && indexAttr !== ''
-          ? parseInt(indexAttr, 10)
-          : -1;
-      if (index === -1 && segmentId) {
-        index = segments.findIndex((s) => s.id === segmentId);
+    // Check if segment intersects the visible scroller viewport
+    const isIntersecting = rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
+    if (!isIntersecting) {
+      continue;
+    }
+
+    const segmentId = el.getAttribute('data-segment-id') || el.dataset.segmentId || '';
+    const indexAttr = el.getAttribute('data-segment-index') || el.dataset.segmentIndex;
+    let index =
+      indexAttr !== undefined && indexAttr !== null && indexAttr !== ''
+        ? parseInt(indexAttr, 10)
+        : -1;
+    if (index === -1 && segmentId) {
+      index = segments.findIndex((s) => s.id === segmentId);
+    }
+
+    if (segmentId || index !== -1) {
+      const anchor: SegmentAnchor = {
+        segmentId,
+        index,
+        offsetFromTop: rect.top - scrollerRect.top,
+      };
+
+      // Segment top must not be clipped (rect.top >= scrollerRect.top - 1)
+      if (rect.top >= scrollerRect.top - 1) {
+        return anchor;
       }
-      if (segmentId || index !== -1) {
-        return {
-          segmentId,
-          index,
-          offsetFromTop: rect.top - scrollerRect.top,
-        };
+
+      // If top is clipped, retain the first intersecting segment as fallback
+      if (!fallbackAnchor) {
+        fallbackAnchor = anchor;
       }
     }
   }
-  return null;
+  return fallbackAnchor;
 }
 
 /**
@@ -140,6 +156,7 @@ export function useTranscriptScrollFollow({
   segmentsRef.current = segments;
 
   // DOM Scroller and Anchoring state
+  const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   const anchorRef = useRef<SegmentAnchor | null>(null);
   const isUserInteractingRef = useRef(false);
@@ -149,6 +166,7 @@ export function useTranscriptScrollFollow({
   const scrollerRef = useCallback((element: HTMLElement | null | Window) => {
     const el = element instanceof HTMLElement ? element : null;
     scrollerElementRef.current = el;
+    setScrollerElement(el);
     if (el && !anchorRef.current && !isStreamingActiveRef.current && !isPlayingRef.current) {
       anchorRef.current = findFirstFullyVisibleSegment(el, segmentsRef.current);
     }
@@ -262,24 +280,8 @@ export function useTranscriptScrollFollow({
     }
   }, [editingSegmentId]);
 
-  // Track content modifications across segments (e.g. translation text arrives on ANY segment)
-  const lastSegment = segments[segments.length - 1];
-  const lastSegmentKey = lastSegment
-    ? `${lastSegment.id}:${lastSegment.text}:${lastSegment.translation ?? ''}:${lastSegment.isFinal ? 1 : 0}`
-    : '';
-
-  const translationLengthSum = segments.reduce(
-    (acc, s) =>
-      acc +
-      (s.translation ? s.translation.length : 0) +
-      (s.draftTranslation ? s.draftTranslation.length : 0),
-    0
-  );
-
   // Content height and anchor compensation
   useLayoutEffect(() => {
-    void lastSegmentKey;
-    void translationLengthSum;
     const scroller = scrollerElementRef.current;
 
     // 1. Streaming Follow Mode: keep pinned to bottom
@@ -322,14 +324,16 @@ export function useTranscriptScrollFollow({
           isProgrammaticScrollRef.current = true;
           scroller.scrollTop += delta;
         }
+      } else {
+        // If previous anchor was deleted or unmounted, re-establish anchor
+        anchorRef.current = findFirstFullyVisibleSegment(scroller, segmentsRef.current);
       }
     }
-  }, [segments.length, lastSegmentKey, translationLengthSum, editingSegmentId, virtuosoRef]);
+  }, [segments, editingSegmentId, virtuosoRef]);
 
   // Scroller event listeners for scrollbar tracking & user scroll detection
   useEffect(() => {
-    const scroller = scrollerElementRef.current;
-    if (!scroller) return;
+    if (!scrollerElement) return;
 
     const handlePointerDown = () => {
       isUserInteractingRef.current = true;
@@ -361,7 +365,9 @@ export function useTranscriptScrollFollow({
       }
       if (isUserInteractingRef.current) {
         const isAtBottom =
-          scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight) <= 60;
+          scrollerElement.scrollHeight -
+            (scrollerElement.scrollTop + scrollerElement.clientHeight) <=
+          60;
         if (isStreamingActiveRef.current && isAtBottom && !isStreamingFollowRef.current) {
           isStreamingFollowRef.current = true;
           setIsStreamingFollow(true);
@@ -370,16 +376,19 @@ export function useTranscriptScrollFollow({
       }
     };
 
-    scroller.addEventListener('pointerdown', handlePointerDown);
+    scrollerElement.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointerup', handlePointerUp);
-    scroller.addEventListener('scroll', handleScroll, { passive: true });
+    scrollerElement.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      scroller.removeEventListener('pointerdown', handlePointerDown);
+      scrollerElement.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointerup', handlePointerUp);
-      scroller.removeEventListener('scroll', handleScroll);
+      scrollerElement.removeEventListener('scroll', handleScroll);
+      if (userInteractionTimerRef.current) {
+        clearTimeout(userInteractionTimerRef.current);
+      }
     };
-  }, []);
+  }, [scrollerElement]);
 
   // Virtuoso atBottom callback for streaming follow
   const atBottomStateChange = useCallback(
