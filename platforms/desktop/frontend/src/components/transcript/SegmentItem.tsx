@@ -519,7 +519,12 @@ export function SegmentItem({
     ) : null;
 
   return (
-    <div className={classNames} onAnimationEnd={handleAnimationEnd}>
+    <div
+      className={classNames}
+      data-segment-id={segment.id}
+      data-segment-index={index}
+      onAnimationEnd={handleAnimationEnd}
+    >
       {speakerBadge && <div className="segment-speaker-row">{speakerBadge}</div>}
 
       <div className="transcript-segment-main">
