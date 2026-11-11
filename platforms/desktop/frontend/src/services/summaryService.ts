@@ -1,5 +1,4 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { resolveSidecarKey } from '../stores/transcriptSidecarState';
@@ -21,6 +20,7 @@ import { runTranscriptLlmJob } from './llmOperations';
 import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
 import { summarySidecarService } from './summarySidecarService';
+import { resolveTaskProjectContext } from './task/taskProjectContext';
 import {
   captureTaskTarget,
   normalizeHistoryId,
@@ -303,12 +303,13 @@ export class SummaryService {
 
     const initialSidecarKey = resolveTargetSidecarKey(target);
     const normalizedHistoryId = normalizeHistoryId(historyId);
-    const activeProjectId = useProjectStore.getState().activeProjectId;
-    const currentItem = normalizedHistoryId
-      ? useHistoryStore.getState().items.find((i) => i.id === normalizedHistoryId)
-      : null;
-    const projectId = currentItem?.projectId ?? activeProjectId;
-    const pipeline = resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
+    const { projectId, pipelineSnapshot } = resolveTaskProjectContext({
+      sessionId,
+      historyId: normalizedHistoryId,
+    });
+    const pipeline =
+      pipelineSnapshot ??
+      resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
     const candidateTemplateId =
       templateId ??
       sidecarStore.getSummaryState(initialSidecarKey).activeTemplateId ??

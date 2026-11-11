@@ -8,6 +8,7 @@ import {
   selectIsDocumentEditorLocked,
   useDocumentMutationLockStore,
 } from '../services/task/documentMutationCoordinator';
+import { useTaskProjectContext } from '../services/task/taskProjectContext';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -61,7 +62,6 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const config = useEffectiveConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
 
   const boundSessionId = useBoundSessionId();
@@ -75,8 +75,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const canRetranscribeCurrentHistory =
     !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
-  const projectId = currentHistoryItem?.projectId ?? activeProjectId;
-  const projectPipeline = resolveItemPipeline(projectId, projects, config);
+  const { projectId, pipelineSnapshot } = useTaskProjectContext(boundSessionId, sourceHistoryId);
+  const projectPipeline = pipelineSnapshot ?? resolveItemPipeline(projectId, projects, config);
   const currentPresetId = coercePolishPresetId(
     projectPipeline.polishPresetId || config.polishPresetId,
     config.polishCustomPresets

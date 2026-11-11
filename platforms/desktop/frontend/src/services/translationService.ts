@@ -25,6 +25,7 @@ import type {
   TranslateSegmentsRequest,
 } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
+import { resolveTaskProjectContext } from './task/taskProjectContext';
 import {
   buildLocalNmtPostProcessReplacements,
   createTaskTarget,
@@ -229,17 +230,14 @@ export class TranslationService {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const activeProjectId = useProjectStore.getState().activeProjectId;
-    const normalizedHistoryId = normalizeHistoryId(historyId);
-    const currentItem = normalizedHistoryId
-      ? useHistoryStore.getState().items.find((i) => i.id === normalizedHistoryId)
-      : null;
-    const initialProjectId = currentItem?.projectId ?? activeProjectId;
-    const initialPipeline = resolveItemPipeline(
-      initialProjectId,
-      useProjectStore.getState().projects,
-      config
-    );
+    const { projectId: initialProjectId, pipelineSnapshot: initialSnapshot } =
+      resolveTaskProjectContext({
+        sessionId,
+        historyId,
+      });
+    const initialPipeline =
+      initialSnapshot ??
+      resolveItemPipeline(initialProjectId, useProjectStore.getState().projects, config);
     const resolvedTargetLanguage =
       targetLanguage || initialPipeline.targetLanguage || config.translationLanguage || 'zh';
 
@@ -265,15 +263,13 @@ export class TranslationService {
 
           const latestSegments = await resolveLatestSegmentsForTarget(ctx.target, segments);
           const sentJobHistoryId = ctx.resolveHistoryId();
-          const item = sentJobHistoryId
-            ? useHistoryStore.getState().items.find((i) => i.id === sentJobHistoryId)
-            : null;
-          const projectId = item?.projectId ?? activeProjectId;
-          const pipeline = resolveItemPipeline(
-            projectId,
-            useProjectStore.getState().projects,
-            config
-          );
+          const { projectId, pipelineSnapshot } = resolveTaskProjectContext({
+            sessionId: sessionId ?? ctx.target.sessionId,
+            historyId: sentJobHistoryId,
+          });
+          const pipeline =
+            pipelineSnapshot ??
+            resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
           const effectiveTargetLanguage =
             targetLanguage || pipeline.targetLanguage || config.translationLanguage || 'zh';
           const keywords =

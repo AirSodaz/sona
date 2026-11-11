@@ -39,7 +39,6 @@ interface CreateRecordingPersistenceArgs {
   history: RecordingHistorySaver;
   getTranscriptState: () => RecordingPersistenceTranscriptState;
   getActiveProjectId: () => string | null;
-  setActiveProjectId: (projectId: string | null) => Promise<void> | void;
   addHistoryItem: (item: HistoryItem) => void;
   upsertHistoryItem: (item: HistoryItem) => void;
   removeHistoryItem: (id: string) => void;
@@ -70,7 +69,6 @@ export function createRecordingPersistence({
   history,
   getTranscriptState,
   getActiveProjectId,
-  setActiveProjectId,
   addHistoryItem,
   upsertHistoryItem,
   removeHistoryItem,
@@ -94,7 +92,6 @@ export function createRecordingPersistence({
       upsertHistoryItem(newItem);
     }
     syncMeta(newItem.title, newItem.id, newItem.icon);
-    void setActiveProjectId(newItem.tagIds?.[0] ?? newItem.projectId ?? null);
     await persistSummary(newItem.id);
 
     // Detach heavy LLM post-processing (Polish / Translate / Summary / Export) after the

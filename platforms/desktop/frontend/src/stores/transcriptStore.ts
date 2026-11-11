@@ -10,6 +10,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { create, type StateCreator } from 'zustand';
 import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
+import type { EffectivePipelineSnapshot } from '../types/project';
 import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import type {
   AppMode,
@@ -57,6 +58,8 @@ export interface SessionData {
   sourceHistoryId: string | null;
   title: string;
   icon: string | null;
+  projectId?: string | null;
+  pipelineSnapshot?: EffectivePipelineSnapshot | null;
   editingSegmentId: string | null;
   aligningSegmentIds: Set<string>;
 
@@ -76,6 +79,8 @@ export const DEFAULT_SESSION_DATA: SessionData = {
   sourceHistoryId: null,
   title: '',
   icon: null,
+  projectId: undefined,
+  pipelineSnapshot: undefined,
   editingSegmentId: null,
   aligningSegmentIds: new Set(),
   audioFile: null,
@@ -124,6 +129,8 @@ export interface TranscriptStore {
           title?: string | null;
           icon?: string | null;
           audioUrl?: string | null;
+          projectId?: string | null;
+          pipelineSnapshot?: EffectivePipelineSnapshot | null;
         }
   ) => void;
   openLiveDraftSession: (args: {
@@ -132,6 +139,8 @@ export interface TranscriptStore {
     title?: string | null;
     icon?: string | null;
     audioUrl?: string | null;
+    projectId?: string | null;
+    pipelineSnapshot?: EffectivePipelineSnapshot | null;
   }) => void;
   openBatchAdhocDraft: (args: {
     segments: TranscriptSegment[];
@@ -139,6 +148,8 @@ export interface TranscriptStore {
     title?: string | null;
     icon?: string | null;
     audioUrl?: string | null;
+    projectId?: string | null;
+    pipelineSnapshot?: EffectivePipelineSnapshot | null;
   }) => void;
   closeBatchAdhocDraft: (sessionId?: string) => void;
   loadTranscriptSession: (
@@ -186,6 +197,11 @@ export interface TranscriptStore {
   setTitleForSession: (sessionId: string, title: string | null) => void;
   setIcon: (icon: string | null) => void;
   setIconForSession: (sessionId: string, icon: string | null) => void;
+  setSessionProjectContext: (
+    sessionId: string,
+    projectId: string | null,
+    pipelineSnapshot?: EffectivePipelineSnapshot | null
+  ) => void;
   setSegments: (segments: TranscriptSegment[]) => void;
   setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => void;
   setSegmentsForHistory: (historyId: string, segments: TranscriptSegment[]) => void;
@@ -555,7 +571,15 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       get().setAudioUrl(args);
       return;
     }
-    const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const {
+      segments = [],
+      sourceHistoryId,
+      title,
+      icon,
+      audioUrl,
+      projectId,
+      pipelineSnapshot,
+    } = args;
     const sessionId = sourceHistoryId || uuidv4();
     // Never clobber the in-progress recording (e.g. backup import reloading the draft from disk).
     if (get().recordingSessionId === sessionId) {
@@ -585,13 +609,23 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
             title: title || '',
             icon: icon || null,
             audioUrl: audioUrl !== undefined ? audioUrl : null,
+            projectId,
+            pipelineSnapshot,
           },
         },
       };
     });
   },
   openLiveDraftSession: (args) => {
-    const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const {
+      segments = [],
+      sourceHistoryId,
+      title,
+      icon,
+      audioUrl,
+      projectId,
+      pipelineSnapshot,
+    } = args;
     const sessionId = sourceHistoryId || uuidv4();
     if (get().recordingSessionId === sessionId) {
       return;
@@ -621,13 +655,23 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
             title: title || '',
             icon: icon || null,
             audioUrl: audioUrl !== undefined ? audioUrl : null,
+            projectId,
+            pipelineSnapshot,
           },
         },
       };
     });
   },
   openBatchAdhocDraft: (args) => {
-    const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
+    const {
+      segments = [],
+      sourceHistoryId,
+      title,
+      icon,
+      audioUrl,
+      projectId,
+      pipelineSnapshot,
+    } = args;
     const sessionId = sourceHistoryId || uuidv4();
     if (get().recordingSessionId === sessionId) {
       return;
@@ -657,6 +701,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
             title: title || '',
             icon: icon || null,
             audioUrl: audioUrl !== undefined ? audioUrl : null,
+            projectId,
+            pipelineSnapshot,
           },
         },
       };
@@ -931,6 +977,13 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setTitle: (title) => get().setTitleForSession(get().activeSessionId, title),
   setIconForSession: (sessionId, icon) => updateSession(set, sessionId, () => ({ icon })),
   setIcon: (icon) => get().setIconForSession(get().activeSessionId, icon),
+  setSessionProjectContext: (sessionId, projectId, pipelineSnapshot) =>
+    updateSession(set, sessionId, (session) => ({
+      projectId,
+      ...(pipelineSnapshot !== undefined
+        ? { pipelineSnapshot }
+        : { pipelineSnapshot: session.pipelineSnapshot }),
+    })),
   setSegments: (segments) => get().setSegmentsForSession(get().activeSessionId, segments),
   setSegmentsForSession: (sessionId, segments) => {
     set((state: TranscriptStore) => ({

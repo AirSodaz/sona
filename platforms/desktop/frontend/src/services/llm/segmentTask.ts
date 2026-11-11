@@ -17,6 +17,7 @@ import {
   type TranslatedSegment,
   type TranslateSegmentsRequest,
 } from '../llmTaskTypes';
+import { resolveTaskProjectContext } from '../task/taskProjectContext';
 import {
   captureTaskTarget,
   resolveTargetHistoryId,
@@ -252,6 +253,11 @@ export async function runTranscriptLlmTaskJob<TTaskType extends TranscriptLlmTas
   const isCancelled = () => isTaskLedgerCancelRequested(ledgerId);
 
   try {
+    const taskProjectId = resolveTaskProjectContext({
+      sessionId: originSessionId,
+      historyId: sourceHistoryId,
+      fallbackToActive: false,
+    }).projectId;
     upsertTaskLedgerRecord(
       buildLlmTaskLedgerRecord({
         taskId,
@@ -259,6 +265,7 @@ export async function runTranscriptLlmTaskJob<TTaskType extends TranscriptLlmTas
         jobHistoryId: resolveTargetHistoryId(target),
         targetLanguage,
         templateId,
+        tagIds: taskProjectId ? [taskProjectId] : undefined,
         status: 'pending',
       })
     );

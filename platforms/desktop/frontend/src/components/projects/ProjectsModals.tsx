@@ -35,6 +35,7 @@ export interface ProjectsModalsProps {
   onSaveProject: () => void;
   onDeleteProject: () => void;
   disableDeleteProject?: boolean;
+  deleteDisabledReason?: string;
   onDraftNameChange: (name: string) => void;
   onDraftDescriptionChange: (desc: string) => void;
   onDraftIconChange: (icon: string) => void;
@@ -84,6 +85,7 @@ export function ProjectsModals({
   onSaveProject,
   onDeleteProject,
   disableDeleteProject = false,
+  deleteDisabledReason,
   onDraftNameChange,
   onDraftDescriptionChange,
   onDraftIconChange,
@@ -131,6 +133,7 @@ export function ProjectsModals({
         onSave={onSaveProject}
         onDelete={onDeleteProject}
         disableDelete={disableDeleteProject}
+        deleteDisabledReason={deleteDisabledReason}
         onNameChange={onDraftNameChange}
         onDescriptionChange={onDraftDescriptionChange}
         onIconChange={onDraftIconChange}

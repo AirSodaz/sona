@@ -1,8 +1,15 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TranscriptSessionProvider } from '../../contexts/TranscriptSessionContext';
 import { polishService } from '../../services/polishService';
 import { useConfigStore } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
+import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
 import { PolishButton } from '../PolishButton';
 
@@ -201,5 +208,56 @@ describe('PolishButton', () => {
     fireEvent.click(screen.getByText('polish.modes.formal'));
 
     expect(useConfigStore.getState().config.polishPresetId).toBe('formal');
+  });
+
+  it('uses session pipelineSnapshot preset even after activeProjectId switches to another project', () => {
+    useProjectStore.setState({
+      activeProjectId: 'proj-b',
+      projects: [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: { ...DEFAULT_PROJECT_PIPELINE, enabled: true, polishPresetId: 'formal' },
+        },
+        {
+          id: 'proj-b',
+          name: 'Project B',
+          createdAt: 2,
+          updatedAt: 2,
+          pipeline: { ...DEFAULT_PROJECT_PIPELINE, enabled: true, polishPresetId: 'verbatim' },
+        },
+      ],
+    });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'rec-a',
+      sessions: {
+        ...useCanonicalTranscriptStore.getState().sessions,
+        'rec-a': {
+          ...DEFAULT_SESSION_DATA,
+          projectId: 'proj-a',
+          pipelineSnapshot: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            polishPresetId: 'formal',
+            isProjectPipeline: true,
+          },
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        },
+      },
+    });
+
+    render(
+      <TranscriptSessionProvider sessionId="rec-a" isActive={true}>
+        <PolishButton />
+      </TranscriptSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const formalRadio = screen.getByRole('menuitemradio', { name: 'polish.modes.formal' });
+    const verbatimRadio = screen.getByRole('menuitemradio', { name: 'polish.modes.verbatim' });
+    expect(formalRadio.getAttribute('aria-checked')).toBe('true');
+    expect(verbatimRadio.getAttribute('aria-checked')).toBe('false');
   });
 });

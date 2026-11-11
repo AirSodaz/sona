@@ -8,14 +8,22 @@ import {
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { historyService } from '../../services/historyService';
+import { projectService } from '../../services/projectService';
+import { useDocumentMutationLockStore } from '../../services/task/documentMutationCoordinator';
 import { transcriptAutoSaveRuntime } from '../../services/transcriptAutoSaveRuntime';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { DEFAULT_SESSION_DATA } from '../../stores/transcriptStore';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import {
+  resetTranscriptStores,
+  useTranscriptStore,
+} from '../../test-utils/transcriptStoreTestUtils';
+import type { HistoryItem as HistoryItemType } from '../../types/history';
 import { ContextMenuProvider } from '../context-menu/ContextMenuProvider';
 import { ProjectsView } from '../ProjectsView';
 import { ProjectsResults } from '../projects/ProjectsResults';
@@ -424,6 +432,7 @@ describe('ProjectsView', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    resetTranscriptStores();
     workspaceQueryBackendMock.impl = null;
 
     useProjectStore.setState({
@@ -490,6 +499,9 @@ describe('ProjectsView', () => {
       checkboxConfirm: vi.fn().mockResolvedValue({ confirmed: true, checked: false }),
       showError: vi.fn().mockResolvedValue(undefined),
     });
+    useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+    useTaskLedgerStore.setState({ tasks: [] });
+    useDocumentMutationLockStore.setState({ locks: {} });
   });
 
   it('renders All Items and Trash in the scopes section, and Inbox pinned at the top of the projects list', async () => {
@@ -625,7 +637,7 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
 
     await waitFor(() => {
-      expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
+      expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
       screen.getByText('Project settings');
     });
   });
@@ -723,40 +735,40 @@ describe('ProjectsView', () => {
     expect(useDialogStore.getState().confirm).not.toHaveBeenCalled();
   });
 
-  it('rechecks the live draft lock before a project context action switches scope', async () => {
-    const { projectService } = await import('../../services/projectService');
+  it('allows project rail Open action to switch browseScope during active recording without mutating activeProjectId', async () => {
+    useProjectStore.setState({ activeProjectId: null });
+    const liveItems: HistoryItemType[] = [
+      {
+        id: 'hist-live',
+        title: 'Live Draft',
+        timestamp: Date.now(),
+        duration: 12,
+        audioPath: 'live.wav',
+        transcriptPath: 'hist-live.json',
+        previewText: 'Live preview',
+        type: 'recording',
+        projectId: 'project-1',
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+    ];
+    useHistoryStore.setState({ items: liveItems });
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-live',
+      recordingSessionId: 'hist-live',
+      isRecording: true,
+    });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     const openAction = screen.getByRole('menuitem', { name: 'Open' });
+    expect((openAction as HTMLButtonElement).disabled).toBe(false);
 
-    act(() => {
-      useHistoryStore.setState({
-        items: [
-          {
-            id: 'hist-live',
-            title: 'Live Draft',
-            timestamp: Date.now(),
-            duration: 12,
-            audioPath: 'live.wav',
-            transcriptPath: 'hist-live.json',
-            previewText: 'Live preview',
-            type: 'recording',
-            projectId: 'project-1',
-            status: 'draft',
-            draftSource: 'live_record',
-          },
-        ],
-      } as any);
-      useTranscriptStore.setState({
-        sourceHistoryId: 'hist-live',
-        isRecording: true,
-      });
-      fireEvent.click(openAction);
-    });
+    await clickAsync(openAction);
 
+    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
     expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
     expect(useProjectStore.getState().activeProjectId).toBeNull();
   });
@@ -767,7 +779,7 @@ describe('ProjectsView', () => {
     const firstRender = render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+    fireEvent.contextMenu(await screen.findByTestId('history-item-hist-inbox'), {
       clientX: 120,
       clientY: 180,
     });
@@ -783,7 +795,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+    fireEvent.contextMenu(await screen.findByTestId('history-item-hist-inbox'), {
       clientX: 120,
       clientY: 180,
     });
@@ -925,27 +937,27 @@ describe('ProjectsView', () => {
     ).toBe(false);
   });
 
-  it('disables other project actions during an active live draft', async () => {
+  it('disables only delete for a project with an active live recording while keeping Open and Tag Settings enabled', async () => {
     useProjectStore.setState({ activeProjectId: null });
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'hist-live',
-          title: 'Live Draft',
-          timestamp: Date.now(),
-          duration: 12,
-          audioPath: 'live.wav',
-          transcriptPath: 'hist-live.json',
-          previewText: 'Live preview',
-          type: 'recording',
-          projectId: 'project-1',
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-      ],
-    } as any);
+    const liveItems: HistoryItemType[] = [
+      {
+        id: 'hist-live',
+        title: 'Live Draft',
+        timestamp: Date.now(),
+        duration: 12,
+        audioPath: 'live.wav',
+        transcriptPath: 'hist-live.json',
+        previewText: 'Live preview',
+        type: 'recording',
+        projectId: 'project-1',
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+    ];
+    useHistoryStore.setState({ items: liveItems });
     useTranscriptStore.setState({
       sourceHistoryId: 'hist-live',
+      recordingSessionId: 'hist-live',
       isRecording: true,
       segments: [{ id: 'seg-live', start: 0, end: 1, text: 'Live', isFinal: true }],
     });
@@ -955,10 +967,13 @@ describe('ProjectsView', () => {
 
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(
-      true
+      false
     );
     expect(
       (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
     ).toBe(true);
   });
 
@@ -1181,9 +1196,7 @@ describe('ProjectsView', () => {
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
   });
 
-  it('creates a project from the modal and makes it the active browse scope', async () => {
-    const { projectService } = await import('../../services/projectService');
-
+  it('creates a project from the modal and makes it the active browse scope without mutating activeProjectId', async () => {
     render(<ProjectsView />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New Project' }));
@@ -1194,8 +1207,10 @@ describe('ProjectsView', () => {
 
     await waitFor(() => {
       expect(projectService.create).toHaveBeenCalled();
-      expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-new');
+      expect(screen.getByRole('heading', { name: 'New Workspace' })).toBeDefined();
     });
+    expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
   });
 
   it('keeps project settings in a drawer and saves edits', async () => {
@@ -1204,8 +1219,9 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.change(await screen.findByDisplayValue('Alpha'), {
@@ -1229,8 +1245,9 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     expect(screen.queryByRole('checkbox', { name: 'Brand Terms' })).toBeNull();
@@ -1260,8 +1277,9 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
@@ -1271,15 +1289,17 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
+    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
     screen.getByText('Project settings');
 
     fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
-      expect(useProjectStore.getState().activeProjectId).toBeNull();
+      expect(screen.getByRole('heading', { name: 'Inbox' })).toBeDefined();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Project settings')).toBeNull();
+    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
 
   it('guards closing project settings when icon-only edits are dirty', async () => {
@@ -1292,8 +1312,9 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
@@ -1337,8 +1358,9 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
@@ -1346,11 +1368,13 @@ describe('ProjectsView', () => {
 
     await clickAsync(getButtonByContent('Beta'));
     await waitFor(() => {
-      expect(useProjectStore.getState().activeProjectId).toBe('project-2');
+      expect(screen.getByRole('heading', { name: 'Beta' })).toBeDefined();
     });
+    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
 
+    fireEvent.contextMenu(getButtonByContent('Beta'), { clientX: 80, clientY: 160 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     expect(await screen.findByRole('button', { name: '🎯' })).toBeDefined();
@@ -1405,8 +1429,7 @@ describe('ProjectsView', () => {
       '1 recordings / 1 imports'
     );
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Tag Settings' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Start Live Record' })).toBeNull();
+    expect(screen.queryByTestId('projects-main-entry-actions')).toBeNull();
   });
 
   it('opens an item from All Items, restores project context, and keeps All Items active', async () => {
@@ -1438,11 +1461,12 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(getDetailPlaceholder()).not.toBeNull();
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-project');
-      expect(useProjectStore.getState().activeProjectId).toBe('project-1');
+      expect(useTranscriptStore.getState().sessions['hist-project']?.projectId).toBe('project-1');
     });
 
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
     expect(allItemsButton.className).toContain('active');
-    expect(screen.queryByRole('button', { name: 'Tag Settings' })).toBeNull();
+    expect(screen.queryByTestId('projects-main-entry-actions')).toBeNull();
   });
 
   it('opens a project item in the detail pane and closes it when switching out of scope', async () => {
@@ -1772,19 +1796,6 @@ describe('ProjectsView', () => {
 
     expect(historyService.purgeRecordings).not.toHaveBeenCalled();
     expect(historyService.deleteRecordings).not.toHaveBeenCalled();
-  });
-
-  it('jumps into live mode while keeping the active project context', async () => {
-    useProjectStore.setState({ activeProjectId: 'project-1' });
-
-    render(<ProjectsView />);
-    await waitForInitialHistoryLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start Live Record' }));
-
-    expect(useTranscriptStore.getState().mode).toBe('create');
-    expect(useTranscriptStore.getState().ingestionFocus).toBe('live');
-    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
 
   it('searches, filters, and sorts only within the current browse scope', async () => {
@@ -2436,38 +2447,36 @@ describe('ProjectsView', () => {
     );
   });
 
-  it('keeps project switching disabled during background recording even when detail pane is open for completed record', async () => {
-    const { projectService } = await import('../../services/projectService');
+  it('allows switching browseScope during background recording without mutating activeProjectId', async () => {
     vi.mocked(projectService.setActiveProjectId).mockClear();
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'live-draft-1',
-          title: 'Live Recording Draft',
-          timestamp: Date.now(),
-          duration: 30,
-          audioPath: 'draft.wav',
-          transcriptPath: 'live-draft-1.json',
-          previewText: 'Live recording in progress',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-        {
-          id: 'hist-completed',
-          title: 'Completed Call',
-          timestamp: Date.now() - 5000,
-          duration: 120,
-          audioPath: 'completed.wav',
-          transcriptPath: 'hist-completed.json',
-          previewText: 'Meeting notes',
-          type: 'recording',
-          projectId: null,
-          status: 'complete',
-        },
-      ],
-    } as any);
+    const items: HistoryItemType[] = [
+      {
+        id: 'live-draft-1',
+        title: 'Live Recording Draft',
+        timestamp: Date.now(),
+        duration: 30,
+        audioPath: 'draft.wav',
+        transcriptPath: 'live-draft-1.json',
+        previewText: 'Live recording in progress',
+        type: 'recording',
+        projectId: null,
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+      {
+        id: 'hist-completed',
+        title: 'Completed Call',
+        timestamp: Date.now() - 5000,
+        duration: 120,
+        audioPath: 'completed.wav',
+        transcriptPath: 'hist-completed.json',
+        previewText: 'Meeting notes',
+        type: 'recording',
+        projectId: null,
+        status: 'complete',
+      },
+    ];
+    useHistoryStore.setState({ items });
 
     useTranscriptStore.setState({
       isRecording: true,
@@ -2496,12 +2505,14 @@ describe('ProjectsView', () => {
 
     vi.mocked(projectService.setActiveProjectId).mockClear();
 
-    // 2. Attempt to switch project scope while completed item is open in detail
-    const projectButton = getButtonByContent('Alpha');
-    await clickAsync(projectButton);
+    // 2. Switch browse scope to Alpha while recording in background
+    await clickAsync(getButtonByContent('Alpha'));
 
-    // Switching project must remain disabled during active recording session
+    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
     expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().sessions['live-draft-1']?.segments[0]?.text).toBe(
+      'Live transcription...'
+    );
   });
 
   it('preserves Create tab session when switching browse scope with no Projects detail open', async () => {
@@ -2530,36 +2541,55 @@ describe('ProjectsView', () => {
     );
   });
 
-  it('keeps rail context menu and selection mode locked during background recording even after closing a detail pane', async () => {
-    useHistoryStore.setState({
-      items: [
+  it('keeps Open, Tag Settings, Set as Active, and selection mode unlocked during background recording while disabling delete only for active recording project', async () => {
+    useProjectStore.setState({
+      projects: [
         {
-          id: 'live-draft-1',
-          title: 'Live Recording Draft',
-          timestamp: Date.now(),
-          duration: 30,
-          audioPath: 'draft.wav',
-          transcriptPath: 'live-draft-1.json',
-          previewText: 'Live recording in progress',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
+          id: 'project-1',
+          name: 'Alpha',
+          description: 'Project alpha',
+          icon: '🧪',
+          createdAt: 1,
+          updatedAt: 1,
         },
         {
-          id: 'hist-completed',
-          title: 'Completed Call',
-          timestamp: Date.now() - 5000,
-          duration: 120,
-          audioPath: 'completed.wav',
-          transcriptPath: 'hist-completed.json',
-          previewText: 'Meeting notes',
-          type: 'recording',
-          projectId: null,
-          status: 'complete',
+          id: 'project-2',
+          name: 'Beta',
+          description: 'Project beta',
+          icon: '🎯',
+          createdAt: 2,
+          updatedAt: 2,
         },
       ],
-    } as any);
+    });
+    const items: HistoryItemType[] = [
+      {
+        id: 'live-draft-1',
+        title: 'Live Recording Draft',
+        timestamp: Date.now(),
+        duration: 30,
+        audioPath: 'draft.wav',
+        transcriptPath: 'live-draft-1.json',
+        previewText: 'Live recording in progress',
+        type: 'recording',
+        projectId: 'project-1',
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+      {
+        id: 'hist-completed',
+        title: 'Completed Call',
+        timestamp: Date.now() - 5000,
+        duration: 120,
+        audioPath: 'completed.wav',
+        transcriptPath: 'hist-completed.json',
+        previewText: 'Meeting notes',
+        type: 'recording',
+        projectId: null,
+        status: 'complete',
+      },
+    ];
+    useHistoryStore.setState({ items });
 
     useTranscriptStore.setState({
       isRecording: true,
@@ -2570,6 +2600,7 @@ describe('ProjectsView', () => {
         'live-draft-1': {
           ...DEFAULT_SESSION_DATA,
           sourceHistoryId: 'live-draft-1',
+          projectId: 'project-1',
           segments: [
             { id: 'seg-1', text: 'Live transcription...', start: 0, end: 1, isFinal: false },
           ],
@@ -2590,20 +2621,34 @@ describe('ProjectsView', () => {
       expect(getDetailPlaceholder()).toBeNull();
     });
 
-    // Rail context menu must still lock project switching during active recording
+    expect((screen.getByRole('button', { name: 'Select' }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+
+    // Alpha owns the live recording: Open/Settings/Set as Active stay enabled, Delete is disabled
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(
-      true
+      false
     );
+    expect(
+      (screen.getByRole('menuitem', { name: 'Set as Active' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
+    ).toBe(false);
     expect(
       (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
     ).toBe(true);
+
+    // Idle Beta remains fully deletable
+    fireEvent.contextMenu(getButtonByContent('Beta'), { clientX: 80, clientY: 160 });
     expect(
-      (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
-    ).toBe(true);
+      (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+    ).toBe(false);
   });
 
-  it('disables Set as Active in project and Inbox rail context menus during active recording', async () => {
+  it('keeps Set as Active enabled in project and Inbox rail context menus during active recording', async () => {
+    useProjectStore.setState({ activeProjectId: null });
     useTranscriptStore.setState({
       isRecording: true,
       recordingSessionId: 'live-draft-1',
@@ -2618,14 +2663,20 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
-    expect(
-      (screen.getByRole('menuitem', { name: 'Set as Active' }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    const setAlphaActive = screen.getByRole('menuitem', {
+      name: 'Set as Active',
+    }) as HTMLButtonElement;
+    expect(setAlphaActive.disabled).toBe(false);
+    await clickAsync(setAlphaActive);
+    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
 
     fireEvent.contextMenu(getButtonByContent('Inbox'), { clientX: 40, clientY: 90 });
-    expect(
-      (screen.getByRole('menuitem', { name: 'Set as Active' }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    const setInboxActive = screen.getByRole('menuitem', {
+      name: 'Set as Active',
+    }) as HTMLButtonElement;
+    expect(setInboxActive.disabled).toBe(false);
+    await clickAsync(setInboxActive);
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
   });
 
   it('opens historical live_record drafts in the Projects detail pane when another live recording is active', async () => {
@@ -2766,48 +2817,47 @@ describe('ProjectsView', () => {
     }
   });
 
-  it('excludes hidden live recording draft from summary chips and auto-clears selection mode on recording start', async () => {
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'live-draft-1',
-          title: 'Live Recording Draft',
-          timestamp: Date.now(),
-          duration: 30,
-          audioPath: 'draft.wav',
-          transcriptPath: 'live-draft-1.json',
-          previewText: 'Live recording',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-        {
-          id: 'hist-rec-1',
-          title: 'Completed Call',
-          timestamp: Date.now() - 1000,
-          duration: 60,
-          audioPath: 'call.wav',
-          transcriptPath: 'hist-rec-1.json',
-          previewText: 'Notes',
-          type: 'recording',
-          projectId: null,
-          status: 'complete',
-        },
-        {
-          id: 'hist-batch-1',
-          title: 'Imported Lecture',
-          timestamp: Date.now() - 2000,
-          duration: 120,
-          audioPath: 'lecture.mp3',
-          transcriptPath: 'hist-batch-1.json',
-          previewText: 'Slides',
-          type: 'batch',
-          projectId: null,
-          status: 'complete',
-        },
-      ],
-    } as any);
+  it('excludes hidden live recording draft from summary chips while keeping selection mode unlocked on recording start', async () => {
+    const items: HistoryItemType[] = [
+      {
+        id: 'live-draft-1',
+        title: 'Live Recording Draft',
+        timestamp: Date.now(),
+        duration: 30,
+        audioPath: 'draft.wav',
+        transcriptPath: 'live-draft-1.json',
+        previewText: 'Live recording',
+        type: 'recording',
+        projectId: null,
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+      {
+        id: 'hist-rec-1',
+        title: 'Completed Call',
+        timestamp: Date.now() - 1000,
+        duration: 60,
+        audioPath: 'call.wav',
+        transcriptPath: 'hist-rec-1.json',
+        previewText: 'Notes',
+        type: 'recording',
+        projectId: null,
+        status: 'complete',
+      },
+      {
+        id: 'hist-batch-1',
+        title: 'Imported Lecture',
+        timestamp: Date.now() - 2000,
+        duration: 120,
+        audioPath: 'lecture.mp3',
+        transcriptPath: 'hist-batch-1.json',
+        previewText: 'Slides',
+        type: 'batch',
+        projectId: null,
+        status: 'complete',
+      },
+    ];
+    useHistoryStore.setState({ items });
 
     useTranscriptStore.setState({
       mode: 'projects',
@@ -2830,27 +2880,72 @@ describe('ProjectsView', () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByTestId('projects-fab')).toBeNull();
+      expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
     });
-    expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
+    expect(screen.getByTestId('projects-fab')).toBeTruthy();
     expect(screen.getByTestId('projects-summary-type-split').textContent).toBe(
       '1 recordings / 1 imports'
     );
   });
 
-  it('disables Delete Project button inside Project Settings modal when live recording starts', async () => {
-    useProjectStore.setState({ activeProjectId: 'project-1' });
+  it('disables Delete Project button inside Project Settings modal only for the project owning active tasks', async () => {
+    useProjectStore.setState({
+      activeProjectId: 'project-1',
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Alpha',
+          description: 'Project alpha',
+          icon: '🧪',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          id: 'project-2',
+          name: 'Beta',
+          description: 'Project beta',
+          icon: '🎯',
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ],
+    });
+    const items: HistoryItemType[] = [
+      {
+        id: 'live-draft-1',
+        title: 'Live Draft',
+        timestamp: Date.now(),
+        duration: 10,
+        audioPath: 'draft.wav',
+        transcriptPath: 'live-draft-1.json',
+        previewText: 'Live',
+        type: 'recording',
+        projectId: 'project-1',
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+    ];
+    useHistoryStore.setState({ items });
     useTranscriptStore.setState({
       mode: 'projects',
       isRecording: false,
       recordingSessionId: null,
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-draft-1': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-draft-1',
+          projectId: 'project-1',
+        },
+      },
     });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
 
@@ -2871,6 +2966,19 @@ describe('ProjectsView', () => {
         (screen.getByRole('button', { name: 'Delete Project' }) as HTMLButtonElement).disabled
       ).toBe(true);
     });
+    expect(
+      screen.getByRole('button', { name: 'Delete Project' }).getAttribute('data-tooltip')
+    ).toBe('Cannot delete project while tasks in this project are active or queued');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.contextMenu(getButtonByContent('Beta'), { clientX: 80, clientY: 160 });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
+      await Promise.resolve();
+    });
+    expect(
+      (screen.getByRole('button', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+    ).toBe(false);
   });
 
   it('syncs renamed metadata into background sessions and re-binds detail session cleanly on tab activation', async () => {
@@ -3046,5 +3154,122 @@ describe('ProjectsView', () => {
 
     expect(useTranscriptStore.getState().mode).toBe('create');
     expect(useTranscriptStore.getState().activeSessionId).toBe('default');
+  });
+
+  it('enforces per-project delete protection across recording, batch queue, and task ledger tasks while leaving idle projects deletable', async () => {
+    useProjectStore.setState({
+      activeProjectId: 'proj-a',
+      projects: [
+        { id: 'proj-a', name: 'Project A', createdAt: 1, updatedAt: 1 },
+        { id: 'proj-b', name: 'Project B', createdAt: 2, updatedAt: 2 },
+        { id: 'proj-c', name: 'Project C', createdAt: 3, updatedAt: 3 },
+        { id: 'proj-d', name: 'Project D', createdAt: 4, updatedAt: 4 },
+      ],
+    });
+    useTranscriptStore.setState({
+      mode: 'projects',
+      isRecording: true,
+      recordingSessionId: 'rec-a',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'rec-a': { ...DEFAULT_SESSION_DATA, projectId: 'proj-a' },
+      },
+    });
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'batch-b',
+          filename: 'b.wav',
+          filePath: '/b.wav',
+          status: 'processing',
+          progress: 25,
+          segments: [],
+          projectId: 'proj-b',
+        },
+      ],
+    });
+    useTaskLedgerStore.setState({
+      tasks: [
+        {
+          id: 'llm-c',
+          kind: 'llmPolish',
+          status: 'running',
+          title: 'Polish C',
+          progress: 10,
+          createdAt: 1,
+          updatedAt: 1,
+          retryable: true,
+          cancelable: true,
+          recoverable: false,
+          tagIds: ['proj-c'],
+        },
+      ],
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    for (const name of ['Project A', 'Project B', 'Project C']) {
+      fireEvent.contextMenu(getButtonByContent(name), { clientX: 80, clientY: 120 });
+      expect(
+        (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+      ).toBe(true);
+    }
+
+    fireEvent.contextMenu(getButtonByContent('Project D'), { clientX: 80, clientY: 160 });
+    expect(
+      (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+
+    act(() => {
+      useTaskLedgerStore.setState({
+        tasks: [
+          {
+            id: 'llm-c',
+            kind: 'llmPolish',
+            status: 'succeeded',
+            title: 'Polish C',
+            progress: 100,
+            createdAt: 1,
+            updatedAt: 2,
+            retryable: false,
+            cancelable: false,
+            recoverable: false,
+            tagIds: ['proj-c'],
+          },
+        ],
+      });
+    });
+
+    fireEvent.contextMenu(getButtonByContent('Project C'), { clientX: 80, clientY: 140 });
+    expect(
+      (screen.getByRole('menuitem', { name: 'Delete Project' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+  });
+
+  it('opens Inbox menu from rail menu button with Open/Enter and moves active badge on Set as Active without changing browseScope', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
+    expect(getButtonByContent('Alpha').querySelector('.projects-rail-active-badge')).not.toBeNull();
+    expect(getButtonByContent('Inbox').querySelector('.projects-rail-active-badge')).toBeNull();
+
+    const inboxMenuBtn = screen.getAllByRole('button', { name: 'More options' })[0];
+    fireEvent.click(inboxMenuBtn, { detail: 1, clientX: 40, clientY: 80 });
+
+    const menu = screen.getByRole('menu', { name: 'Inbox' });
+    expect(menu).toBeDefined();
+    const openItem = screen.getByRole('menuitem', { name: /Open/i });
+    expect(openItem.textContent).toContain('Enter');
+
+    await clickAsync(screen.getByRole('menuitem', { name: 'Set as Active' }));
+
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
+    expect(getButtonByContent('Alpha').querySelector('.projects-rail-active-badge')).toBeNull();
+    expect(getButtonByContent('Inbox').querySelector('.projects-rail-active-badge')).not.toBeNull();
   });
 });

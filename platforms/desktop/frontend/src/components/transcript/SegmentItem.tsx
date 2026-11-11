@@ -9,10 +9,9 @@ import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
 } from '../../services/speakerCorrectionService';
+import { useTaskProjectId } from '../../services/task/taskProjectContext';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { useHistoryStore } from '../../stores/historyStore';
-import { useProjectStore } from '../../stores/projectStore';
 import { useSearchStore } from '../../stores/searchStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE, resolveSidecarKey } from '../../stores/transcriptSidecarState';
@@ -217,17 +216,7 @@ export function SegmentItem({
   const [showAllSpeakerProfiles, setShowAllSpeakerProfiles] = useState(false);
   const [isApplyingSpeakerProfile, setIsApplyingSpeakerProfile] = useState(false);
   const speakerMenuRef = useRef<HTMLDivElement>(null);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const currentProjectId = useHistoryStore(
-    useCallback(
-      (state) => {
-        if (!sourceHistoryId) return activeProjectId;
-        const item = state.items.find((entry) => entry.id === sourceHistoryId);
-        return item ? (item.projectId ?? null) : activeProjectId;
-      },
-      [sourceHistoryId, activeProjectId]
-    )
-  );
+  const currentProjectId = useTaskProjectId(boundSessionId, sourceHistoryId);
 
   const speakerProfileSections = useMemo(
     () => buildSpeakerCorrectionProfileSections(speakerProfiles, currentProjectId),

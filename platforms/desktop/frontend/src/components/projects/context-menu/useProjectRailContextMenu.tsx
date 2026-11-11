@@ -9,7 +9,7 @@ import type { ProjectBrowseScope, TranslationFn } from '../types';
 export interface UseProjectRailContextMenuParams {
   activeProjectId: string | null;
   browseScope: string;
-  isLockedLiveDraft: boolean;
+  isProjectDeleteBlocked?: (projectId: string) => boolean;
   onDeleteProject: (project: ProjectRecord) => void;
   onEmptyTrash?: () => void;
   onOpenCreateModal?: () => void;
@@ -30,7 +30,7 @@ export interface ProjectRailContextMenuController {
 export function useProjectRailContextMenu({
   activeProjectId,
   browseScope,
-  isLockedLiveDraft,
+  isProjectDeleteBlocked,
   onDeleteProject,
   onEmptyTrash,
   onOpenCreateModal,
@@ -58,7 +58,7 @@ export function useProjectRailContextMenu({
             label: t('common.open', { defaultValue: 'Open' }),
             icon: <FolderOpen size={16} />,
             shortcut: 'Enter',
-            disabled: isCurrentProject || isLockedLiveDraft,
+            disabled: isCurrentProject,
             onSelect: () => {
               void onSwitchScope(project.id);
             },
@@ -67,7 +67,7 @@ export function useProjectRailContextMenu({
             id: 'set_active',
             label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
-            disabled: activeProjectId === project.id || isLockedLiveDraft,
+            disabled: activeProjectId === project.id,
             onSelect: () => {
               onSetActiveProjectId(project.id);
             },
@@ -77,7 +77,7 @@ export function useProjectRailContextMenu({
             label: t('projects.tag_settings', { defaultValue: 'Tag Settings' }),
             icon: <SettingsIcon size={16} />,
             dividerBefore: true,
-            disabled: isLockedLiveDraft && !isCurrentProject,
+            disabled: false,
             onSelect: () => {
               onOpenProjectSettings(project.id);
             },
@@ -88,7 +88,7 @@ export function useProjectRailContextMenu({
             icon: <Trash2 size={16} />,
             tone: 'danger',
             dividerBefore: true,
-            disabled: isLockedLiveDraft,
+            disabled: isProjectDeleteBlocked ? isProjectDeleteBlocked(project.id) : false,
             onSelect: () => {
               onDeleteProject(project);
             },
@@ -116,9 +116,10 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_inbox',
-            label: t('projects.open_inbox', { defaultValue: 'Open Inbox' }),
+            label: t('common.open', { defaultValue: 'Open' }),
             icon: <FolderOpen size={16} />,
-            disabled: isCurrentInbox || isLockedLiveDraft,
+            shortcut: 'Enter',
+            disabled: isCurrentInbox,
             onSelect: () => {
               void onSwitchScope(UNTAGGED_SCOPE);
             },
@@ -127,7 +128,7 @@ export function useProjectRailContextMenu({
             id: 'set_active_inbox',
             label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
-            disabled: activeProjectId === null || isLockedLiveDraft,
+            disabled: activeProjectId === null,
             onSelect: () => {
               onSetActiveProjectId(null);
             },
@@ -152,9 +153,10 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_trash',
-            label: t('projects.open_trash', { defaultValue: 'Open Trash' }),
+            label: t('common.open', { defaultValue: 'Open' }),
             icon: <FolderOpen size={16} />,
-            disabled: isCurrentTrash || isLockedLiveDraft,
+            shortcut: 'Enter',
+            disabled: isCurrentTrash,
             onSelect: () => {
               void onSwitchScope(TRASH_SCOPE);
             },
@@ -168,7 +170,7 @@ export function useProjectRailContextMenu({
             icon: <Trash2 size={16} />,
             tone: 'danger',
             dividerBefore: true,
-            disabled: trashCount === 0 || isLockedLiveDraft,
+            disabled: trashCount === 0,
             onSelect: () => {
               onEmptyTrash();
             },
@@ -193,9 +195,10 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_all',
-            label: t('projects.open_all_items', { defaultValue: 'Open All Items' }),
+            label: t('common.open', { defaultValue: 'Open' }),
             icon: <FolderOpen size={16} />,
-            disabled: isCurrentAll || isLockedLiveDraft,
+            shortcut: 'Enter',
+            disabled: isCurrentAll,
             onSelect: () => {
               void onSwitchScope(ALL_ITEMS_SCOPE);
             },
@@ -238,7 +241,7 @@ export function useProjectRailContextMenu({
     [
       activeProjectId,
       browseScope,
-      isLockedLiveDraft,
+      isProjectDeleteBlocked,
       onDeleteProject,
       onEmptyTrash,
       onMenuOpened,

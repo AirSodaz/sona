@@ -16,6 +16,7 @@ import {
 import { historyService } from '../services/historyService';
 import { type EffectivePipelineSnapshot, resolveItemPipeline } from '../services/projectPipeline';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
+import { registerBatchQueueReader } from '../services/task/taskProjectContext';
 import {
   buildBatchTaskLedgerRecord,
   createBatchTaskLedgerId,
@@ -406,8 +407,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
   },
   addFiles: (filePaths, options) => {
     const projectStore = useProjectStore.getState();
-    const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
+    const targetProjectId =
+      options?.projectId !== undefined
+        ? options.projectId
+        : (options?.tagIds?.[0] ?? projectStore.activeProjectId ?? null);
     const resolvedConfigSnapshot = options?.resolvedConfigSnapshot ?? getEffectiveConfigSnapshot();
+    const pipelineSnapshot =
+      options?.pipelineSnapshot ??
+      resolveItemPipeline(targetProjectId, projectStore.projects, resolvedConfigSnapshot);
     const exportFileNamePrefix = options?.exportFileNamePrefix ?? '';
 
     const newItems: BatchQueueItem[] = filePaths.map((filePath) => {
@@ -420,9 +427,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         progress: 0,
         segments: [],
         audioUrl: null,
-        projectId: activeProjectId,
-        pipelineSnapshot: options?.pipelineSnapshot,
-        // New queue entries have a single canonical project assignment.
+        projectId: targetProjectId,
+        pipelineSnapshot,
         // Legacy tagIds are only read when restoring pre-migration entries.
         tagIds: undefined,
         origin: options?.origin || 'manual',
@@ -462,8 +468,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
   },
   addStreamItems: (urls, options) => {
     const projectStore = useProjectStore.getState();
-    const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
+    const targetProjectId =
+      options?.projectId !== undefined
+        ? options.projectId
+        : ((options as { tagIds?: string[] } | undefined)?.tagIds?.[0] ??
+          projectStore.activeProjectId ??
+          null);
     const resolvedConfigSnapshot = options?.resolvedConfigSnapshot ?? getEffectiveConfigSnapshot();
+    const pipelineSnapshot =
+      options?.pipelineSnapshot ??
+      resolveItemPipeline(targetProjectId, projectStore.projects, resolvedConfigSnapshot);
 
     const validUrls = urls.map((u) => u.trim()).filter((u) => u.length > 0);
 
@@ -483,8 +497,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         progress: 0,
         segments: [],
         audioUrl: null,
-        projectId: activeProjectId,
-        pipelineSnapshot: options?.pipelineSnapshot,
+        projectId: targetProjectId,
+        pipelineSnapshot,
         tagIds: undefined,
         origin: 'manual',
         resolvedConfigSnapshot,
@@ -543,11 +557,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       return;
     }
     const projectStore = useProjectStore.getState();
-    const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
+    const targetProjectId =
+      options?.projectId !== undefined
+        ? options.projectId
+        : ((options as { tagIds?: string[] } | undefined)?.tagIds?.[0] ??
+          projectStore.activeProjectId ??
+          null);
     const overrides = loadEmbyToolOverrides();
     const resolvedConfigSnapshot =
       options?.resolvedConfigSnapshot ??
       buildEmbyEffectiveConfig(getEffectiveConfigSnapshot(), overrides);
+    const basePipelineSnapshot =
+      options?.pipelineSnapshot ??
+      resolveItemPipeline(targetProjectId, projectStore.projects, resolvedConfigSnapshot);
     const newItems: BatchQueueItem[] = uniqueItems.map((opt) => {
       const baseServerUrl = opt.serverUrl.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
       const streamUrl = buildEmbyStreamUrl({
@@ -586,8 +608,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         progress: 0,
         segments: [],
         audioUrl: null,
-        projectId: activeProjectId,
-        pipelineSnapshot: options?.pipelineSnapshot,
+        projectId: targetProjectId,
+        pipelineSnapshot: options?.pipelineSnapshot ?? basePipelineSnapshot,
         origin: 'manual',
         resolvedConfigSnapshot: itemConfig,
         lastKnownStage: 'queued',
@@ -626,7 +648,26 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       return;
     }
 
-    const recoveredQueueItems = items.map((item) => toBatchQueueItem(item));
+    const projectStore = useProjectStore.getState();
+    const fallbackConfig = getEffectiveConfigSnapshot();
+    const recoveredQueueItems = items.map((item) => {
+      const queueItem = toBatchQueueItem(item);
+      const validProjectId =
+        queueItem.projectId && projectStore.getProjectById(queueItem.projectId)
+          ? queueItem.projectId
+          : null;
+      return {
+        ...queueItem,
+        projectId: validProjectId,
+        pipelineSnapshot:
+          queueItem.pipelineSnapshot ??
+          resolveItemPipeline(
+            validProjectId,
+            projectStore.projects,
+            queueItem.resolvedConfigSnapshot ?? fallbackConfig
+          ),
+      };
+    });
     let nextQueueItems: BatchQueueItem[] = [];
     set((state) => {
       nextQueueItems = [...state.queueItems, ...recoveredQueueItems];
@@ -711,25 +752,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         });
         transcriptStore.rekeySessionSidecar(id, savedMeta.historyId);
         if (get().activeItemId === id) {
-          const {
-            activeSessionId,
-            mode: currentMode,
-            ingestionFocus,
-            isRecording,
-            recordingSessionId,
-          } = useTranscriptStore.getState();
+          const { activeSessionId } = useTranscriptStore.getState();
           if (activeSessionId === id) {
             useTranscriptStore.getState().setAudioUrl(savedMeta.audioUrl ?? null);
-          }
-          // Only update the active project when still in batch mode and not recording,
-          // to avoid overriding the browse scope or active recording project.
-          if (
-            currentMode === 'create' &&
-            ingestionFocus === 'batch' &&
-            !isRecording &&
-            !recordingSessionId
-          ) {
-            void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
           }
         }
       },
@@ -841,9 +866,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         ...(shouldClearAdhocDraft ? { createBatchAdhocSessionId: null } : {}),
         sessions: nextSessions,
       });
-      if (!isBackgroundRecording && transcriptState.mode !== 'projects') {
-        void useProjectStore.getState().setActiveProjectId(item.projectId);
-      }
     } else if (id === null) {
       if (prevActiveId !== null) {
         syncActiveViewAfterBatchClear([prevActiveId], null);
@@ -1120,3 +1142,7 @@ export const useIsQueueProcessing = () => useBatchQueueStore((state) => state.is
 export const useIsQueuePaused = () => useBatchQueueStore((state) => state.isQueuePaused);
 
 registerBatchActiveItemIdResolver(() => useBatchQueueStore.getState().activeItemId);
+registerBatchQueueReader({
+  getItems: () => useBatchQueueStore.getState().queueItems,
+  subscribe: (listener) => useBatchQueueStore.subscribe(listener),
+});

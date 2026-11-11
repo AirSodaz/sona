@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TranscriptSessionProvider } from '../../contexts/TranscriptSessionContext';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { translationService } from '../../services/translationService';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { TranslateButton } from '../TranslateButton';
@@ -454,5 +459,93 @@ describe('TranslateButton', () => {
     expect(screen.queryByRole('switch')).toBeNull();
     // Should render the batch translation button
     expect(screen.getByText('translation.start')).toBeDefined();
+  });
+
+  it('uses recording session project and frozen pipelineSnapshot when activeProjectId switches mid-recording', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        realtimeTranslationEngine: 'llm',
+        realtimeTranslationSourceLanguage: 'auto',
+        translationLanguage: 'zh',
+      },
+    });
+    const updateProjectPipelineSpy = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.setState({
+      activeProjectId: 'proj-b',
+      updateProjectPipeline: updateProjectPipelineSpy,
+      projects: [
+        {
+          id: 'proj-a',
+          name: 'Project A',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+          },
+        },
+        {
+          id: 'proj-b',
+          name: 'Project B',
+          createdAt: 2,
+          updatedAt: 2,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'fr',
+          },
+        },
+      ],
+    });
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+    useCanonicalTranscriptStore.setState({
+      activeSessionId: 'rec-a',
+      recordingSessionId: 'rec-a',
+      sessions: {
+        ...useCanonicalTranscriptStore.getState().sessions,
+        'rec-a': {
+          ...DEFAULT_SESSION_DATA,
+          projectId: 'proj-a',
+          pipelineSnapshot: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+            isProjectPipeline: true,
+          },
+          segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        },
+      },
+    });
+
+    render(
+      <TranscriptSessionProvider sessionId="rec-a" isActive={true}>
+        <TranslateButton />
+      </TranscriptSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getAllByRole('button', { name: 'Japanese' })[0].style.fontWeight).toBe('600');
+    const frenchCandidate = screen
+      .getAllByRole('button', { name: 'French' })
+      .find((el) => el.getAttribute('data-candidate-lang') === 'true');
+    expect(frenchCandidate?.style.fontWeight).toBe('normal');
+
+    fireEvent.click(screen.getByText('Afrikaans'));
+
+    await waitFor(() => {
+      expect(updateProjectPipelineSpy).toHaveBeenCalledWith(
+        'proj-a',
+        expect.objectContaining({ targetLanguage: 'af' })
+      );
+      expect(
+        useCanonicalTranscriptStore.getState().sessions['rec-a']?.pipelineSnapshot?.targetLanguage
+      ).toBe('af');
+    });
+    expect(useProjectStore.getState().activeProjectId).toBe('proj-b');
   });
 });

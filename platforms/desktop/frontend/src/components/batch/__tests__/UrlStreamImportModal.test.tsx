@@ -10,6 +10,9 @@ vi.mock('../../../services/tauri/invoke', () => ({
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBatchQueueStore } from '../../../stores/batchQueueStore';
+import { useConfigStore } from '../../../stores/configStore';
+import { useProjectStore } from '../../../stores/projectStore';
+import { DEFAULT_PROJECT_PIPELINE } from '../../../types/project';
 import { UrlStreamImportModal } from '../UrlStreamImportModal';
 
 describe('UrlStreamImportModal', () => {
@@ -198,5 +201,49 @@ describe('UrlStreamImportModal', () => {
     expect(handleClose).toHaveBeenCalled();
     const items = useBatchQueueStore.getState().queueItems;
     expect(items).toHaveLength(2);
+  });
+
+  it('snapshots activeProjectId and pipelineSnapshot when submitting stream URLs', () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        translationLanguage: 'en',
+      },
+    });
+    useProjectStore.setState({
+      activeProjectId: 'proj-stream',
+      projects: [
+        {
+          id: 'proj-stream',
+          name: 'Stream Project',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+          },
+        },
+      ],
+    });
+
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'https://example.com/podcast.mp3' } });
+    fireEvent.click(screen.getByRole('button', { name: /加入队列|Add to Queue/i }));
+
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items).toHaveLength(1);
+    expect(items[0].projectId).toBe('proj-stream');
+    expect(items[0].pipelineSnapshot).toEqual(
+      expect.objectContaining({
+        isProjectPipeline: true,
+        autoTranslate: true,
+        targetLanguage: 'ja',
+      })
+    );
   });
 });

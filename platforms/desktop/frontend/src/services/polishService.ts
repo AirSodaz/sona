@@ -20,6 +20,7 @@ import type {
   TranscriptLlmJobResult,
 } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
+import { resolveTaskProjectContext } from './task/taskProjectContext';
 import {
   createTaskTarget,
   mergeUpdatedSegmentsById,
@@ -174,16 +175,13 @@ export class PolishService {
 
           const latestSegments = await resolveLatestSegmentsForTarget(ctx.target, segments);
           const sentJobHistoryId = ctx.resolveHistoryId();
-          const activeProjectId = useProjectStore.getState().activeProjectId;
-          const currentItem = sentJobHistoryId
-            ? useHistoryStore.getState().items.find((i) => i.id === sentJobHistoryId)
-            : null;
-          const projectId = currentItem?.projectId ?? activeProjectId;
-          const pipeline = resolveItemPipeline(
-            projectId,
-            useProjectStore.getState().projects,
-            config
-          );
+          const { projectId, pipelineSnapshot } = resolveTaskProjectContext({
+            sessionId: sessionId ?? ctx.target.sessionId,
+            historyId: sentJobHistoryId,
+          });
+          const pipeline =
+            pipelineSnapshot ??
+            resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
           const resolvedPresetId =
             polishPresetId || pipeline.polishPresetId || config.polishPresetId;
           const preset = resolvePolishPreset(resolvedPresetId, config.polishCustomPresets);

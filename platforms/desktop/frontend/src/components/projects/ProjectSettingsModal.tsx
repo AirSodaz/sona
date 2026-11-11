@@ -36,6 +36,7 @@ interface ProjectSettingsModalProps {
   onSave: () => void;
   onDelete: () => void;
   disableDelete?: boolean;
+  deleteDisabledReason?: string;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onIconChange: (value: string) => void;
@@ -54,6 +55,7 @@ export function ProjectSettingsModal({
   onSave,
   onDelete,
   disableDelete = false,
+  deleteDisabledReason,
   onNameChange,
   onDescriptionChange,
   onIconChange,
@@ -154,6 +156,8 @@ export function ProjectSettingsModal({
             type="button"
             className="btn btn-danger"
             disabled={disableDelete}
+            data-tooltip={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
+            title={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
             onClick={() => void onDelete()}
           >
             {t('projects.delete_project', { defaultValue: 'Delete Project' })}

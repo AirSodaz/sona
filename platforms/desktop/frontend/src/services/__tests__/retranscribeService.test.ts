@@ -128,7 +128,11 @@ describe('RetranscribeService', () => {
       'C:/audio/history-a.wav',
       undefined,
       undefined,
-      'ja'
+      'ja',
+      undefined,
+      undefined,
+      undefined,
+      null
     );
   });
 

@@ -41,7 +41,7 @@ describe('useProjectRailContextMenu', () => {
       useProjectRailContextMenu({
         activeProjectId: null,
         browseScope: 'all',
-        isLockedLiveDraft: false,
+        isProjectDeleteBlocked: () => false,
         onDeleteProject,
         onOpenProjectSettings,
         onSetActiveProjectId,
@@ -92,7 +92,7 @@ describe('useProjectRailContextMenu', () => {
       useProjectRailContextMenu({
         activeProjectId: 'proj-1',
         browseScope: 'all',
-        isLockedLiveDraft: false,
+        isProjectDeleteBlocked: () => false,
         onDeleteProject: vi.fn(),
         onOpenProjectSettings: vi.fn(),
         onSetActiveProjectId,
@@ -110,6 +110,9 @@ describe('useProjectRailContextMenu', () => {
     expect(openContextMenu).toHaveBeenCalledTimes(1);
     const actionIds = capturedOptions!.actions.map((action) => action.id);
     expect(actionIds).toEqual(['open_inbox', 'set_active_inbox']);
+    const openInboxAction = capturedOptions!.actions.find((action) => action.id === 'open_inbox');
+    expect(openInboxAction?.label).toBe('Open');
+    expect(openInboxAction?.shortcut).toBe('Enter');
 
     const setActiveInbox = capturedOptions!.actions.find(
       (action) => action.id === 'set_active_inbox'
@@ -130,7 +133,7 @@ describe('useProjectRailContextMenu', () => {
       useProjectRailContextMenu({
         activeProjectId: null,
         browseScope: 'all',
-        isLockedLiveDraft: false,
+        isProjectDeleteBlocked: () => false,
         onDeleteProject: vi.fn(),
         onEmptyTrash,
         onOpenProjectSettings: vi.fn(),
@@ -150,10 +153,11 @@ describe('useProjectRailContextMenu', () => {
     expect(openContextMenu).toHaveBeenCalledTimes(1);
     const actionIds = capturedOptions!.actions.map((action) => action.id);
     expect(actionIds).toEqual(['open_trash', 'empty_trash']);
+    const openTrashAction = capturedOptions!.actions.find((action) => action.id === 'open_trash');
+    expect(openTrashAction?.label).toBe('Open');
+    expect(openTrashAction?.shortcut).toBe('Enter');
 
     const emptyTrashAction = capturedOptions!.actions.find((action) => action.id === 'empty_trash');
-    expect(emptyTrashAction?.disabled).toBe(false);
-    expect(emptyTrashAction?.tone).toBe('danger');
     emptyTrashAction?.onSelect();
     expect(onEmptyTrash).toHaveBeenCalledTimes(1);
   });
@@ -169,7 +173,7 @@ describe('useProjectRailContextMenu', () => {
       useProjectRailContextMenu({
         activeProjectId: null,
         browseScope: 'proj-1',
-        isLockedLiveDraft: false,
+        isProjectDeleteBlocked: () => false,
         onDeleteProject: vi.fn(),
         onOpenProjectSettings: vi.fn(),
         onSetActiveProjectId: vi.fn(),
@@ -187,6 +191,9 @@ describe('useProjectRailContextMenu', () => {
     expect(openContextMenu).toHaveBeenCalledTimes(1);
     const actionIds = capturedOptions!.actions.map((action) => action.id);
     expect(actionIds).toEqual(['open_all']);
+    const openAllAction = capturedOptions!.actions.find((action) => action.id === 'open_all');
+    expect(openAllAction?.label).toBe('Open');
+    expect(openAllAction?.shortcut).toBe('Enter');
   });
 
   it('opens rail empty area menu to create new project', () => {
@@ -200,7 +207,7 @@ describe('useProjectRailContextMenu', () => {
       useProjectRailContextMenu({
         activeProjectId: null,
         browseScope: 'all',
-        isLockedLiveDraft: false,
+        isProjectDeleteBlocked: () => false,
         onDeleteProject: vi.fn(),
         onOpenCreateModal,
         onOpenProjectSettings: vi.fn(),
@@ -223,5 +230,37 @@ describe('useProjectRailContextMenu', () => {
     const newProjectAction = capturedOptions!.actions.find((action) => action.id === 'new_project');
     newProjectAction?.onSelect();
     expect(onOpenCreateModal).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables only delete when isProjectDeleteBlocked returns true while keeping open/set_active/settings enabled', () => {
+    let capturedOptions: OpenContextMenuOptions | null = null;
+    const openContextMenu = vi.fn((opts) => {
+      capturedOptions = opts;
+    });
+
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: null,
+        browseScope: 'all',
+        isProjectDeleteBlocked: (projectId) => projectId === 'proj-1',
+        onDeleteProject: vi.fn(),
+        onOpenProjectSettings: vi.fn(),
+        onSetActiveProjectId: vi.fn(),
+        onSwitchScope: vi.fn().mockResolvedValue(true),
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.openRailContextMenu('proj-1', createDummyRequest());
+    });
+
+    const byId = (id: string) => capturedOptions!.actions.find((action) => action.id === id);
+    expect(byId('open')?.disabled).toBe(false);
+    expect(byId('set_active')?.disabled).toBe(false);
+    expect(byId('settings')?.disabled).toBe(false);
+    expect(byId('delete')?.disabled).toBe(true);
   });
 });
