@@ -2,7 +2,7 @@ export type ToolId =
   | 'subtitles'
   | 'voice_typing'
   | 'api_server'
+  | 'automation'
   | 'mcp'
-  | 'emby_sync'
   | 'cli'
-  | 'automation';
+  | 'emby_sync';

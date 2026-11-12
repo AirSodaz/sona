@@ -124,7 +124,29 @@
 .automation-rule-actions {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.automation-rule-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-icon-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .automation-rule-exceptions {

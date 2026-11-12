@@ -109,23 +109,24 @@ describe('ToolsView', () => {
     expect(sidebarTabs[2].getAttribute('aria-controls')).toBe('tools-panel-api_server');
     expect(sidebarTabs[2].getAttribute('tabindex')).toBe('-1');
 
-    expect(sidebarTabs[3].textContent).toContain('MCP Agents');
-    expect(sidebarTabs[3].getAttribute('id')).toBe('tools-tab-mcp');
-    expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-mcp');
+    expect(sidebarTabs[3].textContent).toContain('Automation');
+    expect(sidebarTabs[3].getAttribute('id')).toBe('tools-tab-automation');
+    expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-automation');
     expect(sidebarTabs[3].getAttribute('tabindex')).toBe('-1');
 
-    expect(sidebarTabs[4].textContent).toContain('Sona CLI');
-    expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-cli');
-    expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-cli');
+    expect(sidebarTabs[4].textContent).toContain('MCP Agents');
+    expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-mcp');
+    expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-mcp');
     expect(sidebarTabs[4].getAttribute('tabindex')).toBe('-1');
 
-    expect(sidebarTabs[5].textContent).toContain('Media Server Subtitle Assistant');
-    expect(sidebarTabs[5].getAttribute('id')).toBe('tools-tab-emby_sync');
-    expect(sidebarTabs[5].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
+    expect(sidebarTabs[5].textContent).toContain('Sona CLI');
+    expect(sidebarTabs[5].getAttribute('id')).toBe('tools-tab-cli');
+    expect(sidebarTabs[5].getAttribute('aria-controls')).toBe('tools-panel-cli');
     expect(sidebarTabs[5].getAttribute('tabindex')).toBe('-1');
-    expect(sidebarTabs[6].textContent).toContain('Automation');
-    expect(sidebarTabs[6].getAttribute('id')).toBe('tools-tab-automation');
-    expect(sidebarTabs[6].getAttribute('aria-controls')).toBe('tools-panel-automation');
+
+    expect(sidebarTabs[6].textContent).toContain('Media Server Subtitle Assistant');
+    expect(sidebarTabs[6].getAttribute('id')).toBe('tools-tab-emby_sync');
+    expect(sidebarTabs[6].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
     expect(sidebarTabs[6].getAttribute('tabindex')).toBe('-1');
 
     // Check default subtitles panel is visible and unselected panels are hidden
@@ -192,10 +193,10 @@ describe('ToolsView', () => {
     render(<ToolsView />);
 
     const sidebarTabs = screen.getAllByRole('tab');
-    fireEvent.click(sidebarTabs[4]); // cli is index 4
+    fireEvent.click(sidebarTabs[5]); // cli is index 5
 
     expect(useToolsStore.getState().activeTool).toBe('cli');
-    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('0');
+    expect(sidebarTabs[5].getAttribute('tabindex')).toBe('0');
     expect(
       (
         document
@@ -216,10 +217,10 @@ describe('ToolsView', () => {
     render(<ToolsView />);
 
     const sidebarTabs = screen.getAllByRole('tab');
-    fireEvent.click(sidebarTabs[5]); // emby sync is index 5
+    fireEvent.click(sidebarTabs[6]); // emby sync is index 6
 
     expect(useToolsStore.getState().activeTool).toBe('emby_sync');
-    expect(sidebarTabs[5].getAttribute('tabindex')).toBe('0');
+    expect(sidebarTabs[6].getAttribute('tabindex')).toBe('0');
     expect(
       (
         document
@@ -287,17 +288,17 @@ describe('ToolsView', () => {
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('api_server');
 
-    // End -> automation (last tab)
+    // End -> emby_sync (last tab)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(useToolsStore.getState().activeTool).toBe('automation');
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
 
     // ArrowDown wraps -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
 
-    // ArrowUp wraps -> automation (last tab)
+    // ArrowUp wraps -> emby_sync (last tab)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(useToolsStore.getState().activeTool).toBe('automation');
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
     // Home -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'Home' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
@@ -321,7 +322,7 @@ describe('ToolsView', () => {
     });
 
     render(<ToolsSidebar />);
-    const mcpTab = screen.getAllByRole('tab')[3];
+    const mcpTab = screen.getAllByRole('tab')[4];
     expect(mcpTab.textContent).toContain('Stopped');
     const badge = mcpTab.querySelector('.tools-status-badge');
     expect(badge?.classList.contains('tools-status-warning')).toBe(true);

@@ -23,10 +23,10 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
+    activeTool === 'automation' ||
     activeTool === 'mcp' ||
     activeTool === 'cli' ||
-    activeTool === 'emby_sync' ||
-    activeTool === 'automation'
+    activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';
   const detailPaneRef = useRef<HTMLDivElement>(null);
@@ -60,6 +60,9 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
         <div style={{ display: resolvedTool === 'api_server' ? 'block' : 'none' }}>
           <ToolApiServerPanel />
         </div>
+        <div style={{ display: resolvedTool === 'automation' ? 'block' : 'none' }}>
+          <ToolAutomationPanel />
+        </div>
         <div style={{ display: resolvedTool === 'mcp' ? 'block' : 'none' }}>
           <ToolMcpPanel />
         </div>
@@ -68,9 +71,6 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
         </div>
         <div style={{ display: resolvedTool === 'emby_sync' ? 'block' : 'none' }}>
           <ToolEmbySyncPanel />
-        </div>
-        <div style={{ display: resolvedTool === 'automation' ? 'block' : 'none' }}>
-          <ToolAutomationPanel />
         </div>
       </div>
     </div>

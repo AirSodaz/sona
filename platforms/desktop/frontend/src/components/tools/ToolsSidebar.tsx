@@ -201,6 +201,16 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: isApiActive ? 'active' : 'inactive',
     },
     {
+      id: 'automation',
+      nameKey: 'tools.automation',
+      defaultName: 'Automation',
+      descKey: 'tools.automation_desc',
+      defaultDesc: 'Watch folders and route recordings into projects or exports',
+      Icon: FolderSync,
+      statusText: automationStatus.text,
+      statusType: automationStatus.tone,
+    },
+    {
       id: 'mcp',
       nameKey: 'tools.mcp',
       defaultName: 'MCP Agents',
@@ -244,25 +254,15 @@ export function ToolsSidebar(): React.JSX.Element {
         : t('tools.status_not_connected', { defaultValue: 'Not Connected' }),
       statusType: embyServerName ? 'active' : 'inactive',
     },
-    {
-      id: 'automation',
-      nameKey: 'tools.automation',
-      defaultName: 'Automation',
-      descKey: 'tools.automation_desc',
-      defaultDesc: 'Watch folders and route recordings into projects or exports',
-      Icon: FolderSync,
-      statusText: automationStatus.text,
-      statusType: automationStatus.tone,
-    },
   ];
   const resolvedTool: ToolId =
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
+    activeTool === 'automation' ||
     activeTool === 'mcp' ||
     activeTool === 'cli' ||
-    activeTool === 'emby_sync' ||
-    activeTool === 'automation'
+    activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';
   const selectedIndex = tools.findIndex((tool) => tool.id === resolvedTool);

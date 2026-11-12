@@ -1,3 +1,4 @@
+import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../../../../stores/batchQueueStore';
@@ -71,6 +72,7 @@ export function AutomationRuleCard({
   const destination = rule.saveHistory
     ? projectName
     : `${rule.exportConfig?.format?.toUpperCase() ?? 'TXT'} · ${rule.exportConfig?.directory ?? ''}`;
+  const isScanning = runtime?.status === 'scanning';
   const statusLabel =
     failedEntries.length > 0
       ? t('automation.failures', {
@@ -118,38 +120,55 @@ export function AutomationRuleCard({
       <div className="automation-rule-actions">
         <button
           type="button"
-          className="btn btn-secondary"
-          disabled={runtime?.status === 'scanning'}
+          className="btn btn-sm btn-secondary"
+          disabled={isScanning}
           onClick={() => void onScan(rule.id)}
         >
-          {t('automation.scan_now', { defaultValue: 'Scan Now' })}
+          {isScanning ? (
+            <Loader2 size={13} className="automation-icon-spin" />
+          ) : (
+            <RefreshCw size={13} />
+          )}
+          <span>
+            {isScanning
+              ? t('automation.status.scanning', { defaultValue: 'Scanning...' })
+              : t('automation.scan_now', { defaultValue: 'Scan Now' })}
+          </span>
         </button>
-        <button type="button" className="btn btn-secondary" onClick={() => onEdit(rule)}>
-          {t('common.edit', { defaultValue: 'Edit' })}
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => {
-            void confirm(
-              t('automation.delete_confirm', {
-                defaultValue: 'Delete automation rule "{{name}}"?',
-                name: rule.name,
-              }),
-              {
-                title: t('automation.delete_rule', { defaultValue: 'Delete Automation Rule' }),
-                variant: 'error',
-              }
-            ).then((confirmed) => {
-              if (confirmed) {
-                return onDelete(rule.id);
-              }
-              return undefined;
-            });
-          }}
-        >
-          {t('common.delete', { defaultValue: 'Delete' })}
-        </button>
+        <div className="automation-rule-actions-group">
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary-soft"
+            onClick={() => onEdit(rule)}
+          >
+            <Pencil size={13} />
+            <span>{t('common.edit', { defaultValue: 'Edit' })}</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-danger-soft"
+            onClick={() => {
+              void confirm(
+                t('automation.delete_confirm', {
+                  defaultValue: 'Delete automation rule "{{name}}"?',
+                  name: rule.name,
+                }),
+                {
+                  title: t('automation.delete_rule', { defaultValue: 'Delete Automation Rule' }),
+                  variant: 'error',
+                }
+              ).then((confirmed) => {
+                if (confirmed) {
+                  return onDelete(rule.id);
+                }
+                return undefined;
+              });
+            }}
+          >
+            <Trash2 size={13} />
+            <span>{t('common.delete', { defaultValue: 'Delete' })}</span>
+          </button>
+        </div>
       </div>
       {failedEntries.length > 0 || blocked ? (
         <div className="automation-rule-exceptions">
