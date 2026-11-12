@@ -113,7 +113,7 @@ export function ToolAutomationPanel(): React.JSX.Element {
   }, [processedEntries, rules, runtimeStates, t]);
 
   return (
-    <SettingsTabContainer id="tools-panel-automation">
+    <SettingsTabContainer id="tools-panel-automation" ariaLabelledby="tools-tab-automation">
       <ToolHeroHeader
         icon={<FolderSync size={22} />}
         title={t('tools.automation', { defaultValue: 'Automation' })}

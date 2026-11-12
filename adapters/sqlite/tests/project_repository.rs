@@ -257,3 +257,45 @@ fn project_deletion_and_replacement_clear_rule_project_ids() {
     repository.delete_tag("proj-1").unwrap();
     assert_eq!(loaded_project_id(), "");
 }
+
+#[test]
+fn project_cascade_disables_rules_that_lose_their_project() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let adapter =
+        SqliteProjectAdapter::new(Arc::clone(&db), Arc::new(FixedIds), Arc::new(FixedClock));
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    adapter
+        .replace_tags(vec![
+            tag("proj-1", "One", "#2563EB", 0),
+            tag("proj-2", "Two", "#DC2626", 1),
+        ])
+        .unwrap();
+
+    let mut affected = automation_rule("proj-1");
+    affected.id = "rule-affected".to_string();
+    let mut survivor = automation_rule("proj-2");
+    survivor.id = "rule-survivor".to_string();
+    AutomationStore::replace_rules(&automation, &[affected, survivor]).unwrap();
+
+    adapter
+        .delete_project_with_cascade("proj-1", "moveToInbox")
+        .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    let affected = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-affected")
+        .unwrap();
+    assert_eq!(affected.project_id, "");
+    assert!(!affected.enabled);
+
+    let survivor = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-survivor")
+        .unwrap();
+    assert_eq!(survivor.project_id, "proj-2");
+    assert!(survivor.enabled);
+}

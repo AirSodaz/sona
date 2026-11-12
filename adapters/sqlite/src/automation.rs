@@ -220,10 +220,12 @@ fn record_automation_rules_sync(
         let now_ms = u64::try_from(rule.updated_at)
             .or_else(|_| u64::try_from(rule.created_at))
             .unwrap_or(fallback_now_ms);
+        // Legacy peers derive save_history from projectId != "none", so an
+        // export-only rule must ship the sentinel on the wire.
         let project_id = if rule.save_history {
             rule.project_id.as_str()
         } else {
-            ""
+            "none"
         };
         for (field, value) in [
             ("name", serde_json::json!(rule.name)),

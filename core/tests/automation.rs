@@ -68,7 +68,7 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let result = validate_rule_activation(
         &rule,
         &config,
-        &[json!({ "id": "tag-1" })],
+        &[],
         AutomationRuleActivationEnvironment {
             watch_directory_exists: true,
             export_directory_ready: true,
@@ -286,4 +286,52 @@ fn sample_runtime_rule(
     };
     overrides(&mut rule);
     rule
+}
+
+#[test]
+fn save_history_rules_targeting_inbox_or_unset_stay_activatable() {
+    let config = json!({
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "online",
+                    "providerId": "groq-whisper"
+                }
+            },
+            "providers": {
+                "online": {
+                    "groq-whisper": {
+                        "apiKey": "groq-key"
+                    }
+                }
+            }
+        }
+    });
+    let projects = vec![json!({ "id": "proj-1" })];
+
+    // Deleting a project clears the rule's project_id; the sentinel must stay valid.
+    for project_id in ["", "inbox"] {
+        let rule = AutomationRule {
+            name: "Inbox Watch".to_string(),
+            save_history: true,
+            project_id: project_id.to_string(),
+            watch_directory: "C:\\watch".to_string(),
+            recursive: false,
+            stage_config: AutomationRuleStageConfig::default(),
+            export_config: AutomationRuleExportConfig::default(),
+        };
+
+        let result = validate_rule_activation(
+            &rule,
+            &config,
+            &projects,
+            AutomationRuleActivationEnvironment {
+                watch_directory_exists: true,
+                export_directory_ready: false,
+                batch_model_path_exists: false,
+            },
+        );
+
+        assert!(result.valid, "project_id {project_id:?}: {result:?}");
+    }
 }

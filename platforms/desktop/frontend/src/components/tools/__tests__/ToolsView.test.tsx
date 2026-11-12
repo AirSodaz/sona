@@ -69,7 +69,7 @@ describe('ToolsView', () => {
     cleanup();
   });
 
-  it('renders sidebar with 5 tools and subtitle panel by default', () => {
+  it('renders sidebar with 7 tools and subtitle panel by default', () => {
     const { container } = render(<ToolsView />);
 
     // Check dual-panel alignment classes
@@ -125,6 +125,8 @@ describe('ToolsView', () => {
     expect(sidebarTabs[5].getAttribute('tabindex')).toBe('-1');
     expect(sidebarTabs[6].textContent).toContain('Automation');
     expect(sidebarTabs[6].getAttribute('id')).toBe('tools-tab-automation');
+    expect(sidebarTabs[6].getAttribute('aria-controls')).toBe('tools-panel-automation');
+    expect(sidebarTabs[6].getAttribute('tabindex')).toBe('-1');
 
     // Check default subtitles panel is visible and unselected panels are hidden
     expect(

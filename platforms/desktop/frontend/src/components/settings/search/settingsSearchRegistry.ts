@@ -783,8 +783,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     promptsSubTab: 'translation',
     targetId: 'settings-vocabulary-translation',
     tabKey: 'settings.vocabulary',
-    titleKey: 'settings.translation_automation_title',
-    hintKey: 'settings.translation_automation_description',
+    titleKey: 'settings.translation_default_language_title',
+    hintKey: 'settings.translation_default_language_hint',
     keywords: [
       'translate',
       'target language',

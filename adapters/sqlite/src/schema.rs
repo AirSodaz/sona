@@ -1,4 +1,5 @@
 use super::{Database, DatabaseError};
+use serde_json::{Map, Value, json};
 
 pub const CURRENT_SCHEMA_VERSION: i64 = 11;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
@@ -746,7 +747,158 @@ fn migrate_v10(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Moves legacy per-rule export settings into the owning project's pipeline.
+///
+/// Before v11, a save-history rule owned its export directory. Post-v11 exports
+/// are resolved from `project_pipelines`, so upgrading without this backfill
+/// silently stops exporting. Must run before `automation_rules` is rebuilt and
+/// `stage_export_enabled` disappears.
+fn backfill_automation_export_pipelines(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<i64, rusqlite::Error> {
+    if !has_table(tx, "project_pipelines")?
+        || !has_table(tx, "automation_rules")?
+        || !has_table(tx, "projects")?
+        || !has_column(tx, "automation_rules", "stage_export_enabled")?
+        || !has_column(tx, "automation_rules", "export_directory")?
+        || !has_column(tx, "automation_rules", "export_format")?
+        || !has_column(tx, "automation_rules", "export_prefix")?
+    {
+        return Ok(0);
+    }
+
+    // v9 dropped automation_rules.project_id, so legacy rules keep their
+    // destination only in automation_rule_projects. Resolve the same way the
+    // migrate_v11 rebuild does.
+    let rule_project_expr = if has_column(tx, "automation_rules", "project_id")? {
+        "COALESCE(r.project_id, '')"
+    } else {
+        "''"
+    };
+    let project_id_expr = if has_table(tx, "automation_rule_projects")? {
+        format!(
+            "COALESCE((SELECT arp.project_id FROM automation_rule_projects arp WHERE arp.rule_id = r.id ORDER BY arp.rowid LIMIT 1), {rule_project_expr})"
+        )
+    } else {
+        rule_project_expr.to_string()
+    };
+    let save_history_expr = if has_column(tx, "automation_rules", "save_history")? {
+        "r.save_history <> 0"
+    } else if has_column(tx, "automation_rules", "project_id")? {
+        "r.project_id <> 'none'"
+    } else {
+        "1"
+    };
+    // Tag-kind rules are deleted by this migration; they never own an export target.
+    let exclude_tag_rules = if has_column(tx, "automation_rules", "kind")? {
+        "AND r.kind <> 'tag'"
+    } else {
+        ""
+    };
+
+    let candidates: Vec<(String, String, String, String, String)> = {
+        let mut stmt = tx.prepare(&format!(
+            "SELECT c.id, c.project_id, c.directory, c.export_format, c.export_prefix
+             FROM (
+                 SELECT r.id AS id,
+                        {project_id_expr} AS project_id,
+                        TRIM(r.export_directory) AS directory,
+                        r.export_format AS export_format,
+                        r.export_prefix AS export_prefix
+                 FROM automation_rules AS r
+                 WHERE {save_history_expr}
+                   AND r.stage_export_enabled <> 0
+                   AND TRIM(r.export_directory) <> ''
+                   {exclude_tag_rules}
+             ) AS c
+             WHERE c.project_id NOT IN ('', 'inbox')
+               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = c.project_id)
+             ORDER BY c.id"
+        ))?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    if candidates.is_empty() {
+        return Ok(0);
+    }
+
+    let mut backfilled = 0;
+    for (rule_id, project_id, directory, format, prefix) in candidates {
+        let mut map = {
+            let mut stmt =
+                tx.prepare("SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1")?;
+            let mut rows = stmt.query([&project_id])?;
+            match rows.next()? {
+                Some(row) => {
+                    let raw: String = row.get(0)?;
+                    match serde_json::from_str::<Value>(&raw) {
+                        Ok(Value::Object(map)) => map,
+                        _ => Map::new(),
+                    }
+                }
+                None => Map::new(),
+            }
+        };
+
+        let already_configured = map.get("autoExport") == Some(&Value::Bool(true))
+            && map
+                .get("exportDirectory")
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.is_empty());
+        if already_configured {
+            continue;
+        }
+
+        map.insert("enabled".to_string(), json!(true));
+        map.insert("autoExport".to_string(), json!(true));
+        map.insert("exportDirectory".to_string(), json!(directory));
+        map.insert("exportFormat".to_string(), json!(format));
+        map.insert("exportFileNamePrefix".to_string(), json!(prefix));
+
+        tx.execute(
+            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at)
+             VALUES (?1, ?2, 0)
+             ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json",
+            rusqlite::params![project_id, Value::Object(map).to_string()],
+        )?;
+        tx.execute(
+            "UPDATE automation_rules SET export_directory = '', export_prefix = '' WHERE id = ?1",
+            rusqlite::params![rule_id],
+        )?;
+        backfilled += 1;
+    }
+
+    Ok(backfilled)
+}
+
 fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    let export_backfilled = backfill_automation_export_pipelines(tx)?;
+    let legacy_tag_rules: i64 = if has_column(tx, "automation_rules", "kind")? {
+        tx.query_row(
+            "SELECT COUNT(*) FROM automation_rules WHERE kind = 'tag'",
+            [],
+            |row| row.get(0),
+        )?
+    } else {
+        0
+    };
+    let legacy_profiles: i64 = if has_table(tx, "automation_profiles")? {
+        tx.query_row("SELECT COUNT(*) FROM automation_profiles", [], |row| {
+            row.get(0)
+        })?
+    } else {
+        0
+    };
+
     tx.execute_batch(
         "DROP TABLE IF EXISTS automation_profile_links;
          DROP TABLE IF EXISTS automation_profiles;",
@@ -818,7 +970,9 @@ fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
         tx.execute_batch(&insert_sql)?;
         tx.execute_batch(
             "DROP TABLE automation_rules;
-             ALTER TABLE automation_rules_v11 RENAME TO automation_rules;",
+             ALTER TABLE automation_rules_v11 RENAME TO automation_rules;
+             CREATE INDEX IF NOT EXISTS idx_automation_rules_project_id
+                 ON automation_rules(project_id);",
         )?;
     }
 
@@ -850,6 +1004,18 @@ fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
                 tx.execute(&format!("ALTER TABLE task_ledger DROP COLUMN {col}"), [])?;
             }
         }
+    }
+
+    if has_table(tx, "app_settings")? {
+        tx.execute(
+            "INSERT INTO app_settings (key, value)
+             VALUES ('automation-migration-v11-report',
+                     json_object('legacyTagRules', ?1,
+                                 'legacyProfiles', ?2,
+                                 'exportBackfilled', ?3))
+             ON CONFLICT(key) DO NOTHING",
+            rusqlite::params![legacy_tag_rules, legacy_profiles, export_backfilled],
+        )?;
     }
 
     Ok(())
@@ -1515,11 +1681,14 @@ mod tests {
         )
         .unwrap();
         tx.execute(
-            "INSERT INTO automation_rules (id, name, kind, save_history, watch_directory)
+            "INSERT INTO automation_rules (
+                id, name, kind, save_history, watch_directory,
+                stage_export_enabled, export_directory, export_format, export_prefix
+             )
              VALUES
-                ('file-proj', 'File Project', 'file', 1, 'C:\\watch'),
-                ('file-export', 'File Export', 'file', 0, 'C:\\raw'),
-                ('tag-rule', 'Tag Rule', 'tag', 1, '')",
+                ('file-proj', 'File Project', 'file', 1, 'C:\\watch', 1, 'C:\\out', 'txt', ''),
+                ('file-export', 'File Export', 'file', 0, 'C:\\raw', 1, 'C:\\raw', 'txt', ''),
+                ('tag-rule', 'Tag Rule', 'tag', 1, '', 0, '', 'txt', '')",
             [],
         )
         .unwrap();
@@ -1586,6 +1755,100 @@ mod tests {
         assert!(!has_column(&tx, "task_ledger", "tag_automation_rule_id").unwrap());
         assert!(!has_column(&tx, "task_ledger", "automation_profile_id").unwrap());
         assert!(!has_column(&tx, "task_ledger", "automation_profile_source").unwrap());
+
+        // Legacy export settings moved into the owning project's pipeline.
+        let pipeline_json: String = tx
+            .query_row(
+                "SELECT pipeline_json FROM project_pipelines WHERE project_id = 'proj-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let pipeline: Value = serde_json::from_str(&pipeline_json).unwrap();
+        assert_eq!(pipeline["autoExport"], json!(true));
+        assert_eq!(pipeline["exportDirectory"], json!("C:\\out"));
+        assert_eq!(pipeline["enabled"], json!(true));
+
+        let rule_export_directory: String = tx
+            .query_row(
+                "SELECT export_directory FROM automation_rules WHERE id = 'file-proj'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_export_directory, "");
+
+        let report: String = tx
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'automation-migration-v11-report'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let report: Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(report["legacyTagRules"], json!(1));
+        assert_eq!(report["exportBackfilled"], json!(1));
+
+        let preserved: (
+            String,
+            String,
+            i64,
+            i64,
+            i64,
+            String,
+            i64,
+            String,
+            String,
+            String,
+            String,
+        ) = tx
+            .query_row(
+                "SELECT name, watch_directory, recursive, enabled, stage_auto_polish,
+                        stage_polish_preset_id, stage_auto_translate, stage_translation_language,
+                        export_format, export_mode, export_prefix
+                   FROM automation_rules WHERE id = 'file-proj'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            preserved,
+            (
+                "File Project".to_string(),
+                "C:\\watch".to_string(),
+                0,
+                0,
+                0,
+                "general".to_string(),
+                0,
+                "en".to_string(),
+                "txt".to_string(),
+                "original".to_string(),
+                "".to_string(),
+            )
+        );
+
+        // Column shape must match a freshly created database.
+        let fresh = Database::open_in_memory().unwrap();
+        let fresh_columns = fresh
+            .with_connection(|conn| Ok(table_columns(conn, "automation_rules")))
+            .unwrap();
+        assert_eq!(table_columns(&tx, "automation_rules"), fresh_columns);
+
         tx.commit().unwrap();
     }
 

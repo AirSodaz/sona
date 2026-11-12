@@ -146,6 +146,7 @@ vi.mock('../../services/recoveryService', () => ({
   isAutomationRecoveryBlocked: testContext.isAutomationRecoveryBlockedMock,
 }));
 
+import { historyService } from '../../services/historyService';
 import { __emitAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
 
 async function emitRuntimeCandidate(payload: any) {
@@ -1412,6 +1413,51 @@ describe('automationStore', () => {
       }),
     ]);
     expect(clearAutomationRecoveryGuardEntryMock).toHaveBeenCalledWith(rule.id, 'fp-complete');
+  });
+
+  it('keeps the saved recording when an export-only rule fails after transcription', async () => {
+    const rule = createRule({ saveHistory: false });
+    vi.spyOn(historyService, 'deleteRecording').mockResolvedValue(undefined);
+    vi.spyOn(historyService, 'purgeRecordings').mockResolvedValue(undefined);
+    useAutomationStore.setState({
+      rules: [rule],
+      processedEntries: [],
+      runtimeStates: {},
+      notifications: [],
+      isLoaded: true,
+      error: null,
+    });
+
+    await __emitAutomationTaskSettledForTests({
+      ruleId: rule.id,
+      filePath: 'C:\\watch\\meeting.wav',
+      sourceFingerprint: 'fp-settled',
+      size: 42,
+      mtimeMs: 1000,
+      status: 'error',
+      processedAt: 2000,
+      historyId: 'history-1',
+      errorMessage: 'Export failed',
+      stage: 'exporting',
+    });
+
+    expect(historyService.deleteRecording).not.toHaveBeenCalled();
+    expect(historyService.purgeRecordings).not.toHaveBeenCalled();
+
+    await __emitAutomationTaskSettledForTests({
+      ruleId: rule.id,
+      filePath: 'C:\\watch\\meeting.wav',
+      sourceFingerprint: 'fp-settled',
+      size: 42,
+      mtimeMs: 1000,
+      status: 'complete',
+      processedAt: 2100,
+      historyId: 'history-1',
+      stage: 'exporting',
+    });
+
+    expect(historyService.deleteRecording).toHaveBeenCalledWith('history-1');
+    expect(historyService.purgeRecordings).toHaveBeenCalledWith(['history-1']);
   });
 
   it('merges settled file errors into one retryable failure notification per rule', async () => {

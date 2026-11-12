@@ -1263,7 +1263,10 @@ fn apply_remote_segment_in_transaction(
 
     let mut result = SyncRemoteApplyResult::default();
     for operation in &segment.operations {
-        let operation = canonicalize_operation(operation);
+        let Some(operation) = canonicalize_incoming_operation(operation) else {
+            result.applied_operation_count += 1;
+            continue;
+        };
         validate_operation(&operation)
             .map_err(|error| DatabaseError::Internal(error.to_string()))?;
         if !operation_allowed_incoming(configured_preset, &operation)
@@ -1541,6 +1544,28 @@ fn canonicalize_operation(operation: &SyncOperation) -> SyncOperation {
     operation
 }
 
+/// Translates retired wire fields into their current equivalents before the
+/// LWW merge reads the field version row.
+fn canonicalize_incoming_operation(operation: &SyncOperation) -> Option<SyncOperation> {
+    let mut operation = canonicalize_operation(operation);
+    if operation.entity.kind == SyncEntityKind::AutomationRule
+        && let SyncOperationKind::SetField { field, value } = &operation.kind
+        && field == "tagIds"
+    {
+        let project_id = value
+            .as_array()?
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .find(|id| !matches!(*id, "" | "inbox" | "none"))?;
+        operation.kind = SyncOperationKind::SetField {
+            field: "projectId".to_string(),
+            value: Value::String(project_id.to_string()),
+        };
+    }
+    Some(operation)
+}
+
 fn operation_field(kind: &SyncOperationKind) -> &str {
     kind.field().unwrap_or(DELETE_FIELD)
 }
@@ -1578,7 +1603,6 @@ fn operation_allowed_incoming(preset: SyncPresetV1, operation: &SyncOperation) -
                 | "priority"
                 | "profileId"
                 | "profileSource"
-                | "tagIds"
                 | "presetId"
                 | "stageExportEnabled"
                 | "actionAutoSummary"
@@ -1702,14 +1726,14 @@ fn apply_domain_delete(
 ) -> Result<(), DatabaseError> {
     match kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => {
-            let _ = transaction.execute(
-                "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+            transaction.execute(
+                "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
                 [entity_id],
-            );
-            let _ = transaction.execute(
+            )?;
+            transaction.execute(
                 "DELETE FROM project_pipelines WHERE project_id = ?1",
                 [entity_id],
-            );
+            )?;
             execute_delete(transaction, "projects", "id", entity_id)
         }
         SyncEntityKind::HistoryItem => {
@@ -2167,20 +2191,6 @@ fn apply_automation_rule_field(
         "INSERT OR IGNORE INTO automation_rules (id) VALUES (?1)",
         [entity_id],
     )?;
-    if field == "tagIds" {
-        let tag_ids = json_string_array(value, field)?;
-        if let Some(project_id) = tag_ids
-            .into_iter()
-            .map(|id| id.trim().to_string())
-            .find(|id| !matches!(id.as_str(), "" | "inbox" | "none"))
-        {
-            transaction.execute(
-                "UPDATE automation_rules SET project_id = ?1 WHERE id = ?2",
-                params![project_id, entity_id],
-            )?;
-        }
-        return Ok(());
-    }
     if field == "projectId" {
         let project_id = value.as_str().unwrap_or_default().trim();
         if project_id == "none" {

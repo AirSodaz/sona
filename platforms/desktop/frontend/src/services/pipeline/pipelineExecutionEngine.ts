@@ -266,15 +266,20 @@ export class PipelineExecutionEngine {
       } else {
         onProgress?.('summarizing', 99);
         const templateId = pipeline.summaryTemplateId || globalConfig.summaryTemplateId;
-        await this.ports.summaryService.retrySummaryTranscriptJob({
-          segments: currentSegments,
-          historyId,
-          sessionId: sessionId ?? null,
-          templateId,
-          config: globalConfig,
-          priority: 'normal',
-        });
-        await this.ports.summaryService.persistSummary(historyId);
+        try {
+          await this.ports.summaryService.retrySummaryTranscriptJob({
+            segments: currentSegments,
+            historyId,
+            sessionId: sessionId ?? null,
+            templateId,
+            config: globalConfig,
+            priority: 'normal',
+            allowWhenSummaryDisabled: true,
+          });
+          await this.ports.summaryService.persistSummary(historyId);
+        } catch (error) {
+          logger.warn('[PipelineExecutionEngine] Auto-summary failed, continuing.', error);
+        }
       }
     }
 

@@ -12,7 +12,7 @@ import { useProjectStore } from '../../../../stores/projectStore';
 import type { AutomationRule } from '../../../../types/automation';
 import type { ExportFormat, ExportMode } from '../../../../utils/exportFormats';
 import { getLocalizedLanguageName } from '../../../../utils/languageUtils';
-import { getPolishPresetOptions } from '../../../../utils/polishPresets';
+import { coercePolishPresetId, getPolishPresetOptions } from '../../../../utils/polishPresets';
 import { Dropdown } from '../../../Dropdown';
 import { Modal } from '../../../Modal';
 import { Switch } from '../../../Switch';
@@ -53,7 +53,7 @@ export function AutomationRuleModal({
   const [exportMode, setExportMode] = useState<ExportMode>(rule?.exportConfig?.mode ?? 'original');
   const [autoPolish, setAutoPolish] = useState(rule?.stageConfig?.autoPolish ?? false);
   const [polishPresetId, setPolishPresetId] = useState(
-    rule?.stageConfig?.polishPresetId || 'general'
+    coercePolishPresetId(rule?.stageConfig?.polishPresetId, config.polishCustomPresets)
   );
   const [autoTranslate, setAutoTranslate] = useState(rule?.stageConfig?.autoTranslate ?? false);
   const [translationLanguage, setTranslationLanguage] = useState(
@@ -330,7 +330,7 @@ export function AutomationRuleModal({
                   <span>{t('automation.polish_preset', { defaultValue: 'Polish Preset' })}</span>
                   <Dropdown
                     options={polishOptions}
-                    value={polishPresetId}
+                    value={coercePolishPresetId(polishPresetId, config.polishCustomPresets)}
                     onChange={setPolishPresetId}
                     aria-label={t('automation.polish_preset', { defaultValue: 'Polish Preset' })}
                   />

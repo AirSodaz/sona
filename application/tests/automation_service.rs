@@ -498,12 +498,10 @@ fn online_asr_does_not_require_a_local_model() {
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
+    let mut rule = sample_rule("C:\\watch", "C:\\exports");
+    rule.save_history = false;
     let result = AutomationValidationService::new(&fs)
-        .validate_rule_activation(
-            &sample_rule("C:\\watch", "C:\\exports"),
-            &online_config(),
-            &[json!({"id":"tag-1"})],
-        )
+        .validate_rule_activation(&rule, &online_config(), &[json!({"id":"tag-1"})])
         .unwrap();
 
     assert!(result.valid, "{result:?}");

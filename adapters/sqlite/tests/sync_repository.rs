@@ -1471,7 +1471,7 @@ fn legacy_tag_ids_backfill_does_not_clobber_newer_save_history() {
 }
 
 #[test]
-fn sync_changelog_records_normalized_project_id() {
+fn sync_changelog_emits_none_sentinel_for_export_only_rules() {
     let db = Arc::new(Database::open_in_memory().unwrap());
     let sync = SqliteSyncRepository::initialize(
         Arc::clone(&db),
@@ -1523,7 +1523,144 @@ fn sync_changelog_records_normalized_project_id() {
         project_id_operation.kind,
         SyncOperationKind::SetField {
             field: "projectId".to_string(),
-            value: json!(""),
+            value: json!("none"),
         }
     );
+}
+
+fn save_history_rule_record() -> AutomationRuleRecord {
+    AutomationRuleRecord {
+        id: "rule-1".to_string(),
+        name: "Export only".to_string(),
+        save_history: true,
+        project_id: "proj-1".to_string(),
+        watch_directory: String::new(),
+        recursive: false,
+        enabled: true,
+        stage_config: AutomationRuleRecordStageConfig {
+            auto_polish: false,
+            polish_preset_id: "general".to_string(),
+            auto_translate: false,
+            translation_language: "en".to_string(),
+        },
+        export_config: AutomationRuleRecordExportConfig {
+            directory: String::new(),
+            format: "srt".to_string(),
+            mode: "original".to_string(),
+            prefix: String::new(),
+        },
+        created_at: 1_000,
+        updated_at: 2_000,
+    }
+}
+
+fn seed_save_history_rule(db: &Arc<Database>) -> SqliteAutomationRepository {
+    let automation = SqliteAutomationRepository::new(Arc::clone(db));
+    AutomationStore::replace_rules(&automation, &[save_history_rule_record()]).unwrap();
+    automation
+}
+
+fn stored_rule(automation: &SqliteAutomationRepository, rule_id: &str) -> AutomationRuleRecord {
+    AutomationStore::load_state(automation)
+        .unwrap()
+        .rules
+        .into_iter()
+        .find(|rule| rule.id == rule_id)
+        .expect("rule should still exist")
+}
+
+#[test]
+fn legacy_tag_ids_backfill_loses_to_newer_project_id() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-legacy-tag-ids".to_string(),
+        operations: vec![rule_field_operation(
+            "tag-op-old",
+            1_500,
+            "rule-1",
+            "tagIds",
+            json!(["proj-from-tag"]),
+        )],
+    })
+    .unwrap();
+
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn legacy_tag_ids_without_project_is_ignored() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-legacy-tag-ids-empty".to_string(),
+        operations: vec![rule_field_operation(
+            "tag-op-empty",
+            4_000,
+            "rule-1",
+            "tagIds",
+            json!([]),
+        )],
+    })
+    .unwrap();
+
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn remote_rule_field_outside_allowlist_rolls_back() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let _automation = seed_save_history_rule(&db);
+
+    let result = sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-unsupported-rule-field".to_string(),
+        operations: vec![rule_field_operation(
+            "op-x",
+            4_000,
+            "rule-1",
+            "watchDirectory",
+            json!("C:\\x"),
+        )],
+    });
+
+    assert!(result.is_err());
+    let cursor_count: i64 = db
+        .with_connection(|connection| {
+            connection
+                .query_row("SELECT COUNT(*) FROM sync_device_cursors", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .map_err(DatabaseError::QueryError)
+        })
+        .unwrap();
+    assert_eq!(cursor_count, 0);
 }

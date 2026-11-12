@@ -592,7 +592,7 @@ export class AutomationRuntimeCoordinator {
 
     const state = this.ports.getState();
     const rule = state.rules.find((item) => item.id === payload.ruleId);
-    if (rule?.saveHistory === false && payload.historyId) {
+    if (rule?.saveHistory === false && payload.status === 'complete' && payload.historyId) {
       this.ports.historyService
         .deleteRecording(payload.historyId)
         .then(() => this.ports.historyService.purgeRecordings([payload.historyId as string]))

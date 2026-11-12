@@ -167,7 +167,7 @@ where
                         rusqlite::params![ACTIVE_PROJECT_SETTINGS_KEY, project_id],
                     )?;
                     tx.execute(
-                        "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+                        "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
                         [project_id],
                     )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
@@ -497,7 +497,7 @@ where
             .and_then(|db| {
                 db.with_transaction(|tx| {
                     tx.execute(
-                        "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+                        "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
                         [tag_id],
                     )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [tag_id])?;

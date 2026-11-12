@@ -735,6 +735,9 @@ fn imports_v3_archive_dropping_profiles_and_tag_rules_and_mapping_tag_ids() {
     assert_eq!(session.dataset.automation.rules.len(), 1);
     assert_eq!(session.dataset.automation.rules[0].id, "file-rule-1");
     assert_eq!(session.dataset.automation.rules[0].project_id, "tag-1");
+    assert_eq!(preview.manifest.counts.automation_rules, 1);
+    assert_eq!(preview.manifest.counts.automation_processed_entries, 0);
+    assert_eq!(session.dataset.automation.processed_entries.len(), 0);
 }
 
 #[test]

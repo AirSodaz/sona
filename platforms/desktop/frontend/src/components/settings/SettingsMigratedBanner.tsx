@@ -161,6 +161,21 @@ export function SettingsMigratedBanner({
                   'This setting has been moved to the homepage Tools workbench for faster control, configuration, and monitoring.',
               })}
             </p>
+            {tool === 'automation' && (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.875rem',
+                  color: 'var(--color-text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
+                {t('tools.automation_migrated_note', {
+                  defaultValue:
+                    'Auto Polish, Auto Translate and Auto Summary are now configured per project instead of globally.',
+                })}
+              </p>
+            )}
           </div>
         </div>
 

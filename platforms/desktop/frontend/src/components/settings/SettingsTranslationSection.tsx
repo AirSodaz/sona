@@ -34,12 +34,7 @@ export function SettingsTranslationSection(): React.JSX.Element {
       icon={<Languages size={20} />}
     >
       <SettingsItem
-        title={t('settings.translation_default_language_title', {
-          defaultValue: 'Default Target Language',
-        })}
-        hint={t('settings.translation_default_language_hint', {
-          defaultValue: 'Default target language used when initiating transcript translation.',
-        })}
+        title={t('settings.translation_target_language', { defaultValue: 'Target Language' })}
       >
         <div style={{ width: '280px', maxWidth: '100%' }}>
           <Dropdown

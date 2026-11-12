@@ -656,7 +656,7 @@ fn parse_prepared_session(
         }
     }
 
-    let manifest: BackupManifest = read_json(root, MANIFEST_PATH)?;
+    let mut manifest: BackupManifest = read_json(root, MANIFEST_PATH)?;
     validate_backup_manifest(&manifest)?;
     let workspace_path = if manifest.schema_version == 1 {
         LEGACY_PROJECTS_PATH
@@ -708,7 +708,7 @@ fn parse_prepared_session(
         rules: automation_rules,
         processed_entries: automation_processed_entries,
     };
-    let dataset = BackupDataset {
+    let mut dataset = BackupDataset {
         config,
         tags,
         history,
@@ -716,6 +716,24 @@ fn parse_prepared_session(
         analytics_content,
     };
     validate_counts(&manifest, &dataset)?;
+
+    // Legacy bundles advertise raw counts that include rules and processed
+    // entries this import drops; report what the restore will actually write.
+    if manifest.schema_version < BACKUP_SCHEMA_VERSION {
+        let kept_rule_ids = dataset
+            .automation
+            .rules
+            .iter()
+            .map(|rule| rule.id.as_str())
+            .collect::<HashSet<_>>();
+        dataset
+            .automation
+            .processed_entries
+            .retain(|entry| kept_rule_ids.contains(entry.rule_id.as_str()));
+        manifest.counts.automation_rules = dataset.automation.rules.len() as u64;
+        manifest.counts.automation_processed_entries =
+            dataset.automation.processed_entries.len() as u64;
+    }
 
     Ok(PreparedBackupSession {
         import_id,

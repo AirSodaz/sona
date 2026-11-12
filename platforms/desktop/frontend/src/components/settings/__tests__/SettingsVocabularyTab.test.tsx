@@ -353,19 +353,17 @@ describe('SettingsVocabularyTab', () => {
     render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     const polishTab = screen.getByRole('tab', { name: 'Polish' });
-    expect(polishTab.getAttribute('data-tooltip')).toBe('Auto polish and style presets');
+    expect(polishTab.getAttribute('data-tooltip')).toBe('Presets and style prompts');
     expect(polishTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(polishTab.getAttribute('title')).toBeNull();
 
     const translationTab = screen.getByRole('tab', { name: 'Translation' });
-    expect(translationTab.getAttribute('data-tooltip')).toBe(
-      'Auto translation and default target language'
-    );
+    expect(translationTab.getAttribute('data-tooltip')).toBe('Default target language');
     expect(translationTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(translationTab.getAttribute('title')).toBeNull();
 
     const summaryTab = screen.getByRole('tab', { name: 'Summary' });
-    expect(summaryTab.getAttribute('data-tooltip')).toBe('Auto summary and custom templates');
+    expect(summaryTab.getAttribute('data-tooltip')).toBe('Summary templates');
     expect(summaryTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(summaryTab.getAttribute('title')).toBeNull();
   });

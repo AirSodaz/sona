@@ -155,6 +155,7 @@ export function AutomationRuleCard({
         <div className="automation-rule-exceptions">
           {blocked && runtime?.lastBlockedReason ? (
             <p>
+              {runtime.lastBlockedFilePath ? `${fileName(runtime.lastBlockedFilePath)}: ` : ''}
               {t(`automation.blocked_reason_${runtime.lastBlockedReason}`, {
                 defaultValue: runtime.lastBlockedReason,
               })}

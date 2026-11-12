@@ -109,7 +109,7 @@ function validateManifest(raw: unknown): BackupManifestV1 {
         typeof counts.automationProcessedEntries === 'number'
           ? counts.automationProcessedEntries
           : 0,
-      analyticsFiles: typeof counts.analyticsFiles === 'number' ? counts.analyticsFiles : 1,
+      analyticsFiles: typeof counts.analyticsFiles === 'number' ? counts.analyticsFiles : 0,
     },
   };
 }
