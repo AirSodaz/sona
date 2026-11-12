@@ -135,6 +135,32 @@ describe('PipelineExecutionEngine', () => {
     expect(result.exportPath).toBe('/path/to/export.txt');
   });
 
+  it('prefers the explicit exportMode over the pipeline value', async () => {
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: true,
+      enabled: true,
+      autoPolish: false,
+      autoTranslate: true,
+      autoSummary: false,
+      autoExport: true,
+      exportDirectory: '/exports',
+      exportFormat: 'txt',
+      exportMode: 'translation',
+    };
+
+    await engine.execute({
+      historyId: 'hist-1',
+      segments: mockSegments,
+      pipeline,
+      globalConfig: baseConfig,
+      exportMode: 'original',
+    });
+
+    expect(mockPorts.exportService.exportTranscriptToDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'original' })
+    );
+  });
+
   it('falls back to global configs when project overrides are omitted', async () => {
     const pipeline: EffectivePipelineSnapshot = {
       isProjectPipeline: false,

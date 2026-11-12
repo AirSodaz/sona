@@ -831,7 +831,9 @@ fn read_backup_automation_rules(
     let mut normalized = Vec::with_capacity(rules.len());
     for mut rule in rules {
         let Some(object) = rule.as_object_mut() else {
-            continue;
+            return Err(invalid_backup(
+                "Backup automation rules are invalid: expected an object.",
+            ));
         };
         if object.get("kind").and_then(Value::as_str) == Some("tag") {
             continue;

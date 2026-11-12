@@ -54,7 +54,7 @@ export function ToolAutomationPanel(): React.JSX.Element {
     } catch (error) {
       await showError({
         code: 'automation.delete_failed',
-        messageKey: 'errors.automation.save_failed',
+        messageKey: 'errors.automation.delete_failed',
         cause: error,
       });
     }

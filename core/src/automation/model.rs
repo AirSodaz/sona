@@ -28,6 +28,7 @@ pub struct AutomationRule {
     pub watch_directory: String,
     #[serde(default)]
     pub recursive: bool,
+    #[serde(default)]
     pub stage_config: AutomationRuleStageConfig,
     #[serde(default)]
     pub export_config: AutomationRuleExportConfig,

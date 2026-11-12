@@ -402,15 +402,16 @@ describe('tauri boundary wrappers', () => {
                 ...rule,
                 stageConfig: {
                   ...rule.stageConfig,
-                  polishPresetId: 'general',
-                  translationLanguage: 'en',
+                  polishPresetId: '',
+                  translationLanguage: '',
                 },
-                exportConfig: { ...rule.exportConfig, prefix: '' },
+                exportConfig: { ...rule.exportConfig, prefix: undefined },
               },
             ],
             processedEntries: [
               {
                 ...processedEntry,
+                attempt: undefined,
                 historyId: null,
                 exportPath: null,
                 errorMessage: null,

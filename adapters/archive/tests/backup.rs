@@ -738,6 +738,47 @@ fn imports_v3_archive_dropping_profiles_and_tag_rules_and_mapping_tag_ids() {
 }
 
 #[test]
+fn rejects_v3_archive_with_non_object_rule_entry() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("legacy-v3-null-rule.sona-backup");
+    let mut entries = valid_entries();
+    entries.retain(|entry| {
+        !matches!(
+            entry.path.as_str(),
+            "manifest.json" | "automation/rules.json"
+        )
+    });
+    entries.extend([
+        json_entry(
+            "manifest.json",
+            &json!({
+                "schemaVersion": 3,
+                "createdAt": "2026-07-13T00:00:00.000Z",
+                "appVersion": TEST_APP_VERSION,
+                "historyMode": "light",
+                "scopes": {"config": true, "workspace": true, "history": true, "automation": true, "analytics": true},
+                "counts": {
+                    "tags": 1, "historyItems": 1, "transcriptFiles": 1, "summaryFiles": 1,
+                    "automationProfiles": 0, "automationRules": 1,
+                    "automationProcessedEntries": 1, "analyticsFiles": 1
+                }
+            }),
+        ),
+        json_entry("automation/rules.json", &json!([null])),
+    ]);
+    write_entries(&archive_path, &entries);
+
+    let repository = FsBackupArchiveRepository::new();
+    let error = repository
+        .prepare_import(archive_path.to_str().unwrap())
+        .expect_err("non-object rule entry should fail the import");
+    assert!(
+        error.to_string().contains("expected an object"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
 fn export_rejects_snapshot_records_without_an_index() {
     let mut source = dataset();
     source.history.snapshot_files.remove(0);

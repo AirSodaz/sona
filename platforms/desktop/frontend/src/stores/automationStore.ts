@@ -51,6 +51,7 @@ import type {
 } from '../types/automation';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -306,7 +307,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
         await syncAutomationRuntimeRules();
       }
     } catch (error) {
-      await persistAutomationRules(previousRules);
+      await persistAutomationRules(previousRules).catch((rollbackError) => {
+        void logger.error(
+          'Failed to roll back automation rules after runtime sync failure',
+          rollbackError
+        );
+      });
       set((current) => ({
         rules: previousRules,
         runtimeStates: rebuildRuntimeStates(
@@ -315,6 +321,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           current.runtimeStates
         ),
       }));
+      await syncAutomationRuntimeRules().catch(() => undefined);
       throw error;
     }
 
@@ -382,7 +389,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       automationRuntimeCoordinator.clearRulePendingFingerprints(ruleId);
       await syncAutomationRuntimeRules();
     } catch (error) {
-      await persistAutomationRules(previousRules);
+      await persistAutomationRules(previousRules).catch((rollbackError) => {
+        void logger.error(
+          'Failed to roll back automation rules after runtime sync failure',
+          rollbackError
+        );
+      });
       set((current) => ({
         rules: previousRules,
         runtimeStates: rebuildRuntimeStates(
@@ -391,6 +403,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           current.runtimeStates
         ),
       }));
+      await syncAutomationRuntimeRules().catch(() => undefined);
       throw error;
     }
   },

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAutomationStore } from '../../../../../stores/automationStore';
+import { useDialogStore } from '../../../../../stores/dialogStore';
 import { useProjectStore } from '../../../../../stores/projectStore';
 import type { AutomationRule } from '../../../../../types/automation';
 import { ToolAutomationPanel } from '../ToolAutomationPanel';
@@ -45,10 +46,19 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
 
 describe('ToolAutomationPanel', () => {
   const saveRule = vi.fn();
+  const deleteRule = vi.fn();
+  const alert = vi.fn().mockResolvedValue(undefined);
+  const confirm = vi.fn().mockResolvedValue(true);
 
   beforeEach(() => {
     saveRule.mockReset();
     saveRule.mockResolvedValue(createRule());
+    deleteRule.mockReset();
+    deleteRule.mockResolvedValue(undefined);
+    alert.mockClear();
+    confirm.mockReset();
+    confirm.mockResolvedValue(true);
+    useDialogStore.setState({ alert, confirm });
     useProjectStore.setState({
       projects: [{ id: 'project-1', name: 'Team', createdAt: 1, updatedAt: 1 }],
     });
@@ -57,7 +67,7 @@ describe('ToolAutomationPanel', () => {
       processedEntries: [],
       runtimeStates: {},
       saveRule,
-      deleteRule: vi.fn(),
+      deleteRule,
       toggleRuleEnabled: vi.fn(),
       scanRuleNow: vi.fn(),
       retryFailed: vi.fn(),
@@ -144,5 +154,60 @@ describe('ToolAutomationPanel', () => {
     expect(screen.getByText('ASR missing')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retryFailedFile).toHaveBeenCalledWith('rule-1', 'C:\\raw\\bad.wav');
+  });
+  it('blocks save when the rule name or watch directory is missing', async () => {
+    render(<ToolAutomationPanel />);
+    fireEvent.click(screen.getByRole('button', { name: '+ New Rule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    expect(saveRule).not.toHaveBeenCalled();
+  });
+
+  it('requires an output directory for export-only rules', async () => {
+    render(<ToolAutomationPanel />);
+    fireEvent.click(screen.getByRole('button', { name: '+ New Rule' }));
+    fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), {
+      target: { value: 'Export Only' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor'), {
+      target: { value: 'C:\\watch' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Export Only (No History)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    expect(saveRule).not.toHaveBeenCalled();
+  });
+
+  it('asks for confirmation before deleting a rule', async () => {
+    useAutomationStore.setState({ rules: [createRule()] });
+    render(<ToolAutomationPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(deleteRule).toHaveBeenCalledWith('rule-1'));
+
+    deleteRule.mockClear();
+    confirm.mockResolvedValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(deleteRule).not.toHaveBeenCalled();
+  });
+
+  it('edits an existing rule keeping its id', async () => {
+    useAutomationStore.setState({ rules: [createRule()] });
+    render(<ToolAutomationPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), {
+      target: { value: 'Renamed Rule' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(saveRule).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'rule-1', name: 'Renamed Rule' })
+      )
+    );
   });
 });

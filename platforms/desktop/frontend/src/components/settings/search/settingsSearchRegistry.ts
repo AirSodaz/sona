@@ -1124,6 +1124,26 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
 
   // ---------------------------------------------------------------------------
+  // Automation (migrated to Tools)
+  // ---------------------------------------------------------------------------
+  {
+    id: 'automation-panel',
+    tab: 'automation',
+    targetId: 'settings-panel-migrated-automation',
+    tabKey: 'settings.automation',
+    titleKey: 'automation.file_rules',
+    keywords: [
+      'automation',
+      'watch folder',
+      'file rules',
+      '自動化',
+      '자동화',
+      '自动化',
+      'zidonghua',
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
   // API Server Tab
   // ---------------------------------------------------------------------------
   {

@@ -81,10 +81,6 @@ export const loadSettingsVocabularyTab = memoizeLoader(async () => {
   return resolveModuleComponent(module, 'SettingsVocabularyTab');
 });
 
-export const loadSettingsAutomationTab = memoizeLoader(async () => {
-  return { default: () => null };
-});
-
 export const loadSettingsStorageTab = memoizeLoader(async () => {
   const module = await import('./SettingsStorageTab');
   return resolveModuleComponent(module, 'SettingsStorageTab');

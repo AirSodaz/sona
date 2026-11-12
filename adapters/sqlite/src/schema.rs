@@ -31,7 +31,7 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
             )?;
         } else {
             // Legacy v7 and earlier schemas (the tag era) are deprecated and no longer
-            // auto-migrated. Only v8 -> v9 -> v10 migrations remain active.
+            // auto-migrated. Only v8 -> v9 -> v10 -> v11 migrations remain active.
             if applied_version < 9 {
                 migrate_v9(tx)?;
                 tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
@@ -1148,7 +1148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v10() {
+    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v11() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         connection
             .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")

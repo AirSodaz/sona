@@ -1342,3 +1342,188 @@ fn sync_repository_factory_opens_initializes_previews_and_exposes_application_st
     reopened.disconnect().unwrap();
     assert!(factory.open().unwrap().is_none());
 }
+
+fn rule_field_operation(
+    operation_id: &str,
+    physical_ms: u64,
+    entity_id: &str,
+    field: &str,
+    value: serde_json::Value,
+) -> SyncOperation {
+    SyncOperation {
+        operation_id: operation_id.to_string(),
+        source_device_id: "device-old".to_string(),
+        source_sequence: 1,
+        causal_context: SyncCausalContext::default(),
+        version: SyncVersion {
+            clock: HybridLogicalClock {
+                physical_ms,
+                logical: 0,
+            },
+            device_id: "device-old".to_string(),
+            operation_id: operation_id.to_string(),
+        },
+        entity: SyncEntityKey {
+            kind: SyncEntityKind::AutomationRule,
+            id: entity_id.to_string(),
+        },
+        kind: SyncOperationKind::SetField {
+            field: field.to_string(),
+            value,
+        },
+    }
+}
+
+#[test]
+fn retired_rule_fields_do_not_create_rule_rows() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-phantom".to_string(),
+        operations: vec![rule_field_operation(
+            "phantom-op-1",
+            3_000,
+            "rule-phantom",
+            "profileId",
+            json!("profile-legacy"),
+        )],
+    })
+    .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    assert!(state.rules.iter().all(|rule| rule.id != "rule-phantom"));
+}
+
+#[test]
+fn legacy_tag_ids_backfill_does_not_clobber_newer_save_history() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+    AutomationStore::replace_rules(
+        &automation,
+        &[AutomationRuleRecord {
+            id: "rule-1".to_string(),
+            name: "Export only".to_string(),
+            save_history: true,
+            project_id: "proj-1".to_string(),
+            watch_directory: String::new(),
+            recursive: false,
+            enabled: true,
+            stage_config: AutomationRuleRecordStageConfig {
+                auto_polish: false,
+                polish_preset_id: "general".to_string(),
+                auto_translate: false,
+                translation_language: "en".to_string(),
+            },
+            export_config: AutomationRuleRecordExportConfig {
+                directory: String::new(),
+                format: "srt".to_string(),
+                mode: "original".to_string(),
+                prefix: String::new(),
+            },
+            created_at: 1_000,
+            updated_at: 2_000,
+        }],
+    )
+    .unwrap();
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-legacy-tags".to_string(),
+        operations: vec![
+            rule_field_operation("history-op-1", 4_000, "rule-1", "saveHistory", json!(false)),
+            rule_field_operation(
+                "history-op-2",
+                3_000,
+                "rule-1",
+                "tagIds",
+                json!(["proj-from-tag"]),
+            ),
+        ],
+    })
+    .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    let rule = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-1")
+        .expect("rule should still exist");
+    assert_eq!(rule.project_id, "proj-from-tag");
+    assert!(!rule.save_history);
+}
+
+#[test]
+fn sync_changelog_records_normalized_project_id() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+    AutomationStore::replace_rules(
+        &automation,
+        &[AutomationRuleRecord {
+            id: "rule-1".to_string(),
+            name: "Export only".to_string(),
+            save_history: false,
+            project_id: "proj-x".to_string(),
+            watch_directory: String::new(),
+            recursive: false,
+            enabled: true,
+            stage_config: AutomationRuleRecordStageConfig {
+                auto_polish: false,
+                polish_preset_id: "general".to_string(),
+                auto_translate: false,
+                translation_language: "en".to_string(),
+            },
+            export_config: AutomationRuleRecordExportConfig {
+                directory: String::new(),
+                format: "srt".to_string(),
+                mode: "original".to_string(),
+                prefix: String::new(),
+            },
+            created_at: 1_000,
+            updated_at: 2_000,
+        }],
+    )
+    .unwrap();
+
+    let pending = sync
+        .load_pending_operations(SyncPresetV1::Full, 256, usize::MAX)
+        .unwrap();
+    let project_id_operation = pending
+        .iter()
+        .find(|operation| {
+            operation.entity.kind == SyncEntityKind::AutomationRule
+                && operation.kind.field() == Some("projectId")
+        })
+        .expect("projectId should be captured");
+    assert_eq!(
+        project_id_operation.kind,
+        SyncOperationKind::SetField {
+            field: "projectId".to_string(),
+            value: json!(""),
+        }
+    );
+}

@@ -393,7 +393,7 @@ export interface VocabularyConfig {
 
 /** Base application configuration fields. */
 export interface BaseConfig {
-  /** Schema version for the configuration file. Current version: 8. */
+  /** Schema version for the configuration file. Current version: 9. */
   configVersion?: number;
 }
 

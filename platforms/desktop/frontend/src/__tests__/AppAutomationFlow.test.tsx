@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { useToolsStore } from '../stores/toolsStore';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -82,6 +83,11 @@ vi.mock('../stores/onboardingStore', () => ({
 }));
 
 describe('App automation flow', () => {
+  beforeEach(() => {
+    setMode.mockClear();
+    useToolsStore.setState({ activeTool: 'subtitles' });
+  });
+
   it('opens the automation tool from the notification center entry', async () => {
     mockUseTranscriptRuntimeStore.mockImplementation(
       (selector: (state: Record<string, unknown>) => unknown) =>
@@ -110,6 +116,7 @@ describe('App automation flow', () => {
 
     expect(screen.queryByText('Settings Tab: automation')).toBeNull();
     expect(setMode).toHaveBeenCalledWith('tools');
+    expect(useToolsStore.getState().activeTool).toBe('automation');
   });
 
   it('does not render an automation shortcut button in the batch panel header', async () => {
@@ -140,5 +147,6 @@ describe('App automation flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
     expect(screen.queryByText('Settings Tab: automation')).toBeNull();
     expect(setMode).toHaveBeenCalledWith('tools');
+    expect(useToolsStore.getState().activeTool).toBe('automation');
   });
 });

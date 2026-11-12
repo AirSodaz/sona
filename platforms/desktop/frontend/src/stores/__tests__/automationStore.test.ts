@@ -35,6 +35,7 @@ const testContext = vi.hoisted(() => {
     projectRecord,
     projectState: {
       activeProjectId: projectRecord.id,
+      projects: [projectRecord],
       getActiveProject: vi.fn(() => projectRecord),
       getProjectById: vi.fn((projectId: string | null | undefined) =>
         projectId === projectRecord.id ? projectRecord : null
@@ -441,6 +442,22 @@ describe('automationStore', () => {
     ).rejects.toThrow('Missing batch model.');
 
     expect(saveAutomationRulesMock).not.toHaveBeenCalled();
+  });
+
+  it('restores the runtime watcher set when activation fails after persist', async () => {
+    const rule = createRule({ enabled: false });
+    useAutomationStore.setState({ rules: [rule], runtimeStates: {} });
+    replaceAutomationRuntimeRulesMock.mockResolvedValueOnce([
+      { ruleId: rule.id, started: false, error: 'watch failed' },
+    ]);
+
+    await expect(useAutomationStore.getState().toggleRuleEnabled(rule.id, true)).rejects.toThrow(
+      'watch failed'
+    );
+
+    expect(useAutomationStore.getState().rules[0].enabled).toBe(false);
+    expect(saveAutomationRulesMock).toHaveBeenLastCalledWith([rule]);
+    expect(replaceAutomationRuntimeRulesMock).toHaveBeenLastCalledWith([]);
   });
 
   it('records runtime validation failures as non-retryable notifications', async () => {

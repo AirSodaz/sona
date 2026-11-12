@@ -15,7 +15,6 @@ import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
 vi.mock('../../../services/automation/automationRepository', () => ({
   loadAutomationRepositoryState: vi.fn(),
   persistAutomationProcessedEntries: vi.fn().mockResolvedValue(undefined),
-  persistAutomationProfiles: vi.fn().mockResolvedValue(undefined),
   persistAutomationRepositoryState: vi.fn().mockResolvedValue(undefined),
   persistAutomationRules: vi.fn().mockResolvedValue(undefined),
   validateAutomationRuleActivation: vi.fn().mockResolvedValue(undefined),

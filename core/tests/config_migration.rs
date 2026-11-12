@@ -455,4 +455,9 @@ fn migration_v9_strips_legacy_global_auto_keys_and_preserves_fallbacks() {
     let cleaned = migrate_app_config(Some(dirty_v9), "Default Rules".to_string());
     assert!(cleaned.migrated);
     assert!(cleaned.config.get("autoPolish").is_none());
+
+    // Re-migrating an already-cleaned v9 config is a fixed point.
+    let again = migrate_app_config(Some(cleaned.config.clone()), "Default Rules".to_string());
+    assert!(!again.migrated);
+    assert_eq!(again.config, cleaned.config);
 }

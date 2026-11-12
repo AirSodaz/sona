@@ -220,9 +220,14 @@ fn record_automation_rules_sync(
         let now_ms = u64::try_from(rule.updated_at)
             .or_else(|_| u64::try_from(rule.created_at))
             .unwrap_or(fallback_now_ms);
+        let project_id = if rule.save_history {
+            rule.project_id.as_str()
+        } else {
+            ""
+        };
         for (field, value) in [
             ("name", serde_json::json!(rule.name)),
-            ("projectId", serde_json::json!(rule.project_id)),
+            ("projectId", serde_json::json!(project_id)),
             ("saveHistory", serde_json::json!(rule.save_history)),
             ("recursive", serde_json::json!(rule.recursive)),
             (

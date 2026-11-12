@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { useToolsStore } from '../stores/toolsStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 
@@ -217,6 +218,7 @@ describe('App settings preload', () => {
     });
     expect(preloadSettingsTabMock).not.toHaveBeenCalledWith('automation');
     expect(screen.queryByText('Settings Tab: automation')).toBeNull();
+    expect(useToolsStore.getState().activeTool).toBe('automation');
 
     fireEvent.click(settingsButton);
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();

@@ -226,10 +226,15 @@ export function AutomationRuleModal({
             aria-label={t('automation.recursive', { defaultValue: 'Include Subdirectories' })}
           />
         </div>
-        <div className="automation-mode-switch" role="group">
+        <div
+          className="automation-mode-switch"
+          role="group"
+          aria-label={t('automation.save_mode', { defaultValue: 'Save mode' })}
+        >
           <button
             type="button"
             className={saveHistory ? 'is-active' : ''}
+            aria-pressed={saveHistory}
             onClick={() => setSaveHistory(true)}
           >
             {t('automation.save_to_project', { defaultValue: 'Save to Project' })}
@@ -237,6 +242,7 @@ export function AutomationRuleModal({
           <button
             type="button"
             className={!saveHistory ? 'is-active' : ''}
+            aria-pressed={!saveHistory}
             onClick={() => setSaveHistory(false)}
           >
             {t('automation.export_only', { defaultValue: 'Export Only (No History)' })}

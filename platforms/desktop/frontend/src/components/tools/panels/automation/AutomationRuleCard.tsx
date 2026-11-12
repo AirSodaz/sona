@@ -97,7 +97,10 @@ export function AutomationRuleCard({
         <Switch
           checked={rule.enabled}
           onChange={(enabled) => void onToggle(rule.id, enabled)}
-          aria-label={t('automation.toggle_rule', { defaultValue: 'Enable rule' })}
+          aria-label={t('automation.toggle_rule', {
+            defaultValue: 'Enable {{name}}',
+            name: rule.name,
+          })}
         />
       </header>
       <p className="automation-rule-flow">

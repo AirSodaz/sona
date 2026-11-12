@@ -96,7 +96,7 @@ export function SettingsContextSection(): React.JSX.Element {
         <SettingsItem
           title={t('projects.polish_preset', { defaultValue: 'Default Polish Preset' })}
           hint={t('settings.context_default_hint', {
-            defaultValue: 'Automation profiles can override this selection.',
+            defaultValue: 'Projects can still override this with their own preset selection.',
           })}
         >
           <div style={{ width: '280px', maxWidth: '100%' }}>

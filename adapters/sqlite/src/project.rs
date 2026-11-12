@@ -368,6 +368,10 @@ fn upsert_tags_in_transaction(
 pub(crate) fn delete_tags_in_transaction(
     tx: &rusqlite::Transaction<'_>,
 ) -> Result<(), DatabaseError> {
+    tx.execute(
+        "UPDATE automation_rules SET project_id = '' WHERE project_id != ''",
+        [],
+    )?;
     tx.execute("DELETE FROM projects", [])?;
     Ok(())
 }
@@ -388,6 +392,12 @@ pub(crate) fn replace_tags_in_transaction(
     }
     tx.execute(
         "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
+        [],
+    )?;
+    tx.execute(
+        "UPDATE automation_rules SET project_id = ''
+         WHERE project_id != ''
+           AND project_id NOT IN (SELECT id FROM keep_projects)",
         [],
     )?;
     tx.execute("DROP TABLE keep_projects", [])?;
@@ -486,6 +496,10 @@ where
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
+                    tx.execute(
+                        "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+                        [tag_id],
+                    )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [tag_id])?;
                     record_local_delete_in_transaction(
                         tx,

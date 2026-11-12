@@ -610,7 +610,7 @@ export type AutomationRule = {
 	projectId?: string,
 	watchDirectory?: string,
 	recursive?: boolean,
-	stageConfig: AutomationRuleStageConfig,
+	stageConfig?: AutomationRuleStageConfig,
 	exportConfig?: AutomationRuleExportConfig,
 };
 

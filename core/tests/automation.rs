@@ -148,6 +148,17 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
 }
 
 #[test]
+fn legacy_rule_json_without_stage_config_defaults() {
+    let rule: AutomationRule =
+        serde_json::from_value(json!({"name": "Legacy", "watchDirectory": "C:\\watch"}))
+            .expect("legacy payload without stageConfig should deserialize");
+
+    assert!(!rule.stage_config.auto_polish);
+    assert!(!rule.stage_config.auto_translate);
+    assert!(rule.project_id.is_empty());
+}
+
+#[test]
 fn resolves_trimmed_batch_model_path() {
     let config = json!({
         "asr": {

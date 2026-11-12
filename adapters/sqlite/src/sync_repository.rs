@@ -2150,10 +2150,6 @@ fn apply_automation_rule_field(
     field: &str,
     value: &Value,
 ) -> Result<(), DatabaseError> {
-    transaction.execute(
-        "INSERT OR IGNORE INTO automation_rules (id) VALUES (?1)",
-        [entity_id],
-    )?;
     if matches!(
         field,
         "kind"
@@ -2167,6 +2163,10 @@ fn apply_automation_rule_field(
     ) {
         return Ok(());
     }
+    transaction.execute(
+        "INSERT OR IGNORE INTO automation_rules (id) VALUES (?1)",
+        [entity_id],
+    )?;
     if field == "tagIds" {
         let tag_ids = json_string_array(value, field)?;
         if let Some(project_id) = tag_ids
@@ -2175,7 +2175,7 @@ fn apply_automation_rule_field(
             .find(|id| !matches!(id.as_str(), "" | "inbox" | "none"))
         {
             transaction.execute(
-                "UPDATE automation_rules SET project_id = ?1, save_history = 1 WHERE id = ?2",
+                "UPDATE automation_rules SET project_id = ?1 WHERE id = ?2",
                 params![project_id, entity_id],
             )?;
         }

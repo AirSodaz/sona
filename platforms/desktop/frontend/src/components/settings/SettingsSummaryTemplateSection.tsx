@@ -93,18 +93,18 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       <SettingsSection
         id="settings-vocabulary-summary-templates"
         title={t('settings.summary_templates_default_title', {
-          defaultValue: 'Summary Automation & Templates',
+          defaultValue: 'Summary Templates',
         })}
         description={t('settings.summary_templates_default_description', {
-          defaultValue:
-            'Configure automatic summarization and choose which summary template is used by default.',
+          defaultValue: 'Choose which summary template is used by default.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
         <SettingsItem
           title={t('projects.summary_template', { defaultValue: 'Default Summary Template' })}
           hint={t('settings.summary_templates_default_hint', {
-            defaultValue: 'Automation profiles can override this selection.',
+            defaultValue:
+              'Projects can still choose a different summary template in project settings.',
           })}
         >
           <div style={{ width: '280px', maxWidth: '100%' }}>
