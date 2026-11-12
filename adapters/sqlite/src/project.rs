@@ -166,6 +166,10 @@ where
                         "DELETE FROM app_settings WHERE key = ?1 AND (value = ?2 OR json_extract(value, '$') = ?2)",
                         rusqlite::params![ACTIVE_PROJECT_SETTINGS_KEY, project_id],
                     )?;
+                    tx.execute(
+                        "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+                        [project_id],
+                    )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
                     record_local_delete_in_transaction(
                         tx,

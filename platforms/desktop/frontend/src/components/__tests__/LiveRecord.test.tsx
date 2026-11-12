@@ -1028,6 +1028,7 @@ describe('LiveRecord', () => {
             ...DEFAULT_PROJECT_PIPELINE,
             enabled: true,
             autoPolish: true,
+            autoPolishFrequency: 1,
             polishPresetId: 'formal',
           },
         },

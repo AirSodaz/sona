@@ -1,41 +1,49 @@
+/* ==========================================================================
+   Automation Tool Panel & Rules
+   ========================================================================== */
+
 .automation-rule-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.automation-empty,
-.automation-export-notice,
-.automation-pipeline-card {
-  color: var(--text-secondary, var(--muted));
+.automation-empty {
+  color: var(--color-text-secondary, #787774);
+  font-size: 13px;
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
 }
+
+/* ==========================================================================
+   Automation Rule Card
+   ========================================================================== */
 
 .automation-rule-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.automation-rule-card-header,
-.automation-rule-flow,
-.automation-rule-actions,
-.automation-path-row,
-.automation-switch-row,
-.automation-mode-switch,
-.automation-failed-entry,
-.automation-modal-footer {
+.automation-rule-card:hover {
+  border-color: var(--color-border-hover, var(--color-border));
+  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.05));
+}
+
+.automation-rule-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.automation-rule-card-header,
-.automation-failed-entry,
-.automation-modal-footer {
   justify-content: space-between;
+  gap: 12px;
 }
 
 .automation-rule-card-title {
@@ -46,56 +54,148 @@
   min-width: 0;
 }
 
-.automation-status-dot,
-.automation-status-chip,
-.automation-recursive-badge {
-  border-radius: 999px;
+.automation-rule-card-title strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .automation-status-dot {
   width: 8px;
   height: 8px;
-  background: var(--muted);
+  border-radius: 999px;
+  background: var(--color-text-muted, #9b9a97);
+  flex-shrink: 0;
 }
 
 .automation-status-dot.is-watching,
 .automation-status-dot.is-scanning {
-  background: var(--success);
+  background: var(--color-success, #4ea067);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success, #4ea067) 20%, transparent);
 }
 
 .automation-status-dot.is-error {
-  background: var(--error);
+  background: var(--color-error, #e03e3e);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-error, #e03e3e) 20%, transparent);
 }
 
 .automation-status-chip,
 .automation-recursive-badge {
+  display: inline-flex;
+  align-items: center;
   padding: 2px 8px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 12px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
 }
 
 .automation-rule-flow {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
-.automation-rule-form,
-.automation-rule-exceptions,
+.automation-rule-flow span:not(.automation-recursive-badge) {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--color-border);
+}
+
+.automation-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-rule-exceptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--color-error, #e03e3e) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error, #e03e3e) 20%, transparent);
+  border-radius: var(--radius-md, 8px);
+}
+
+.automation-rule-exceptions > p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-error, #e03e3e);
+  font-weight: 500;
+}
+
+.automation-failed-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .automation-failed-entry > div {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.automation-failed-entry strong {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.automation-failed-entry span {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+/* ==========================================================================
+   Automation Rule Modal & Form
+   ========================================================================== */
+
+.automation-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0;
 }
 
 .automation-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
 }
 
-.automation-field input,
-.automation-path-row input {
+.automation-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: -0.01em;
+}
+
+.automation-path-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
 }
 
@@ -103,16 +203,172 @@
   flex: 1;
 }
 
+.automation-browse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 12px;
+}
+
+/* Switch Row */
+.automation-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  user-select: none;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.automation-switch-row > span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* Mode Switch (Segmented Control) */
+.automation-mode-switch {
+  display: flex;
+  background: var(--color-bg-secondary);
+  padding: 3px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border);
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .automation-mode-switch button {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: calc(var(--radius-md, 8px) - 2px);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  user-select: none;
+}
+
+.automation-mode-switch button:hover:not(.is-active) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
 }
 
 .automation-mode-switch button.is-active {
-  border-color: var(--accent);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+  font-weight: 600;
 }
 
+/* Pipeline Card in Modal */
 .automation-pipeline-card {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-secondary);
+}
+
+.automation-pipeline-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.automation-pipeline-stages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automation-pipeline-stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.03));
+}
+
+.automation-stage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-success, #4ea067);
+}
+
+.automation-pipeline-empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Nested Fields (Dependent on Switch) */
+.automation-nested-field {
+  padding-left: 14px;
+  border-left: 2px solid var(--color-border);
+  margin-top: -4px;
+}
+
+.automation-nested-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-left: 14px;
+  border-left: 2px solid var(--color-border);
+  margin-top: -4px;
+}
+
+/* Export Notice */
+.automation-export-notice {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Modal Footer */
+.automation-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
 }

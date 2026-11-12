@@ -37,8 +37,8 @@ describe('configStore - useApiServerConfig', () => {
   });
 
   it('exports CURRENT_CONFIG_VERSION aligned with DEFAULT_CONFIG.configVersion', () => {
-    expect(CURRENT_CONFIG_VERSION).toBe(8);
-    expect(DEFAULT_CONFIG.configVersion).toBe(8);
+    expect(CURRENT_CONFIG_VERSION).toBe(9);
+    expect(DEFAULT_CONFIG.configVersion).toBe(9);
   });
 
   it('includes captionTranslationFontSize and captionTranslationFontColor in DEFAULT_CONFIG', () => {

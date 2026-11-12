@@ -143,7 +143,7 @@ export function AutomationRuleCard({
         <div className="automation-rule-exceptions">
           {blocked && runtime?.lastBlockedReason ? (
             <p>
-              {t(`automation.blocked.${runtime.lastBlockedReason}`, {
+              {t(`automation.blocked_reason_${runtime.lastBlockedReason}`, {
                 defaultValue: runtime.lastBlockedReason,
               })}
             </p>

@@ -16,6 +16,7 @@ import { getPolishPresetOptions } from '../../../../utils/polishPresets';
 import { Dropdown } from '../../../Dropdown';
 import { Modal } from '../../../Modal';
 import { Switch } from '../../../Switch';
+import './ToolAutomationPanel.css';
 
 interface AutomationRuleModalProps {
   rule: AutomationRule | null;
@@ -185,6 +186,7 @@ export function AutomationRuleModal({
         <label className="automation-field">
           <span>{t('automation.rule_name', { defaultValue: 'Rule Name' })}</span>
           <input
+            type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t('automation.rule_name_placeholder', {
@@ -196,6 +198,7 @@ export function AutomationRuleModal({
           <span>{t('automation.watch_directory', { defaultValue: 'Watch Directory' })}</span>
           <div className="automation-path-row">
             <input
+              type="text"
               value={watchDirectory}
               onChange={(event) => setWatchDirectory(event.target.value)}
               placeholder={t('automation.watch_directory_placeholder', {
@@ -204,7 +207,7 @@ export function AutomationRuleModal({
             />
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary automation-browse-btn"
               aria-label={t('automation.browse', { defaultValue: 'Browse' })}
               onClick={() => void browse(watchDirectory, setWatchDirectory)}
             >
@@ -248,14 +251,20 @@ export function AutomationRuleModal({
               />
             </label>
             <div className="automation-pipeline-card">
+              <span className="automation-pipeline-card-label">
+                {t('automation.pipeline_preset', { defaultValue: 'Project Pipeline' })}
+              </span>
               {enabledStages.length > 0 ? (
-                <ul>
+                <ul className="automation-pipeline-stages">
                   {enabledStages.map((stage) => (
-                    <li key={stage}>{stage}</li>
+                    <li key={stage} className="automation-pipeline-stage-chip">
+                      <span className="automation-stage-dot" aria-hidden="true" />
+                      {stage}
+                    </li>
                   ))}
                 </ul>
               ) : (
-                <p>
+                <p className="automation-pipeline-empty">
                   {t('automation.transcribe_only', {
                     defaultValue: 'Transcribe only — no project pipeline enabled',
                   })}
@@ -269,6 +278,7 @@ export function AutomationRuleModal({
               <span>{t('automation.output_directory', { defaultValue: 'Output Directory' })}</span>
               <div className="automation-path-row">
                 <input
+                  type="text"
                   value={exportDirectory}
                   onChange={(event) => setExportDirectory(event.target.value)}
                   placeholder={t('automation.output_directory_placeholder', {
@@ -277,7 +287,7 @@ export function AutomationRuleModal({
                 />
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-secondary automation-browse-btn"
                   aria-label={t('automation.browse_output', { defaultValue: 'Browse output' })}
                   onClick={() => void browse(exportDirectory, setExportDirectory)}
                 >
@@ -306,12 +316,17 @@ export function AutomationRuleModal({
               />
             </div>
             {autoPolish ? (
-              <Dropdown
-                options={polishOptions}
-                value={polishPresetId}
-                onChange={setPolishPresetId}
-                aria-label={t('automation.polish_preset', { defaultValue: 'Polish Preset' })}
-              />
+              <div className="automation-nested-field">
+                <label className="automation-field">
+                  <span>{t('automation.polish_preset', { defaultValue: 'Polish Preset' })}</span>
+                  <Dropdown
+                    options={polishOptions}
+                    value={polishPresetId}
+                    onChange={setPolishPresetId}
+                    aria-label={t('automation.polish_preset', { defaultValue: 'Polish Preset' })}
+                  />
+                </label>
+              </div>
             ) : null}
             <div className="automation-switch-row">
               <span>{t('automation.auto_translate', { defaultValue: 'Auto Translate' })}</span>
@@ -322,20 +337,30 @@ export function AutomationRuleModal({
               />
             </div>
             {autoTranslate ? (
-              <>
-                <Dropdown
-                  options={languageOptions}
-                  value={translationLanguage}
-                  onChange={setTranslationLanguage}
-                  aria-label={t('automation.target_language', { defaultValue: 'Target Language' })}
-                />
-                <Dropdown
-                  options={EXPORT_MODES.map((mode) => ({ value: mode, label: mode }))}
-                  value={exportMode}
-                  onChange={(value) => setExportMode(value as ExportMode)}
-                  aria-label={t('automation.export_mode', { defaultValue: 'Export Mode' })}
-                />
-              </>
+              <div className="automation-nested-grid">
+                <label className="automation-field">
+                  <span>
+                    {t('automation.target_language', { defaultValue: 'Target Language' })}
+                  </span>
+                  <Dropdown
+                    options={languageOptions}
+                    value={translationLanguage}
+                    onChange={setTranslationLanguage}
+                    aria-label={t('automation.target_language', {
+                      defaultValue: 'Target Language',
+                    })}
+                  />
+                </label>
+                <label className="automation-field">
+                  <span>{t('automation.export_mode', { defaultValue: 'Export Mode' })}</span>
+                  <Dropdown
+                    options={EXPORT_MODES.map((mode) => ({ value: mode, label: mode }))}
+                    value={exportMode}
+                    onChange={(value) => setExportMode(value as ExportMode)}
+                    aria-label={t('automation.export_mode', { defaultValue: 'Export Mode' })}
+                  />
+                </label>
+              </div>
             ) : null}
             <p className="automation-export-notice">
               {t('automation.export_only_notice', {

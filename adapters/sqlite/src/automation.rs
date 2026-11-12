@@ -156,7 +156,7 @@ where
     fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
                     let previous = load_rules(tx)?;
                     tx.execute("DELETE FROM automation_rules", [])?;
                     insert_rules(tx, rules)?;
@@ -173,7 +173,7 @@ where
     ) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
                     tx.execute("DELETE FROM automation_processed", [])?;
                     insert_processed_entries(tx, entries)?;
                     Ok(())
@@ -185,7 +185,7 @@ where
     fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
                     let previous_rules = load_rules(tx)?;
                     replace_automation_in_transaction(tx, state)?;
                     record_automation_rules_sync(tx, &previous_rules, &state.rules)

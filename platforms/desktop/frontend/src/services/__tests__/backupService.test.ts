@@ -200,7 +200,7 @@ import { applyImportBackup, exportBackup, prepareImportBackup } from '../backupS
 
 function makeManifest() {
   return {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     createdAt: '2026-04-29T00:00:00.000Z',
     appVersion: packageJson.version,
     historyMode: 'light' as const,
@@ -216,7 +216,6 @@ function makeManifest() {
       historyItems: 1,
       transcriptFiles: 1,
       summaryFiles: 1,
-      automationProfiles: 0,
       automationRules: 1,
       automationProcessedEntries: 1,
       analyticsFiles: 1,

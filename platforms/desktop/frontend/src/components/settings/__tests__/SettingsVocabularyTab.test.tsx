@@ -326,17 +326,17 @@ describe('SettingsVocabularyTab', () => {
     render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Polish Automation & Presets');
+    expect(screen.getAllByText('Default Polish Preset').length).toBeGreaterThan(0);
     expect(screen.queryByText('Translation Automation')).toBeNull();
     expect(screen.queryByText('Summary Automation & Default')).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));
-    expect(screen.queryByText('Summary Automation & Templates')).toBeNull();
-    expect(screen.queryByText('Polish Automation & Presets')).toBeNull();
+    expect(screen.queryByText('Custom Summary Templates')).toBeNull();
+    expect(screen.queryAllByText('Default Polish Preset')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Summary' }));
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Summary Automation & Templates');
+    screen.getByText('Custom Summary Templates');
     expect(screen.queryByText('Translation Automation')).toBeNull();
 
     const promptsTablist = screen.getByRole('tablist', {
@@ -344,7 +344,7 @@ describe('SettingsVocabularyTab', () => {
     });
     fireEvent.keyDown(promptsTablist, { key: 'ArrowRight' });
     expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Polish Automation & Presets');
+    expect(screen.getAllByText('Default Polish Preset').length).toBeGreaterThan(0);
 
     fireEvent.keyDown(promptsTablist, { key: 'ArrowLeft' });
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');

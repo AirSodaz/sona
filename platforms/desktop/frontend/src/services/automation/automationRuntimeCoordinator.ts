@@ -104,6 +104,7 @@ export class AutomationRuntimeCoordinator {
   private pendingFingerprints = new Set<string>();
   private successNotificationSequence = 0;
   private automationRuntimeCandidateUnlisten: (() => void) | null = null;
+  private candidateListenerPromise: Promise<void> | null = null;
   private automationTaskSettledUnlisten: (() => void) | null = null;
 
   constructor(private readonly ports: AutomationRuntimeCoordinatorPorts) {}
@@ -650,15 +651,30 @@ export class AutomationRuntimeCoordinator {
     if (this.automationRuntimeCandidateUnlisten) {
       return;
     }
+    if (this.candidateListenerPromise) {
+      return this.candidateListenerPromise;
+    }
 
-    this.automationRuntimeCandidateUnlisten = await this.ports.listenToAutomationRuntimeCandidates(
-      (payload) => {
-        void this.handleRuntimeCandidatePayload(payload);
+    this.candidateListenerPromise = (async () => {
+      try {
+        const unlisten = await this.ports.listenToAutomationRuntimeCandidates((payload) => {
+          void this.handleRuntimeCandidatePayload(payload);
+        });
+        if (this.automationRuntimeCandidateUnlisten) {
+          unlisten();
+        } else {
+          this.automationRuntimeCandidateUnlisten = unlisten;
+        }
+      } finally {
+        this.candidateListenerPromise = null;
       }
-    );
+    })();
+
+    return this.candidateListenerPromise;
   };
 
   clearRuntimeCandidateListener = (): void => {
+    this.candidateListenerPromise = null;
     if (!this.automationRuntimeCandidateUnlisten) {
       return;
     }
