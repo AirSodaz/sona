@@ -3,6 +3,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAutomationStore } from '../../../../stores/automationStore';
+import { useDialogStore } from '../../../../stores/dialogStore';
 import type { AutomationRule } from '../../../../types/automation';
 import { SettingsTabContainer } from '../../../settings/SettingsLayout';
 import { ToolHeroHeader } from '../../ToolHeroHeader';
@@ -20,7 +21,68 @@ export function ToolAutomationPanel(): React.JSX.Element {
   const scanRuleNow = useAutomationStore((state) => state.scanRuleNow);
   const retryFailed = useAutomationStore((state) => state.retryFailed);
   const retryFailedFile = useAutomationStore((state) => state.retryFailedFile);
+  const showError = useDialogStore((state) => state.showError);
   const [editing, setEditing] = useState<AutomationRule | null | undefined>(undefined);
+
+  const handleToggleRule = async (ruleId: string, enabled: boolean) => {
+    try {
+      await toggleRuleEnabled(ruleId, enabled);
+    } catch (error) {
+      await showError({
+        code: 'automation.toggle_failed',
+        messageKey: 'errors.automation.toggle_failed',
+        cause: error,
+      });
+    }
+  };
+
+  const handleScanRule = async (ruleId: string) => {
+    try {
+      await scanRuleNow(ruleId);
+    } catch (error) {
+      await showError({
+        code: 'automation.scan_failed',
+        messageKey: 'errors.automation.scan_failed',
+        cause: error,
+      });
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: string) => {
+    try {
+      await deleteRule(ruleId);
+    } catch (error) {
+      await showError({
+        code: 'automation.delete_failed',
+        messageKey: 'errors.automation.save_failed',
+        cause: error,
+      });
+    }
+  };
+
+  const handleRetryFailed = async (ruleId: string) => {
+    try {
+      await retryFailed(ruleId);
+    } catch (error) {
+      await showError({
+        code: 'automation.retry_failed',
+        messageKey: 'errors.automation.retry_failed',
+        cause: error,
+      });
+    }
+  };
+
+  const handleRetryFailedFile = async (ruleId: string, filePath: string) => {
+    try {
+      await retryFailedFile(ruleId, filePath);
+    } catch (error) {
+      await showError({
+        code: 'automation.retry_failed',
+        messageKey: 'errors.automation.retry_failed',
+        cause: error,
+      });
+    }
+  };
 
   const summary = useMemo(() => {
     const hasError = rules.some(
@@ -80,17 +142,21 @@ export function ToolAutomationPanel(): React.JSX.Element {
               runtime={runtimeStates[rule.id]}
               processedEntries={processedEntries}
               onEdit={setEditing}
-              onDelete={deleteRule}
-              onToggle={toggleRuleEnabled}
-              onScan={scanRuleNow}
-              onRetryFailed={retryFailed}
-              onRetryFile={retryFailedFile}
+              onDelete={handleDeleteRule}
+              onToggle={handleToggleRule}
+              onScan={handleScanRule}
+              onRetryFailed={handleRetryFailed}
+              onRetryFile={handleRetryFailedFile}
             />
           ))}
         </div>
       )}
       {editing !== undefined ? (
-        <AutomationRuleModal rule={editing} onClose={() => setEditing(undefined)} />
+        <AutomationRuleModal
+          key={editing?.id ?? 'new'}
+          rule={editing}
+          onClose={() => setEditing(undefined)}
+        />
       ) : null}
     </SettingsTabContainer>
   );

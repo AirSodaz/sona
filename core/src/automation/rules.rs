@@ -36,6 +36,9 @@ pub fn validate_rule_activation(
         );
     }
 
+    // When saving into history, recordings are ingested into the target project (or Inbox).
+    // Post-processing stages (polish/translate/summary/export) are governed by the project's
+    // dynamic pipeline at execution time and do not block folder monitoring activation.
     if rule.save_history {
         let project_id = rule.project_id.trim();
         if !project_id.is_empty()

@@ -283,6 +283,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       await validateRuleBeforeActivation(nextRule);
     }
 
+    const previousRules = state.rules;
     const nextRules = existing
       ? state.rules.map((rule) => (rule.id === existing.id ? nextRule : rule))
       : [nextRule, ...state.rules];
@@ -297,11 +298,24 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       ),
     }));
 
-    if (nextRule.enabled) {
-      await syncAutomationRuntimeRules({ throwForRuleId: nextRule.id });
-    } else {
-      automationRuntimeCoordinator.clearRulePendingFingerprints(nextRule.id);
-      await syncAutomationRuntimeRules();
+    try {
+      if (nextRule.enabled) {
+        await syncAutomationRuntimeRules({ throwForRuleId: nextRule.id });
+      } else {
+        automationRuntimeCoordinator.clearRulePendingFingerprints(nextRule.id);
+        await syncAutomationRuntimeRules();
+      }
+    } catch (error) {
+      await persistAutomationRules(previousRules);
+      set((current) => ({
+        rules: previousRules,
+        runtimeStates: rebuildRuntimeStates(
+          previousRules,
+          current.processedEntries,
+          current.runtimeStates
+        ),
+      }));
+      throw error;
     }
 
     return nextRule;
@@ -342,6 +356,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       });
     }
 
+    const previousRules = state.rules;
     const nextRule = {
       ...targetRule,
       enabled,
@@ -358,13 +373,26 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       ),
     }));
 
-    if (enabled) {
-      await syncAutomationRuntimeRules({ throwForRuleId: ruleId });
-      return;
-    }
+    try {
+      if (enabled) {
+        await syncAutomationRuntimeRules({ throwForRuleId: ruleId });
+        return;
+      }
 
-    automationRuntimeCoordinator.clearRulePendingFingerprints(ruleId);
-    await syncAutomationRuntimeRules();
+      automationRuntimeCoordinator.clearRulePendingFingerprints(ruleId);
+      await syncAutomationRuntimeRules();
+    } catch (error) {
+      await persistAutomationRules(previousRules);
+      set((current) => ({
+        rules: previousRules,
+        runtimeStates: rebuildRuntimeStates(
+          previousRules,
+          current.processedEntries,
+          current.runtimeStates
+        ),
+      }));
+      throw error;
+    }
   },
 
   scanRuleNow: async (ruleId) => {

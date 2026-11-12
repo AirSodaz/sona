@@ -834,6 +834,7 @@
     "blocked_reason_already_pending": "已在队列中",
     "blocked_reason_recovery_blocked": "被恢复保护阻止",
     "blocked_reason_project_missing": "目标项目不存在",
+    "project_missing": "关联项目已缺失",
     "blocked_reason_retry_source_missing": "重试源文件不可用",
     "watching_count": "监控中 · {{count}}",
     "empty": "暂无自动化规则。",

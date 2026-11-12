@@ -834,6 +834,7 @@
     "blocked_reason_already_pending": "already queued",
     "blocked_reason_recovery_blocked": "blocked by recovery",
     "blocked_reason_project_missing": "target project is missing",
+    "project_missing": "Missing Project",
     "blocked_reason_retry_source_missing": "retry source is unavailable",
     "watching_count": "Watching · {{count}}",
     "empty": "No automation rules yet.",

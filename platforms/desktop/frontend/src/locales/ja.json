@@ -834,6 +834,7 @@
     "blocked_reason_already_pending": "すでにキューに入れられています",
     "blocked_reason_recovery_blocked": "回復によってブロックされる",
     "blocked_reason_project_missing": "ターゲットプロジェクトがありません",
+    "project_missing": "関連プロジェクトが見つかりません",
     "blocked_reason_retry_source_missing": "再試行ソースが使用できません",
     "watching_count": "監視中 · {{count}}",
     "empty": "自動化ルールはまだありません。",

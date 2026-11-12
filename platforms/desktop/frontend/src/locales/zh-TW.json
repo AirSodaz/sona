@@ -834,6 +834,7 @@
     "blocked_reason_already_pending": "已在佇列中",
     "blocked_reason_recovery_blocked": "被恢復保護阻止",
     "blocked_reason_project_missing": "目標專案不存在",
+    "project_missing": "關聯專案已遺失",
     "blocked_reason_retry_source_missing": "重試來源檔案不可用",
     "watching_count": "監控中 · {{count}}",
     "empty": "尚無自動化規則。",

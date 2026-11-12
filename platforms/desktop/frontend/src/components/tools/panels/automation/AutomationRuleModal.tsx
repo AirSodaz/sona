@@ -41,19 +41,23 @@ export function AutomationRuleModal({
   const [watchDirectory, setWatchDirectory] = useState(rule?.watchDirectory ?? '');
   const [recursive, setRecursive] = useState(rule?.recursive ?? false);
   const [saveHistory, setSaveHistory] = useState(rule?.saveHistory ?? true);
-  const [projectId, setProjectId] = useState(rule?.projectId || 'inbox');
-  const [exportDirectory, setExportDirectory] = useState(rule?.exportConfig.directory ?? '');
+  const initialProjectId =
+    rule?.projectId && (rule.projectId === 'inbox' || projects.some((p) => p.id === rule.projectId))
+      ? rule.projectId
+      : 'inbox';
+  const [projectId, setProjectId] = useState(initialProjectId);
+  const [exportDirectory, setExportDirectory] = useState(rule?.exportConfig?.directory ?? '');
   const [exportFormat, setExportFormat] = useState<ExportFormat>(
-    rule?.exportConfig.format ?? 'txt'
+    rule?.exportConfig?.format ?? 'txt'
   );
-  const [exportMode, setExportMode] = useState<ExportMode>(rule?.exportConfig.mode ?? 'original');
-  const [autoPolish, setAutoPolish] = useState(rule?.stageConfig.autoPolish ?? false);
+  const [exportMode, setExportMode] = useState<ExportMode>(rule?.exportConfig?.mode ?? 'original');
+  const [autoPolish, setAutoPolish] = useState(rule?.stageConfig?.autoPolish ?? false);
   const [polishPresetId, setPolishPresetId] = useState(
-    rule?.stageConfig.polishPresetId || 'general'
+    rule?.stageConfig?.polishPresetId || 'general'
   );
-  const [autoTranslate, setAutoTranslate] = useState(rule?.stageConfig.autoTranslate ?? false);
+  const [autoTranslate, setAutoTranslate] = useState(rule?.stageConfig?.autoTranslate ?? false);
   const [translationLanguage, setTranslationLanguage] = useState(
-    rule?.stageConfig.translationLanguage || 'en'
+    rule?.stageConfig?.translationLanguage || 'en'
   );
   const [saving, setSaving] = useState(false);
 
@@ -132,7 +136,7 @@ export function AutomationRuleModal({
           directory: saveHistory ? '' : exportDirectory,
           format: exportFormat,
           mode: autoTranslate ? exportMode : 'original',
-          prefix: rule?.exportConfig.prefix ?? '',
+          prefix: rule?.exportConfig?.prefix ?? '',
         },
       });
       onClose();
@@ -142,7 +146,6 @@ export function AutomationRuleModal({
         messageKey: 'errors.automation.save_failed',
         cause: error,
       });
-    } finally {
       setSaving(false);
     }
   };
@@ -168,7 +171,7 @@ export function AutomationRuleModal({
       }
       footer={
         <div className="automation-modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
           <button

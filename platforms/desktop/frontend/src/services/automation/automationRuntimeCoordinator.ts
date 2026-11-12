@@ -103,6 +103,7 @@ export interface AutomationRuntimeCoordinatorPorts {
 export class AutomationRuntimeCoordinator {
   private pendingFingerprints = new Set<string>();
   private successNotificationSequence = 0;
+  private candidateListenerGeneration = 0;
   private automationRuntimeCandidateUnlisten: (() => void) | null = null;
   private candidateListenerPromise: Promise<void> | null = null;
   private automationTaskSettledUnlisten: (() => void) | null = null;
@@ -591,7 +592,7 @@ export class AutomationRuntimeCoordinator {
 
     const state = this.ports.getState();
     const rule = state.rules.find((item) => item.id === payload.ruleId);
-    if (rule?.saveHistory === false && payload.status === 'complete' && payload.historyId) {
+    if (rule?.saveHistory === false && payload.historyId) {
       this.ports.historyService
         .deleteRecording(payload.historyId)
         .then(() => this.ports.historyService.purgeRecordings([payload.historyId as string]))
@@ -655,12 +656,16 @@ export class AutomationRuntimeCoordinator {
       return this.candidateListenerPromise;
     }
 
+    const generation = ++this.candidateListenerGeneration;
     this.candidateListenerPromise = (async () => {
       try {
         const unlisten = await this.ports.listenToAutomationRuntimeCandidates((payload) => {
           void this.handleRuntimeCandidatePayload(payload);
         });
-        if (this.automationRuntimeCandidateUnlisten) {
+        if (
+          generation !== this.candidateListenerGeneration ||
+          this.automationRuntimeCandidateUnlisten
+        ) {
           unlisten();
         } else {
           this.automationRuntimeCandidateUnlisten = unlisten;
@@ -674,6 +679,7 @@ export class AutomationRuntimeCoordinator {
   };
 
   clearRuntimeCandidateListener = (): void => {
+    this.candidateListenerGeneration += 1;
     this.candidateListenerPromise = null;
     if (!this.automationRuntimeCandidateUnlisten) {
       return;

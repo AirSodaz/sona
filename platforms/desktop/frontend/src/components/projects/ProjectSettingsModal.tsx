@@ -399,7 +399,7 @@ export function ProjectSettingsModal({
                           className="settings-input"
                           value={pipeline.exportDirectory || ''}
                           onChange={(e) => updatePipeline({ exportDirectory: e.target.value })}
-                          placeholder={t('automation.export_directory_placeholder', {
+                          placeholder={t('automation.output_directory_placeholder', {
                             defaultValue: 'Export directory',
                           })}
                           style={{ flex: 1 }}

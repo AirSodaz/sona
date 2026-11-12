@@ -1703,6 +1703,10 @@ fn apply_domain_delete(
     match kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => {
             let _ = transaction.execute(
+                "UPDATE automation_rules SET project_id = '' WHERE project_id = ?1",
+                [entity_id],
+            );
+            let _ = transaction.execute(
                 "DELETE FROM project_pipelines WHERE project_id = ?1",
                 [entity_id],
             );

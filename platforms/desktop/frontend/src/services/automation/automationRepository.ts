@@ -41,6 +41,10 @@ export async function validateAutomationRuleActivation(rule: AutomationRule): Pr
   );
 
   if (!validation.valid) {
-    throw new Error(validation.message || 'Automation rule validation failed.');
+    const error = new Error(validation.message || 'Automation rule validation failed.');
+    if (validation.code) {
+      (error as Error & { code?: string }).code = validation.code;
+    }
+    throw error;
   }
 }

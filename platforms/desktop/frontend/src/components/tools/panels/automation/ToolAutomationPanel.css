@@ -105,7 +105,7 @@
   color: var(--color-text-secondary);
 }
 
-.automation-rule-flow span:not(.automation-recursive-badge) {
+.automation-rule-flow span:not(.automation-recursive-badge):not(.automation-flow-arrow) {
   font-family: var(--font-mono, monospace);
   font-size: 12px;
   color: var(--color-text-primary);
@@ -113,6 +113,12 @@
   padding: 2px 6px;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--color-border);
+}
+
+.automation-flow-arrow {
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  font-weight: 600;
+  padding: 0 2px;
 }
 
 .automation-rule-actions {
@@ -130,6 +136,8 @@
   background: color-mix(in srgb, var(--color-error, #e03e3e) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-error, #e03e3e) 20%, transparent);
   border-radius: var(--radius-md, 8px);
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .automation-rule-exceptions > p {

@@ -834,6 +834,7 @@
     "blocked_reason_already_pending": "이미 대기열에 있음",
     "blocked_reason_recovery_blocked": "복구 항목 때문에 차단됨",
     "blocked_reason_project_missing": "대상 프로젝트가 없음",
+    "project_missing": "연결된 프로젝트가 없습니다",
     "blocked_reason_retry_source_missing": "다시 시도할 원본이 없음",
     "watching_count": "감시 중 · {{count}}",
     "empty": "아직 자동화 규칙이 없습니다.",

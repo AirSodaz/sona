@@ -62,13 +62,15 @@ export function AutomationRuleCard({
         : rule.enabled
           ? 'watching'
           : 'stopped';
+  const matchedProject = projects.find((project) => project.id === rule.projectId);
   const projectName =
     !rule.projectId || rule.projectId === 'inbox'
       ? t('projects.inbox', { defaultValue: 'Inbox' })
-      : projects.find((project) => project.id === rule.projectId)?.name || rule.projectId;
+      : matchedProject?.name ||
+        t('automation.project_missing', { defaultValue: 'Missing Project' });
   const destination = rule.saveHistory
     ? projectName
-    : `${rule.exportConfig.format.toUpperCase()} · ${rule.exportConfig.directory}`;
+    : `${rule.exportConfig?.format?.toUpperCase() ?? 'TXT'} · ${rule.exportConfig?.directory ?? ''}`;
   const statusLabel =
     failedEntries.length > 0
       ? t('automation.failures', {
@@ -105,11 +107,18 @@ export function AutomationRuleCard({
             {t('automation.recursive_badge', { defaultValue: 'subfolders' })}
           </span>
         ) : null}
-        <span aria-hidden="true">→</span>
+        <span className="automation-flow-arrow" aria-hidden="true">
+          →
+        </span>
         <span>{destination}</span>
       </p>
       <div className="automation-rule-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => void onScan(rule.id)}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={runtime?.status === 'scanning'}
+          onClick={() => void onScan(rule.id)}
+        >
           {t('automation.scan_now', { defaultValue: 'Scan Now' })}
         </button>
         <button type="button" className="btn btn-secondary" onClick={() => onEdit(rule)}>
