@@ -16,7 +16,7 @@ describe('ClientLogo', () => {
   });
 
   it('adds monochrome class for monochrome clients', () => {
-    const monochromeClients = ['cursor', 'codex', 'antigravity', 'pi-omp', 'generic'];
+    const monochromeClients = ['cursor', 'codex', 'antigravity', 'pi-omp', 'devin', 'generic'];
     for (const id of monochromeClients) {
       const { container } = render(<ClientLogo clientId={id} label={id} />);
       const img = container.querySelector('img');
@@ -26,7 +26,7 @@ describe('ClientLogo', () => {
   });
 
   it('does not add monochrome class for colored brand icons', () => {
-    const coloredClients = ['claude-desktop', 'claude-code', 'windsurf'];
+    const coloredClients = ['claude-desktop', 'claude-code'];
     for (const id of coloredClients) {
       const { container } = render(<ClientLogo clientId={id} label={id} />);
       const img = container.querySelector('img');
@@ -53,7 +53,7 @@ describe('ClientLogo', () => {
       'antigravity',
       'claude-code',
       'pi-omp',
-      'windsurf',
+      'devin',
       'generic',
     ];
     for (const id of expectedClients) {

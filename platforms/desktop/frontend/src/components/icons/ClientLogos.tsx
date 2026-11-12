@@ -1,9 +1,9 @@
 import type React from 'react';
 import antigravitySvg from '../../assets/clients/antigravity.svg';
 import cursorSvg from '../../assets/clients/cursor.svg';
+import devinSvg from '../../assets/clients/devin.svg';
 import mcpSvg from '../../assets/clients/mcp.svg';
 import piOmpSvg from '../../assets/clients/pi-omp.svg';
-import windsurfSvg from '../../assets/clients/windsurf.svg';
 import anthropicSvg from '../../assets/providers/anthropic.svg';
 import openaiSvg from '../../assets/providers/openai.svg';
 
@@ -19,7 +19,7 @@ export const CLIENT_ICON_MAP: Record<string, ClientLogoMeta> = {
   antigravity: { src: antigravitySvg, monochrome: true },
   'claude-code': { src: anthropicSvg },
   'pi-omp': { src: piOmpSvg, monochrome: true },
-  windsurf: { src: windsurfSvg },
+  devin: { src: devinSvg, monochrome: true },
   generic: { src: mcpSvg, monochrome: true },
 };
 

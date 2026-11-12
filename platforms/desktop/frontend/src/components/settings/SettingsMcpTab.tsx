@@ -229,7 +229,7 @@ export function SettingsMcpTab(): React.JSX.Element {
         title={t('settings.mcp.title', { defaultValue: 'MCP Agents' })}
         description={t('settings.mcp.description', {
           defaultValue:
-            'Securely expose transcription, recording control, and historical data to external AI Agents (Claude Desktop, Cursor, Windsurf, Zed) via Model Context Protocol.',
+            'Securely expose transcription, recording control, and historical data to external AI Agents (Claude Code, Codex, Cursor) via Model Context Protocol.',
         })}
         statusText={statusText}
         statusTone={statusTone}

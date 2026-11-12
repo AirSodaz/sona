@@ -1226,7 +1226,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
       'agent',
       'claude desktop',
       'cursor',
-      'windsurf',
+      'devin',
       'model context protocol',
       '智能体',
       '智能体服务',

@@ -583,12 +583,12 @@ In your oh-my-pi / omp MCP configuration file:
 }
 ```
 
-### Windsurf & VS Code
+### Devin
 
-In your Windsurf configuration file:
+In your Devin configuration file (Devin Desktop / Devin CLI):
 
-- **macOS / Linux**: `~/.codeium/windsurf/mcp_config.json`
-- **Windows**: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+- **macOS / Linux**: `~/.config/devin/mcp_config.json`
+- **Windows**: `%APPDATA%\devin\mcp_config.json`
 
 ```json
 {
@@ -600,6 +600,13 @@ In your Windsurf configuration file:
   }
 }
 ```
+
+Or register via Devin CLI:
+
+```bash
+devin mcp add -s user sona -- sona-mcp
+```
+
 ### Command-Line Verification & Testing
 
 To test the MCP server manually over standard I/O:

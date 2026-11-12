@@ -107,6 +107,13 @@ describe('SettingsMcpTab', () => {
             configContent: '{\n  "mcpServers": {}\n}',
             format: 'json',
           },
+          {
+            id: 'devin',
+            name: 'Devin',
+            configPath: '%APPDATA%\\devin\\mcp_config.json',
+            configContent: '{\n  "mcpServers": {}\n}',
+            format: 'json',
+          },
         ],
       },
       filter: {
@@ -211,6 +218,14 @@ describe('SettingsMcpTab', () => {
     });
     expect(cursorTab.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('%USERPROFILE%\\.cursor\\mcp.json')).toBeDefined();
+
+    // Switch to Devin tab
+    const devinTab = screen.getByRole('tab', { name: 'Devin' });
+    await act(async () => {
+      fireEvent.click(devinTab);
+    });
+    expect(devinTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('%APPDATA%\\devin\\mcp_config.json')).toBeDefined();
   });
   it('renders activity audit logs and allows clearing logs', async () => {
     mockInvokeTauri.mockResolvedValueOnce(undefined as never);

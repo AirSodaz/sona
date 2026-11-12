@@ -233,10 +233,10 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         "~/.omp/agent/mcp.json".to_string()
     };
 
-    let windsurf_config_path = if cfg!(windows) {
-        r"%USERPROFILE%\.codeium\windsurf\mcp_config.json".to_string()
+    let devin_config_path = if cfg!(windows) {
+        r"%APPDATA%\devin\mcp_config.json".to_string()
     } else {
-        "~/.codeium/windsurf/mcp_config.json".to_string()
+        "~/.config/devin/mcp_config.json".to_string()
     };
 
     let stdio_snippet = serde_json::json!({
@@ -311,9 +311,9 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
             format: "json".to_string(),
         },
         McpClientGuide {
-            id: "windsurf".to_string(),
-            name: "Windsurf".to_string(),
-            config_path: windsurf_config_path,
+            id: "devin".to_string(),
+            name: "Devin".to_string(),
+            config_path: devin_config_path,
             config_content: stdio_json_str.clone(),
             format: "json".to_string(),
         },
@@ -359,10 +359,10 @@ mod tests {
         assert!(configs.guides.iter().any(|g| g.id == "antigravity"));
         assert!(configs.guides.iter().any(|g| g.id == "claude-code"));
         assert!(configs.guides.iter().any(|g| g.id == "pi-omp"));
-        assert!(configs.guides.iter().any(|g| g.id == "windsurf"));
+        assert!(configs.guides.iter().any(|g| g.id == "devin"));
         assert!(configs.guides.iter().any(|g| g.id == "generic"));
 
-        assert_eq!(configs.guides[6].id, "windsurf");
+        assert_eq!(configs.guides[6].id, "devin");
         assert_eq!(configs.guides[7].id, "generic");
 
         let codex = configs.guides.iter().find(|g| g.id == "codex").unwrap();
@@ -379,6 +379,17 @@ mod tests {
             .unwrap();
         assert!(claude_desktop.config_content.contains("mcpServers"));
         assert!(claude_desktop.config_content.contains("sona"));
+
+        let devin = configs.guides.iter().find(|g| g.id == "devin").unwrap();
+        assert_eq!(devin.name, "Devin");
+        assert_eq!(devin.format, "json");
+        if cfg!(windows) {
+            assert_eq!(devin.config_path, r"%APPDATA%\devin\mcp_config.json");
+        } else {
+            assert_eq!(devin.config_path, "~/.config/devin/mcp_config.json");
+        }
+        assert!(devin.config_content.contains("mcpServers"));
+        assert!(devin.config_content.contains("sona"));
     }
 
     #[test]
