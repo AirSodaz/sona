@@ -213,18 +213,10 @@ describe('App settings preload', () => {
 
     fireEvent.click(screen.getByText('Open Automation Settings'));
     await waitFor(() => {
-      expect(preloadSettingsTabMock).toHaveBeenCalledWith('automation');
+      expect(screen.queryByText('Settings Tab: general')).toBeNull();
     });
-    expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.open.tab.click', {
-      tab: 'automation',
-    });
-    expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
-
-    fireEvent.click(screen.getByText('Close Settings'));
-    await waitFor(() => {
-      expect(screen.queryByText('Settings Tab: automation')).toBeNull();
-    });
-    expect(screen.getByTestId('settings-prewarm').textContent).toBe('Settings Prewarm: general');
+    expect(preloadSettingsTabMock).not.toHaveBeenCalledWith('automation');
+    expect(screen.queryByText('Settings Tab: automation')).toBeNull();
 
     fireEvent.click(settingsButton);
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();

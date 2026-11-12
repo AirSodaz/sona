@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::ports::asr::online_asr_providers;
 
-pub const CURRENT_CONFIG_VERSION: i64 = 8;
+pub const CURRENT_CONFIG_VERSION: i64 = 9;
 pub const DEFAULT_POLISH_PRESET_ID: &str = "clean";
 pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
@@ -91,8 +91,6 @@ pub fn default_config() -> Value {
         ("polishKeywords", json!("")),
         ("polishPresetId", json!(DEFAULT_POLISH_PRESET_ID)),
         ("polishCustomPresets", json!([])),
-        ("autoPolish", json!(false)),
-        ("autoPolishFrequency", json!(5)),
         ("voiceTypingEnabled", json!(false)),
         ("voiceTypingShortcut", json!("Alt+V")),
         ("voiceTypingMode", json!("hold")),

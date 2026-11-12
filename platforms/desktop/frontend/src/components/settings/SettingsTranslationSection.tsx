@@ -6,7 +6,6 @@ import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { Dropdown } from '../Dropdown';
-import { Switch } from '../Switch';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 
 export function SettingsTranslationSection(): React.JSX.Element {
@@ -26,25 +25,14 @@ export function SettingsTranslationSection(): React.JSX.Element {
   return (
     <SettingsSection
       id="settings-vocabulary-translation"
-      title={t('settings.translation_automation_title', { defaultValue: 'Translation Automation' })}
-      description={t('settings.translation_automation_description', {
-        defaultValue:
-          'Configure automatic translation and default target language for transcripts.',
+      title={t('settings.translation_default_language_title', {
+        defaultValue: 'Default Target Language',
+      })}
+      description={t('settings.translation_default_language_hint', {
+        defaultValue: 'Default target language used when initiating transcript translation.',
       })}
       icon={<Languages size={20} />}
     >
-      <SettingsItem
-        title={t('settings.translation_auto_title', { defaultValue: 'Auto Translate' })}
-        hint={t('settings.translation_auto_hint', {
-          defaultValue: 'Automatically translate transcript after transcription completes.',
-        })}
-      >
-        <Switch
-          checked={config.autoTranslate ?? false}
-          onChange={(val) => updateConfig({ autoTranslate: val })}
-        />
-      </SettingsItem>
-
       <SettingsItem
         title={t('settings.translation_default_language_title', {
           defaultValue: 'Default Target Language',

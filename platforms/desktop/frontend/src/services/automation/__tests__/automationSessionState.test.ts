@@ -18,14 +18,13 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     id: 'rule-1',
     name: 'Automation Rule',
     projectId: 'project-1',
-    presetId: 'meeting_notes',
+    saveHistory: true,
     watchDirectory: 'C:\\watch',
     recursive: true,
     enabled: true,
     stageConfig: {
       autoPolish: false,
       autoTranslate: false,
-      exportEnabled: false,
     },
     exportConfig: {
       directory: 'C:\\exports',
@@ -98,6 +97,7 @@ describe('automationSessionState', () => {
     expect(nextState.processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\missing.wav',
         size: 0,
         mtimeMs: 0,
@@ -154,6 +154,7 @@ describe('automationSessionState', () => {
     expect(nextState.processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\blocked.wav',
         sourceFingerprint: 'fp-blocked',
         size: 12,
@@ -227,6 +228,7 @@ describe('automationSessionState', () => {
     const processedEntries: AutomationProcessedEntry[] = [
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\meeting.wav',
         sourceFingerprint: 'fp-success',
         size: 42,
@@ -299,6 +301,7 @@ describe('automationSessionState', () => {
     const processedEntries: AutomationProcessedEntry[] = [
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\cancelled.wav',
         sourceFingerprint: 'fp-discarded',
         size: 42,

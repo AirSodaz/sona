@@ -24,11 +24,7 @@ import {
   upsertTaskLedgerRecord,
 } from '../services/taskLedgerBuilders';
 import { cancelBatchTask } from '../services/tauri/recognizer';
-import type {
-  AutomationExportConfig,
-  AutomationResolutionSnapshot,
-  AutomationStageConfig,
-} from '../types/automation';
+import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
 import type {
   BatchQueueItem,
   BatchQueueItemOrigin,
@@ -150,7 +146,6 @@ interface AddFilesOptions {
   resolvedConfigSnapshot?: AppConfig;
   exportConfig?: AutomationExportConfig | null;
   stageConfig?: AutomationStageConfig | null;
-  automationResolutionSnapshot?: AutomationResolutionSnapshot;
   sourceFingerprint?: string;
   projectId?: string | null;
   pipelineSnapshot?: EffectivePipelineSnapshot;
@@ -437,7 +432,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         resolvedConfigSnapshot,
         exportConfig: options?.exportConfig || null,
         stageConfig: options?.stageConfig || null,
-        automationResolutionSnapshot: options?.automationResolutionSnapshot,
         sourceFingerprint: options?.sourceFingerprint,
         fileStat: options?.fileStat,
         exportFileNamePrefix,

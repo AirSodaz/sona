@@ -13,27 +13,16 @@ fn rule(id: Option<&str>, name: &str) -> FfiAutomationRuleInputV1 {
     FfiAutomationRuleInputV1 {
         id: id.map(str::to_string),
         name: name.to_string(),
-        kind: "file".to_string(),
-        priority: 0,
-        profile_id: None,
-        profile_source: "tag_match".to_string(),
         save_history: false,
-        project_ids: Vec::new(),
-        preset_id: "custom".to_string(),
+        project_id: String::new(),
         watch_directory: "C:\\watch".to_string(),
         recursive: true,
         enabled: true,
-        actions: sona_uniffi_bind::FfiAutomationActionsV1 {
-            auto_polish: true,
-            auto_translate: true,
-            auto_summary: false,
-        },
         stage_config: FfiAutomationStageConfigV1 {
             auto_polish: true,
             polish_preset_id: "general".to_string(),
             auto_translate: true,
             translation_language: "zh".to_string(),
-            export_enabled: true,
         },
         export_config: FfiAutomationExportConfigV1 {
             directory: "C:\\export".to_string(),
@@ -43,7 +32,6 @@ fn rule(id: Option<&str>, name: &str) -> FfiAutomationRuleInputV1 {
         },
         created_at: 100,
         updated_at: 200,
-        migration_notice: None,
     }
 }
 
@@ -51,8 +39,6 @@ fn processed(id: Option<&str>, rule_id: &str) -> FfiAutomationProcessedInputV1 {
     FfiAutomationProcessedInputV1 {
         id: id.map(str::to_string),
         rule_id: rule_id.to_string(),
-        kind: "file".to_string(),
-        input_version: "fingerprint".to_string(),
         attempt: 1,
         file_path: "C:\\watch\\audio.wav".to_string(),
         source_fingerprint: "fingerprint".to_string(),
@@ -74,7 +60,6 @@ fn automation_v1_round_trips_typed_repository_state_without_json() {
     let state = replace_automation_repository_state_v1(
         app_data_dir.clone(),
         FfiAutomationRepositoryInputV1 {
-            profiles: Vec::new(),
             rules: vec![rule(Some("rule-1"), "Rule")],
             processed_entries: vec![processed(Some("entry-1"), "rule-1")],
         },
@@ -121,11 +106,41 @@ fn automation_v1_validation_uses_typed_rule_and_tags() {
     let model_path = dir.path().join("model.onnx");
     fs::create_dir(&watch_directory).unwrap();
     fs::write(&model_path, b"model").unwrap();
+    let project_rule = FfiAutomationValidationRuleV1 {
+        name: "Project Rule".to_string(),
+        save_history: true,
+        project_id: "tag-1".to_string(),
+        watch_directory: watch_directory.to_string_lossy().into_owned(),
+        recursive: false,
+        stage_config: FfiAutomationValidationStageConfigV1 {
+            auto_polish: false,
+            auto_translate: false,
+        },
+        export_config: FfiAutomationValidationExportConfigV1 {
+            directory: String::new(),
+            mode: "original".to_string(),
+        },
+    };
+    let projects = vec![FfiAutomationProjectReferenceV1 {
+        id: "tag-1".to_string(),
+    }];
+
+    let project_result = validate_automation_rule_activation_v1(
+        project_rule,
+        serde_json::json!({"offlineModelPath": model_path}).to_string(),
+        projects.clone(),
+    )
+    .unwrap();
+    assert!(project_result.valid);
+    assert_eq!(project_result.code, None);
+    assert!(!output_directory.exists());
+
     let rule = FfiAutomationValidationRuleV1 {
         name: "Rule".to_string(),
-        save_history: true,
-        project_ids: vec!["tag-1".to_string()],
+        save_history: false,
+        project_id: String::new(),
         watch_directory: watch_directory.to_string_lossy().into_owned(),
+        recursive: false,
         stage_config: FfiAutomationValidationStageConfigV1 {
             auto_polish: false,
             auto_translate: false,
@@ -135,9 +150,6 @@ fn automation_v1_validation_uses_typed_rule_and_tags() {
             mode: "original".to_string(),
         },
     };
-    let projects = vec![FfiAutomationProjectReferenceV1 {
-        id: "tag-1".to_string(),
-    }];
 
     let result = validate_automation_rule_activation_v1(
         rule.clone(),

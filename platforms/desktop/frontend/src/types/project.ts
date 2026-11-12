@@ -1,6 +1,7 @@
 export type ProjectPipelineConfig = {
   enabled: boolean;
   autoPolish: boolean;
+  autoPolishFrequency?: number;
   polishPresetId?: string;
   polishPromptOverride?: string;
   autoTranslate: boolean;
@@ -18,6 +19,7 @@ export type ProjectPipelineConfig = {
 
 export type EffectivePipelineSnapshot = ProjectPipelineConfig & {
   isProjectPipeline: boolean;
+  exportMode?: 'original' | 'translation' | 'bilingual';
 };
 
 export interface ProjectRecord {
@@ -51,6 +53,7 @@ export interface ProjectUpdateInput {
 export const DEFAULT_PROJECT_PIPELINE: ProjectPipelineConfig = {
   enabled: false,
   autoPolish: false,
+  autoPolishFrequency: 5,
   autoTranslate: false,
   autoSummary: false,
   autoExport: false,

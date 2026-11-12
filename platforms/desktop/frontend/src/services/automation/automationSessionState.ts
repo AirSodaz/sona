@@ -368,6 +368,7 @@ export function buildRetryFailureEntry(
 ): AutomationProcessedEntry {
   return {
     ruleId,
+    attempt: 1,
     filePath,
     sourceFingerprint: createAutomationFingerprint(
       filePath,
@@ -390,6 +391,7 @@ export function buildRetryBlockedEntry(
 ): AutomationProcessedEntry {
   return {
     ruleId,
+    attempt: 1,
     filePath: candidate.filePath,
     sourceFingerprint: candidate.sourceFingerprint,
     size: candidate.size,
@@ -481,7 +483,7 @@ export function applyRetryFailureResults(
       ruleId: rule.id,
       ruleName: rule.name,
       filePath: result.filePath,
-      message: entriesToAdd[index].errorMessage,
+      message: entriesToAdd[index].errorMessage ?? undefined,
       retryable: true,
       occurredAt,
     });
@@ -538,7 +540,7 @@ export function applyRetryBlockedResults(
       ruleId: rule.id,
       ruleName: rule.name,
       filePath: candidate.filePath,
-      message: entriesToAdd[index].errorMessage,
+      message: entriesToAdd[index].errorMessage ?? undefined,
       retryable: true,
       occurredAt,
     });
@@ -641,7 +643,7 @@ export function applyTaskSettledState(
       ruleName: nextRuleName,
       filePath: payload.filePath,
       stage: payload.stage,
-      message: payload.errorMessage,
+      message: payload.errorMessage ?? undefined,
       retryable: hasRetryableFailures(payload.ruleId, current.processedEntries),
       occurredAt: payload.processedAt,
     });
@@ -666,7 +668,7 @@ export function applyTaskSettledState(
               : payload.status === 'complete'
                 ? 'success'
                 : 'error',
-          lastResultMessage: payload.errorMessage,
+          lastResultMessage: payload.errorMessage ?? undefined,
           ...(shouldClearBlockedHint
             ? {
                 lastBlockedAt: undefined,

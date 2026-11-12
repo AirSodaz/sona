@@ -11,9 +11,10 @@ use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let rule = AutomationRule {
         name: "Import calls".to_string(),
-        save_history: true,
-        tag_ids: vec!["tag-1".to_string()],
+        save_history: false,
+        project_id: String::new(),
         watch_directory: "C:\\watch".to_string(),
+        recursive: false,
         stage_config: AutomationRuleStageConfig {
             auto_polish: true,
             auto_translate: false,
@@ -77,6 +78,73 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
 
     assert!(result.valid, "{result:?}");
     assert_eq!(result.code, None);
+
+    // save_history: true allows empty export directory and skips rule-level LLM checks
+    let project_rule = AutomationRule {
+        name: "Project Watch".to_string(),
+        save_history: true,
+        project_id: "proj-1".to_string(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: false,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig::default(),
+    };
+    let res_ok = validate_rule_activation(
+        &project_rule,
+        &config,
+        &[json!({ "id": "proj-1" })],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: false,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(res_ok.valid, "{res_ok:?}");
+
+    let res_missing = validate_rule_activation(
+        &project_rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: false,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(!res_missing.valid);
+    assert_eq!(
+        res_missing.code.as_deref(),
+        Some("automation.project_missing")
+    );
+
+    // Export directory inside recursive watch directory is rejected
+    let overlap_rule = AutomationRule {
+        name: "Overlap".to_string(),
+        save_history: false,
+        project_id: String::new(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: true,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig {
+            directory: "C:\\watch\\sub\\out".to_string(),
+            mode: "original".to_string(),
+        },
+    };
+    let res_overlap = validate_rule_activation(
+        &overlap_rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: true,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(!res_overlap.valid);
+    assert_eq!(
+        res_overlap.code.as_deref(),
+        Some("automation.same_directory")
+    );
 }
 
 #[test]

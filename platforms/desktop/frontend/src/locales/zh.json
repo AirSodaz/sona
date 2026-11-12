@@ -235,6 +235,8 @@
     "api_server_desc": "本地 HTTP 音频转录接口",
     "mcp": "MCP 智能体",
     "mcp_desc": "AI Agent 协议服务端",
+    "automation": "自动化",
+    "automation_desc": "监视文件夹，并将录音送入项目或导出目录",
     "emby_sync": "媒体服务器字幕助手",
     "emby_sync_desc": "检测 Emby 和 Jellyfin 缺失字幕并离线转录自动补全",
     "media_server": {

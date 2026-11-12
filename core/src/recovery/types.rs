@@ -167,12 +167,6 @@ pub struct RecoveryItemInput {
         feature = "specta",
         specta(type = Option<specta_typescript::Unknown>)
     )]
-    pub automation_resolution_snapshot: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(
-        feature = "specta",
-        specta(type = Option<specta_typescript::Unknown>)
-    )]
     pub export_config: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
@@ -260,12 +254,6 @@ pub struct RecoveredQueueItem {
         specta(type = Option<specta_typescript::Unknown>)
     )]
     pub resolved_config_snapshot: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(
-        feature = "specta",
-        specta(type = Option<specta_typescript::Unknown>)
-    )]
-    pub automation_resolution_snapshot: Option<Value>,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub export_config: Value,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]

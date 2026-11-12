@@ -109,7 +109,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         baseConfig
       );
     const autoPolish = snapshotPipeline.autoPolish ?? false;
-    const frequency = baseConfig.autoPolishFrequency ?? 5;
+    const frequency = snapshotPipeline.autoPolishFrequency ?? 5;
 
     if (autoPolish && frequency > 0) {
       const allSegments = recSession?.segments || [];

@@ -9,9 +9,8 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use serde_json::{Value, json};
 use sona_application::config::app_config_stored_state_from_value;
 use sona_core::automation::repository::{
-    AutomationProcessedRecord, AutomationProfileRecord, AutomationRepositoryState,
-    AutomationRuleInputActions, AutomationRuleRecord, AutomationRuleRecordExportConfig,
-    AutomationRuleRecordStageConfig, AutomationStore,
+    AutomationProcessedRecord, AutomationRepositoryState, AutomationRuleRecord,
+    AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
 };
 use sona_core::backup::{
     BackupDataset, BackupError, BackupRestoreDataset, BackupStateRepository, build_backup_manifest,
@@ -284,10 +283,6 @@ fn seed_history(db: &Database, label: &str) {
 
 fn automation_state(label: &str) -> AutomationRepositoryState {
     AutomationRepositoryState {
-        profiles: vec![
-            automation_profile(label, "b"),
-            automation_profile(label, "a"),
-        ],
         rules: vec![automation_rule(label, "b"), automation_rule(label, "a")],
         processed_entries: vec![
             automation_processed(label, "b"),
@@ -296,53 +291,20 @@ fn automation_state(label: &str) -> AutomationRepositoryState {
     }
 }
 
-fn automation_profile(label: &str, suffix: &str) -> AutomationProfileRecord {
-    AutomationProfileRecord {
-        id: format!("{label}-profile-{suffix}"),
-        name: format!("Profile {suffix}"),
-        translation_language: if suffix == "a" { "en" } else { "zh" }.to_string(),
-        polish_preset_id: format!("{label}-polish"),
-        summary_template_id: format!("{label}-summary-{suffix}"),
-        enabled_text_replacement_set_ids: vec![
-            format!("{label}-replace-{suffix}-2"),
-            format!("{label}-replace-{suffix}-1"),
-        ],
-        enabled_hotword_set_ids: vec![format!("{label}-hotword-{suffix}")],
-        enabled_polish_keyword_set_ids: vec![format!("{label}-keyword-{suffix}")],
-        enabled_speaker_profile_ids: vec![
-            format!("{label}-speaker-{suffix}-2"),
-            format!("{label}-speaker-{suffix}-1"),
-        ],
-        created_at: timestamp(label),
-        updated_at: timestamp(label) + 1,
-    }
-}
-
 fn automation_rule(label: &str, suffix: &str) -> AutomationRuleRecord {
     AutomationRuleRecord {
         id: format!("{label}-rule-{suffix}"),
         name: format!("Rule {suffix}"),
-        kind: "file".to_string(),
-        priority: 0,
-        profile_id: Some(format!("{label}-profile-{suffix}")),
-        profile_source: "explicit".to_string(),
         save_history: true,
-        tag_ids: vec![format!("{label}-tag-{suffix}")],
-        preset_id: format!("preset-{suffix}"),
+        project_id: format!("{label}-tag-{suffix}"),
         watch_directory: format!("C:/{label}/{suffix}"),
         recursive: suffix == "a",
         enabled: true,
-        actions: AutomationRuleInputActions {
-            auto_polish: true,
-            auto_translate: suffix == "b",
-            auto_summary: false,
-        },
         stage_config: AutomationRuleRecordStageConfig {
             auto_polish: true,
             polish_preset_id: format!("{label}-polish"),
             auto_translate: suffix == "b",
             translation_language: "en".to_string(),
-            export_enabled: true,
         },
         export_config: AutomationRuleRecordExportConfig {
             directory: format!("C:/{label}/export/{suffix}"),
@@ -352,7 +314,6 @@ fn automation_rule(label: &str, suffix: &str) -> AutomationRuleRecord {
         },
         created_at: timestamp(label),
         updated_at: timestamp(label) + 1,
-        migration_notice: None,
     }
 }
 
@@ -360,8 +321,6 @@ fn automation_processed(label: &str, suffix: &str) -> AutomationProcessedRecord 
     AutomationProcessedRecord {
         id: format!("{label}-processed-{suffix}"),
         rule_id: format!("{label}-rule-{suffix}"),
-        kind: "file".to_string(),
-        input_version: format!("fingerprint-{suffix}"),
         attempt: 1,
         file_path: format!("C:/{label}/{suffix}.wav"),
         source_fingerprint: format!("fingerprint-{suffix}"),
@@ -405,7 +364,6 @@ fn manifest_for(dataset: &BackupDataset) -> sona_core::backup::BackupManifest {
         dataset.history.items.len(),
         dataset.history.transcript_files.len(),
         dataset.history.summary_files.len(),
-        dataset.automation.profiles.len(),
         dataset.automation.rules.len(),
         dataset.automation.processed_entries.len(),
     )
@@ -564,10 +522,7 @@ fn snapshot_and_replace_restore_all_scopes_and_clear_active_tag() {
             .collect::<Vec<_>>(),
         ["before-tag-a", "before-tag-b"]
     );
-    assert_eq!(
-        before.automation.profiles[0].enabled_text_replacement_set_ids,
-        ["before-replace-a-2", "before-replace-a-1"]
-    );
+    assert_eq!(before.automation.rules[0].project_id, "before-tag-a");
     assert_eq!(
         before
             .history

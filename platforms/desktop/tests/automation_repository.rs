@@ -14,9 +14,10 @@ fn sample_rule(
 ) -> AutomationRule {
     let mut rule = AutomationRule {
         name: "Meeting Inbox".to_string(),
-        save_history: true,
-        tag_ids: vec!["tag-1".to_string()],
+        save_history: false,
+        project_id: String::new(),
         watch_directory,
+        recursive: false,
         stage_config: AutomationRuleStageConfig {
             auto_polish: false,
             auto_translate: false,
@@ -257,7 +258,7 @@ fn validation_accepts_rules_that_do_not_save_history_without_tags() {
         export_dir.to_string_lossy().into_owned(),
         |rule| {
             rule.save_history = false;
-            rule.tag_ids.clear();
+            rule.project_id.clear();
         },
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
@@ -268,18 +269,18 @@ fn validation_accepts_rules_that_do_not_save_history_without_tags() {
 }
 
 #[test]
-fn validation_rejects_missing_tag() {
+fn validation_rejects_missing_project() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
-    let export_dir = dir.path().join("exports");
     let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
     fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
-        export_dir.to_string_lossy().into_owned(),
+        String::new(),
         |rule| {
-            rule.tag_ids = vec!["missing-tag".to_string()];
+            rule.save_history = true;
+            rule.project_id = "missing-tag".to_string();
         },
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
@@ -287,7 +288,7 @@ fn validation_rejects_missing_tag() {
     let result = validate_rule_activation_inner(&rule, &global_config, &[]).unwrap();
 
     assert!(!result.valid);
-    assert_eq!(result.code.as_deref(), Some("automation.tag_missing"));
+    assert_eq!(result.code.as_deref(), Some("automation.project_missing"));
 }
 
 #[test]

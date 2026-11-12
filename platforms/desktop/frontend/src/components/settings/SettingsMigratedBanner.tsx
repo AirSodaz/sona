@@ -1,4 +1,14 @@
-import { ArrowRight, Bot, Keyboard, Server, Subtitles, Terminal, Tv, Wrench } from 'lucide-react';
+import {
+  ArrowRight,
+  Bot,
+  FolderSync,
+  Keyboard,
+  Server,
+  Subtitles,
+  Terminal,
+  Tv,
+  Wrench,
+} from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
@@ -43,6 +53,11 @@ const TOOL_META_MAP: Record<
     titleKey: 'tools.cli.title',
     defaultTitle: 'Sona CLI',
     icon: <Terminal width={28} height={28} />,
+  },
+  automation: {
+    titleKey: 'tools.automation',
+    defaultTitle: 'Automation',
+    icon: <FolderSync width={28} height={28} />,
   },
 };
 

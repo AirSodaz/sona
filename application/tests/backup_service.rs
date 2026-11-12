@@ -215,7 +215,6 @@ fn manifest() -> BackupManifest {
             history_items: 0,
             transcript_files: 0,
             summary_files: 0,
-            automation_profiles: 0,
             automation_rules: 0,
             automation_processed_entries: 0,
             analytics_files: 1,
@@ -230,7 +229,6 @@ fn preview(import_id: &str) -> PreparedBackupImport {
         manifest: manifest(),
         config: json!({}),
         tags: vec![],
-        automation_profiles: vec![],
         automation_rules: vec![],
         automation_processed_entries: vec![],
         analytics_content: "[]".to_string(),
@@ -276,7 +274,7 @@ fn export_builds_manifest_from_the_typed_snapshot_and_writes_it() {
         })
         .unwrap();
 
-    assert_eq!(result.schema_version, 3);
+    assert_eq!(result.schema_version, 4);
     assert_eq!(result.created_at, "2026-07-13T00:00:00.123Z");
     assert_eq!(result.history_mode, "light");
     assert_eq!(result.counts.analytics_files, 1);

@@ -3,12 +3,11 @@ import type { useConfigStore } from '../../stores/configStore';
 import type { useProjectStore } from '../../stores/projectStore';
 import type {
   AutomationProcessedEntry,
-  AutomationProfile,
   AutomationRule,
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../../types/automation';
-import type { ProjectPipelineConfig } from '../../types/project';
+import type { EffectivePipelineSnapshot, ProjectPipelineConfig } from '../../types/project';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import type {
@@ -60,7 +59,6 @@ type AutomationRuntimeCandidateHandleResult =
   | { status: 'ignored' };
 
 export interface AutomationRuntimeCoordinatorState {
-  profiles: AutomationProfile[];
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
   runtimeStates: Record<string, AutomationRuntimeState>;
@@ -208,39 +206,36 @@ export class AutomationRuntimeCoordinator {
 
     this.pendingFingerprints.add(pendingKey);
     const effectiveConfig = this.ports.useConfigStore.getState().config;
-    const rawProjectId = latestRule.projectId ?? (latestRule.tagIds?.[0] || null);
-    const projectId =
-      rawProjectId && rawProjectId !== 'inbox' && rawProjectId !== 'none' ? rawProjectId : null;
-    const pipeline = resolveItemPipeline(
+    const saveHistory = latestRule.saveHistory !== false;
+    const projectId = saveHistory
+      ? latestRule.projectId && latestRule.projectId !== 'inbox'
+        ? latestRule.projectId
+        : null
+      : null;
+    const resolvedPipeline = resolveItemPipeline(
       projectId,
       this.ports.useProjectStore.getState().projects,
       effectiveConfig
     );
-    const hasExportDir = Boolean(latestRule.exportConfig?.directory);
-    const ruleActionPolish = latestRule.actions?.autoPolish ?? latestRule.stageConfig?.autoPolish;
-    const ruleActionTranslate =
-      latestRule.actions?.autoTranslate ?? latestRule.stageConfig?.autoTranslate;
-    const effectivePipeline = {
-      ...pipeline,
-      ...(ruleActionPolish !== undefined ? { autoPolish: ruleActionPolish } : {}),
-      ...(ruleActionTranslate !== undefined ? { autoTranslate: ruleActionTranslate } : {}),
-      ...(latestRule.stageConfig?.polishPresetId
-        ? { polishPresetId: latestRule.stageConfig.polishPresetId }
-        : {}),
-      ...(latestRule.stageConfig?.translationLanguage
-        ? { targetLanguage: latestRule.stageConfig.translationLanguage }
-        : {}),
-      ...(hasExportDir
-        ? {
-            autoExport: true,
-            exportDirectory: latestRule.exportConfig.directory,
-            exportFormat:
-              (latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat']) ||
-              pipeline.exportFormat ||
-              'txt',
-          }
-        : {}),
-    };
+    const pipelineSnapshot: EffectivePipelineSnapshot = saveHistory
+      ? resolvedPipeline
+      : {
+          ...resolvedPipeline,
+          isProjectPipeline: false,
+          autoPolish: latestRule.stageConfig.autoPolish,
+          polishPresetId: latestRule.stageConfig.polishPresetId || resolvedPipeline.polishPresetId,
+          autoTranslate: latestRule.stageConfig.autoTranslate,
+          targetLanguage:
+            latestRule.stageConfig.translationLanguage || resolvedPipeline.targetLanguage,
+          autoSummary: false,
+          autoExport: true,
+          exportDirectory: latestRule.exportConfig.directory,
+          exportFormat: latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat'],
+          exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+          exportMode: latestRule.stageConfig.autoTranslate
+            ? latestRule.exportConfig.mode
+            : 'original',
+        };
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
@@ -249,15 +244,14 @@ export class AutomationRuntimeCoordinator {
         automationRuleName: latestRule.name,
         resolvedConfigSnapshot: effectiveConfig,
         projectId,
-        pipelineSnapshot: effectivePipeline,
-        exportConfig: latestRule.exportConfig,
+        pipelineSnapshot,
+        exportConfig: saveHistory ? null : latestRule.exportConfig,
         sourceFingerprint: payload.sourceFingerprint,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,
         },
-        exportFileNamePrefix:
-          effectivePipeline.exportFileNamePrefix || latestRule.exportConfig?.prefix || '',
+        exportFileNamePrefix: pipelineSnapshot.exportFileNamePrefix || '',
       });
     } catch (error) {
       this.pendingFingerprints.delete(pendingKey);
@@ -609,19 +603,14 @@ export class AutomationRuntimeCoordinator {
       ...state.processedEntries.filter(
         (entry) =>
           !(
-            entry.kind !== 'tag' &&
-            entry.ruleId === payload.ruleId &&
-            entry.sourceFingerprint === payload.sourceFingerprint
+            entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint
           )
       ),
       {
         ruleId: payload.ruleId,
-        kind: 'file' as const,
-        inputVersion: payload.sourceFingerprint,
         attempt:
           (state.processedEntries.find(
             (entry) =>
-              entry.kind !== 'tag' &&
               entry.ruleId === payload.ruleId &&
               entry.sourceFingerprint === payload.sourceFingerprint
           )?.attempt ?? 0) + 1,

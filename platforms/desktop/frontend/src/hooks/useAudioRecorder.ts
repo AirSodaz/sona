@@ -468,13 +468,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       recordingAutomationSnapshotRef.current = {
         projectId: targetProjectId,
         pipeline,
-        config: {
-          ...effectiveConfig,
-          autoPolish: pipeline.autoPolish,
-          translationLanguage: pipeline.targetLanguage,
-          summaryEnabled: pipeline.autoSummary,
-          summaryTemplateId: pipeline.summaryTemplateId,
-        },
+        config: effectiveConfig,
       };
       const activeRecSessionId =
         recordSessionIdRef.current ?? useTranscriptStore.getState().recordingSessionId;

@@ -21,18 +21,11 @@ const SUPPORTED_MEDIA_EXTENSIONS: &[&str] = &[
 pub fn validate_rule_activation(
     rule: &AutomationRule,
     global_config: &Value,
-    tags: &[Value],
+    projects: &[Value],
     environment: AutomationRuleActivationEnvironment,
 ) -> AutomationRuleValidationResult {
     if rule.name.trim().is_empty() {
         return invalid_validation("automation.name_required", "Rule name is required.");
-    }
-
-    if rule.save_history && !automation_tags_exist(&rule.tag_ids, tags) {
-        return invalid_validation(
-            "automation.tag_missing",
-            "One or more selected tags are missing.",
-        );
     }
 
     let watch_directory = rule.watch_directory.trim();
@@ -43,6 +36,35 @@ pub fn validate_rule_activation(
         );
     }
 
+    if rule.save_history {
+        let project_id = rule.project_id.trim();
+        if !project_id.is_empty()
+            && project_id != "inbox"
+            && !automation_project_exists(project_id, projects)
+        {
+            return invalid_validation(
+                "automation.project_missing",
+                "The selected project does not exist.",
+            );
+        }
+
+        if !environment.watch_directory_exists {
+            return invalid_validation(
+                "automation.watch_directory_missing",
+                "The watch directory does not exist.",
+            );
+        }
+
+        if !is_batch_asr_configured(global_config, environment) {
+            return invalid_validation(
+                "automation.batch_model_missing",
+                "A batch ASR model or online ASR credential is required before automation can run.",
+            );
+        }
+
+        return valid_validation();
+    }
+
     let export_directory = rule.export_config.directory.trim();
     if export_directory.is_empty() {
         return invalid_validation(
@@ -51,7 +73,11 @@ pub fn validate_rule_activation(
         );
     }
 
-    if is_same_automation_path(watch_directory, export_directory) {
+    if is_export_directory_overlapping_watch_directory(
+        watch_directory,
+        export_directory,
+        rule.recursive,
+    ) {
         return invalid_validation(
             "automation.same_directory",
             "Watch and output directories must be different.",
@@ -114,13 +140,29 @@ pub fn normalize_automation_path(path: &str) -> String {
         .to_lowercase()
 }
 
-fn automation_tags_exist(tag_ids: &[String], tags: &[Value]) -> bool {
-    tag_ids.iter().all(|tag_id| {
-        tags.iter()
-            .any(|tag| tag.get("id").and_then(Value::as_str) == Some(tag_id.as_str()))
-    })
+pub fn automation_project_exists(project_id: &str, projects: &[Value]) -> bool {
+    projects
+        .iter()
+        .any(|project| project.get("id").and_then(Value::as_str) == Some(project_id))
 }
 
+pub fn is_export_directory_overlapping_watch_directory(
+    watch_directory: &str,
+    export_directory: &str,
+    recursive: bool,
+) -> bool {
+    if is_same_automation_path(watch_directory, export_directory) {
+        return true;
+    }
+    let normalized_watch = normalize_automation_path(watch_directory);
+    if normalized_watch.is_empty() {
+        return false;
+    }
+    if recursive {
+        return is_path_inside_runtime_directory(export_directory, watch_directory);
+    }
+    parent_path_string(export_directory).is_some_and(|parent| parent == normalized_watch)
+}
 pub fn resolve_batch_model_path(global_config: &Value) -> Option<String> {
     global_config
         .get("asr")

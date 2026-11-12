@@ -60,12 +60,6 @@ pub struct TaskLedgerRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automation_rule_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tag_automation_rule_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub automation_profile_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub automation_profile_source: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
@@ -139,27 +133,6 @@ pub struct TaskLedgerPatch {
     )]
     #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
     pub automation_rule_id: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
-    pub tag_automation_rule_id: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
-    pub automation_profile_id: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
-    pub automation_profile_source: Option<Option<String>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

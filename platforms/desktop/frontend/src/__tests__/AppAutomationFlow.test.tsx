@@ -64,6 +64,7 @@ vi.mock('../services/diagnosticsService', () => ({
   },
 }));
 
+const setMode = vi.hoisted(() => vi.fn());
 const mockUseTranscriptRuntimeStore = vi.fn();
 const mockUseProjectStore = vi.fn();
 const mockUseOnboardingStore = vi.fn();
@@ -81,14 +82,14 @@ vi.mock('../stores/onboardingStore', () => ({
 }));
 
 describe('App automation flow', () => {
-  it('opens settings on the automation tab from the notification center entry', async () => {
+  it('opens the automation tool from the notification center entry', async () => {
     mockUseTranscriptRuntimeStore.mockImplementation(
       (selector: (state: Record<string, unknown>) => unknown) =>
         selector({
           mode: 'create',
           ingestionFocus: 'live',
           isRecording: false,
-          setMode: vi.fn(),
+          setMode,
         })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
@@ -107,7 +108,8 @@ describe('App automation flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
 
-    expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
+    expect(screen.queryByText('Settings Tab: automation')).toBeNull();
+    expect(setMode).toHaveBeenCalledWith('tools');
   });
 
   it('does not render an automation shortcut button in the batch panel header', async () => {
@@ -117,7 +119,7 @@ describe('App automation flow', () => {
           mode: 'create',
           ingestionFocus: 'batch',
           isRecording: false,
-          setMode: vi.fn(),
+          setMode,
         })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
@@ -136,6 +138,7 @@ describe('App automation flow', () => {
 
     expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
-    expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
+    expect(screen.queryByText('Settings Tab: automation')).toBeNull();
+    expect(setMode).toHaveBeenCalledWith('tools');
   });
 });

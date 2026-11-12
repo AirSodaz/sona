@@ -329,31 +329,19 @@ mod tests {
 
     fn automation_state(history_id: &str) -> AutomationRepositoryState {
         AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![AutomationRuleRecord {
                 id: "backup-rule".to_string(),
                 name: "Backup Rule".to_string(),
-                kind: "file".to_string(),
-                priority: 0,
-                profile_id: None,
-                profile_source: "tag_match".to_string(),
                 save_history: true,
-                tag_ids: vec!["backup-project".to_string()],
-                preset_id: "general".to_string(),
+                project_id: "backup-project".to_string(),
                 watch_directory: "C:/backup/watch".to_string(),
                 recursive: true,
                 enabled: true,
-                actions: sona_core::automation::repository::AutomationRuleInputActions {
-                    auto_polish: false,
-                    auto_translate: true,
-                    auto_summary: false,
-                },
                 stage_config: AutomationRuleRecordStageConfig {
                     auto_polish: false,
                     polish_preset_id: "general".to_string(),
                     auto_translate: true,
                     translation_language: "en".to_string(),
-                    export_enabled: true,
                 },
                 export_config: AutomationRuleRecordExportConfig {
                     directory: "C:/backup/export".to_string(),
@@ -363,13 +351,10 @@ mod tests {
                 },
                 created_at: 300,
                 updated_at: 400,
-                migration_notice: None,
             }],
             processed_entries: vec![AutomationProcessedRecord {
                 id: "backup-entry".to_string(),
                 rule_id: "backup-rule".to_string(),
-                kind: "file".to_string(),
-                input_version: "backup-fingerprint".to_string(),
                 attempt: 1,
                 file_path: "C:/backup/watch/audio.wav".to_string(),
                 source_fingerprint: "backup-fingerprint".to_string(),

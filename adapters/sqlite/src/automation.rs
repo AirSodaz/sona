@@ -5,9 +5,9 @@ use sona_core::automation::AutomationError;
 use sona_core::automation::AutomationIdGenerator;
 pub use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
-    AutomationProfileRecord, AutomationRepositoryInput, AutomationRuleInput, AutomationRuleRecord,
-    AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRuleInput, AutomationRuleRecord, AutomationRuleRecordExportConfig,
+    AutomationRuleRecordStageConfig, AutomationStore,
 };
 use sona_core::sync::SyncEntityKind;
 use std::collections::BTreeSet;
@@ -55,13 +55,6 @@ where
         self.service().replace_rules(rules)
     }
 
-    pub fn replace_profiles(
-        &self,
-        profiles: Vec<AutomationProfileInput>,
-    ) -> Result<(), AutomationError> {
-        self.service().replace_profiles(profiles)
-    }
-
     pub fn replace_processed_entries(
         &self,
         entries: Vec<AutomationProcessedInput>,
@@ -82,7 +75,6 @@ pub(crate) fn load_automation_in_transaction(
     tx: &rusqlite::Transaction<'_>,
 ) -> Result<AutomationRepositoryState, DatabaseError> {
     Ok(AutomationRepositoryState {
-        profiles: load_profiles(tx)?,
         rules: load_rules(tx)?,
         processed_entries: load_processed_entries(tx)?,
     })
@@ -101,7 +93,6 @@ pub(crate) fn delete_automation_in_transaction(
 ) -> Result<(), DatabaseError> {
     tx.execute("DELETE FROM automation_processed", [])?;
     tx.execute("DELETE FROM automation_rules", [])?;
-    tx.execute("DELETE FROM automation_profiles", [])?;
     Ok(())
 }
 
@@ -109,55 +100,31 @@ pub(crate) fn insert_automation_in_transaction(
     tx: &rusqlite::Transaction<'_>,
     state: &AutomationRepositoryState,
 ) -> Result<(), DatabaseError> {
-    insert_profiles(tx, &state.profiles)?;
     insert_rules(tx, &state.rules)?;
     insert_processed_entries(tx, &state.processed_entries)
 }
 
-fn load_profiles(
-    conn: &rusqlite::Connection,
-) -> Result<Vec<AutomationProfileRecord>, DatabaseError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT id, name, translation_language, polish_preset_id, summary_template_id,
-                created_at, updated_at
-         FROM automation_profiles ORDER BY id",
-    )?;
-    let rows = stmt.query_map([], map_row_to_profile_record)?;
-    let mut profiles = rows
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(DatabaseError::QueryError)?;
-    for profile in &mut profiles {
-        hydrate_profile_links(conn, profile)?;
-    }
-    Ok(profiles)
-}
-
 fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT id, name, kind, priority, profile_id, profile_source, save_history, preset_id,
+        "SELECT id, name, project_id, save_history,
                 watch_directory, recursive, enabled,
                 stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
-                stage_translation_language, stage_export_enabled, action_auto_summary,
+                stage_translation_language,
                 export_directory, export_format, export_mode, export_prefix,
-                created_at, updated_at, migration_notice
+                created_at, updated_at
          FROM automation_rules
          ORDER BY id",
     )?;
     let rows = stmt.query_map([], map_row_to_rule_record)?;
-    let mut rules = rows
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(DatabaseError::QueryError)?;
-    for rule in &mut rules {
-        hydrate_rule_projects(conn, rule)?;
-    }
-    Ok(rules)
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(DatabaseError::QueryError)
 }
 
 fn load_processed_entries(
     conn: &rusqlite::Connection,
 ) -> Result<Vec<AutomationProcessedRecord>, DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT id, rule_id, kind, input_version, attempt, file_path, source_fingerprint,
+        "SELECT id, rule_id, attempt, file_path, source_fingerprint,
                 size, mtime_ms, status, processed_at, history_id, export_path, error_message
          FROM automation_processed
          ORDER BY id",
@@ -200,22 +167,6 @@ where
             .map_err(|error| AutomationError::Repository(error.to_string()))
     }
 
-    fn replace_profiles(
-        &self,
-        profiles: &[AutomationProfileRecord],
-    ) -> Result<(), AutomationError> {
-        self.get_db()
-            .and_then(|db| {
-                db.with_transaction(|tx| {
-                    let previous = load_profiles(tx)?;
-                    tx.execute("DELETE FROM automation_profiles", [])?;
-                    insert_profiles(tx, profiles)?;
-                    record_automation_profiles_sync(tx, &previous, profiles)
-                })
-            })
-            .map_err(|error| AutomationError::Repository(error.to_string()))
-    }
-
     fn replace_processed_entries(
         &self,
         entries: &[AutomationProcessedRecord],
@@ -235,86 +186,13 @@ where
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
-                    let previous_profiles = load_profiles(tx)?;
                     let previous_rules = load_rules(tx)?;
                     replace_automation_in_transaction(tx, state)?;
-                    record_automation_profiles_sync(tx, &previous_profiles, &state.profiles)?;
                     record_automation_rules_sync(tx, &previous_rules, &state.rules)
                 })
             })
             .map_err(|error| AutomationError::Repository(error.to_string()))
     }
-}
-
-fn record_automation_profiles_sync(
-    tx: &rusqlite::Transaction<'_>,
-    previous: &[AutomationProfileRecord],
-    current: &[AutomationProfileRecord],
-) -> Result<(), DatabaseError> {
-    let current_ids = current
-        .iter()
-        .map(|profile| profile.id.as_str())
-        .collect::<BTreeSet<_>>();
-    let fallback_now_ms = legacy_change_time::now_ms();
-    for removed in previous
-        .iter()
-        .filter(|profile| !current_ids.contains(profile.id.as_str()))
-    {
-        record_local_delete_in_transaction(
-            tx,
-            SyncEntityKind::AutomationProfile,
-            &removed.id,
-            fallback_now_ms,
-        )?;
-    }
-    for profile in current {
-        let now_ms = u64::try_from(profile.updated_at)
-            .or_else(|_| u64::try_from(profile.created_at))
-            .unwrap_or(fallback_now_ms);
-        for (field, value) in [
-            ("name", serde_json::json!(profile.name)),
-            (
-                "translationLanguage",
-                serde_json::json!(profile.translation_language),
-            ),
-            (
-                "polishPresetId",
-                serde_json::json!(profile.polish_preset_id),
-            ),
-            (
-                "summaryTemplateId",
-                serde_json::json!(profile.summary_template_id),
-            ),
-            (
-                "enabledTextReplacementSetIds",
-                serde_json::json!(profile.enabled_text_replacement_set_ids),
-            ),
-            (
-                "enabledHotwordSetIds",
-                serde_json::json!(profile.enabled_hotword_set_ids),
-            ),
-            (
-                "enabledPolishKeywordSetIds",
-                serde_json::json!(profile.enabled_polish_keyword_set_ids),
-            ),
-            (
-                "enabledSpeakerProfileIds",
-                serde_json::json!(profile.enabled_speaker_profile_ids),
-            ),
-            ("createdAt", serde_json::json!(profile.created_at)),
-            ("updatedAt", serde_json::json!(profile.updated_at)),
-        ] {
-            record_local_field_change_in_transaction(
-                tx,
-                SyncEntityKind::AutomationProfile,
-                &profile.id,
-                field,
-                value,
-                now_ms,
-            )?;
-        }
-    }
-    Ok(())
 }
 
 fn record_automation_rules_sync(
@@ -344,13 +222,8 @@ fn record_automation_rules_sync(
             .unwrap_or(fallback_now_ms);
         for (field, value) in [
             ("name", serde_json::json!(rule.name)),
-            ("kind", serde_json::json!(rule.kind)),
-            ("priority", serde_json::json!(rule.priority)),
-            ("profileId", serde_json::json!(rule.profile_id)),
-            ("profileSource", serde_json::json!(rule.profile_source)),
+            ("projectId", serde_json::json!(rule.project_id)),
             ("saveHistory", serde_json::json!(rule.save_history)),
-            ("tagIds", serde_json::json!(rule.tag_ids)),
-            ("presetId", serde_json::json!(rule.preset_id)),
             ("recursive", serde_json::json!(rule.recursive)),
             (
                 "stageAutoPolish",
@@ -368,20 +241,11 @@ fn record_automation_rules_sync(
                 "stageTranslationLanguage",
                 serde_json::json!(rule.stage_config.translation_language),
             ),
-            (
-                "stageExportEnabled",
-                serde_json::json!(rule.stage_config.export_enabled),
-            ),
-            (
-                "actionAutoSummary",
-                serde_json::json!(rule.actions.auto_summary),
-            ),
             ("exportFormat", serde_json::json!(rule.export_config.format)),
             ("exportMode", serde_json::json!(rule.export_config.mode)),
             ("exportPrefix", serde_json::json!(rule.export_config.prefix)),
             ("createdAt", serde_json::json!(rule.created_at)),
             ("updatedAt", serde_json::json!(rule.updated_at)),
-            ("migrationNotice", serde_json::json!(rule.migration_notice)),
         ] {
             record_local_field_change_in_transaction(
                 tx,
@@ -399,8 +263,6 @@ fn record_automation_rules_sync(
 pub(crate) fn seed_sync_automation_baseline_in_transaction(
     tx: &rusqlite::Transaction<'_>,
 ) -> Result<(), DatabaseError> {
-    let profiles = load_profiles(tx)?;
-    record_automation_profiles_sync(tx, &[], &profiles)?;
     let rules = load_rules(tx)?;
     record_automation_rules_sync(tx, &[], &rules)
 }
@@ -411,26 +273,26 @@ fn insert_rules(
 ) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_rules (
-            id, name, kind, priority, profile_id, profile_source, save_history, preset_id,
+            id, name, project_id, save_history,
             watch_directory, recursive, enabled,
             stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
-            stage_translation_language, stage_export_enabled, action_auto_summary,
+            stage_translation_language,
             export_directory, export_format, export_mode, export_prefix,
-            created_at, updated_at, migration_notice
+            created_at, updated_at
         )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
     )?;
     for rule in rules {
+        let project_id = if rule.save_history {
+            rule.project_id.as_str()
+        } else {
+            ""
+        };
         stmt.execute(rusqlite::params![
             &rule.id,
             &rule.name,
-            &rule.kind,
-            rule.priority,
-            &rule.profile_id,
-            &rule.profile_source,
+            project_id,
             rule.save_history as i64,
-            &rule.preset_id,
             &rule.watch_directory,
             rule.recursive as i64,
             rule.enabled as i64,
@@ -438,72 +300,13 @@ fn insert_rules(
             &rule.stage_config.polish_preset_id,
             rule.stage_config.auto_translate as i64,
             &rule.stage_config.translation_language,
-            rule.stage_config.export_enabled as i64,
-            rule.actions.auto_summary as i64,
             &rule.export_config.directory,
             &rule.export_config.format,
             &rule.export_config.mode,
             &rule.export_config.prefix,
             rule.created_at,
             rule.updated_at,
-            &rule.migration_notice,
         ])?;
-        replace_rule_projects(tx, &rule.id, &rule.tag_ids)?;
-    }
-    Ok(())
-}
-
-fn insert_profiles(
-    tx: &rusqlite::Transaction<'_>,
-    profiles: &[AutomationProfileRecord],
-) -> Result<(), DatabaseError> {
-    let mut stmt = tx.prepare_cached(
-        "INSERT INTO automation_profiles (
-            id, name, translation_language, polish_preset_id, summary_template_id,
-            created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-    )?;
-    for profile in profiles {
-        stmt.execute(rusqlite::params![
-            &profile.id,
-            &profile.name,
-            &profile.translation_language,
-            &profile.polish_preset_id,
-            &profile.summary_template_id,
-            profile.created_at,
-            profile.updated_at,
-        ])?;
-        replace_profile_links(tx, profile)?;
-    }
-    Ok(())
-}
-
-fn replace_profile_links(
-    tx: &rusqlite::Transaction<'_>,
-    profile: &AutomationProfileRecord,
-) -> Result<(), DatabaseError> {
-    let groups = [
-        (
-            "text_replacement",
-            &profile.enabled_text_replacement_set_ids,
-        ),
-        ("hotword", &profile.enabled_hotword_set_ids),
-        ("polish_keyword", &profile.enabled_polish_keyword_set_ids),
-        ("speaker_profile", &profile.enabled_speaker_profile_ids),
-    ];
-    let mut stmt = tx.prepare_cached(
-        "INSERT INTO automation_profile_links (profile_id, kind, target_id, sort_order)
-         VALUES (?1, ?2, ?3, ?4)",
-    )?;
-    for (kind, ids) in groups {
-        for (sort_order, target_id) in ids.iter().enumerate() {
-            stmt.execute(rusqlite::params![
-                &profile.id,
-                kind,
-                target_id,
-                sort_order as i64,
-            ])?;
-        }
     }
     Ok(())
 }
@@ -514,17 +317,15 @@ fn insert_processed_entries(
 ) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_processed (
-            id, rule_id, kind, input_version, attempt, file_path, source_fingerprint,
+            id, rule_id, attempt, file_path, source_fingerprint,
             size, mtime_ms, status, processed_at, history_id, export_path, error_message
         )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
     )?;
     for entry in entries {
         stmt.execute(rusqlite::params![
             &entry.id,
             &entry.rule_id,
-            &entry.kind,
-            &entry.input_version,
             entry.attempt,
             &entry.file_path,
             &entry.source_fingerprint,
@@ -544,13 +345,8 @@ fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRul
     Ok(AutomationRuleRecord {
         id: row.get("id")?,
         name: row.get("name")?,
-        kind: row.get("kind")?,
-        priority: row.get("priority")?,
-        profile_id: row.get("profile_id")?,
-        profile_source: row.get("profile_source")?,
         save_history: row.get::<_, i64>("save_history")? != 0,
-        tag_ids: Vec::new(),
-        preset_id: row.get("preset_id")?,
+        project_id: row.get("project_id")?,
         watch_directory: row.get("watch_directory")?,
         recursive: row.get::<_, i64>("recursive")? != 0,
         enabled: row.get::<_, i64>("enabled")? != 0,
@@ -559,12 +355,6 @@ fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRul
             polish_preset_id: row.get("stage_polish_preset_id")?,
             auto_translate: row.get::<_, i64>("stage_auto_translate")? != 0,
             translation_language: row.get("stage_translation_language")?,
-            export_enabled: row.get::<_, i64>("stage_export_enabled")? != 0,
-        },
-        actions: sona_core::automation::repository::AutomationRuleInputActions {
-            auto_polish: row.get::<_, i64>("stage_auto_polish")? != 0,
-            auto_translate: row.get::<_, i64>("stage_auto_translate")? != 0,
-            auto_summary: row.get::<_, i64>("action_auto_summary")? != 0,
         },
         export_config: AutomationRuleRecordExportConfig {
             directory: row.get("export_directory")?,
@@ -574,92 +364,13 @@ fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRul
         },
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
-        migration_notice: row.get("migration_notice")?,
     })
-}
-
-fn map_row_to_profile_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationProfileRecord> {
-    Ok(AutomationProfileRecord {
-        id: row.get("id")?,
-        name: row.get("name")?,
-        translation_language: row.get("translation_language")?,
-        polish_preset_id: row.get("polish_preset_id")?,
-        summary_template_id: row.get("summary_template_id")?,
-        enabled_text_replacement_set_ids: Vec::new(),
-        enabled_hotword_set_ids: Vec::new(),
-        enabled_polish_keyword_set_ids: Vec::new(),
-        enabled_speaker_profile_ids: Vec::new(),
-        created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
-    })
-}
-
-fn hydrate_profile_links(
-    conn: &rusqlite::Connection,
-    profile: &mut AutomationProfileRecord,
-) -> Result<(), DatabaseError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT kind, target_id FROM automation_profile_links
-         WHERE profile_id = ?1 ORDER BY kind, sort_order, target_id",
-    )?;
-    let links = stmt
-        .query_map([profile.id.as_str()], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    for (kind, target_id) in links {
-        match kind.as_str() {
-            "text_replacement" => profile.enabled_text_replacement_set_ids.push(target_id),
-            "hotword" => profile.enabled_hotword_set_ids.push(target_id),
-            "polish_keyword" => profile.enabled_polish_keyword_set_ids.push(target_id),
-            "speaker_profile" => profile.enabled_speaker_profile_ids.push(target_id),
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-fn replace_rule_projects(
-    tx: &rusqlite::Transaction<'_>,
-    rule_id: &str,
-    project_ids: &[String],
-) -> Result<(), DatabaseError> {
-    tx.execute(
-        "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
-        [rule_id],
-    )?;
-    let mut stmt = tx.prepare_cached(
-        "INSERT INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
-    )?;
-    for project_id in project_ids {
-        stmt.execute(rusqlite::params![rule_id, project_id])?;
-    }
-    Ok(())
-}
-
-fn hydrate_rule_projects(
-    conn: &rusqlite::Connection,
-    rule: &mut AutomationRuleRecord,
-) -> Result<(), DatabaseError> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT arp.project_id
-         FROM automation_rule_projects arp
-         JOIN projects project ON project.id = arp.project_id
-         WHERE arp.rule_id = ?1
-         ORDER BY project.sort_order, project.id",
-    )?;
-    rule.tag_ids = stmt
-        .query_map([rule.id.as_str()], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(())
 }
 
 fn map_row_to_processed_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationProcessedRecord> {
     Ok(AutomationProcessedRecord {
         id: row.get("id")?,
         rule_id: row.get("rule_id")?,
-        kind: row.get("kind")?,
-        input_version: row.get("input_version")?,
         attempt: row.get("attempt")?,
         file_path: row.get("file_path")?,
         source_fingerprint: row.get("source_fingerprint")?,
@@ -708,27 +419,16 @@ mod tests {
         AutomationRuleRecord {
             id: id.into(),
             name: name.into(),
-            kind: "file".into(),
-            priority: 0,
-            profile_id: None,
-            profile_source: "tag_match".into(),
             save_history: true,
-            tag_ids: Vec::new(),
-            preset_id: "preset-1".into(),
+            project_id: String::new(),
             watch_directory: "C:\\watch".into(),
             recursive: true,
             enabled: true,
-            actions: sona_core::automation::repository::AutomationRuleInputActions {
-                auto_polish: true,
-                auto_translate: true,
-                auto_summary: false,
-            },
             stage_config: AutomationRuleRecordStageConfig {
                 auto_polish: true,
                 polish_preset_id: "polish-1".into(),
                 auto_translate: true,
                 translation_language: "zh".into(),
-                export_enabled: true,
             },
             export_config: AutomationRuleRecordExportConfig {
                 directory: "C:\\export".into(),
@@ -738,7 +438,6 @@ mod tests {
             },
             created_at: 100,
             updated_at: 200,
-            migration_notice: None,
         }
     }
 
@@ -746,8 +445,6 @@ mod tests {
         AutomationProcessedRecord {
             id: id.into(),
             rule_id: rule_id.into(),
-            kind: "file".into(),
-            input_version: "fingerprint".into(),
             attempt: 1,
             file_path: "C:\\watch\\audio.wav".into(),
             source_fingerprint: "fingerprint".into(),
@@ -771,7 +468,6 @@ mod tests {
     fn typed_state_round_trips() {
         let (_, repo) = repository();
         let state = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-1", "Rule")],
             processed_entries: vec![processed_record("entry-1", "rule-1")],
         };
@@ -785,7 +481,6 @@ mod tests {
     fn typed_state_loads_from_read_only_database() {
         let temp = tempdir().unwrap();
         let state = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-1", "Rule")],
             processed_entries: vec![processed_record("entry-1", "rule-1")],
         };
@@ -805,7 +500,6 @@ mod tests {
     fn replacing_rules_preserves_processed_entries() {
         let (_, repo) = repository();
         let initial = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-old", "Old")],
             processed_entries: vec![processed_record("entry-1", "rule-old")],
         };
@@ -822,7 +516,6 @@ mod tests {
     fn replacing_processed_entries_preserves_rules() {
         let (_, repo) = repository();
         let initial = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-1", "Rule")],
             processed_entries: vec![processed_record("entry-old", "rule-1")],
         };
@@ -843,7 +536,6 @@ mod tests {
         AutomationStore::replace_state(
             &repo,
             &AutomationRepositoryState {
-                profiles: Vec::new(),
                 rules: vec![rule_record("rule-z", "Z"), rule_record("rule-a", "A")],
                 processed_entries: vec![
                     processed_record("entry-z", "rule-z"),
@@ -886,7 +578,6 @@ mod tests {
         entry.export_path = None;
         entry.error_message = None;
         let state = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule],
             processed_entries: vec![entry],
         };
@@ -900,7 +591,6 @@ mod tests {
     fn full_state_replacement_rolls_back_both_collections() {
         let (db, repo) = repository();
         let initial = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-old", "Old")],
             processed_entries: vec![processed_record("entry-old", "rule-old")],
         };
@@ -916,7 +606,6 @@ mod tests {
         .unwrap();
 
         let replacement = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-new", "New")],
             processed_entries: vec![processed_record("entry-new", "rule-new")],
         };
@@ -927,33 +616,24 @@ mod tests {
 
         assert_eq!(AutomationStore::load_state(&repo).unwrap(), initial);
     }
+
     #[test]
-    fn rule_projects_round_trip_with_projects_table() {
-        let (db, repo) = repository();
-        db.with_write_connection(|conn| {
-            conn.execute(
-                "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('project-1', 'Project One', 1, 1)",
-                [],
-            )?;
-            conn.execute(
-                "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('project-2', 'Project Two', 2, 2)",
-                [],
-            )?;
-            Ok(())
-        })
-        .unwrap();
+    fn rule_project_id_round_trips_and_clears_when_not_saving_history() {
+        let (_, repo) = repository();
 
-        let mut rule = rule_record("rule-1", "Rule with Projects");
-        rule.tag_ids = vec!["project-1".to_string(), "project-2".to_string()];
+        let mut project_rule = rule_record("rule-1", "Rule with Project");
+        project_rule.project_id = "project-1".to_string();
 
-        AutomationStore::replace_rules(&repo, &[rule.clone()]).unwrap();
+        let mut export_rule = rule_record("rule-2", "Export Only");
+        export_rule.save_history = false;
+        export_rule.project_id = "should-be-cleared".to_string();
+
+        AutomationStore::replace_rules(&repo, &[project_rule, export_rule]).unwrap();
 
         let state = AutomationStore::load_state(&repo).unwrap();
-        assert_eq!(state.rules.len(), 1);
-        assert_eq!(
-            state.rules[0].tag_ids,
-            vec!["project-1".to_string(), "project-2".to_string()]
-        );
+        assert_eq!(state.rules.len(), 2);
+        assert_eq!(state.rules[0].project_id, "project-1");
+        assert_eq!(state.rules[1].project_id, "");
     }
 
     #[test]
@@ -967,7 +647,6 @@ mod tests {
 
         adapter
             .replace_state(AutomationRepositoryInput {
-                profiles: Vec::new(),
                 rules: vec![object(&[])],
                 processed_entries: vec![object(&[])],
             })
@@ -979,23 +658,16 @@ mod tests {
             vec![AutomationRuleRecord {
                 id: "rule-generated".into(),
                 name: "".into(),
-                kind: "file".into(),
-                priority: 0,
-                profile_id: None,
-                profile_source: "tag_match".into(),
                 save_history: true,
-                tag_ids: Vec::new(),
-                preset_id: "custom".into(),
+                project_id: "".into(),
                 watch_directory: "".into(),
                 recursive: false,
                 enabled: false,
-                actions: sona_core::automation::repository::AutomationRuleInputActions::default(),
                 stage_config: AutomationRuleRecordStageConfig {
                     auto_polish: false,
                     polish_preset_id: "general".into(),
                     auto_translate: false,
                     translation_language: "en".into(),
-                    export_enabled: false,
                 },
                 export_config: AutomationRuleRecordExportConfig {
                     directory: "".into(),
@@ -1005,13 +677,10 @@ mod tests {
                 },
                 created_at: 0,
                 updated_at: 0,
-                migration_notice: None,
             }]
         );
         assert_eq!(state.processed_entries[0].id, "entry-generated");
         assert_eq!(state.processed_entries[0].status, "complete");
-        assert_eq!(state.processed_entries[0].kind, "file");
-        assert_eq!(state.processed_entries[0].input_version, "");
         assert_eq!(state.processed_entries[0].attempt, 1);
     }
 
@@ -1019,7 +688,6 @@ mod tests {
     fn service_full_state_persistence_is_atomic() {
         let (db, repo) = repository();
         let initial = AutomationRepositoryState {
-            profiles: Vec::new(),
             rules: vec![rule_record("rule-old", "Old")],
             processed_entries: vec![processed_record("entry-old", "rule-old")],
         };
@@ -1037,7 +705,6 @@ mod tests {
 
         let result = AutomationRepositoryService::new(&repo, &ids).replace_state(
             AutomationRepositoryInput {
-                profiles: Vec::new(),
                 rules: vec![AutomationRuleInput {
                     id: Some("rule-new".into()),
                     name: "New".into(),

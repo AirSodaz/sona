@@ -78,7 +78,6 @@ function EntityKindIcon({ kind }: { kind: SyncEntityKind }): React.JSX.Element {
     case 'tag':
     case 'project':
       return <Tag size={15} />;
-    case 'automation_profile':
     case 'automation_rule':
       return <Bot size={15} />;
     default:

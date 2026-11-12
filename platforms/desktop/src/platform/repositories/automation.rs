@@ -1,8 +1,7 @@
 use serde_json::Value;
 use sona_core::automation::AutomationError;
 use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationProfileInput, AutomationRepositoryInput,
-    AutomationRuleInput,
+    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
 };
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
@@ -17,17 +16,18 @@ pub use sona_sqlite::automation::AutomationRepositoryState;
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
     global_config: &Value,
-    tags: &[Value],
+    projects: &[Value],
 ) -> Result<AutomationRuleValidationResult, AutomationError> {
-    validate_native_automation_rule_activation(rule, global_config, tags)
+    validate_native_automation_rule_activation(rule, global_config, projects)
 }
 
 pub async fn validate_rule_activation(
     rule: AutomationRule,
     global_config: Value,
-    tags: Vec<Value>,
+    projects: Vec<Value>,
 ) -> Result<AutomationRuleValidationResult, String> {
-    spawn_blocking_map(move || validate_rule_activation_inner(&rule, &global_config, &tags)).await
+    spawn_blocking_map(move || validate_rule_activation_inner(&rule, &global_config, &projects))
+        .await
 }
 
 async fn run_automation_adapter_task_with_sqlite<T, F>(
@@ -57,16 +57,6 @@ pub async fn persist_rules_with_sqlite(
 ) -> Result<(), String> {
     run_automation_adapter_task_with_sqlite(sqlite, move |adapter| adapter.replace_rules(rules))
         .await
-}
-
-pub async fn persist_profiles_with_sqlite(
-    sqlite: &crate::platform::database::DesktopSqliteState,
-    profiles: Vec<AutomationProfileInput>,
-) -> Result<(), String> {
-    run_automation_adapter_task_with_sqlite(sqlite, move |adapter| {
-        adapter.replace_profiles(profiles)
-    })
-    .await
 }
 
 pub async fn persist_processed_entries_with_sqlite(
@@ -111,13 +101,6 @@ pub async fn persist_rules<R: Runtime>(
     rules: Vec<AutomationRuleInput>,
 ) -> Result<(), String> {
     run_automation_adapter_task(app, move |adapter| adapter.replace_rules(rules)).await
-}
-
-pub async fn persist_profiles<R: Runtime>(
-    app: &AppHandle<R>,
-    profiles: Vec<AutomationProfileInput>,
-) -> Result<(), String> {
-    run_automation_adapter_task(app, move |adapter| adapter.replace_profiles(profiles)).await
 }
 
 pub async fn persist_processed_entries<R: Runtime>(

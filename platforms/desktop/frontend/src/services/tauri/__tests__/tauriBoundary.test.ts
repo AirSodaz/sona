@@ -412,7 +412,6 @@ describe('tauri boundary wrappers', () => {
             processedEntry as unknown as AutomationProcessedEntry,
           ]);
           await automationPersistRepositoryState(
-            [],
             [rule as unknown as AutomationRule],
             [processedEntry as unknown as AutomationProcessedEntry]
           );

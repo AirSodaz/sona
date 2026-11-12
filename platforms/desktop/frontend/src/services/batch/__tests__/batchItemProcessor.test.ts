@@ -745,6 +745,7 @@ describe('BatchItemProcessor', () => {
         mode: 'original',
         format: 'srt',
         directory: '/custom/export',
+        prefix: '',
       },
       pipelineSnapshot: {
         isProjectPipeline: true,

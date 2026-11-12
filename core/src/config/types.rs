@@ -392,14 +392,6 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polish_scenario: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_polish: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(
-        feature = "specta",
-        specta(type = Option<specta_typescript::Number>)
-    )]
-    pub auto_polish_frequency: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_request_timeout_seconds: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_replacement_sets: Option<Vec<TextReplacementSetRecord>>,

@@ -274,6 +274,46 @@ export function ProjectSettingsModal({
                         style={{ width: '100%' }}
                         aria-label={t('automation.auto_polish', { defaultValue: 'Auto Polish' })}
                       />
+                      <Dropdown
+                        value={String(pipeline.autoPolishFrequency ?? 5)}
+                        onChange={(value) =>
+                          updatePipeline({ autoPolishFrequency: Number(value) || 5 })
+                        }
+                        options={[
+                          {
+                            value: '3',
+                            label: t('polish.every_n_segments', {
+                              count: 3,
+                              defaultValue: 'Every 3 segments',
+                            }),
+                          },
+                          {
+                            value: '5',
+                            label: t('polish.every_n_segments', {
+                              count: 5,
+                              defaultValue: 'Every 5 segments',
+                            }),
+                          },
+                          {
+                            value: '10',
+                            label: t('polish.every_n_segments', {
+                              count: 10,
+                              defaultValue: 'Every 10 segments',
+                            }),
+                          },
+                          {
+                            value: '15',
+                            label: t('polish.every_n_segments', {
+                              count: 15,
+                              defaultValue: 'Every 15 segments',
+                            }),
+                          },
+                        ]}
+                        style={{ width: '100%', marginTop: '8px' }}
+                        aria-label={t('settings.polish_auto_frequency_title', {
+                          defaultValue: 'Live Recording Polish Frequency',
+                        })}
+                      />
                     </div>
                   )}
                 </div>

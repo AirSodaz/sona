@@ -93,7 +93,7 @@ describe('ToolsView', () => {
 
     // Check sidebar tabs
     const sidebarTabs = screen.getAllByRole('tab');
-    expect(sidebarTabs).toHaveLength(6);
+    expect(sidebarTabs).toHaveLength(7);
     expect(sidebarTabs[0].textContent).toContain('Live Subtitles');
     expect(sidebarTabs[0].getAttribute('id')).toBe('tools-tab-subtitles');
     expect(sidebarTabs[0].getAttribute('aria-controls')).toBe('tools-panel-subtitles');
@@ -123,6 +123,8 @@ describe('ToolsView', () => {
     expect(sidebarTabs[5].getAttribute('id')).toBe('tools-tab-emby_sync');
     expect(sidebarTabs[5].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
     expect(sidebarTabs[5].getAttribute('tabindex')).toBe('-1');
+    expect(sidebarTabs[6].textContent).toContain('Automation');
+    expect(sidebarTabs[6].getAttribute('id')).toBe('tools-tab-automation');
 
     // Check default subtitles panel is visible and unselected panels are hidden
     expect(
@@ -283,17 +285,17 @@ describe('ToolsView', () => {
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('api_server');
 
-    // End -> emby_sync (tab 4)
+    // End -> automation (last tab)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
+    expect(useToolsStore.getState().activeTool).toBe('automation');
 
     // ArrowDown wraps -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
 
-    // ArrowUp wraps -> emby_sync (tab 4)
+    // ArrowUp wraps -> automation (last tab)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
+    expect(useToolsStore.getState().activeTool).toBe('automation');
     // Home -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'Home' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');

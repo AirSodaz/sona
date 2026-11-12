@@ -15,6 +15,12 @@ use crate::config::AppConfig;
 pub struct ProjectPipelineConfig {
     pub enabled: bool,
     pub auto_polish: bool,
+    #[serde(default)]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
+    pub auto_polish_frequency: Option<i64>,
     pub polish_preset_id: Option<String>,
     pub polish_prompt_override: Option<String>,
     pub auto_translate: bool,
@@ -104,6 +110,8 @@ pub struct ProjectRepositorySnapshot {
 pub struct EffectivePipelineSnapshot {
     pub is_project_pipeline: bool,
     pub auto_polish: bool,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub auto_polish_frequency: i64,
     pub polish_preset_id: Option<String>,
     pub polish_prompt_override: Option<String>,
     pub auto_translate: bool,
@@ -122,12 +130,13 @@ pub struct EffectivePipelineSnapshot {
 fn global_snapshot(config: &AppConfig) -> EffectivePipelineSnapshot {
     EffectivePipelineSnapshot {
         is_project_pipeline: false,
-        auto_polish: config.auto_polish.unwrap_or(false),
+        auto_polish: false,
+        auto_polish_frequency: 5,
         polish_preset_id: config.polish_preset_id.clone(),
         polish_prompt_override: None,
         auto_translate: false,
         target_language: config.translation_language.clone(),
-        auto_summary: config.summary_enabled.unwrap_or(false),
+        auto_summary: false,
         summary_template_id: config.summary_template_id.clone(),
         hotword_set_ids: Vec::new(),
         replacement_set_ids: Vec::new(),
@@ -154,6 +163,10 @@ pub fn resolve_item_pipeline(
     EffectivePipelineSnapshot {
         is_project_pipeline: true,
         auto_polish: pipeline.auto_polish,
+        auto_polish_frequency: pipeline
+            .auto_polish_frequency
+            .filter(|v| *v > 0)
+            .unwrap_or(5),
         polish_preset_id: pipeline
             .polish_preset_id
             .clone()
@@ -191,7 +204,6 @@ mod tests {
 
     fn config() -> AppConfig {
         AppConfig {
-            auto_polish: Some(true),
             polish_preset_id: Some("global".into()),
             translation_language: Some("zh".into()),
             summary_enabled: Some(true),
@@ -223,6 +235,12 @@ mod tests {
                 .as_deref(),
             Some("global")
         );
+        let inbox = resolve_item_pipeline(None, &projects, &config());
+        assert!(!inbox.auto_polish);
+        assert!(!inbox.auto_translate);
+        assert!(!inbox.auto_summary);
+        assert!(!inbox.auto_export);
+        assert_eq!(inbox.auto_polish_frequency, 5);
     }
 
     #[test]
@@ -230,6 +248,7 @@ mod tests {
         let pipeline = ProjectPipelineConfig {
             enabled: true,
             auto_polish: false,
+            auto_polish_frequency: Some(10),
             auto_translate: true,
             target_language: Some("en".into()),
             hotword_set_ids: vec!["hot".into()],
@@ -242,6 +261,17 @@ mod tests {
         assert!(snapshot.auto_translate);
         assert_eq!(snapshot.target_language.as_deref(), Some("en"));
         assert_eq!(snapshot.summary_template_id.as_deref(), Some("default"));
+        assert_eq!(snapshot.auto_polish_frequency, 10);
+
+        let zero_freq = ProjectPipelineConfig {
+            enabled: true,
+            auto_polish: true,
+            auto_polish_frequency: Some(0),
+            ..Default::default()
+        };
+        let fallback_snapshot =
+            resolve_item_pipeline(Some("p1"), &[project(Some(zero_freq))], &config());
+        assert_eq!(fallback_snapshot.auto_polish_frequency, 5);
         assert_eq!(
             snapshot.custom_terms,
             vec!["Sona".to_string(), "K8s".to_string()]

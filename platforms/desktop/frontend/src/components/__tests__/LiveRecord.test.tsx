@@ -1012,8 +1012,6 @@ describe('LiveRecord', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        autoPolish: false,
-        autoPolishFrequency: 1,
         polishPresetId: 'clean',
       },
     });
@@ -1129,7 +1127,6 @@ describe('LiveRecord', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        autoTranslate: false,
       },
     });
     useProjectStore.setState({

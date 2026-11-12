@@ -6,6 +6,13 @@ use crate::ports::asr::{
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
+const LEGACY_GLOBAL_AUTO_KEYS: [&str; 4] = [
+    "autoPolish",
+    "autoPolishFrequency",
+    "autoTranslate",
+    "autoSummary",
+];
+
 pub(crate) fn migrate_app_config_inner(
     saved_config: Option<Value>,
     default_rule_set_name: &str,
@@ -66,6 +73,12 @@ fn should_upgrade_config(config: &Value) -> bool {
     if version < CURRENT_CONFIG_VERSION {
         return true;
     }
+    if LEGACY_GLOBAL_AUTO_KEYS
+        .iter()
+        .any(|key| config.get(*key).is_some())
+    {
+        return true;
+    }
 
     if config.get("summaryEnabled").is_none() {
         return true;
@@ -119,6 +132,11 @@ fn should_upgrade_config(config: &Value) -> bool {
 fn normalize_current_config(existing: Value) -> Value {
     let original = existing.clone();
     let mut config = merge_default(existing);
+    if let Some(object) = config.as_object_mut() {
+        for key in LEGACY_GLOBAL_AUTO_KEYS {
+            object.remove(key);
+        }
+    }
     let summary_custom_templates =
         normalize_summary_custom_templates(config.get("summaryCustomTemplates"));
     let summary_template_id = coerce_summary_template_id(
@@ -275,6 +293,12 @@ fn flatten_id_value(value: &Value) -> Option<&str> {
 }
 
 fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
+    if LEGACY_GLOBAL_AUTO_KEYS
+        .iter()
+        .any(|key| existing.get(*key).is_some())
+    {
+        return true;
+    }
     if existing.get("llmSettings") != normalized.get("llmSettings") {
         return true;
     }
@@ -808,14 +832,6 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             ),
         ),
         (
-            "autoPolish",
-            json!(bool_at(&parsed, "autoPolish").unwrap_or(false)),
-        ),
-        (
-            "autoPolishFrequency",
-            json!(number_or_default(&parsed, "autoPolishFrequency", 5)),
-        ),
-        (
             "autoCheckUpdates",
             json!(bool_at(&parsed, "autoCheckUpdates").unwrap_or(true)),
         ),
@@ -994,6 +1010,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             "recognitionModelPath",
             "offlineModelPath",
             "modelPath",
+            "autoPolish",
+            "autoPolishFrequency",
+            "autoTranslate",
+            "autoSummary",
         ] {
             object.remove(key);
         }
@@ -1095,7 +1115,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "enableITN",
         "batchVadEnabled",
         "summaryEnabled",
-        "autoPolish",
         "voiceTypingEnabled",
         "httpServerEnabled",
         "mcpEnabled",
@@ -1119,7 +1138,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
     for key in [
         "configVersion",
         "maxConcurrent",
-        "autoPolishFrequency",
         "httpServerPort",
         "httpServerMaxConcurrent",
         "httpServerMaxQueueSize",

@@ -235,6 +235,8 @@
     "api_server_desc": "Local HTTP audio transcription API",
     "mcp": "MCP Agents",
     "mcp_desc": "Model Context Protocol agent server",
+    "automation": "Automation",
+    "automation_desc": "Watch folders and route recordings into projects or exports",
     "emby_sync": "Media Server Subtitle Assistant",
     "emby_sync_desc": "Detect missing subtitles in Emby and Jellyfin with local transcription",
     "media_server": {

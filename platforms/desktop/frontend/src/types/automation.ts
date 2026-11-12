@@ -2,78 +2,28 @@ import type { ExportFormat, ExportMode } from '../utils/exportFormats';
 
 export type { AutomationRuleValidationResult } from '../bindings';
 
-export type AutomationPresetId =
-  | 'meeting_notes'
-  | 'lecture_notes'
-  | 'bilingual_subtitles'
-  | 'custom';
-
-export type BuiltInAutomationPresetId = Exclude<AutomationPresetId, 'custom'>;
-
-export type AutomationRuleKind = 'tag' | 'file';
-
-export interface AutomationProfile {
-  id: string;
-  name: string;
-  translationLanguage: string;
-  polishPresetId: string;
-  summaryTemplateId: string;
-  enabledTextReplacementSetIds: string[];
-  enabledHotwordSetIds: string[];
-  enabledPolishKeywordSetIds: string[];
-  enabledSpeakerProfileIds: string[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface AutomationActions {
-  autoPolish: boolean;
-  autoTranslate: boolean;
-  autoSummary: boolean;
-}
-
 export interface AutomationStageConfig {
   autoPolish: boolean;
   polishPresetId?: string;
   autoTranslate: boolean;
   translationLanguage?: string;
-  autoSummary?: boolean;
-  exportEnabled: boolean;
-}
-
-export interface AutomationResolutionSnapshot {
-  fileRuleId?: string;
-  tagRuleId?: string;
-  profileId?: string;
-  profileSource: 'file' | 'tag' | 'global';
-  actions: AutomationActions;
-  resolvedAt: number;
 }
 
 export interface AutomationExportConfig {
   directory: string;
   format: ExportFormat;
   mode: ExportMode;
-  prefix?: string;
+  prefix: string;
 }
 
 export interface AutomationRule {
   id: string;
   name: string;
-  kind?: AutomationRuleKind;
-  priority?: number;
-  profileId?: string;
-  profileSource?: 'explicit' | 'tag_match' | string;
-  saveHistory?: boolean;
-  tagIds?: string[];
-  /** @deprecated Single-target compatibility alias. */
-  projectId?: string;
-  presetId: AutomationPresetId;
+  saveHistory: boolean;
+  projectId: string;
   watchDirectory: string;
   recursive: boolean;
   enabled: boolean;
-  actions?: AutomationActions;
-  migrationNotice?: string;
   stageConfig: AutomationStageConfig;
   exportConfig: AutomationExportConfig;
   createdAt: number;
@@ -107,26 +57,14 @@ export interface AutomationRuntimeState {
 export interface AutomationProcessedEntry {
   id?: string;
   ruleId: string;
-  kind?: AutomationRuleKind;
-  inputVersion?: string;
-  attempt?: number;
+  attempt: number;
   filePath: string;
   sourceFingerprint: string;
   size: number;
   mtimeMs: number;
   status: 'pending' | 'complete' | 'error' | 'discarded';
   processedAt: number;
-  historyId?: string;
-  exportPath?: string;
-  errorMessage?: string;
-}
-
-export interface AutomationPresetDefinition {
-  id: AutomationPresetId;
-  labelKey: string;
-  defaultLabel: string;
-  descriptionKey: string;
-  defaultDescription: string;
-  stageConfig: AutomationStageConfig;
-  exportConfig: Pick<AutomationExportConfig, 'format' | 'mode'>;
+  historyId?: string | null;
+  exportPath?: string | null;
+  errorMessage?: string | null;
 }

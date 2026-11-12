@@ -16,7 +16,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { speakerService } from '../../services/speakerService';
 import { openDialog } from '../../services/tauri/platform/dialog';
 import { remove } from '../../services/tauri/platform/fs';
-import { useAutomationStore } from '../../stores/automationStore';
 import { useSetConfig, useVocabularyConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -50,7 +49,6 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
   const config = useVocabularyConfig();
   const updateConfig = useSetConfig();
   const showError = useDialogStore((state) => state.showError);
-  const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
   const projects = useProjectStore((state) => state.projects);
 
   const [newProfileName, setNewProfileName] = useState('');
@@ -205,7 +203,6 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
     });
 
     await Promise.allSettled(profile.samples.map((sample) => remove(sample.filePath)));
-    await removeProfileDependency('speakerProfile', profile.id);
   };
 
   const handleDeleteSample = async (profileId: string, sampleId: string) => {

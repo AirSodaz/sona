@@ -1,0 +1,118 @@
+.automation-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.automation-empty,
+.automation-export-notice,
+.automation-pipeline-card {
+  color: var(--text-secondary, var(--muted));
+}
+
+.automation-rule-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.automation-rule-card-header,
+.automation-rule-flow,
+.automation-rule-actions,
+.automation-path-row,
+.automation-switch-row,
+.automation-mode-switch,
+.automation-failed-entry,
+.automation-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-rule-card-header,
+.automation-failed-entry,
+.automation-modal-footer {
+  justify-content: space-between;
+}
+
+.automation-rule-card-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.automation-status-dot,
+.automation-status-chip,
+.automation-recursive-badge {
+  border-radius: 999px;
+}
+
+.automation-status-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--muted);
+}
+
+.automation-status-dot.is-watching,
+.automation-status-dot.is-scanning {
+  background: var(--success);
+}
+
+.automation-status-dot.is-error {
+  background: var(--error);
+}
+
+.automation-status-chip,
+.automation-recursive-badge {
+  padding: 2px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.automation-rule-flow {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.automation-rule-form,
+.automation-rule-exceptions,
+.automation-failed-entry > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.automation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.automation-field input,
+.automation-path-row input {
+  width: 100%;
+}
+
+.automation-path-row input {
+  flex: 1;
+}
+
+.automation-mode-switch button {
+  flex: 1;
+}
+
+.automation-mode-switch button.is-active {
+  border-color: var(--accent);
+}
+
+.automation-pipeline-card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}

@@ -7,7 +7,6 @@ import {
   setFeatureModelSelection,
   updateProviderSetting,
 } from '../../../services/llm/state';
-import { useAutomationStore } from '../../../stores/automationStore';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { SettingsNavigationProvider } from '../SettingsNavigationContext';
@@ -94,23 +93,6 @@ describe('SettingsVocabularyTab', () => {
       ],
       activeProjectId: null,
     });
-    useAutomationStore.setState({
-      profiles: [
-        {
-          id: 'profile-1',
-          name: 'Team profile',
-          translationLanguage: 'en',
-          polishPresetId: 'custom-team',
-          summaryTemplateId: 'summary-team',
-          enabledTextReplacementSetIds: ['text-1'],
-          enabledHotwordSetIds: ['hot-1'],
-          enabledPolishKeywordSetIds: ['kw-1'],
-          enabledSpeakerProfileIds: ['speaker-1'],
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ],
-    });
   });
 
   it('renders secondary category tabs and switches between recognition and prompts sections', () => {
@@ -185,7 +167,6 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([]);
       expect(useConfigStore.getState().config.summaryTemplateId).toBe('general');
-      expect(useAutomationStore.getState().profiles[0].summaryTemplateId).toBe('general');
     });
   });
 
@@ -220,7 +201,6 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
       expect(useConfigStore.getState().config.polishPresetId).toBe('clean');
-      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('clean');
     });
   });
 
@@ -237,7 +217,6 @@ describe('SettingsVocabularyTab', () => {
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.speakerProfiles).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledSpeakerProfileIds).toEqual([]);
     });
   });
 

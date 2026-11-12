@@ -175,7 +175,6 @@ fn manifest_for_dataset(
         dataset.history.items.len(),
         dataset.history.transcript_files.len(),
         dataset.history.summary_files.len(),
-        dataset.automation.profiles.len(),
         dataset.automation.rules.len(),
         dataset.automation.processed_entries.len(),
     )
@@ -207,14 +206,7 @@ fn validate_preview(preview: &PreparedBackupImport) -> Result<(), BackupError> {
     ensure_config_object(&preview.config)?;
     ensure_analytics_json(&preview.analytics_content)?;
     ensure_count(preview.manifest.counts.tags, preview.tags.len(), "tag")?;
-    if preview.manifest.schema_version >= 3 {
-        ensure_count(
-            preview.manifest.counts.automation_profiles,
-            preview.automation_profiles.len(),
-            "automation-profile",
-        )?;
-    }
-    if preview.manifest.schema_version >= 3 {
+    if preview.manifest.schema_version >= sona_core::backup::BACKUP_SCHEMA_VERSION {
         ensure_count(
             preview.manifest.counts.automation_rules,
             preview.automation_rules.len(),
@@ -254,14 +246,7 @@ fn validate_manifest_counts(
         dataset.history.summary_files.len(),
         "summary",
     )?;
-    if manifest.schema_version >= 3 {
-        ensure_count(
-            manifest.counts.automation_profiles,
-            dataset.automation.profiles.len(),
-            "automation-profile",
-        )?;
-    }
-    if manifest.schema_version >= 3 {
+    if manifest.schema_version >= sona_core::backup::BACKUP_SCHEMA_VERSION {
         ensure_count(
             manifest.counts.automation_rules,
             dataset.automation.rules.len(),

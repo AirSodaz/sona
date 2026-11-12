@@ -2,11 +2,7 @@ import type {
   RecoveredQueueItem_Serialize as CoreRecoveredQueueItem,
   RecoverySnapshot_Serialize as CoreRecoverySnapshot,
 } from '../bindings';
-import type {
-  AutomationExportConfig,
-  AutomationResolutionSnapshot,
-  AutomationStageConfig,
-} from './automation';
+import type { AutomationExportConfig, AutomationStageConfig } from './automation';
 import type { AppConfig } from './config';
 import type { TranscriptSegment } from './transcript';
 
@@ -21,7 +17,6 @@ export interface RecoveredQueueItem
     | 'automationRuleId'
     | 'automationRuleName'
     | 'resolvedConfigSnapshot'
-    | 'automationResolutionSnapshot'
     | 'exportConfig'
     | 'stageConfig'
     | 'sourceFingerprint'
@@ -38,7 +33,6 @@ export interface RecoveredQueueItem
   automationRuleId?: string;
   automationRuleName?: string;
   resolvedConfigSnapshot?: AppConfig;
-  automationResolutionSnapshot?: AutomationResolutionSnapshot;
   exportConfig?: AutomationExportConfig | null;
   stageConfig?: AutomationStageConfig | null;
   sourceFingerprint?: string;

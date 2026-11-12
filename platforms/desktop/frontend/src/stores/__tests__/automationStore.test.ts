@@ -158,20 +158,22 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   return {
     id: 'rule-1',
     name: 'Meeting Inbox',
+    saveHistory: true,
     projectId: projectRecord.id,
-    presetId: 'meeting_notes',
     watchDirectory: 'C:\\watch',
     recursive: true,
     enabled: true,
     stageConfig: {
       autoPolish: true,
+      polishPresetId: 'clean',
       autoTranslate: false,
-      exportEnabled: true,
+      translationLanguage: 'en',
     },
     exportConfig: {
       directory: 'C:\\exports',
       format: 'txt',
       mode: 'original',
+      prefix: '',
     },
     createdAt: 1,
     updatedAt: 1,
@@ -281,24 +283,18 @@ describe('automationStore', () => {
       id: 'rule-export-only',
       name: 'Export Only Watcher',
       saveHistory: false,
-      projectId: 'none',
-      tagIds: [],
-      actions: {
-        autoPolish: true,
-        autoTranslate: true,
-        autoSummary: false,
-      },
+      projectId: '',
       stageConfig: {
         autoPolish: true,
         polishPresetId: 'interview',
         autoTranslate: true,
         translationLanguage: 'ja',
-        exportEnabled: true,
       },
       exportConfig: {
         directory: 'C:\\exports',
         format: 'srt',
         mode: 'translation',
+        prefix: '',
       },
     });
     loadAutomationRulesMock.mockResolvedValue([rule]);
@@ -359,6 +355,7 @@ describe('automationStore', () => {
     loadAutomationProcessedEntriesMock.mockResolvedValue([
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\meeting.wav',
         sourceFingerprint: 'fp-1',
         size: 42,
@@ -425,20 +422,20 @@ describe('automationStore', () => {
     await expect(
       useAutomationStore.getState().saveRule({
         name: 'Invalid Rule',
+        saveHistory: true,
         projectId: projectRecord.id,
-        presetId: 'meeting_notes',
         watchDirectory: 'C:\\watch',
         recursive: false,
         enabled: true,
         stageConfig: {
           autoPolish: true,
           autoTranslate: false,
-          exportEnabled: true,
         },
         exportConfig: {
           directory: 'C:\\exports',
           format: 'txt',
           mode: 'original',
+          prefix: '',
         },
       })
     ).rejects.toThrow('Missing batch model.');
@@ -489,6 +486,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -499,6 +497,7 @@ describe('automationStore', () => {
     };
     const completeEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\done.wav',
       sourceFingerprint: 'done-fingerprint',
       size: 9,
@@ -574,6 +573,7 @@ describe('automationStore', () => {
     const failedEntries = [
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\failed-a.wav',
         sourceFingerprint: 'failed-fingerprint-a',
         size: 8,
@@ -584,6 +584,7 @@ describe('automationStore', () => {
       },
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\failed-b.wav',
         sourceFingerprint: 'failed-fingerprint-b',
         size: 9,
@@ -657,6 +658,7 @@ describe('automationStore', () => {
     const candidateCount = 8;
     const failedEntries = Array.from({ length: candidateCount }, (_, index) => ({
       ruleId: rule.id,
+      attempt: 1,
       filePath: `C:\\watch\\failed-${index}.wav`,
       sourceFingerprint: `failed-fingerprint-${index}`,
       size: 8 + index,
@@ -716,6 +718,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -792,6 +795,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -859,6 +863,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const targetEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\target.wav',
       sourceFingerprint: 'target-fingerprint',
       size: 8,
@@ -869,6 +874,7 @@ describe('automationStore', () => {
     };
     const otherEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\other.wav',
       sourceFingerprint: 'other-fingerprint',
       size: 9,
@@ -928,6 +934,7 @@ describe('automationStore', () => {
   it('keeps the failed entry when a single automation ledger file retry has no rule', async () => {
     const failedEntry = {
       ruleId: 'missing-rule',
+      attempt: 1,
       filePath: 'C:\\watch\\orphan.wav',
       sourceFingerprint: 'orphan-fingerprint',
       size: 8,
@@ -958,6 +965,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\missing.wav',
       sourceFingerprint: 'missing-fingerprint',
       size: 8,
@@ -995,6 +1003,7 @@ describe('automationStore', () => {
     expect(useAutomationStore.getState().processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         status: 'error',
         errorMessage: 'Source file is no longer available for retry.',
@@ -1013,6 +1022,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\blocked.wav',
       sourceFingerprint: 'blocked-fingerprint',
       size: 8,
@@ -1058,6 +1068,7 @@ describe('automationStore', () => {
     expect(useAutomationStore.getState().processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         sourceFingerprint: 'retry-blocked-fingerprint',
         status: 'error',
@@ -1077,6 +1088,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false, projectId: 'missing-project' });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\project-missing.wav',
       sourceFingerprint: 'project-fingerprint',
       size: 8,
@@ -1129,6 +1141,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\blocked.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -1188,6 +1201,7 @@ describe('automationStore', () => {
     expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         sourceFingerprint: 'blocked-fingerprint',
         size: 12,
@@ -1218,6 +1232,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\missing.wav',
       sourceFingerprint: 'missing-fingerprint',
       size: 8,
@@ -1277,6 +1292,7 @@ describe('automationStore', () => {
     expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         status: 'error',
         size: 0,
@@ -1607,6 +1623,7 @@ describe('automationStore', () => {
     const rule = createRule();
     const successfulEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\done.wav',
       sourceFingerprint: 'fp-success',
       size: 10,

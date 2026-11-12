@@ -235,6 +235,8 @@
     "api_server_desc": "本機 HTTP 音訊轉錄介面",
     "mcp": "MCP 智慧體",
     "mcp_desc": "AI Agent 協定服務端",
+    "automation": "自動化",
+    "automation_desc": "監視資料夾，並將錄音送入專案或匯出目錄",
     "emby_sync": "媒體伺服器字幕助手",
     "emby_sync_desc": "檢測 Emby 和 Jellyfin 缺失字幕並離線轉錄自動補全",
     "media_server": {

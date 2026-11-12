@@ -422,3 +422,37 @@ fn speaker_diarization_enabled_upgrades_legacy_config_versions() {
     assert_eq!(result.config["batchSpeakerDiarizationEnabled"], true);
     assert_eq!(result.config["liveSpeakerDiarizationEnabled"], true);
 }
+
+#[test]
+fn migration_v9_strips_legacy_global_auto_keys_and_preserves_fallbacks() {
+    let mut v8 = default_config();
+    v8["configVersion"] = json!(8);
+    v8["autoPolish"] = json!(true);
+    v8["autoPolishFrequency"] = json!(10);
+    v8["autoTranslate"] = json!(true);
+    v8["autoSummary"] = json!(true);
+    v8["polishPresetId"] = json!("formal");
+    v8["translationLanguage"] = json!("ja");
+    v8["summaryTemplateId"] = json!("meeting");
+    v8["summaryEnabled"] = json!(true);
+
+    let result = migrate_app_config(Some(v8), "Default Rules".to_string());
+    assert!(result.migrated);
+    assert_eq!(result.config["configVersion"], json!(9));
+    assert!(result.config.get("autoPolish").is_none());
+    assert!(result.config.get("autoPolishFrequency").is_none());
+    assert!(result.config.get("autoTranslate").is_none());
+    assert!(result.config.get("autoSummary").is_none());
+    assert_eq!(result.config["polishPresetId"], "formal");
+    assert_eq!(result.config["translationLanguage"], "ja");
+    assert_eq!(result.config["summaryTemplateId"], "meeting");
+    assert_eq!(result.config["summaryEnabled"], true);
+    validate_app_config(&result.config).expect("v9 config should validate");
+
+    // Even if configVersion is already 9, presence of legacy keys triggers stripping
+    let mut dirty_v9 = result.config.clone();
+    dirty_v9["autoPolish"] = json!(true);
+    let cleaned = migrate_app_config(Some(dirty_v9), "Default Rules".to_string());
+    assert!(cleaned.migrated);
+    assert!(cleaned.config.get("autoPolish").is_none());
+}

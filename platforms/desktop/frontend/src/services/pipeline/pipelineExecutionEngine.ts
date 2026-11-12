@@ -29,6 +29,7 @@ export interface ExecutePipelineOptions {
   pipeline: EffectivePipelineSnapshot;
   globalConfig: AppConfig;
   baseFileName?: string;
+  exportMode?: ExportMode;
   onProgress?: (stage: PipelineStage, progress: number) => void;
   onSegmentsUpdated?: (segments: TranscriptSegment[]) => void | Promise<void>;
   onExportComplete?: (exportPath: string) => void;
@@ -84,6 +85,7 @@ export class PipelineExecutionEngine {
       onSegmentsUpdated,
       onExportComplete,
       isCancelRequested,
+      exportMode,
     } = options;
 
     let currentSegments = [...options.segments];
@@ -281,7 +283,8 @@ export class PipelineExecutionEngine {
       this.throwIfCancelled(isCancelRequested);
       onProgress?.('exporting', 100);
       const format = (pipeline.exportFormat as ExportFormat) || 'txt';
-      const mode: ExportMode = pipeline.autoTranslate ? 'bilingual' : 'original';
+      const mode: ExportMode =
+        exportMode ?? pipeline.exportMode ?? (pipeline.autoTranslate ? 'bilingual' : 'original');
       const prefix = (pipeline.exportFileNamePrefix || '').trim();
       const rawBaseName = baseFileName || historyId || 'transcript';
       const finalBaseName = prefix ? `${prefix} ${rawBaseName}`.trim() : rawBaseName;

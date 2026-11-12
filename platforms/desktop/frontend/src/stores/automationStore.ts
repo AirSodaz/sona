@@ -3,7 +3,6 @@ import { create } from 'zustand';
 import {
   loadAutomationRepositoryState,
   persistAutomationProcessedEntries,
-  persistAutomationProfiles,
   persistAutomationRepositoryState,
   persistAutomationRules,
   validateAutomationRuleActivation,
@@ -47,13 +46,11 @@ import {
 } from '../services/recoveryService';
 import type {
   AutomationProcessedEntry,
-  AutomationProfile,
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
-import { DEFAULT_POLISH_PRESET_ID } from '../utils/polishPresets';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -61,60 +58,29 @@ import { useProjectStore } from './projectStore';
 interface SaveRuleInput {
   id?: string;
   name: string;
-  kind?: AutomationRule['kind'];
-  priority?: number;
-  profileId?: string;
-  profileSource?: string;
   saveHistory?: boolean;
-  tagIds?: string[];
-  /** @deprecated */
   projectId?: string;
-  presetId: AutomationRule['presetId'];
   watchDirectory: string;
   recursive: boolean;
   stageConfig: AutomationRule['stageConfig'];
   exportConfig: AutomationRule['exportConfig'];
   enabled?: boolean;
-  actions?: AutomationRule['actions'];
-  migrationNotice?: string;
 }
-
-interface SaveProfileInput extends Omit<AutomationProfile, 'id' | 'createdAt' | 'updatedAt'> {
-  id?: string;
-}
-
-type AutomationProfileDependencyKind =
-  | 'polishPreset'
-  | 'summaryTemplate'
-  | 'textReplacementSet'
-  | 'hotwordSet'
-  | 'polishKeywordSet'
-  | 'speakerProfile';
 
 interface AutomationState {
-  profiles: AutomationProfile[];
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
   runtimeStates: Record<string, AutomationRuntimeState>;
   notifications: AutomationSessionNotification[];
   isLoaded: boolean;
   error: string | null;
-  focusTagId: string | null;
-  setFocusTagId: (tagId: string | null) => void;
   loadAndStart: () => Promise<void>;
   saveRule: (input: SaveRuleInput) => Promise<AutomationRule>;
-  saveProfile: (input: SaveProfileInput) => Promise<AutomationProfile>;
-  deleteProfile: (profileId: string) => Promise<void>;
-  removeProfileDependency: (
-    kind: AutomationProfileDependencyKind,
-    dependencyId: string
-  ) => Promise<void>;
   deleteRule: (ruleId: string) => Promise<void>;
   toggleRuleEnabled: (ruleId: string, enabled: boolean) => Promise<void>;
   scanRuleNow: (ruleId: string) => Promise<void>;
   retryFailed: (ruleId: string) => Promise<void>;
   retryFailedFile: (ruleId: string, filePath: string) => Promise<void>;
-  applyTagRuleToExisting: (ruleId: string) => Promise<number>;
   dismissNotification: (notificationId: string) => void;
   retryNotification: (notificationId: string) => Promise<void>;
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
@@ -127,9 +93,7 @@ async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void>
 
 async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string }) {
   const state = useAutomationStore.getState();
-  const enabledRules = state.rules.filter(
-    (rule) => rule.enabled && (rule.kind ?? 'file') === 'file'
-  );
+  const enabledRules = state.rules.filter((rule) => rule.enabled);
 
   await automationRuntimeCoordinator.ensureRuntimeCandidateListener();
 
@@ -259,23 +223,18 @@ async function scanRule(ruleId: string) {
 
 export const useAutomationStore = create<AutomationState>((set, get) => ({
   rules: [],
-  profiles: [],
   processedEntries: [],
   runtimeStates: {},
   notifications: [],
   isLoaded: false,
   error: null,
-  focusTagId: null,
-
-  setFocusTagId: (tagId) => set({ focusTagId: tagId }),
 
   loadAndStart: async () => {
     await get().stopAll();
-    const { profiles, rules, processedEntries } = await loadAutomationRepositoryState();
+    const { rules, processedEntries } = await loadAutomationRepositoryState();
 
     set({
       rules,
-      profiles,
       processedEntries,
       runtimeStates: rebuildRuntimeStates(rules, processedEntries, {}),
       notifications: [],
@@ -291,39 +250,36 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const now = Date.now();
     const state = get();
     const existing = input.id ? state.rules.find((rule) => rule.id === input.id) : null;
+    const saveHistory = input.saveHistory ?? existing?.saveHistory ?? true;
+    const projectId = saveHistory ? input.projectId?.trim() || existing?.projectId || 'inbox' : '';
+    const exportMode =
+      saveHistory || !input.stageConfig.autoTranslate ? 'original' : input.exportConfig.mode;
 
     const nextRule: AutomationRule = {
       id: existing?.id || uuidv4(),
       name: input.name.trim(),
-      kind: input.kind ?? existing?.kind ?? 'file',
-      priority: input.priority ?? existing?.priority ?? 0,
-      profileId: input.profileId ?? existing?.profileId,
-      profileSource: input.profileSource ?? existing?.profileSource ?? 'tag_match',
-      saveHistory: input.saveHistory ?? input.projectId !== 'none',
-      tagIds: [],
-      presetId: input.presetId,
+      saveHistory,
+      projectId,
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,
       enabled: input.enabled ?? existing?.enabled ?? false,
-      actions: input.actions ??
-        existing?.actions ?? {
-          autoPolish: input.stageConfig.autoPolish,
-          autoTranslate: input.stageConfig.autoTranslate,
-          autoSummary: false,
-        },
       stageConfig: {
-        ...input.stageConfig,
+        autoPolish: input.stageConfig.autoPolish,
+        polishPresetId: input.stageConfig.polishPresetId || 'general',
+        autoTranslate: input.stageConfig.autoTranslate,
+        translationLanguage: input.stageConfig.translationLanguage || 'en',
       },
       exportConfig: {
-        ...input.exportConfig,
-        directory: input.exportConfig.directory.trim(),
+        directory: saveHistory ? '' : input.exportConfig.directory.trim(),
+        format: input.exportConfig.format,
+        mode: exportMode,
+        prefix: saveHistory ? '' : input.exportConfig.prefix || '',
       },
       createdAt: existing?.createdAt || now,
       updatedAt: now,
-      migrationNotice: input.migrationNotice ?? existing?.migrationNotice,
     };
 
-    if (nextRule.enabled && (nextRule.kind ?? 'file') === 'file') {
+    if (nextRule.enabled) {
       await validateRuleBeforeActivation(nextRule);
     }
 
@@ -341,7 +297,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       ),
     }));
 
-    if (nextRule.enabled && (nextRule.kind ?? 'file') === 'file') {
+    if (nextRule.enabled) {
       await syncAutomationRuntimeRules({ throwForRuleId: nextRule.id });
     } else {
       automationRuntimeCoordinator.clearRulePendingFingerprints(nextRule.id);
@@ -355,7 +311,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRules = get().rules.filter((rule) => rule.id !== ruleId);
     const nextProcessedEntries = get().processedEntries.filter((entry) => entry.ruleId !== ruleId);
 
-    await persistAutomationRepositoryState(get().profiles, nextRules, nextProcessedEntries);
+    await persistAutomationRepositoryState(nextRules, nextProcessedEntries);
     automationRuntimeCoordinator.clearRulePendingFingerprints(ruleId);
 
     set((current) => {
@@ -372,100 +328,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await syncAutomationRuntimeRules();
   },
 
-  saveProfile: async (input) => {
-    const now = Date.now();
-    const existing = input.id
-      ? get().profiles.find((profile) => profile.id === input.id)
-      : undefined;
-    const profile: AutomationProfile = {
-      ...input,
-      id: existing?.id ?? input.id ?? uuidv4(),
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    const profiles = existing
-      ? get().profiles.map((item) => (item.id === existing.id ? profile : item))
-      : [profile, ...get().profiles];
-    await persistAutomationProfiles(profiles);
-    set({ profiles });
-    return profile;
-  },
-
-  deleteProfile: async (profileId) => {
-    if (get().rules.some((rule) => rule.profileId === profileId)) {
-      throw new Error('This profile is still used by an automation rule.');
-    }
-    const profiles = get().profiles.filter((profile) => profile.id !== profileId);
-    await persistAutomationProfiles(profiles);
-    set({ profiles });
-  },
-
-  removeProfileDependency: async (kind, dependencyId) => {
-    const now = Date.now();
-    let changed = false;
-    const profiles = get().profiles.map((profile) => {
-      let next = profile;
-      switch (kind) {
-        case 'polishPreset':
-          if (profile.polishPresetId === dependencyId) {
-            next = { ...profile, polishPresetId: DEFAULT_POLISH_PRESET_ID };
-          }
-          break;
-        case 'summaryTemplate':
-          if (profile.summaryTemplateId === dependencyId) {
-            next = { ...profile, summaryTemplateId: 'general' };
-          }
-          break;
-        case 'textReplacementSet':
-          if (profile.enabledTextReplacementSetIds.includes(dependencyId)) {
-            next = {
-              ...profile,
-              enabledTextReplacementSetIds: profile.enabledTextReplacementSetIds.filter(
-                (id) => id !== dependencyId
-              ),
-            };
-          }
-          break;
-        case 'hotwordSet':
-          if (profile.enabledHotwordSetIds.includes(dependencyId)) {
-            next = {
-              ...profile,
-              enabledHotwordSetIds: profile.enabledHotwordSetIds.filter(
-                (id) => id !== dependencyId
-              ),
-            };
-          }
-          break;
-        case 'polishKeywordSet':
-          if (profile.enabledPolishKeywordSetIds.includes(dependencyId)) {
-            next = {
-              ...profile,
-              enabledPolishKeywordSetIds: profile.enabledPolishKeywordSetIds.filter(
-                (id) => id !== dependencyId
-              ),
-            };
-          }
-          break;
-        case 'speakerProfile':
-          if (profile.enabledSpeakerProfileIds.includes(dependencyId)) {
-            next = {
-              ...profile,
-              enabledSpeakerProfileIds: profile.enabledSpeakerProfileIds.filter(
-                (id) => id !== dependencyId
-              ),
-            };
-          }
-          break;
-      }
-      if (next === profile) return profile;
-      changed = true;
-      return { ...next, updatedAt: now };
-    });
-    if (!changed) return;
-    await persistAutomationProfiles(profiles);
-    set({ profiles });
-  },
-
   toggleRuleEnabled: async (ruleId, enabled) => {
     const state = get();
     const targetRule = state.rules.find((rule) => rule.id === ruleId);
@@ -473,7 +335,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       return;
     }
 
-    if (enabled && (targetRule.kind ?? 'file') === 'file') {
+    if (enabled) {
       await validateRuleBeforeActivation({
         ...targetRule,
         enabled: true,
@@ -517,13 +379,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await automationRuntimeCoordinator.retryFailedFile(ruleId, filePath);
   },
 
-  applyTagRuleToExisting: async (ruleId) => {
-    // Project pipelines are immutable queue snapshots. Legacy tag rules are
-    // retained for backup import only and are never replayed at runtime.
-    void ruleId;
-    return 0;
-  },
-
   dismissNotification: (notificationId) => {
     set((current) => ({
       notifications: current.notifications.filter(
@@ -548,12 +403,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
     const nextEntry: AutomationProcessedEntry = {
       ruleId: item.automationRuleId,
-      kind: 'file',
-      inputVersion: item.sourceFingerprint,
       attempt:
         (get().processedEntries.find(
           (entry) =>
-            entry.kind !== 'tag' &&
             entry.ruleId === item.automationRuleId &&
             entry.sourceFingerprint === item.sourceFingerprint
         )?.attempt ?? 0) + 1,
@@ -613,7 +465,6 @@ function getAutomationRuntimeCoordinatorState(
   state: AutomationState
 ): AutomationRuntimeCoordinatorState {
   return {
-    profiles: state.profiles,
     rules: state.rules,
     processedEntries: state.processedEntries,
     runtimeStates: state.runtimeStates,

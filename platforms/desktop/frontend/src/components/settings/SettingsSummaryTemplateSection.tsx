@@ -3,7 +3,6 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { useAutomationStore } from '../../stores/automationStore';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { DEFAULT_SUMMARY_TEMPLATE_ID, type SummaryCustomTemplate } from '../../types/transcript';
 import {
@@ -13,13 +12,11 @@ import {
 } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
 import { SummaryIcon } from '../Icons';
-import { Switch } from '../Switch';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 export function SettingsSummaryTemplateSection(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
-  const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
 
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateInstructions, setNewTemplateInstructions] = useState('');
@@ -89,8 +86,6 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       summaryCustomTemplates: nextTemplates,
       summaryTemplateId: nextTemplateId,
     });
-
-    await removeProfileDependency('summaryTemplate', templateId);
   };
 
   return (
@@ -106,18 +101,6 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
-        <SettingsItem
-          title={t('settings.summary_auto_title', { defaultValue: 'Auto Summarize' })}
-          hint={t('settings.summary_auto_hint', {
-            defaultValue: 'Automatically generate summary after transcription and polishing.',
-          })}
-        >
-          <Switch
-            checked={config.autoSummary ?? false}
-            onChange={(val) => updateConfig({ autoSummary: val })}
-          />
-        </SettingsItem>
-
         <SettingsItem
           title={t('projects.summary_template', { defaultValue: 'Default Summary Template' })}
           hint={t('settings.summary_templates_default_hint', {

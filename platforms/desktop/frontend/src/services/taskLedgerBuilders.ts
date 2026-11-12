@@ -50,9 +50,6 @@ export class TaskLedgerBuilders {
       tagIds: item.tagIds ?? (item.projectId ? [item.projectId] : []),
       filePath: item.filePath,
       automationRuleId: item.automationRuleId,
-      tagAutomationRuleId: item.automationResolutionSnapshot?.tagRuleId,
-      automationProfileId: item.automationResolutionSnapshot?.profileId,
-      automationProfileSource: item.automationResolutionSnapshot?.profileSource,
       sourceFingerprint: item.sourceFingerprint,
       errorMessage: item.errorMessage,
     };
@@ -75,9 +72,6 @@ export class TaskLedgerBuilders {
       tagIds: item.tagIds ?? (item.projectId ? [item.projectId] : []),
       filePath: item.filePath,
       automationRuleId: item.automationRuleId,
-      tagAutomationRuleId: item.automationResolutionSnapshot?.tagRuleId,
-      automationProfileId: item.automationResolutionSnapshot?.profileId,
-      automationProfileSource: item.automationResolutionSnapshot?.profileSource,
       sourceFingerprint: item.sourceFingerprint,
       errorMessage: item.canResume ? undefined : 'Source file is missing.',
     };

@@ -949,52 +949,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // Automation Tab
-  // ---------------------------------------------------------------------------
-  {
-    id: 'automation-rules',
-    tab: 'automation',
-    targetId: 'settings-automation-rules',
-    tabKey: 'settings.automation',
-    titleKey: 'automation.file_rules',
-    hintKey: 'automation.file_rules_description',
-    keywords: [
-      'automation',
-      'workflow',
-      'rule',
-      'trigger',
-      'watch',
-      'folder',
-      'directory',
-      'monitor',
-      '自动化',
-      '自动化规则',
-      '文件自动化',
-      '监控文件夹',
-      '监听目录',
-      '工作流',
-      'zidonghua',
-    ],
-  },
-  {
-    id: 'automation-new-rule',
-    tab: 'automation',
-    targetId: 'settings-automation-new-rule',
-    tabKey: 'settings.automation',
-    titleKey: 'automation.new_rule',
-    hintKey: 'automation.file_list_hint',
-    keywords: [
-      'new rule',
-      'create rule',
-      'add rule',
-      '新建规则',
-      '创建自动化',
-      '添加规则',
-      'xinjian',
-    ],
-  },
-
-  // ---------------------------------------------------------------------------
   // Storage Tab
   // ---------------------------------------------------------------------------
   {
