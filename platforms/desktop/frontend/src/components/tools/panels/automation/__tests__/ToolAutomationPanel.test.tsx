@@ -269,4 +269,21 @@ describe('ToolAutomationPanel', () => {
       )
     );
   });
+
+  it('displays missing project in project select and preserves it on edit', async () => {
+    useAutomationStore.setState({
+      rules: [createRule({ id: 'rule-ghost', projectId: 'deleted-proj' })],
+    });
+    render(<ToolAutomationPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getAllByText('Missing Project')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(saveRule).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'rule-ghost', projectId: 'deleted-proj' })
+      )
+    );
+  });
 });

@@ -58,19 +58,29 @@ export function AutomationRuleModal({
   );
   const [saving, setSaving] = useState(false);
 
-  const projectOptions = useMemo(
-    () => [
+  const projectOptions = useMemo(() => {
+    const options = [
       { value: 'inbox', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
       ...projects.map((project) => ({ value: project.id, label: project.name })),
-    ],
-    [projects, t]
-  );
+    ];
+    if (
+      projectId &&
+      projectId !== 'inbox' &&
+      !projects.some((project) => project.id === projectId)
+    ) {
+      options.push({
+        value: projectId,
+        label: t('automation.project_missing', { defaultValue: 'Missing Project' }),
+      });
+    }
+    return options;
+  }, [projectId, projects, t]);
   const polishOptions = useMemo(
     () => getPolishPresetOptions(config.polishCustomPresets, t),
     [config.polishCustomPresets, t]
   );
   // Keep an unresolvable project id in state (saving must not silently retarget the
-  // rule to Inbox), but show Inbox when the dropdown has no matching option.
+  // rule to Inbox), showing a missing project label instead of misleadingly displaying Inbox.
   const selectedProjectValue = projectOptions.some((option) => option.value === projectId)
     ? projectId
     : 'inbox';

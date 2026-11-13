@@ -344,10 +344,10 @@ mod tests {
                     translation_language: "en".to_string(),
                 },
                 export_config: AutomationRuleRecordExportConfig {
-                    directory: "C:/backup/export".to_string(),
+                    directory: String::new(),
                     format: "srt".to_string(),
                     mode: "original".to_string(),
-                    prefix: "done-".to_string(),
+                    prefix: String::new(),
                 },
                 created_at: 300,
                 updated_at: 400,

@@ -125,10 +125,10 @@ fn normalize_rule_record(
     } else {
         String::new()
     };
-    let export_directory = if input.save_history {
-        String::new()
+    let (export_directory, export_prefix) = if input.save_history {
+        (String::new(), String::new())
     } else {
-        input.export_config.directory
+        (input.export_config.directory, input.export_config.prefix)
     };
     AutomationRuleRecord {
         id: input.id.unwrap_or_else(|| ids.generate_id()),
@@ -148,7 +148,7 @@ fn normalize_rule_record(
             directory: export_directory,
             format: input.export_config.format,
             mode: input.export_config.mode,
-            prefix: input.export_config.prefix,
+            prefix: export_prefix,
         },
         created_at: input.created_at,
         updated_at: input.updated_at,
