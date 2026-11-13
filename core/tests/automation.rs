@@ -148,6 +148,55 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
 }
 
 #[test]
+fn non_recursive_rules_may_export_into_a_subdirectory_of_the_watch_directory() {
+    // Non-recursive scans only read the watch directory's own entries, so a file
+    // written under `watch\out` is never re-ingested.
+    let rule = AutomationRule {
+        name: "Export into subfolder".to_string(),
+        save_history: false,
+        project_id: String::new(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: false,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig {
+            directory: "C:\\watch\\out".to_string(),
+            mode: "original".to_string(),
+        },
+    };
+    let config = json!({
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "online",
+                    "providerId": "groq-whisper"
+                }
+            },
+            "providers": {
+                "online": {
+                    "groq-whisper": {
+                        "apiKey": "groq-key"
+                    }
+                }
+            }
+        }
+    });
+
+    let result = validate_rule_activation(
+        &rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: true,
+            batch_model_path_exists: false,
+        },
+    );
+
+    assert!(result.valid, "{result:?}");
+    assert_eq!(result.code, None);
+}
+
+#[test]
 fn legacy_rule_json_without_stage_config_defaults() {
     let rule: AutomationRule =
         serde_json::from_value(json!({"name": "Legacy", "watchDirectory": "C:\\watch"}))

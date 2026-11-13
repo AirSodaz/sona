@@ -231,23 +231,32 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   error: null,
 
   loadAndStart: async () => {
-    await get().stopAll();
-    const { rules, processedEntries } = await loadAutomationRepositoryState();
+    try {
+      await get().stopAll();
+      const { rules, processedEntries } = await loadAutomationRepositoryState();
 
-    set({
-      rules,
-      processedEntries,
-      runtimeStates: rebuildRuntimeStates(rules, processedEntries, {}),
-      notifications: [],
-      isLoaded: true,
-      error: null,
-    });
+      set({
+        rules,
+        processedEntries,
+        runtimeStates: rebuildRuntimeStates(rules, processedEntries, {}),
+        notifications: [],
+        isLoaded: true,
+        error: null,
+      });
 
-    automationRuntimeCoordinator.ensureTaskSettledListener();
-    await syncAutomationRuntimeRules();
+      automationRuntimeCoordinator.ensureTaskSettledListener();
+      await syncAutomationRuntimeRules();
+    } catch (error) {
+      // Keep the panel from showing an empty rule list for a repository that never loaded.
+      set({ error: extractErrorMessage(error), isLoaded: false });
+      throw error;
+    }
   },
 
   saveRule: async (input) => {
+    if (!get().isLoaded) {
+      throw new Error('Automation rules are still loading.');
+    }
     const now = Date.now();
     const state = get();
     const existing = input.id ? state.rules.find((rule) => rule.id === input.id) : null;

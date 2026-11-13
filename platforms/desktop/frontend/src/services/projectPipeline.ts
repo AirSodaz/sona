@@ -34,10 +34,13 @@ export function resolveItemPipeline(
   if (!project?.pipeline?.enabled) {
     return { ...defaults, isProjectPipeline: false };
   }
+  // Mirrors `core::project::resolve_item_pipeline`: a non-positive frequency means
+  // "unset", never "polish on every segment".
+  const frequency = project.pipeline.autoPolishFrequency ?? 0;
   return {
     ...defaults,
     ...project.pipeline,
-    autoPolishFrequency: project.pipeline.autoPolishFrequency ?? defaults.autoPolishFrequency ?? 5,
+    autoPolishFrequency: frequency > 0 ? frequency : 5,
     polishPresetId: project.pipeline.polishPresetId ?? defaults.polishPresetId,
     targetLanguage: project.pipeline.targetLanguage ?? defaults.targetLanguage,
     summaryTemplateId: project.pipeline.summaryTemplateId ?? defaults.summaryTemplateId,

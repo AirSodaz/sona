@@ -307,10 +307,13 @@ fn automation_rule(label: &str, suffix: &str) -> AutomationRuleRecord {
             translation_language: "en".to_string(),
         },
         export_config: AutomationRuleRecordExportConfig {
-            directory: format!("C:/{label}/export/{suffix}"),
+            // Export targets are derived into project pipelines on restore
+            // (`carry_rule_export_dirs_into_pipelines`), so the generic fixture
+            // stays free of them; the export-carrying case has its own test.
+            directory: String::new(),
             format: "srt".to_string(),
             mode: "original".to_string(),
-            prefix: format!("{suffix}-"),
+            prefix: String::new(),
         },
         created_at: timestamp(label),
         updated_at: timestamp(label) + 1,
@@ -554,6 +557,62 @@ fn snapshot_and_replace_restore_all_scopes_and_clear_active_tag() {
         dataset_value(&fresh_snapshot(fixture.root.path())),
         expected
     );
+}
+
+#[test]
+fn restore_moves_legacy_rule_export_into_the_project_pipeline() {
+    let fixture = Fixture::new();
+    fixture.seed("before");
+    let mut source = fixture.repository.snapshot().unwrap();
+    let exports = fixture.root.path().join("exports");
+
+    let mut legacy = automation_rule("before", "a");
+    legacy.id = "before-rule-legacy".to_string();
+    legacy.save_history = true;
+    legacy.project_id = "before-tag-a".to_string();
+    legacy.export_config.directory = exports.to_string_lossy().into_owned();
+    legacy.export_config.format = "srt".to_string();
+    legacy.export_config.prefix = "call".to_string();
+    source.automation = AutomationRepositoryState {
+        rules: vec![legacy],
+        processed_entries: Vec::new(),
+    };
+
+    fixture
+        .repository
+        .replace_all(restore_dataset(source, "import-legacy-export"))
+        .unwrap();
+
+    let pipeline_json: String = fixture
+        .db
+        .with_read_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT pipeline_json FROM project_pipelines WHERE project_id = 'before-tag-a'",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .unwrap();
+    let pipeline: Value = serde_json::from_str(&pipeline_json).unwrap();
+    assert_eq!(pipeline["autoExport"], json!(true));
+    assert_eq!(
+        pipeline["exportDirectory"],
+        json!(exports.to_string_lossy().to_string())
+    );
+    assert_eq!(pipeline["exportFormat"], json!("srt"));
+    assert_eq!(pipeline["exportFileNamePrefix"], json!("call"));
+
+    let rule_export_directory: String = fixture
+        .db
+        .with_read_connection(|conn| {
+            Ok(conn.query_row(
+                "SELECT export_directory FROM automation_rules WHERE id = 'before-rule-legacy'",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .unwrap();
+    assert_eq!(rule_export_directory, "");
 }
 
 #[test]

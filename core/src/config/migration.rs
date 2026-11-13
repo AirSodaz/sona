@@ -6,6 +6,10 @@ use crate::ports::asr::{
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
+/// Global auto-polish/translate/summary flags that moved into project pipelines.
+///
+/// Only drives the `should_upgrade_config` trigger; the keys themselves are
+/// stripped by `upgrade_config`'s tail removal list.
 const LEGACY_GLOBAL_AUTO_KEYS: [&str; 4] = [
     "autoPolish",
     "autoPolishFrequency",
@@ -132,11 +136,6 @@ fn should_upgrade_config(config: &Value) -> bool {
 fn normalize_current_config(existing: Value) -> Value {
     let original = existing.clone();
     let mut config = merge_default(existing);
-    if let Some(object) = config.as_object_mut() {
-        for key in LEGACY_GLOBAL_AUTO_KEYS {
-            object.remove(key);
-        }
-    }
     let summary_custom_templates =
         normalize_summary_custom_templates(config.get("summaryCustomTemplates"));
     let summary_template_id = coerce_summary_template_id(
@@ -293,12 +292,6 @@ fn flatten_id_value(value: &Value) -> Option<&str> {
 }
 
 fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
-    if LEGACY_GLOBAL_AUTO_KEYS
-        .iter()
-        .any(|key| existing.get(*key).is_some())
-    {
-        return true;
-    }
     if existing.get("llmSettings") != normalized.get("llmSettings") {
         return true;
     }

@@ -59,6 +59,28 @@ describe('resolveItemPipeline', () => {
     });
   });
 
+  it('falls back to a positive auto-polish frequency', () => {
+    const base = {
+      enabled: true,
+      autoPolish: true,
+      autoTranslate: false,
+      autoSummary: false,
+      autoExport: false,
+    };
+
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base, autoPolishFrequency: 0 })], config)
+        .autoPolishFrequency
+    ).toBe(5);
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base })], config).autoPolishFrequency
+    ).toBe(5);
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base, autoPolishFrequency: 3 })], config)
+        .autoPolishFrequency
+    ).toBe(3);
+  });
+
   it('treats disabled project pipelines as global defaults', () => {
     expect(
       resolveItemPipeline(

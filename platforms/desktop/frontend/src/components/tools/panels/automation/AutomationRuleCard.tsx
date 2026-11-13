@@ -64,6 +64,8 @@ export function AutomationRuleCard({
           ? 'watching'
           : 'stopped';
   const matchedProject = projects.find((project) => project.id === rule.projectId);
+  const runtimeError =
+    status === 'error' && failedEntries.length === 0 ? runtime?.lastResultMessage : undefined;
   const projectName =
     !rule.projectId || rule.projectId === 'inbox'
       ? t('projects.inbox', { defaultValue: 'Inbox' })
@@ -170,8 +172,9 @@ export function AutomationRuleCard({
           </button>
         </div>
       </div>
-      {failedEntries.length > 0 || blocked ? (
+      {failedEntries.length > 0 || blocked || runtimeError ? (
         <div className="automation-rule-exceptions">
+          {runtimeError ? <p>{runtimeError}</p> : null}
           {blocked && runtime?.lastBlockedReason ? (
             <p>
               {runtime.lastBlockedFilePath ? `${fileName(runtime.lastBlockedFilePath)}: ` : ''}

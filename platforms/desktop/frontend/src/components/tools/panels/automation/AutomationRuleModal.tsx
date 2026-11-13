@@ -41,10 +41,7 @@ export function AutomationRuleModal({
   const [watchDirectory, setWatchDirectory] = useState(rule?.watchDirectory ?? '');
   const [recursive, setRecursive] = useState(rule?.recursive ?? false);
   const [saveHistory, setSaveHistory] = useState(rule?.saveHistory ?? true);
-  const initialProjectId =
-    rule?.projectId && (rule.projectId === 'inbox' || projects.some((p) => p.id === rule.projectId))
-      ? rule.projectId
-      : 'inbox';
+  const initialProjectId = rule?.projectId || 'inbox';
   const [projectId, setProjectId] = useState(initialProjectId);
   const [exportDirectory, setExportDirectory] = useState(rule?.exportConfig?.directory ?? '');
   const [exportFormat, setExportFormat] = useState<ExportFormat>(
@@ -72,6 +69,11 @@ export function AutomationRuleModal({
     () => getPolishPresetOptions(config.polishCustomPresets, t),
     [config.polishCustomPresets, t]
   );
+  // Keep an unresolvable project id in state (saving must not silently retarget the
+  // rule to Inbox), but show Inbox when the dropdown has no matching option.
+  const selectedProjectValue = projectOptions.some((option) => option.value === projectId)
+    ? projectId
+    : 'inbox';
   const languageOptions = useMemo(
     () =>
       LANGUAGE_OPTIONS.map((lang) => ({
@@ -254,7 +256,7 @@ export function AutomationRuleModal({
               <span>{t('automation.target_project', { defaultValue: 'Target Project' })}</span>
               <Dropdown
                 options={projectOptions}
-                value={projectId || 'inbox'}
+                value={selectedProjectValue}
                 onChange={setProjectId}
                 aria-label={t('automation.target_project', { defaultValue: 'Target Project' })}
               />

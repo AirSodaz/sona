@@ -1,5 +1,5 @@
 use super::{Database, DatabaseError};
-use serde_json::{Map, Value, json};
+use rusqlite::OptionalExtension;
 
 pub const CURRENT_SCHEMA_VERSION: i64 = 11;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
@@ -755,7 +755,7 @@ fn migrate_v10(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
 /// `stage_export_enabled` disappears.
 fn backfill_automation_export_pipelines(
     tx: &rusqlite::Transaction<'_>,
-) -> Result<i64, rusqlite::Error> {
+) -> Result<(i64, i64), rusqlite::Error> {
     if !has_table(tx, "project_pipelines")?
         || !has_table(tx, "automation_rules")?
         || !has_table(tx, "projects")?
@@ -764,7 +764,7 @@ fn backfill_automation_export_pipelines(
         || !has_column(tx, "automation_rules", "export_format")?
         || !has_column(tx, "automation_rules", "export_prefix")?
     {
-        return Ok(0);
+        return Ok((0, 0));
     }
 
     // v9 dropped automation_rules.project_id, so legacy rules keep their
@@ -811,8 +811,6 @@ fn backfill_automation_export_pipelines(
                    AND TRIM(r.export_directory) <> ''
                    {exclude_tag_rules}
              ) AS c
-             WHERE c.project_id NOT IN ('', 'inbox')
-               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = c.project_id)
              ORDER BY c.id"
         ))?;
         let rows = stmt.query_map([], |row| {
@@ -828,48 +826,41 @@ fn backfill_automation_export_pipelines(
     };
 
     if candidates.is_empty() {
-        return Ok(0);
+        return Ok((0, 0));
     }
 
     let mut backfilled = 0;
+    let mut skipped = 0;
     for (rule_id, project_id, directory, format, prefix) in candidates {
-        let mut map = {
-            let mut stmt =
-                tx.prepare("SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1")?;
-            let mut rows = stmt.query([&project_id])?;
-            match rows.next()? {
-                Some(row) => {
-                    let raw: String = row.get(0)?;
-                    match serde_json::from_str::<Value>(&raw) {
-                        Ok(Value::Object(map)) => map,
-                        _ => Map::new(),
-                    }
-                }
-                None => Map::new(),
-            }
-        };
-
-        let already_configured = map.get("autoExport") == Some(&Value::Bool(true))
-            && map
-                .get("exportDirectory")
-                .and_then(Value::as_str)
-                .is_some_and(|value| !value.is_empty());
-        if already_configured {
+        // Inbox has no `projects` row, so its export target cannot live in a pipeline.
+        // Leave the rule directory in place (inert) and report it instead.
+        if matches!(project_id.as_str(), "" | "inbox" | "none") {
+            skipped += 1;
+            continue;
+        }
+        let project_exists: bool = tx
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                [&project_id],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !project_exists {
+            skipped += 1;
             continue;
         }
 
-        map.insert("enabled".to_string(), json!(true));
-        map.insert("autoExport".to_string(), json!(true));
-        map.insert("exportDirectory".to_string(), json!(directory));
-        map.insert("exportFormat".to_string(), json!(format));
-        map.insert("exportFileNamePrefix".to_string(), json!(prefix));
+        if !crate::project::merge_rule_export_into_pipeline(
+            tx,
+            &project_id,
+            &directory,
+            &format,
+            &prefix,
+        )? {
+            continue;
+        }
 
-        tx.execute(
-            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at)
-             VALUES (?1, ?2, 0)
-             ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json",
-            rusqlite::params![project_id, Value::Object(map).to_string()],
-        )?;
         tx.execute(
             "UPDATE automation_rules SET export_directory = '', export_prefix = '' WHERE id = ?1",
             rusqlite::params![rule_id],
@@ -877,11 +868,11 @@ fn backfill_automation_export_pipelines(
         backfilled += 1;
     }
 
-    Ok(backfilled)
+    Ok((backfilled, skipped))
 }
 
 fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
-    let export_backfilled = backfill_automation_export_pipelines(tx)?;
+    let (export_backfilled, export_skipped) = backfill_automation_export_pipelines(tx)?;
     let legacy_tag_rules: i64 = if has_column(tx, "automation_rules", "kind")? {
         tx.query_row(
             "SELECT COUNT(*) FROM automation_rules WHERE kind = 'tag'",
@@ -1012,9 +1003,15 @@ fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
              VALUES ('automation-migration-v11-report',
                      json_object('legacyTagRules', ?1,
                                  'legacyProfiles', ?2,
-                                 'exportBackfilled', ?3))
+                                 'exportBackfilled', ?3,
+                                 'exportSkipped', ?4))
              ON CONFLICT(key) DO NOTHING",
-            rusqlite::params![legacy_tag_rules, legacy_profiles, export_backfilled],
+            rusqlite::params![
+                legacy_tag_rules,
+                legacy_profiles,
+                export_backfilled,
+                export_skipped
+            ],
         )?;
     }
 
@@ -1025,6 +1022,7 @@ fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
 mod tests {
     use super::*;
     use crate::Database;
+    use serde_json::{Value, json};
 
     fn schema_versions(db: &Database) -> Vec<i64> {
         db.with_connection(|conn| {
@@ -1688,6 +1686,7 @@ mod tests {
              VALUES
                 ('file-proj', 'File Project', 'file', 1, 'C:\\watch', 1, 'C:\\out', 'txt', ''),
                 ('file-export', 'File Export', 'file', 0, 'C:\\raw', 1, 'C:\\raw', 'txt', ''),
+                ('file-inbox', 'File Inbox', 'file', 1, 'C:\\inbox-watch', 1, 'C:\\inbox-out', 'txt', ''),
                 ('tag-rule', 'Tag Rule', 'tag', 1, '', 0, '', 'txt', '')",
             [],
         )
@@ -1724,7 +1723,7 @@ mod tests {
         let rules_count: i64 = tx
             .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(rules_count, 2);
+        assert_eq!(rules_count, 3);
 
         let file_proj_pid: String = tx
             .query_row(
@@ -1788,6 +1787,9 @@ mod tests {
         let report: Value = serde_json::from_str(&report).unwrap();
         assert_eq!(report["legacyTagRules"], json!(1));
         assert_eq!(report["exportBackfilled"], json!(1));
+        // `file-inbox` resolves to no project, so its destination cannot be carried
+        // into a pipeline; it is reported instead of being silently dropped.
+        assert_eq!(report["exportSkipped"], json!(1));
 
         let preserved: (
             String,
@@ -1848,6 +1850,80 @@ mod tests {
             .with_connection(|conn| Ok(table_columns(conn, "automation_rules")))
             .unwrap();
         assert_eq!(table_columns(&tx, "automation_rules"), fresh_columns);
+
+        tx.commit().unwrap();
+    }
+
+    #[test]
+    fn schema_v11_export_backfill_never_reenables_a_disabled_pipeline() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        migrate_v7(&tx).unwrap();
+        migrate_v8(&tx).unwrap();
+        migrate_v9(&tx).unwrap();
+        migrate_v10(&tx).unwrap();
+
+        tx.execute(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('proj-2', 'Project Two', 1, 1)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at)
+             VALUES ('proj-2', '{\"enabled\":false,\"autoPolish\":true}', 1)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rules (
+                id, name, kind, save_history, watch_directory,
+                stage_export_enabled, export_directory, export_format, export_prefix
+             )
+             VALUES ('file-disabled', 'File Disabled', 'file', 1, 'C:\\watch', 1, 'C:\\out2', 'srt', 'call')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rule_projects (rule_id, project_id)
+             VALUES ('file-disabled', 'proj-2')",
+            [],
+        )
+        .unwrap();
+
+        migrate_v11(&tx).unwrap();
+
+        let pipeline_json: String = tx
+            .query_row(
+                "SELECT pipeline_json FROM project_pipelines WHERE project_id = 'proj-2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let pipeline: Value = serde_json::from_str(&pipeline_json).unwrap();
+        assert_eq!(pipeline["enabled"], json!(false));
+        assert_eq!(pipeline["autoPolish"], json!(true));
+        assert_eq!(pipeline["autoExport"], json!(true));
+        assert_eq!(pipeline["exportDirectory"], json!("C:\\out2"));
+        assert_eq!(pipeline["exportFormat"], json!("srt"));
+        assert_eq!(pipeline["exportFileNamePrefix"], json!("call"));
+
+        let rule_export_directory: String = tx
+            .query_row(
+                "SELECT export_directory FROM automation_rules WHERE id = 'file-disabled'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_export_directory, "");
 
         tx.commit().unwrap();
     }

@@ -208,11 +208,21 @@ fn automation_rule(project_id: &str) -> AutomationRuleRecord {
     }
 }
 
+fn keeper_rule() -> AutomationRuleRecord {
+    let mut keeper = automation_rule("proj-2");
+    keeper.id = "rule-keeper".to_string();
+    keeper
+}
+
 fn seed_rule(automation: &SqliteAutomationRepository, project_id: &str) -> String {
     AutomationStore::replace_rules(automation, &[automation_rule(project_id)]).unwrap();
     AutomationStore::load_state(automation).unwrap().rules[0]
         .project_id
         .clone()
+}
+
+fn seed_rules(automation: &SqliteAutomationRepository, rules: &[AutomationRuleRecord]) {
+    AutomationStore::replace_rules(automation, rules).unwrap();
 }
 
 #[test]
@@ -226,11 +236,13 @@ fn project_deletion_and_replacement_clear_rule_project_ids() {
             .project_id
             .clone()
     };
+    let loaded_rules = || AutomationStore::load_state(&automation).unwrap().rules;
 
-    // Deleting every project clears every rule link.
+    // Deleting every project clears every rule link and disables the rule.
     assert_eq!(seed_rule(&automation, "proj-1"), "proj-1");
     repository.replace_tags(Vec::new()).unwrap();
     assert_eq!(loaded_project_id(), "");
+    assert!(!loaded_rules()[0].enabled);
 
     // Replacing projects keeps links to surviving projects only.
     repository
@@ -241,10 +253,12 @@ fn project_deletion_and_replacement_clear_rule_project_ids() {
         .replace_tags(vec![tag("proj-1", "Kept", "#2563EB", 0)])
         .unwrap();
     assert_eq!(loaded_project_id(), "proj-1");
+    assert!(loaded_rules()[0].enabled);
     repository
         .replace_tags(vec![tag("proj-2", "Other", "#DC2626", 0)])
         .unwrap();
     assert_eq!(loaded_project_id(), "");
+    assert!(!loaded_rules()[0].enabled);
 
     // Deleting a single project clears only that project's links.
     repository
@@ -253,9 +267,15 @@ fn project_deletion_and_replacement_clear_rule_project_ids() {
             tag("proj-2", "Other", "#DC2626", 1),
         ])
         .unwrap();
-    assert_eq!(seed_rule(&automation, "proj-1"), "proj-1");
+    seed_rules(&automation, &[automation_rule("proj-1"), keeper_rule()]);
     repository.delete_tag("proj-1").unwrap();
-    assert_eq!(loaded_project_id(), "");
+    let rules = loaded_rules();
+    let cleared = rules.iter().find(|rule| rule.id == "rule-1").unwrap();
+    assert_eq!(cleared.project_id, "");
+    assert!(!cleared.enabled);
+    let keeper = rules.iter().find(|rule| rule.id == "rule-keeper").unwrap();
+    assert_eq!(keeper.project_id, "proj-2");
+    assert!(keeper.enabled);
 }
 
 #[test]

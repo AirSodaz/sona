@@ -66,6 +66,8 @@ describe('ToolAutomationPanel', () => {
       rules: [],
       processedEntries: [],
       runtimeStates: {},
+      isLoaded: true,
+      error: null,
       saveRule,
       deleteRule,
       toggleRuleEnabled: vi.fn(),
@@ -127,6 +129,63 @@ describe('ToolAutomationPanel', () => {
         }),
       })
     );
+  });
+
+  it('shows_loading_instead_of_the_empty_state_before_rules_load', () => {
+    useAutomationStore.setState({ isLoaded: false, rules: [], error: null });
+
+    render(<ToolAutomationPanel />);
+
+    expect(screen.getByRole('button', { name: '+ New Rule' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByText('No automation rules yet.')).toBeNull();
+    expect(screen.getByText('Loading...')).toBeDefined();
+  });
+
+  it('keeps an unresolvable target project when the rule is saved untouched', async () => {
+    useProjectStore.setState({ projects: [] });
+    useAutomationStore.setState({
+      rules: [createRule({ projectId: 'project-9' })],
+      isLoaded: true,
+    });
+
+    render(<ToolAutomationPanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(saveRule).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'rule-1', projectId: 'project-9' })
+      )
+    );
+  });
+
+  it('shows the runtime failure detail on the rule card', () => {
+    useAutomationStore.setState({
+      rules: [createRule({ enabled: true })],
+      runtimeStates: {
+        'rule-1': {
+          ruleId: 'rule-1',
+          status: 'error',
+          lastResultMessage: 'Watch directory is unavailable',
+          failureCount: 1,
+        },
+      },
+      processedEntries: [],
+    });
+
+    render(<ToolAutomationPanel />);
+
+    expect(screen.getByText('Watch directory is unavailable')).toBeDefined();
+  });
+
+  it('shows the load failure with a retry action instead of the empty state', () => {
+    useAutomationStore.setState({ isLoaded: false, rules: [], error: 'Database is locked' });
+
+    render(<ToolAutomationPanel />);
+
+    expect(screen.getByText('Database is locked')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeDefined();
+    expect(screen.queryByText('No automation rules yet.')).toBeNull();
   });
 
   it('retries a failed file from the rule card', () => {

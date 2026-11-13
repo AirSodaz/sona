@@ -157,14 +157,16 @@ pub fn is_export_directory_overlapping_watch_directory(
     if is_same_automation_path(watch_directory, export_directory) {
         return true;
     }
+    if !recursive {
+        // Non-recursive scans read only the watch directory's own entries, so a
+        // nested output directory is never re-ingested.
+        return false;
+    }
     let normalized_watch = normalize_automation_path(watch_directory);
     if normalized_watch.is_empty() {
         return false;
     }
-    if recursive {
-        return is_path_inside_runtime_directory(export_directory, watch_directory);
-    }
-    parent_path_string(export_directory).is_some_and(|parent| parent == normalized_watch)
+    is_path_inside_runtime_directory(export_directory, watch_directory)
 }
 pub fn resolve_batch_model_path(global_config: &Value) -> Option<String> {
     global_config

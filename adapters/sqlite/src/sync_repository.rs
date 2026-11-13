@@ -1264,7 +1264,6 @@ fn apply_remote_segment_in_transaction(
     let mut result = SyncRemoteApplyResult::default();
     for operation in &segment.operations {
         let Some(operation) = canonicalize_incoming_operation(operation) else {
-            result.applied_operation_count += 1;
             continue;
         };
         validate_operation(&operation)
@@ -2184,6 +2183,7 @@ fn apply_automation_rule_field(
             | "stageExportEnabled"
             | "actionAutoSummary"
             | "migrationNotice"
+            | "tagIds"
     ) {
         return Ok(());
     }

@@ -236,7 +236,9 @@ describe('automationStore', () => {
       processedEntries: [],
       runtimeStates: {},
       notifications: [],
-      isLoaded: false,
+      // The store refuses `saveRule` until it is hydrated; tests that need the
+      // pre-hydration state set `isLoaded: false` themselves.
+      isLoaded: true,
       error: null,
     });
   });
@@ -244,6 +246,45 @@ describe('automationStore', () => {
   afterEach(async () => {
     await useAutomationStore.getState().stopAll();
     vi.useRealTimers();
+  });
+
+  it('saveRule_refuses_to_persist_before_the_repository_is_loaded', async () => {
+    useAutomationStore.setState({ isLoaded: false, rules: [] });
+
+    await expect(
+      useAutomationStore.getState().saveRule({
+        name: 'Too Early',
+        saveHistory: false,
+        projectId: '',
+        watchDirectory: 'C:\\watch',
+        recursive: false,
+        enabled: false,
+        stageConfig: {
+          autoPolish: false,
+          autoTranslate: false,
+        },
+        exportConfig: {
+          directory: 'C:\\exports',
+          format: 'txt',
+          mode: 'original',
+          prefix: '',
+        },
+      })
+    ).rejects.toThrow();
+
+    // Writing here would replace the whole rule table with this single rule.
+    expect(saveAutomationRulesMock).not.toHaveBeenCalled();
+  });
+
+  it('records a repository load failure instead of leaving the store unloaded and silent', async () => {
+    loadAutomationRepositoryStateMock.mockRejectedValueOnce(new Error('Database is locked'));
+
+    await expect(useAutomationStore.getState().loadAndStart()).rejects.toThrow(
+      'Database is locked'
+    );
+
+    expect(useAutomationStore.getState().isLoaded).toBe(false);
+    expect(useAutomationStore.getState().error).toBe('Database is locked');
   });
 
   it('restores enabled rules and queues matching files on the initial scan', async () => {

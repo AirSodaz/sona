@@ -12,9 +12,9 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::ports::time::ClockPort;
 use sona_core::sync::{
-    HybridLogicalClock, SyncCausalContext, SyncConflictResolution, SyncEntityKey, SyncEntityKind,
-    SyncLocalRepository, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedSegment,
-    SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
+    HybridLogicalClock, SyncCausalContext, SyncConflict, SyncConflictKind, SyncConflictResolution,
+    SyncEntityKey, SyncEntityKind, SyncLocalRepository, SyncOperation, SyncOperationKind,
+    SyncPresetV1, SyncPublishedSegment, SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
 };
 use sona_core::tag::{TagRecord, TagStore};
 use sona_sqlite::{
@@ -1610,20 +1610,65 @@ fn legacy_tag_ids_without_project_is_ignored() {
     .unwrap();
     let automation = seed_save_history_rule(&db);
 
-    sync.apply_remote_segment(&SyncRemoteSegment {
-        device_id: "device-old".to_string(),
-        sequence: 1,
-        cipher_hash: "hash-legacy-tag-ids-empty".to_string(),
-        operations: vec![rule_field_operation(
-            "tag-op-empty",
-            4_000,
-            "rule-1",
-            "tagIds",
-            json!([]),
-        )],
+    let result = sync
+        .apply_remote_segment(&SyncRemoteSegment {
+            device_id: "device-old".to_string(),
+            sequence: 1,
+            cipher_hash: "hash-legacy-tag-ids-empty".to_string(),
+            operations: vec![rule_field_operation(
+                "tag-op-empty",
+                4_000,
+                "rule-1",
+                "tagIds",
+                json!([]),
+            )],
+        })
+        .unwrap();
+
+    // A canonicalized-away operation was never applied, so it must not be counted.
+    assert_eq!(result.applied_operation_count, 0);
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn resolving_a_persisted_legacy_tag_ids_conflict_succeeds() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    let conflict = SyncConflict {
+        kind: SyncConflictKind::ConcurrentWrite,
+        winner: rule_field_operation("op-winner", 5_000, "rule-1", "projectId", json!("proj-1")),
+        loser: rule_field_operation("op-loser", 4_000, "rule-1", "tagIds", json!(["tag-1"])),
+    };
+    let entity_kind = serde_json::to_string(&SyncEntityKind::AutomationRule).unwrap();
+    db.with_rw_transaction(|tx| {
+        tx.execute(
+            "INSERT INTO sync_conflicts (
+                conflict_id, entity_kind, entity_id, field_name,
+                conflict_json, created_at, resolved_at
+             ) VALUES ('conflict-legacy-tagids', ?, 'rule-1', 'tagIds', ?, 1, NULL)",
+            rusqlite::params![entity_kind, serde_json::to_string(&conflict).unwrap()],
+        )?;
+        Ok(())
     })
     .unwrap();
+    assert_eq!(sync.unresolved_conflict_count().unwrap(), 1);
 
+    sync.resolve_conflict(
+        "conflict-legacy-tagids",
+        SyncConflictResolution::UseConflicting,
+        6_000,
+    )
+    .unwrap();
+
+    assert_eq!(sync.unresolved_conflict_count().unwrap(), 0);
     assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
 }
 

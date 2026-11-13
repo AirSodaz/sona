@@ -31,8 +31,8 @@ fn sample_rule(
     rule
 }
 
-fn valid_tags() -> Vec<Value> {
-    vec![json!({ "id": "tag-1" })]
+fn valid_projects() -> Vec<Value> {
+    vec![json!({ "id": "project-1" })]
 }
 
 fn valid_global_config(batch_model_path: &str) -> Value {
@@ -93,7 +93,7 @@ fn path_normalization_matches_the_frontend_fingerprint_contract() {
 fn validation_uses_normalized_paths_for_same_directory_checks() {
     let rule = sample_rule(" C:/Watch ".to_string(), "c:\\watch\\".to_string(), |_| {});
 
-    let result = validate_rule_activation_inner(&rule, &json!({}), &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &json!({}), &valid_projects()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(result.code.as_deref(), Some("automation.same_directory"));
@@ -114,7 +114,7 @@ fn validation_creates_the_output_directory_for_valid_rules() {
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -156,7 +156,7 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -194,7 +194,7 @@ fn validation_uses_volcengine_batch_defaults_when_only_api_key_is_saved() {
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -236,7 +236,7 @@ fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_asy
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(
@@ -246,7 +246,7 @@ fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_asy
 }
 
 #[test]
-fn validation_accepts_rules_that_do_not_save_history_without_tags() {
+fn validation_accepts_rules_that_do_not_save_history_without_a_project() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
@@ -258,12 +258,33 @@ fn validation_accepts_rules_that_do_not_save_history_without_tags() {
         export_dir.to_string_lossy().into_owned(),
         |rule| {
             rule.save_history = false;
-            rule.project_id.clear();
         },
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
     let result = validate_rule_activation_inner(&rule, &global_config, &[]).unwrap();
+
+    assert!(result.valid);
+}
+
+#[test]
+fn validation_accepts_a_save_history_rule_for_an_known_project() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let batch_model_dir = dir.path().join("batch-model");
+    fs::create_dir_all(&watch_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        String::new(),
+        |rule| {
+            rule.save_history = true;
+            rule.project_id = "project-1".to_string();
+        },
+    );
+    let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
+
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(result.valid);
 }
@@ -280,7 +301,7 @@ fn validation_rejects_missing_project() {
         String::new(),
         |rule| {
             rule.save_history = true;
-            rule.project_id = "missing-tag".to_string();
+            rule.project_id = "missing-project".to_string();
         },
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
@@ -315,7 +336,7 @@ fn validation_requires_feature_models_when_auto_stages_are_enabled() {
         "selections": {}
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(
@@ -342,7 +363,7 @@ fn validation_accepts_translation_with_google_translate_free_without_an_api_key(
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_projects()).unwrap();
 
     assert!(result.valid);
 }
