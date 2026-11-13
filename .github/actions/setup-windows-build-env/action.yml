@@ -31,6 +31,9 @@ runs:
         # 3. Use lld-link (fast LLVM linker) for 3-5x faster linking on Windows
         "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
         "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
+        # The Rust wrapper can exceed Windows' process command-line limit on
+        # large workspace crates. Keep sccache enabled for C/C++ only.
+        "RUSTC_WRAPPER=" >> $env:GITHUB_ENV
         # Short path junction: target/ → C:\t avoids MAX_PATH issues with
         # deeply nested Cargo/CMake build trees on Windows.
         # Preserve any pre-existing target/ contents (e.g. restored cache).
