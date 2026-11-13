@@ -12,9 +12,8 @@ pub use tauri_contracts::{
 };
 
 pub use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
-    AutomationProfileRecord, AutomationRepositoryInput, AutomationRepositoryState,
-    AutomationRuleInput, AutomationRuleInputActions, AutomationRuleInputExportConfig,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRepositoryState, AutomationRuleInput, AutomationRuleInputExportConfig,
     AutomationRuleInputStageConfig, AutomationRuleRecord, AutomationRuleRecordExportConfig,
     AutomationRuleRecordStageConfig,
 };
@@ -676,9 +675,6 @@ pub fn desktop_types() -> specta::Types {
         .register::<ProjectUpdateInput>()
         .register::<ProjectRecord>()
         .register::<EffectivePipelineSnapshot>()
-        .register::<AutomationProfileInput>()
-        .register::<AutomationProfileRecord>()
-        .register::<AutomationRuleInputActions>()
         .register::<AutomationRuleInputStageConfig>()
         .register::<AutomationRuleInputExportConfig>()
         .register::<AutomationRuleInput>()
@@ -937,9 +933,6 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ProjectUpdateInput",
     "ProjectRecord",
     "EffectivePipelineSnapshot",
-    "AutomationProfileInput",
-    "AutomationProfileRecord",
-    "AutomationRuleInputActions",
     "AutomationRuleInputStageConfig",
     "AutomationRuleInputExportConfig",
     "AutomationRuleInput",
@@ -1763,9 +1756,6 @@ mod tests {
         assert_specta_type::<ProjectUpdateInput>();
         assert_specta_type::<ProjectRecord>();
         assert_specta_type::<EffectivePipelineSnapshot>();
-        assert_specta_type::<AutomationProfileInput>();
-        assert_specta_type::<AutomationProfileRecord>();
-        assert_specta_type::<AutomationRuleInputActions>();
         assert_specta_type::<AutomationRuleInputStageConfig>();
         assert_specta_type::<AutomationRuleInputExportConfig>();
         assert_specta_type::<AutomationRuleInput>();

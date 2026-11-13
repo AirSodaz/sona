@@ -35,6 +35,7 @@ const testContext = vi.hoisted(() => {
     projectRecord,
     projectState: {
       activeProjectId: projectRecord.id,
+      projects: [projectRecord],
       getActiveProject: vi.fn(() => projectRecord),
       getProjectById: vi.fn((projectId: string | null | undefined) =>
         projectId === projectRecord.id ? projectRecord : null
@@ -145,6 +146,7 @@ vi.mock('../../services/recoveryService', () => ({
   isAutomationRecoveryBlocked: testContext.isAutomationRecoveryBlockedMock,
 }));
 
+import { historyService } from '../../services/historyService';
 import { __emitAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
 
 async function emitRuntimeCandidate(payload: any) {
@@ -158,20 +160,22 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   return {
     id: 'rule-1',
     name: 'Meeting Inbox',
+    saveHistory: true,
     projectId: projectRecord.id,
-    presetId: 'meeting_notes',
     watchDirectory: 'C:\\watch',
     recursive: true,
     enabled: true,
     stageConfig: {
       autoPolish: true,
+      polishPresetId: 'clean',
       autoTranslate: false,
-      exportEnabled: true,
+      translationLanguage: 'en',
     },
     exportConfig: {
       directory: 'C:\\exports',
       format: 'txt',
       mode: 'original',
+      prefix: '',
     },
     createdAt: 1,
     updatedAt: 1,
@@ -232,7 +236,9 @@ describe('automationStore', () => {
       processedEntries: [],
       runtimeStates: {},
       notifications: [],
-      isLoaded: false,
+      // The store refuses `saveRule` until it is hydrated; tests that need the
+      // pre-hydration state set `isLoaded: false` themselves.
+      isLoaded: true,
       error: null,
     });
   });
@@ -240,6 +246,45 @@ describe('automationStore', () => {
   afterEach(async () => {
     await useAutomationStore.getState().stopAll();
     vi.useRealTimers();
+  });
+
+  it('saveRule_refuses_to_persist_before_the_repository_is_loaded', async () => {
+    useAutomationStore.setState({ isLoaded: false, rules: [] });
+
+    await expect(
+      useAutomationStore.getState().saveRule({
+        name: 'Too Early',
+        saveHistory: false,
+        projectId: '',
+        watchDirectory: 'C:\\watch',
+        recursive: false,
+        enabled: false,
+        stageConfig: {
+          autoPolish: false,
+          autoTranslate: false,
+        },
+        exportConfig: {
+          directory: 'C:\\exports',
+          format: 'txt',
+          mode: 'original',
+          prefix: '',
+        },
+      })
+    ).rejects.toThrow();
+
+    // Writing here would replace the whole rule table with this single rule.
+    expect(saveAutomationRulesMock).not.toHaveBeenCalled();
+  });
+
+  it('records a repository load failure instead of leaving the store unloaded and silent', async () => {
+    loadAutomationRepositoryStateMock.mockRejectedValueOnce(new Error('Database is locked'));
+
+    await expect(useAutomationStore.getState().loadAndStart()).rejects.toThrow(
+      'Database is locked'
+    );
+
+    expect(useAutomationStore.getState().isLoaded).toBe(false);
+    expect(useAutomationStore.getState().error).toBe('Database is locked');
   });
 
   it('restores enabled rules and queues matching files on the initial scan', async () => {
@@ -281,24 +326,18 @@ describe('automationStore', () => {
       id: 'rule-export-only',
       name: 'Export Only Watcher',
       saveHistory: false,
-      projectId: 'none',
-      tagIds: [],
-      actions: {
-        autoPolish: true,
-        autoTranslate: true,
-        autoSummary: false,
-      },
+      projectId: '',
       stageConfig: {
         autoPolish: true,
         polishPresetId: 'interview',
         autoTranslate: true,
         translationLanguage: 'ja',
-        exportEnabled: true,
       },
       exportConfig: {
         directory: 'C:\\exports',
         format: 'srt',
         mode: 'translation',
+        prefix: '',
       },
     });
     loadAutomationRulesMock.mockResolvedValue([rule]);
@@ -359,6 +398,7 @@ describe('automationStore', () => {
     loadAutomationProcessedEntriesMock.mockResolvedValue([
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\meeting.wav',
         sourceFingerprint: 'fp-1',
         size: 42,
@@ -425,25 +465,41 @@ describe('automationStore', () => {
     await expect(
       useAutomationStore.getState().saveRule({
         name: 'Invalid Rule',
+        saveHistory: true,
         projectId: projectRecord.id,
-        presetId: 'meeting_notes',
         watchDirectory: 'C:\\watch',
         recursive: false,
         enabled: true,
         stageConfig: {
           autoPolish: true,
           autoTranslate: false,
-          exportEnabled: true,
         },
         exportConfig: {
           directory: 'C:\\exports',
           format: 'txt',
           mode: 'original',
+          prefix: '',
         },
       })
     ).rejects.toThrow('Missing batch model.');
 
     expect(saveAutomationRulesMock).not.toHaveBeenCalled();
+  });
+
+  it('restores the runtime watcher set when activation fails after persist', async () => {
+    const rule = createRule({ enabled: false });
+    useAutomationStore.setState({ rules: [rule], runtimeStates: {} });
+    replaceAutomationRuntimeRulesMock.mockResolvedValueOnce([
+      { ruleId: rule.id, started: false, error: 'watch failed' },
+    ]);
+
+    await expect(useAutomationStore.getState().toggleRuleEnabled(rule.id, true)).rejects.toThrow(
+      'watch failed'
+    );
+
+    expect(useAutomationStore.getState().rules[0].enabled).toBe(false);
+    expect(saveAutomationRulesMock).toHaveBeenLastCalledWith([rule]);
+    expect(replaceAutomationRuntimeRulesMock).toHaveBeenLastCalledWith([]);
   });
 
   it('records runtime validation failures as non-retryable notifications', async () => {
@@ -489,6 +545,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -499,6 +556,7 @@ describe('automationStore', () => {
     };
     const completeEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\done.wav',
       sourceFingerprint: 'done-fingerprint',
       size: 9,
@@ -574,6 +632,7 @@ describe('automationStore', () => {
     const failedEntries = [
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\failed-a.wav',
         sourceFingerprint: 'failed-fingerprint-a',
         size: 8,
@@ -584,6 +643,7 @@ describe('automationStore', () => {
       },
       {
         ruleId: rule.id,
+        attempt: 1,
         filePath: 'C:\\watch\\failed-b.wav',
         sourceFingerprint: 'failed-fingerprint-b',
         size: 9,
@@ -657,6 +717,7 @@ describe('automationStore', () => {
     const candidateCount = 8;
     const failedEntries = Array.from({ length: candidateCount }, (_, index) => ({
       ruleId: rule.id,
+      attempt: 1,
       filePath: `C:\\watch\\failed-${index}.wav`,
       sourceFingerprint: `failed-fingerprint-${index}`,
       size: 8 + index,
@@ -716,6 +777,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -792,6 +854,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\failed.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -859,6 +922,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const targetEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\target.wav',
       sourceFingerprint: 'target-fingerprint',
       size: 8,
@@ -869,6 +933,7 @@ describe('automationStore', () => {
     };
     const otherEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\other.wav',
       sourceFingerprint: 'other-fingerprint',
       size: 9,
@@ -928,6 +993,7 @@ describe('automationStore', () => {
   it('keeps the failed entry when a single automation ledger file retry has no rule', async () => {
     const failedEntry = {
       ruleId: 'missing-rule',
+      attempt: 1,
       filePath: 'C:\\watch\\orphan.wav',
       sourceFingerprint: 'orphan-fingerprint',
       size: 8,
@@ -958,6 +1024,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\missing.wav',
       sourceFingerprint: 'missing-fingerprint',
       size: 8,
@@ -995,6 +1062,7 @@ describe('automationStore', () => {
     expect(useAutomationStore.getState().processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         status: 'error',
         errorMessage: 'Source file is no longer available for retry.',
@@ -1013,6 +1081,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\blocked.wav',
       sourceFingerprint: 'blocked-fingerprint',
       size: 8,
@@ -1058,6 +1127,7 @@ describe('automationStore', () => {
     expect(useAutomationStore.getState().processedEntries).toEqual([
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         sourceFingerprint: 'retry-blocked-fingerprint',
         status: 'error',
@@ -1077,6 +1147,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false, projectId: 'missing-project' });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\project-missing.wav',
       sourceFingerprint: 'project-fingerprint',
       size: 8,
@@ -1129,6 +1200,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\blocked.wav',
       sourceFingerprint: 'failed-fingerprint',
       size: 8,
@@ -1188,6 +1260,7 @@ describe('automationStore', () => {
     expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         sourceFingerprint: 'blocked-fingerprint',
         size: 12,
@@ -1218,6 +1291,7 @@ describe('automationStore', () => {
     const rule = createRule({ enabled: false });
     const failedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\missing.wav',
       sourceFingerprint: 'missing-fingerprint',
       size: 8,
@@ -1277,6 +1351,7 @@ describe('automationStore', () => {
     expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
       expect.objectContaining({
         ruleId: rule.id,
+        attempt: 1,
         filePath: failedEntry.filePath,
         status: 'error',
         size: 0,
@@ -1379,6 +1454,51 @@ describe('automationStore', () => {
       }),
     ]);
     expect(clearAutomationRecoveryGuardEntryMock).toHaveBeenCalledWith(rule.id, 'fp-complete');
+  });
+
+  it('keeps the saved recording when an export-only rule fails after transcription', async () => {
+    const rule = createRule({ saveHistory: false });
+    vi.spyOn(historyService, 'deleteRecording').mockResolvedValue(undefined);
+    vi.spyOn(historyService, 'purgeRecordings').mockResolvedValue(undefined);
+    useAutomationStore.setState({
+      rules: [rule],
+      processedEntries: [],
+      runtimeStates: {},
+      notifications: [],
+      isLoaded: true,
+      error: null,
+    });
+
+    await __emitAutomationTaskSettledForTests({
+      ruleId: rule.id,
+      filePath: 'C:\\watch\\meeting.wav',
+      sourceFingerprint: 'fp-settled',
+      size: 42,
+      mtimeMs: 1000,
+      status: 'error',
+      processedAt: 2000,
+      historyId: 'history-1',
+      errorMessage: 'Export failed',
+      stage: 'exporting',
+    });
+
+    expect(historyService.deleteRecording).not.toHaveBeenCalled();
+    expect(historyService.purgeRecordings).not.toHaveBeenCalled();
+
+    await __emitAutomationTaskSettledForTests({
+      ruleId: rule.id,
+      filePath: 'C:\\watch\\meeting.wav',
+      sourceFingerprint: 'fp-settled',
+      size: 42,
+      mtimeMs: 1000,
+      status: 'complete',
+      processedAt: 2100,
+      historyId: 'history-1',
+      stage: 'exporting',
+    });
+
+    expect(historyService.deleteRecording).toHaveBeenCalledWith('history-1');
+    expect(historyService.purgeRecordings).toHaveBeenCalledWith(['history-1']);
   });
 
   it('merges settled file errors into one retryable failure notification per rule', async () => {
@@ -1607,6 +1727,7 @@ describe('automationStore', () => {
     const rule = createRule();
     const successfulEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\done.wav',
       sourceFingerprint: 'fp-success',
       size: 10,

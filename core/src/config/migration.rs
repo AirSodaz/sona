@@ -6,6 +6,17 @@ use crate::ports::asr::{
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
+/// Global auto-polish/translate/summary flags that moved into project pipelines.
+///
+/// Only drives the `should_upgrade_config` trigger; the keys themselves are
+/// stripped by `upgrade_config`'s tail removal list.
+const LEGACY_GLOBAL_AUTO_KEYS: [&str; 4] = [
+    "autoPolish",
+    "autoPolishFrequency",
+    "autoTranslate",
+    "autoSummary",
+];
+
 pub(crate) fn migrate_app_config_inner(
     saved_config: Option<Value>,
     default_rule_set_name: &str,
@@ -66,6 +77,12 @@ fn should_upgrade_config(config: &Value) -> bool {
     if version < CURRENT_CONFIG_VERSION {
         return true;
     }
+    if LEGACY_GLOBAL_AUTO_KEYS
+        .iter()
+        .any(|key| config.get(*key).is_some())
+    {
+        return true;
+    }
 
     if config.get("summaryEnabled").is_none() {
         return true;
@@ -109,11 +126,7 @@ fn should_upgrade_config(config: &Value) -> bool {
         }
     }
 
-    if !has_valid_or_legacy_current_asr_config(config) {
-        return true;
-    }
-
-    false
+    !has_valid_or_legacy_current_asr_config(config)
 }
 
 fn normalize_current_config(existing: Value) -> Value {
@@ -808,14 +821,6 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             ),
         ),
         (
-            "autoPolish",
-            json!(bool_at(&parsed, "autoPolish").unwrap_or(false)),
-        ),
-        (
-            "autoPolishFrequency",
-            json!(number_or_default(&parsed, "autoPolishFrequency", 5)),
-        ),
-        (
             "autoCheckUpdates",
             json!(bool_at(&parsed, "autoCheckUpdates").unwrap_or(true)),
         ),
@@ -994,6 +999,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             "recognitionModelPath",
             "offlineModelPath",
             "modelPath",
+            "autoPolish",
+            "autoPolishFrequency",
+            "autoTranslate",
+            "autoSummary",
         ] {
             object.remove(key);
         }
@@ -1095,7 +1104,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "enableITN",
         "batchVadEnabled",
         "summaryEnabled",
-        "autoPolish",
         "voiceTypingEnabled",
         "httpServerEnabled",
         "mcpEnabled",
@@ -1119,7 +1127,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
     for key in [
         "configVersion",
         "maxConcurrent",
-        "autoPolishFrequency",
         "httpServerPort",
         "httpServerMaxConcurrent",
         "httpServerMaxQueueSize",
@@ -1369,16 +1376,11 @@ fn has_valid_asr_config(config: &Value) -> bool {
         }
     }
 
-    if config
+    config
         .get("asr")
         .and_then(|v| v.get("providers"))
         .and_then(Value::as_object)
-        .is_none()
-    {
-        return false;
-    }
-
-    true
+        .is_some()
 }
 
 fn has_valid_or_legacy_current_asr_config(config: &Value) -> bool {

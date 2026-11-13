@@ -1,6 +1,5 @@
 import type {
   AutomationProcessedEntry,
-  AutomationProfile,
   AutomationRule,
   AutomationRuleValidationResult,
 } from '../../types/automation';
@@ -10,7 +9,6 @@ import {
   type AutomationRepositoryState,
   automationLoadRepositoryState,
   automationPersistProcessedEntries,
-  automationPersistProfiles,
   automationPersistRepositoryState,
   automationPersistRules,
   automationValidateRuleActivation,
@@ -19,7 +17,6 @@ import {
 export interface AutomationServicePorts {
   automationLoadRepositoryState: typeof automationLoadRepositoryState;
   automationPersistProcessedEntries: typeof automationPersistProcessedEntries;
-  automationPersistProfiles: typeof automationPersistProfiles;
   automationPersistRepositoryState: typeof automationPersistRepositoryState;
   automationPersistRules: typeof automationPersistRules;
   automationValidateRuleActivation: typeof automationValidateRuleActivation;
@@ -40,14 +37,6 @@ export class AutomationService {
     return (await this.ports.automationLoadRepositoryState()).rules;
   };
 
-  loadAutomationProfiles = async (): Promise<AutomationProfile[]> => {
-    return (await this.ports.automationLoadRepositoryState()).profiles;
-  };
-
-  saveAutomationProfiles = async (profiles: AutomationProfile[]): Promise<void> => {
-    await this.ports.automationPersistProfiles(profiles);
-  };
-
   saveAutomationRules = async (rules: AutomationRule[]): Promise<void> => {
     await this.ports.automationPersistRules(rules);
   };
@@ -61,13 +50,11 @@ export class AutomationService {
   };
 
   saveAutomationRepositoryState = async (
-    profiles: AutomationProfile[],
     rules: AutomationRule[],
     processedEntries: AutomationProcessedEntry[]
   ): Promise<void> => {
-    await this.ports.automationPersistRepositoryState(profiles, rules, processedEntries);
+    await this.ports.automationPersistRepositoryState(rules, processedEntries);
   };
-
   normalizeAutomationPath = (path: string): string => {
     return path.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
   };
@@ -93,9 +80,9 @@ export class AutomationService {
   validateAutomationRuleForActivation = async (
     rule: AutomationRule,
     globalConfig: AppConfig,
-    tags: ProjectRecord[]
+    projects: ProjectRecord[]
   ): Promise<AutomationRuleValidationResult> => {
-    return this.ports.automationValidateRuleActivation(rule, globalConfig, tags);
+    return this.ports.automationValidateRuleActivation(rule, globalConfig, projects);
   };
 }
 
@@ -106,7 +93,6 @@ export function createAutomationService(ports: AutomationServicePorts): Automati
 export const automationService = createAutomationService({
   automationLoadRepositoryState,
   automationPersistProcessedEntries,
-  automationPersistProfiles,
   automationPersistRepositoryState,
   automationPersistRules,
   automationValidateRuleActivation,
@@ -116,9 +102,7 @@ export const {
   ensureAutomationStorage,
   loadAutomationRepositoryState,
   loadAutomationRules,
-  loadAutomationProfiles,
   saveAutomationRules,
-  saveAutomationProfiles,
   loadAutomationProcessedEntries,
   saveAutomationProcessedEntries,
   saveAutomationRepositoryState,

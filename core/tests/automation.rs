@@ -11,9 +11,10 @@ use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let rule = AutomationRule {
         name: "Import calls".to_string(),
-        save_history: true,
-        tag_ids: vec!["tag-1".to_string()],
+        save_history: false,
+        project_id: String::new(),
         watch_directory: "C:\\watch".to_string(),
+        recursive: false,
         stage_config: AutomationRuleStageConfig {
             auto_polish: true,
             auto_translate: false,
@@ -67,7 +68,7 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let result = validate_rule_activation(
         &rule,
         &config,
-        &[json!({ "id": "tag-1" })],
+        &[],
         AutomationRuleActivationEnvironment {
             watch_directory_exists: true,
             export_directory_ready: true,
@@ -77,6 +78,133 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
 
     assert!(result.valid, "{result:?}");
     assert_eq!(result.code, None);
+
+    // save_history: true allows empty export directory and skips rule-level LLM checks
+    let project_rule = AutomationRule {
+        name: "Project Watch".to_string(),
+        save_history: true,
+        project_id: "proj-1".to_string(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: false,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig::default(),
+    };
+    let res_ok = validate_rule_activation(
+        &project_rule,
+        &config,
+        &[json!({ "id": "proj-1" })],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: false,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(res_ok.valid, "{res_ok:?}");
+
+    let res_missing = validate_rule_activation(
+        &project_rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: false,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(!res_missing.valid);
+    assert_eq!(
+        res_missing.code.as_deref(),
+        Some("automation.project_missing")
+    );
+
+    // Export directory inside recursive watch directory is rejected
+    let overlap_rule = AutomationRule {
+        name: "Overlap".to_string(),
+        save_history: false,
+        project_id: String::new(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: true,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig {
+            directory: "C:\\watch\\sub\\out".to_string(),
+            mode: "original".to_string(),
+        },
+    };
+    let res_overlap = validate_rule_activation(
+        &overlap_rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: true,
+            batch_model_path_exists: false,
+        },
+    );
+    assert!(!res_overlap.valid);
+    assert_eq!(
+        res_overlap.code.as_deref(),
+        Some("automation.same_directory")
+    );
+}
+
+#[test]
+fn non_recursive_rules_may_export_into_a_subdirectory_of_the_watch_directory() {
+    // Non-recursive scans only read the watch directory's own entries, so a file
+    // written under `watch\out` is never re-ingested.
+    let rule = AutomationRule {
+        name: "Export into subfolder".to_string(),
+        save_history: false,
+        project_id: String::new(),
+        watch_directory: "C:\\watch".to_string(),
+        recursive: false,
+        stage_config: AutomationRuleStageConfig::default(),
+        export_config: AutomationRuleExportConfig {
+            directory: "C:\\watch\\out".to_string(),
+            mode: "original".to_string(),
+        },
+    };
+    let config = json!({
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "online",
+                    "providerId": "groq-whisper"
+                }
+            },
+            "providers": {
+                "online": {
+                    "groq-whisper": {
+                        "apiKey": "groq-key"
+                    }
+                }
+            }
+        }
+    });
+
+    let result = validate_rule_activation(
+        &rule,
+        &config,
+        &[],
+        AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: true,
+            batch_model_path_exists: false,
+        },
+    );
+
+    assert!(result.valid, "{result:?}");
+    assert_eq!(result.code, None);
+}
+
+#[test]
+fn legacy_rule_json_without_stage_config_defaults() {
+    let rule: AutomationRule =
+        serde_json::from_value(json!({"name": "Legacy", "watchDirectory": "C:\\watch"}))
+            .expect("legacy payload without stageConfig should deserialize");
+
+    assert!(!rule.stage_config.auto_polish);
+    assert!(!rule.stage_config.auto_translate);
+    assert!(rule.project_id.is_empty());
 }
 
 #[test]
@@ -207,4 +335,52 @@ fn sample_runtime_rule(
     };
     overrides(&mut rule);
     rule
+}
+
+#[test]
+fn save_history_rules_targeting_inbox_or_unset_stay_activatable() {
+    let config = json!({
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "online",
+                    "providerId": "groq-whisper"
+                }
+            },
+            "providers": {
+                "online": {
+                    "groq-whisper": {
+                        "apiKey": "groq-key"
+                    }
+                }
+            }
+        }
+    });
+    let projects = vec![json!({ "id": "proj-1" })];
+
+    // Deleting a project clears the rule's project_id; the sentinel must stay valid.
+    for project_id in ["", "inbox"] {
+        let rule = AutomationRule {
+            name: "Inbox Watch".to_string(),
+            save_history: true,
+            project_id: project_id.to_string(),
+            watch_directory: "C:\\watch".to_string(),
+            recursive: false,
+            stage_config: AutomationRuleStageConfig::default(),
+            export_config: AutomationRuleExportConfig::default(),
+        };
+
+        let result = validate_rule_activation(
+            &rule,
+            &config,
+            &projects,
+            AutomationRuleActivationEnvironment {
+                watch_directory_exists: true,
+                export_directory_ready: false,
+                batch_model_path_exists: false,
+            },
+        );
+
+        assert!(result.valid, "project_id {project_id:?}: {result:?}");
+    }
 }

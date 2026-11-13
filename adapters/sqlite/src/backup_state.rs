@@ -2,7 +2,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use rusqlite::OptionalExtension;
 use sona_application::config::app_config_value_from_stored_state;
+use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::backup::{
     BackupApplyResult, BackupDataset, BackupError, BackupRestoreDataset, BackupStateRepository,
 };
@@ -23,6 +25,7 @@ use crate::llm_usage::{
     PreparedLlmUsageRows, parse_raw, read_raw_in_transaction, replace_raw_in_transaction,
 };
 use crate::ports::Database as DatabasePort;
+use crate::project::merge_rule_export_into_pipeline;
 use crate::tag::{
     delete_tags_in_transaction, insert_tags_in_transaction, load_tags_in_transaction,
 };
@@ -143,9 +146,53 @@ fn apply_backup_restore(
     clear_setting_in_transaction(tx, ACTIVE_TAG_SETTINGS_KEY)?;
     clear_setting_in_transaction(tx, crate::project::ACTIVE_PROJECT_SETTINGS_KEY)?;
     insert_tags_in_transaction(tx, &dataset.tags)?;
+    // Projects exist again, so legacy rule export targets can be carried into
+    // their pipelines before the rules are written back.
+    let automation = carry_rule_export_dirs_into_pipelines(tx, &dataset.automation)?;
     insert_history_in_transaction(tx, &prepared.history)?;
-    insert_automation_in_transaction(tx, &dataset.automation)?;
+    insert_automation_in_transaction(tx, &automation)?;
     replace_raw_in_transaction(tx, &prepared.analytics)
+}
+
+/// Backups carry no `project_pipelines` rows, so a restored legacy rule would
+/// keep an export directory nothing reads any more. Move each destination into
+/// the owning project's pipeline and clear it from the rule.
+fn carry_rule_export_dirs_into_pipelines(
+    tx: &rusqlite::Transaction<'_>,
+    automation: &AutomationRepositoryState,
+) -> Result<AutomationRepositoryState, DatabaseError> {
+    let mut restored = automation.clone();
+    for rule in &mut restored.rules {
+        if !rule.save_history
+            || rule.export_config.directory.trim().is_empty()
+            || matches!(rule.project_id.as_str(), "" | "inbox" | "none")
+        {
+            continue;
+        }
+        let project_exists = tx
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                [&rule.project_id],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !project_exists {
+            continue;
+        }
+        if !merge_rule_export_into_pipeline(
+            tx,
+            &rule.project_id,
+            &rule.export_config.directory,
+            &rule.export_config.format,
+            &rule.export_config.prefix,
+        )? {
+            continue;
+        }
+        rule.export_config.directory.clear();
+        rule.export_config.prefix.clear();
+    }
+    Ok(restored)
 }
 
 fn validate_restore_relationships(dataset: &BackupRestoreDataset) -> Result<(), BackupError> {

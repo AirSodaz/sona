@@ -4,12 +4,10 @@ import type { ProjectRecord } from '../../types/project';
 import { resolveItemPipeline } from '../projectPipeline';
 
 const config = {
-  autoPolish: true,
   polishPresetId: 'global-polish',
   translationLanguage: 'zh',
-  summaryEnabled: true,
   summaryTemplateId: 'global-summary',
-} as AppConfig;
+} as unknown as AppConfig;
 
 const project = (pipeline?: ProjectRecord['pipeline']): ProjectRecord => ({
   id: 'project-1',
@@ -27,7 +25,9 @@ describe('resolveItemPipeline', () => {
   it('falls back to global defaults for Inbox and missing projects', () => {
     expect(resolveItemPipeline(null, [project()], config)).toMatchObject({
       isProjectPipeline: false,
-      autoPolish: true,
+      autoPolish: false,
+      autoTranslate: false,
+      autoSummary: false,
       polishPresetId: 'global-polish',
     });
     expect(resolveItemPipeline('missing', [project()], config).isProjectPipeline).toBe(false);
@@ -57,6 +57,28 @@ describe('resolveItemPipeline', () => {
       summaryTemplateId: 'global-summary',
       exportFormat: 'vtt',
     });
+  });
+
+  it('falls back to a positive auto-polish frequency', () => {
+    const base = {
+      enabled: true,
+      autoPolish: true,
+      autoTranslate: false,
+      autoSummary: false,
+      autoExport: false,
+    };
+
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base, autoPolishFrequency: 0 })], config)
+        .autoPolishFrequency
+    ).toBe(5);
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base })], config).autoPolishFrequency
+    ).toBe(5);
+    expect(
+      resolveItemPipeline('project-1', [project({ ...base, autoPolishFrequency: 3 })], config)
+        .autoPolishFrequency
+    ).toBe(3);
   });
 
   it('treats disabled project pipelines as global defaults', () => {

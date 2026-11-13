@@ -188,7 +188,7 @@ export function SettingsVocabularyTab({
                   value: 'polish',
                   label: t('settings.vocabulary_prompts_tab_polish', { defaultValue: 'Polish' }),
                   tooltip: t('settings.vocabulary_prompts_tab_polish_desc', {
-                    defaultValue: 'Auto polish and style presets',
+                    defaultValue: 'Presets and style prompts',
                   }),
                   icon: <Sparkles size={15} />,
                 },
@@ -198,7 +198,7 @@ export function SettingsVocabularyTab({
                     defaultValue: 'Translation',
                   }),
                   tooltip: t('settings.vocabulary_prompts_tab_translation_desc', {
-                    defaultValue: 'Auto translation and default target language',
+                    defaultValue: 'Default target language',
                   }),
                   icon: <Languages size={15} />,
                 },
@@ -206,7 +206,7 @@ export function SettingsVocabularyTab({
                   value: 'summary',
                   label: t('settings.vocabulary_prompts_tab_summary', { defaultValue: 'Summary' }),
                   tooltip: t('settings.vocabulary_prompts_tab_summary_desc', {
-                    defaultValue: 'Auto summary and custom templates',
+                    defaultValue: 'Summary templates',
                   }),
                   icon: <SummaryIcon width={15} height={15} />,
                 },

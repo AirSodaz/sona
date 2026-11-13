@@ -2,7 +2,7 @@ use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::ports::TagRepository;
@@ -166,6 +166,10 @@ where
                         "DELETE FROM app_settings WHERE key = ?1 AND (value = ?2 OR json_extract(value, '$') = ?2)",
                         rusqlite::params![ACTIVE_PROJECT_SETTINGS_KEY, project_id],
                     )?;
+                    tx.execute(
+                        "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
+                        [project_id],
+                    )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
                     record_local_delete_in_transaction(
                         tx,
@@ -257,6 +261,58 @@ where
     fn service(&self) -> TagRepositoryService<'_> {
         TagRepositoryService::new(&self.repository, self.ids.as_ref(), self.clock.as_ref())
     }
+}
+
+/// Merges a legacy rule export target into a project's pipeline JSON.
+///
+/// Returns `false` when the pipeline already exports somewhere (the caller keeps
+/// the rule directory untouched). `enabled` is only inserted when absent so a
+/// disabled pipeline is never re-enabled by the backfill.
+pub(crate) fn merge_rule_export_into_pipeline(
+    tx: &rusqlite::Transaction<'_>,
+    project_id: &str,
+    directory: &str,
+    format: &str,
+    prefix: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut map = {
+        let mut stmt =
+            tx.prepare("SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1")?;
+        let mut rows = stmt.query([project_id])?;
+        match rows.next()? {
+            Some(row) => {
+                let raw: String = row.get(0)?;
+                match serde_json::from_str::<Value>(&raw) {
+                    Ok(Value::Object(map)) => map,
+                    _ => Map::new(),
+                }
+            }
+            None => Map::new(),
+        }
+    };
+
+    let already_configured = map.get("autoExport") == Some(&Value::Bool(true))
+        && map
+            .get("exportDirectory")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty());
+    if already_configured {
+        return Ok(false);
+    }
+
+    map.entry("enabled".to_string()).or_insert(json!(true));
+    map.insert("autoExport".to_string(), json!(true));
+    map.insert("exportDirectory".to_string(), json!(directory));
+    map.insert("exportFormat".to_string(), json!(format));
+    map.insert("exportFileNamePrefix".to_string(), json!(prefix));
+
+    tx.execute(
+        "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at)
+         VALUES (?1, ?2, 0)
+         ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json",
+        rusqlite::params![project_id, Value::Object(map).to_string()],
+    )?;
+    Ok(true)
 }
 
 const PROJECT_COLUMNS: [&str; 8] = [
@@ -364,6 +420,10 @@ fn upsert_tags_in_transaction(
 pub(crate) fn delete_tags_in_transaction(
     tx: &rusqlite::Transaction<'_>,
 ) -> Result<(), DatabaseError> {
+    tx.execute(
+        "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id != ''",
+        [],
+    )?;
     tx.execute("DELETE FROM projects", [])?;
     Ok(())
 }
@@ -384,6 +444,12 @@ pub(crate) fn replace_tags_in_transaction(
     }
     tx.execute(
         "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
+        [],
+    )?;
+    tx.execute(
+        "UPDATE automation_rules SET project_id = '', enabled = 0
+         WHERE project_id != ''
+           AND project_id NOT IN (SELECT id FROM keep_projects)",
         [],
     )?;
     tx.execute("DROP TABLE keep_projects", [])?;
@@ -482,6 +548,10 @@ where
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
+                    tx.execute(
+                        "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
+                        [tag_id],
+                    )?;
                     tx.execute("DELETE FROM projects WHERE id = ?1", [tag_id])?;
                     record_local_delete_in_transaction(
                         tx,

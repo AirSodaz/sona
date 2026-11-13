@@ -82,9 +82,9 @@ const syncConflictCenter = read(
 );
 const prGuardrails = read('.github', 'workflows', 'pr-guardrails.yml');
 
-test('desktop backup contract follows Rust schema v3 and tags', () => {
-  assert.match(coreBackup, /BACKUP_SCHEMA_VERSION:\s*u64\s*=\s*3/u);
-  assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*3\s+as const/u);
+test('desktop backup contract follows Rust schema v4 and tags', () => {
+  assert.match(coreBackup, /BACKUP_SCHEMA_VERSION:\s*u64\s*=\s*4/u);
+  assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*4\s+as const/u);
   assert.match(
     desktopBindings,
     /export type BackupManifestCounts_Serialize = \{[\s\S]*?\btags: number[;,]/u,
@@ -225,7 +225,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
     ['project_update', '{ projectId: string; updates: ProjectUpdateInput }', 'ProjectRecord | null'],
     ['task_ledger_patch_task', '{ id: string; patch: TaskLedgerPatch_Deserialize }', 'TaskLedgerSnapshot_Serialize'],
     ['recovery_save_snapshot', '{ items: RecoveryItemInput_Deserialize[] }', 'RecoverySnapshot_Serialize'],
-    ['automation_persist_repository_state', '{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],
+    ['automation_persist_repository_state', '{ rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],
     ['history_update_transcript', 'HistoryUpdateTranscriptRequest_Deserialize', 'HistoryItemRecord'],
     ['history_commit_transcript_edit', 'HistoryCommitTranscriptEditRequest_Deserialize', 'HistoryCommitTranscriptEditResult_Serialize'],
   ]) {

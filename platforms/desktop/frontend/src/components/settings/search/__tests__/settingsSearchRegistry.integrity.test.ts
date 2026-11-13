@@ -7,6 +7,8 @@ import { groupKeyForTab, SETTINGS_SEARCH_REGISTRY } from '../settingsSearchRegis
 
 const componentsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const ANCHOR_PATTERN = /(['"])(settings-[a-z0-9-]+)\1/g;
+// SettingsMigratedBanner renders `settings-panel-migrated-${tool}` from the tool prop.
+const MIGRATED_BANNER_PATTERN = /<SettingsMigratedBanner\b[^>]*\btool="([a-z_]+)"/g;
 const CONDITIONAL_ANCHORS = new Set([
   'settings-storage-cleanup',
   'settings-sync-recovery-key',
@@ -50,6 +52,9 @@ describe('settings search registry integrity', () => {
     for (const source of collectTsxSources(componentsDir)) {
       for (const match of source.matchAll(ANCHOR_PATTERN)) {
         anchors.add(match[2]);
+      }
+      for (const match of source.matchAll(MIGRATED_BANNER_PATTERN)) {
+        anchors.add(`settings-panel-migrated-${match[1]}`);
       }
     }
 

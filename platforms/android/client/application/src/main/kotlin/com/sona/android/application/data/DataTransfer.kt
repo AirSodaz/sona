@@ -31,7 +31,6 @@ data class BackupCounts(
     val historyItems: Long,
     val transcriptFiles: Long,
     val summaryFiles: Long,
-    val automationProfiles: Long,
     val automationRules: Long,
     val automationProcessedEntries: Long,
     val analyticsFiles: Long,

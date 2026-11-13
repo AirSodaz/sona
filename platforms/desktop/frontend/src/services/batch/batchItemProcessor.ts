@@ -451,6 +451,7 @@ export class BatchItemProcessor {
             (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
           exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
         },
+        exportMode: pipeline.exportMode ?? item.exportConfig?.mode,
         globalConfig: { ...config, dictionaryContent: undefined },
         baseFileName: this.buildAutomationExportBaseName(item),
         onProgress: (stage, progress) => {

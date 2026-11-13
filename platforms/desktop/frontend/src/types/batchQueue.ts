@@ -1,8 +1,4 @@
-import type {
-  AutomationExportConfig,
-  AutomationResolutionSnapshot,
-  AutomationStageConfig,
-} from './automation';
+import type { AutomationExportConfig, AutomationStageConfig } from './automation';
 import type { AppConfig } from './config';
 import type { MediaServerSubtitleMode, MediaServerType } from './mediaServer';
 import type { EffectivePipelineSnapshot } from './project';
@@ -85,8 +81,6 @@ export interface BatchQueueItem {
   exportConfig?: AutomationExportConfig | null;
   /** Optional automation stage settings captured at queue time. */
   stageConfig?: AutomationStageConfig | null;
-  /** Immutable profile/rule selection made when this task entered the queue. */
-  automationResolutionSnapshot?: AutomationResolutionSnapshot;
   /** Persistent fingerprint for automation dedupe. */
   sourceFingerprint?: string;
   /** Original source file stat snapshot used for automation manifest writes. */

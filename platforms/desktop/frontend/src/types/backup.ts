@@ -3,7 +3,7 @@ import type {
   PreparedBackupImport_Serialize as GeneratedPreparedBackupImport,
   TagRecord as GeneratedTagRecord,
 } from '../bindings';
-import type { AutomationProcessedEntry, AutomationProfile, AutomationRule } from './automation';
+import type { AutomationProcessedEntry, AutomationRule } from './automation';
 import type { AppConfig } from './config';
 
 export type TagRecord = Omit<GeneratedTagRecord, 'color' | 'sortOrder'> & {
@@ -11,7 +11,7 @@ export type TagRecord = Omit<GeneratedTagRecord, 'color' | 'sortOrder'> & {
   sortOrder?: number;
 };
 
-export const BACKUP_SCHEMA_VERSION = 3 as const;
+export const BACKUP_SCHEMA_VERSION = 4 as const;
 export const BACKUP_HISTORY_MODE = 'light' as const;
 
 export type BackupManifest = GeneratedBackupManifest;
@@ -51,11 +51,10 @@ export interface UploadRemoteBackupResult {
 
 export type PreparedBackupImport = Omit<
   GeneratedPreparedBackupImport,
-  'config' | 'tags' | 'automationProfiles' | 'automationRules' | 'automationProcessedEntries'
+  'config' | 'tags' | 'automationRules' | 'automationProcessedEntries'
 > & {
   config: AppConfig;
   tags: TagRecord[];
-  automationProfiles: AutomationProfile[];
   automationRules: AutomationRule[];
   automationProcessedEntries: AutomationProcessedEntry[];
 };

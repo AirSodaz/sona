@@ -783,8 +783,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     promptsSubTab: 'translation',
     targetId: 'settings-vocabulary-translation',
     tabKey: 'settings.vocabulary',
-    titleKey: 'settings.translation_automation_title',
-    hintKey: 'settings.translation_automation_description',
+    titleKey: 'settings.translation_default_language_title',
+    hintKey: 'settings.translation_default_language_hint',
     keywords: [
       'translate',
       'target language',
@@ -945,52 +945,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
       '显存释放',
       '游戏模式',
       '清理缓存',
-    ],
-  },
-
-  // ---------------------------------------------------------------------------
-  // Automation Tab
-  // ---------------------------------------------------------------------------
-  {
-    id: 'automation-rules',
-    tab: 'automation',
-    targetId: 'settings-automation-rules',
-    tabKey: 'settings.automation',
-    titleKey: 'automation.file_rules',
-    hintKey: 'automation.file_rules_description',
-    keywords: [
-      'automation',
-      'workflow',
-      'rule',
-      'trigger',
-      'watch',
-      'folder',
-      'directory',
-      'monitor',
-      '自动化',
-      '自动化规则',
-      '文件自动化',
-      '监控文件夹',
-      '监听目录',
-      '工作流',
-      'zidonghua',
-    ],
-  },
-  {
-    id: 'automation-new-rule',
-    tab: 'automation',
-    targetId: 'settings-automation-new-rule',
-    tabKey: 'settings.automation',
-    titleKey: 'automation.new_rule',
-    hintKey: 'automation.file_list_hint',
-    keywords: [
-      'new rule',
-      'create rule',
-      'add rule',
-      '新建规则',
-      '创建自动化',
-      '添加规则',
-      'xinjian',
     ],
   },
 
@@ -1167,6 +1121,26 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     titleKey: 'settings.sync.pairing_token_label',
     hintKey: 'settings.sync.pairing_token_hint',
     keywords: ['pairing', 'device', 'qr', 'token', '配对码', '设备配对', '扫码同步', 'peidui'],
+  },
+
+  // ---------------------------------------------------------------------------
+  // Automation (migrated to Tools)
+  // ---------------------------------------------------------------------------
+  {
+    id: 'automation-panel',
+    tab: 'automation',
+    targetId: 'settings-panel-migrated-automation',
+    tabKey: 'settings.automation',
+    titleKey: 'automation.file_rules',
+    keywords: [
+      'automation',
+      'watch folder',
+      'file rules',
+      '自動化',
+      '자동화',
+      '自动化',
+      'zidonghua',
+    ],
   },
 
   // ---------------------------------------------------------------------------

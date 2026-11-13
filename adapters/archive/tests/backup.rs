@@ -72,31 +72,19 @@ fn history_item() -> HistoryItemRecord {
 
 fn automation() -> AutomationRepositoryState {
     AutomationRepositoryState {
-        profiles: vec![],
         rules: vec![AutomationRuleRecord {
             id: "rule-1".to_string(),
             name: "Rule One".to_string(),
-            kind: "file".to_string(),
-            priority: 0,
-            profile_id: None,
-            profile_source: "tag_match".to_string(),
             save_history: true,
-            tag_ids: vec!["tag-1".to_string()],
-            preset_id: "general".to_string(),
+            project_id: "tag-1".to_string(),
             watch_directory: "C:/watch".to_string(),
             recursive: true,
             enabled: true,
-            actions: sona_core::automation::repository::AutomationRuleInputActions {
-                auto_polish: true,
-                auto_translate: false,
-                auto_summary: false,
-            },
             stage_config: AutomationRuleRecordStageConfig {
                 auto_polish: true,
                 polish_preset_id: "general".to_string(),
                 auto_translate: false,
                 translation_language: "en".to_string(),
-                export_enabled: true,
             },
             export_config: AutomationRuleRecordExportConfig {
                 directory: "C:/exports".to_string(),
@@ -106,13 +94,10 @@ fn automation() -> AutomationRepositoryState {
             },
             created_at: 1,
             updated_at: 2,
-            migration_notice: None,
         }],
         processed_entries: vec![AutomationProcessedRecord {
             id: "processed-1".to_string(),
             rule_id: "rule-1".to_string(),
-            kind: "file".to_string(),
-            input_version: "fingerprint".to_string(),
             attempt: 1,
             file_path: "C:/watch/input.wav".to_string(),
             source_fingerprint: "fingerprint".to_string(),
@@ -168,7 +153,7 @@ fn dataset() -> BackupDataset {
 
 fn manifest() -> BackupManifest {
     BackupManifest {
-        schema_version: 3,
+        schema_version: 4,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
         app_version: TEST_APP_VERSION.to_string(),
         history_mode: "light".to_string(),
@@ -184,7 +169,6 @@ fn manifest() -> BackupManifest {
             history_items: 1,
             transcript_files: 1,
             summary_files: 1,
-            automation_profiles: 0,
             automation_rules: 1,
             automation_processed_entries: 1,
             analytics_files: 1,
@@ -577,7 +561,6 @@ fn writes_prepares_loads_and_disposes_v2_archive_with_exact_layout() {
         vec![
             "analytics/llm-usage.json",
             "automation/processed.json",
-            "automation/profiles.json",
             "automation/rules.json",
             "config/sona-config.json",
             "history/history-1.json",
@@ -600,7 +583,6 @@ fn writes_prepares_loads_and_disposes_v2_archive_with_exact_layout() {
         preview.automation_rules,
         vec![serde_json::to_value(&source.automation.rules[0]).unwrap()]
     );
-    assert!(preview.automation_profiles.is_empty());
     assert_eq!(preview.analytics_content, source.analytics_content);
     assert_eq!(prepare_artifacts(&archive_path).len(), 1);
 
@@ -686,7 +668,117 @@ fn imports_v1_projects_and_single_assignments_as_tags() {
     assert_eq!(session.dataset.history.items[0].tag_ids, vec!["tag-1"]);
     assert!(session.dataset.history.items[0].deleted_at.is_none());
     assert!(session.dataset.automation.rules[0].save_history);
-    assert_eq!(session.dataset.automation.rules[0].tag_ids, vec!["tag-1"]);
+    assert_eq!(session.dataset.automation.rules[0].project_id, "tag-1");
+}
+
+#[test]
+fn imports_v3_archive_dropping_profiles_and_tag_rules_and_mapping_tag_ids() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("legacy-v3.sona-backup");
+    let mut entries = valid_entries();
+    entries.retain(|entry| {
+        !matches!(
+            entry.path.as_str(),
+            "manifest.json" | "automation/rules.json"
+        )
+    });
+    entries.extend([
+        json_entry(
+            "manifest.json",
+            &json!({
+                "schemaVersion": 3,
+                "createdAt": "2026-07-13T00:00:00.000Z",
+                "appVersion": TEST_APP_VERSION,
+                "historyMode": "light",
+                "scopes": {"config": true, "workspace": true, "history": true, "automation": true, "analytics": true},
+                "counts": {
+                    "tags": 1, "historyItems": 1, "transcriptFiles": 1, "summaryFiles": 1,
+                    "automationProfiles": 1, "automationRules": 2,
+                    "automationProcessedEntries": 1, "analyticsFiles": 1
+                }
+            }),
+        ),
+        json_entry("automation/profiles.json", &json!([{"id": "prof-1", "name": "Legacy"}])),
+        json_entry(
+            "automation/rules.json",
+            &json!([
+                {
+                    "id": "tag-rule-1", "name": "Tag Rule", "kind": "tag", "priority": 0,
+                    "profileId": "prof-1", "profileSource": "explicit", "saveHistory": true,
+                    "tagIds": ["tag-1"], "presetId": "custom", "watchDirectory": "",
+                    "recursive": false, "enabled": true,
+                    "actions": {"autoPolish": true, "autoTranslate": false, "autoSummary": false},
+                    "stageConfig": {"autoPolish": true, "polishPresetId": "general", "autoTranslate": false, "translationLanguage": "en", "exportEnabled": false},
+                    "exportConfig": {"directory": "", "format": "txt", "mode": "original", "prefix": ""},
+                    "createdAt": 1, "updatedAt": 2
+                },
+                {
+                    "id": "file-rule-1", "name": "File Rule", "kind": "file", "priority": 0,
+                    "profileSource": "tag_match", "saveHistory": true,
+                    "tagIds": ["tag-1"], "presetId": "custom", "watchDirectory": "C:/watch",
+                    "recursive": false, "enabled": true,
+                    "actions": {"autoPolish": false, "autoTranslate": false, "autoSummary": false},
+                    "stageConfig": {"autoPolish": false, "polishPresetId": "general", "autoTranslate": false, "translationLanguage": "en", "exportEnabled": false},
+                    "exportConfig": {"directory": "", "format": "txt", "mode": "original", "prefix": ""},
+                    "createdAt": 1, "updatedAt": 2
+                }
+            ]),
+        ),
+    ]);
+    write_entries(&archive_path, &entries);
+
+    let repository = FsBackupArchiveRepository::new();
+    let preview = repository
+        .prepare_import(archive_path.to_str().unwrap())
+        .unwrap();
+    let session = repository.load_prepared(&preview.import_id).unwrap();
+    assert_eq!(session.dataset.automation.rules.len(), 1);
+    assert_eq!(session.dataset.automation.rules[0].id, "file-rule-1");
+    assert_eq!(session.dataset.automation.rules[0].project_id, "tag-1");
+    assert_eq!(preview.manifest.counts.automation_rules, 1);
+    assert_eq!(preview.manifest.counts.automation_processed_entries, 0);
+    assert_eq!(session.dataset.automation.processed_entries.len(), 0);
+}
+
+#[test]
+fn rejects_v3_archive_with_non_object_rule_entry() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("legacy-v3-null-rule.sona-backup");
+    let mut entries = valid_entries();
+    entries.retain(|entry| {
+        !matches!(
+            entry.path.as_str(),
+            "manifest.json" | "automation/rules.json"
+        )
+    });
+    entries.extend([
+        json_entry(
+            "manifest.json",
+            &json!({
+                "schemaVersion": 3,
+                "createdAt": "2026-07-13T00:00:00.000Z",
+                "appVersion": TEST_APP_VERSION,
+                "historyMode": "light",
+                "scopes": {"config": true, "workspace": true, "history": true, "automation": true, "analytics": true},
+                "counts": {
+                    "tags": 1, "historyItems": 1, "transcriptFiles": 1, "summaryFiles": 1,
+                    "automationProfiles": 0, "automationRules": 1,
+                    "automationProcessedEntries": 1, "analyticsFiles": 1
+                }
+            }),
+        ),
+        json_entry("automation/rules.json", &json!([null])),
+    ]);
+    write_entries(&archive_path, &entries);
+
+    let repository = FsBackupArchiveRepository::new();
+    let error = repository
+        .prepare_import(archive_path.to_str().unwrap())
+        .expect_err("non-object rule entry should fail the import");
+    assert!(
+        error.to_string().contains("expected an object"),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]
@@ -903,7 +995,7 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
     let mut invalid_manifests = Vec::new();
 
     let mut unsupported_schema = manifest();
-    unsupported_schema.schema_version = 4;
+    unsupported_schema.schema_version = 5;
     invalid_manifests.push(unsupported_schema);
     let mut unsupported_mode = manifest();
     unsupported_mode.history_mode = "full".to_string();
@@ -919,16 +1011,15 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
         }
         invalid_manifests.push(missing_scope);
     }
-    for count in 0..8 {
+    for count in 0..7 {
         let mut mismatched = manifest();
         match count {
             0 => mismatched.counts.tags += 1,
             1 => mismatched.counts.history_items += 1,
             2 => mismatched.counts.transcript_files += 1,
             3 => mismatched.counts.summary_files += 1,
-            4 => mismatched.counts.automation_profiles += 1,
-            5 => mismatched.counts.automation_rules += 1,
-            6 => mismatched.counts.automation_processed_entries += 1,
+            4 => mismatched.counts.automation_rules += 1,
+            5 => mismatched.counts.automation_processed_entries += 1,
             _ => mismatched.counts.analytics_files += 1,
         }
         invalid_manifests.push(mismatched);

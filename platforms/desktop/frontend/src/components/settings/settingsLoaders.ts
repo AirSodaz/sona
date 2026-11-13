@@ -15,7 +15,7 @@ export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
   },
   {
     labelKey: 'settings.group.intelligence',
-    tabs: ['llm_service', 'automation'],
+    tabs: ['llm_service'],
   },
   {
     labelKey: 'settings.group.infrastructure',
@@ -81,11 +81,6 @@ export const loadSettingsVocabularyTab = memoizeLoader(async () => {
   return resolveModuleComponent(module, 'SettingsVocabularyTab');
 });
 
-export const loadSettingsAutomationTab = memoizeLoader(async () => {
-  const module = await import('./SettingsAutomationTab');
-  return resolveModuleComponent(module, 'SettingsAutomationTab');
-});
-
 export const loadSettingsStorageTab = memoizeLoader(async () => {
   const module = await import('./SettingsStorageTab');
   return resolveModuleComponent(module, 'SettingsStorageTab');
@@ -121,7 +116,7 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
   subtitle: () => Promise.resolve(),
   models: () => loadSettingsModelsPane().then(() => undefined),
   vocabulary: () => loadSettingsVocabularyTab().then(() => undefined),
-  automation: () => loadSettingsAutomationTab().then(() => undefined),
+  automation: () => Promise.resolve(),
   storage: () => loadSettingsStorageTab().then(() => undefined),
   sync: () => loadSettingsSyncTab().then(() => undefined),
   api_server: () => Promise.resolve(),

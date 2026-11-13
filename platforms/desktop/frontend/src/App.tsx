@@ -27,11 +27,11 @@ import { useTrayHandling } from './hooks/useTrayHandling';
 import { captionWindowService } from './services/captionWindowService';
 import { diagnosticsService } from './services/diagnosticsService';
 import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
-import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
 import { useConfigStore, useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
+import { useToolsStore } from './stores/toolsStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { selectCreateBoundSessionId, useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
@@ -208,13 +208,9 @@ function App(): React.JSX.Element | null {
   };
 
   const openAutomationSettings = () => {
-    useAutomationStore.getState().setFocusTagId(null);
-    openSettingsTab('automation');
-  };
-
-  const openAutomationSettingsForTag = (tagId: string) => {
-    useAutomationStore.getState().setFocusTagId(tagId);
-    openSettingsTab('automation');
+    setIsSettingsOpen(false);
+    useToolsStore.getState().setActiveTool('automation');
+    setMode('tools');
   };
 
   const runFirstRunSetupFromDiagnostics = () => {
@@ -291,10 +287,7 @@ function App(): React.JSX.Element | null {
           className="projects-mode-shell"
           style={{ display: isProjectsMode ? undefined : 'none' }}
         >
-          <ProjectsView
-            isActive={isProjectsMode}
-            onOpenAutomationSettings={openAutomationSettingsForTag}
-          />
+          <ProjectsView isActive={isProjectsMode} />
         </div>
         <div
           id="tools-mode-shell"

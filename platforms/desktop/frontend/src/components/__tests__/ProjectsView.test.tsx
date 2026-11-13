@@ -2612,11 +2612,11 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     // Open and close a completed record
-    await clickAsync(screen.getByRole('button', { name: 'Completed Call' }));
+    await clickAsync(await screen.findByRole('button', { name: 'Completed Call' }));
     await waitFor(() => {
       expect(getDetailPlaceholder()).not.toBeNull();
     });
-    await clickAsync(screen.getByRole('button', { name: 'Close' }));
+    await clickAsync(await screen.findByRole('button', { name: 'Close' }));
     await waitFor(() => {
       expect(getDetailPlaceholder()).toBeNull();
     });

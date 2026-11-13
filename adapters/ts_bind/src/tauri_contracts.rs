@@ -96,23 +96,18 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "void",
     ),
     TauriCommandContract::new(
-        "automation_persist_profiles",
-        "{ profiles: AutomationProfileInput_Deserialize[] }",
-        "void",
-    ),
-    TauriCommandContract::new(
         "automation_persist_processed_entries",
         "{ processedEntries: AutomationProcessedInput_Deserialize[] }",
         "void",
     ),
     TauriCommandContract::new(
         "automation_persist_repository_state",
-        "{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }",
+        "{ rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }",
         "void",
     ),
     TauriCommandContract::new(
         "automation_validate_rule_activation",
-        "{ rule: AutomationRule; globalConfig: unknown; tags: unknown[] }",
+        "{ rule: AutomationRule; globalConfig: unknown; projects: unknown[] }",
         "AutomationRuleValidationResult_Serialize",
     ),
     TauriCommandContract::new(
@@ -283,7 +278,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 54);
+        assert_eq!(contracts.len(), 53);
         let names = contracts
             .iter()
             .map(|contract| contract.command)

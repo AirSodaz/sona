@@ -261,34 +261,51 @@ describe('tauri boundary wrappers', () => {
       name: 'Inbox',
       saveHistory: true,
       projectId: 'project-1',
-      presetId: 'custom',
       watchDirectory: 'C:/watch',
       recursive: true,
       enabled: true,
       stageConfig: {
         autoPolish: false,
         autoTranslate: false,
-        exportEnabled: true,
+        polishPresetId: 'general',
+        translationLanguage: 'en',
       },
       exportConfig: {
         directory: 'C:/exports',
         format: 'srt',
         mode: 'original',
+        prefix: undefined,
       },
       createdAt: 1,
       updatedAt: 2,
     };
     const ruleInput = {
-      ...rule,
-      tagIds: [],
-      kind: 'file',
-      priority: 0,
-      profileSource: 'tag_match',
-      actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+      id: 'rule-1',
+      name: 'Inbox',
+      saveHistory: true,
+      projectId: 'project-1',
+      watchDirectory: 'C:/watch',
+      recursive: true,
+      enabled: true,
+      stageConfig: {
+        autoPolish: false,
+        polishPresetId: 'general',
+        autoTranslate: false,
+        translationLanguage: 'en',
+      },
+      exportConfig: {
+        directory: 'C:/exports',
+        format: 'srt',
+        mode: 'original',
+        prefix: undefined,
+      },
+      createdAt: 1,
+      updatedAt: 2,
     };
     const processedEntry = {
       id: 'entry-1',
       ruleId: 'rule-1',
+      attempt: 1,
       filePath: 'C:/watch/meeting.wav',
       sourceFingerprint: 'fingerprint',
       size: 10,
@@ -347,9 +364,6 @@ describe('tauri boundary wrappers', () => {
       tagIds: projectId ? [projectId] : [],
       filePath: null,
       automationRuleId: null,
-      tagAutomationRuleId: null,
-      automationProfileId: null,
-      automationProfileSource: null,
       sourceFingerprint: null,
       errorMessage: null,
       templateId: null,
@@ -383,7 +397,6 @@ describe('tauri boundary wrappers', () => {
         name: 'automation repository forwards repository commands',
         arrange: () => {
           vi.mocked(invoke).mockResolvedValueOnce({
-            profiles: [],
             rules: [
               {
                 ...rule,
@@ -392,12 +405,13 @@ describe('tauri boundary wrappers', () => {
                   polishPresetId: '',
                   translationLanguage: '',
                 },
-                exportConfig: { ...rule.exportConfig, prefix: '' },
+                exportConfig: { ...rule.exportConfig, prefix: undefined },
               },
             ],
             processedEntries: [
               {
                 ...processedEntry,
+                attempt: undefined,
                 historyId: null,
                 exportPath: null,
                 errorMessage: null,
@@ -412,7 +426,6 @@ describe('tauri boundary wrappers', () => {
             processedEntry as unknown as AutomationProcessedEntry,
           ]);
           await automationPersistRepositoryState(
-            [],
             [rule as unknown as AutomationRule],
             [processedEntry as unknown as AutomationProcessedEntry]
           );
@@ -431,40 +444,51 @@ describe('tauri boundary wrappers', () => {
           ],
           [
             TauriCommand.automationRepository.persistState,
-            { profiles: [], rules: [ruleInput], processedEntries: [processedEntry] },
+            { rules: [ruleInput], processedEntries: [processedEntry] },
           ],
           [
             TauriCommand.automationRepository.validateActivation,
-            { rule: ruleInput, globalConfig: {}, tags: [] },
+            {
+              rule: {
+                name: rule.name,
+                saveHistory: rule.saveHistory,
+                projectId: rule.projectId,
+                watchDirectory: rule.watchDirectory,
+                recursive: rule.recursive,
+                stageConfig: {
+                  autoPolish: rule.stageConfig.autoPolish,
+                  autoTranslate: rule.stageConfig.autoTranslate,
+                },
+                exportConfig: {
+                  directory: rule.exportConfig.directory,
+                  mode: rule.exportConfig.mode,
+                },
+              },
+              globalConfig: {},
+              projects: [],
+            },
           ],
         ],
         verify: () =>
           expect(repoState).toEqual({
-            profiles: [],
             rules: [
               {
                 ...rule,
-                kind: 'file',
-                priority: 0,
-                profileId: undefined,
-                profileSource: 'tag_match',
-                actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
-                tagIds: [],
-                migrationNotice: undefined,
                 stageConfig: {
-                  ...rule.stageConfig,
-                  polishPresetId: undefined,
-                  translationLanguage: undefined,
+                  autoPolish: false,
+                  polishPresetId: 'general',
+                  autoTranslate: false,
+                  translationLanguage: 'en',
                 },
-                exportConfig: { ...rule.exportConfig, prefix: undefined },
+                exportConfig: {
+                  ...rule.exportConfig,
+                  prefix: '',
+                },
               },
             ],
             processedEntries: [
               {
                 ...processedEntry,
-                kind: 'file',
-                inputVersion: 'fingerprint',
-                attempt: 1,
                 historyId: undefined,
                 exportPath: undefined,
                 errorMessage: undefined,

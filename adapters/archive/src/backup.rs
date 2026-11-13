@@ -8,15 +8,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_application::backup::BackupService;
-use sona_core::automation::repository::{
-    AutomationProfileRecord, AutomationRepositoryState, AutomationRuleInputActions,
-    AutomationRuleRecord, AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig,
-};
+use sona_core::automation::repository::{AutomationRepositoryState, AutomationRuleRecord};
 use sona_core::backup::{
-    BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort, BackupDataset,
-    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupManifest,
-    BackupPrepareImportRequest, BackupStateRepository, PreparedBackupImport, PreparedBackupSession,
-    validate_backup_manifest,
+    BACKUP_SCHEMA_VERSION, BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort,
+    BackupDataset, BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest,
+    BackupManifest, BackupPrepareImportRequest, BackupStateRepository, PreparedBackupImport,
+    PreparedBackupSession, validate_backup_manifest,
 };
 use sona_core::history::{
     HistoryBackupSnapshot, HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata,
@@ -659,7 +656,7 @@ fn parse_prepared_session(
         }
     }
 
-    let manifest: BackupManifest = read_json(root, MANIFEST_PATH)?;
+    let mut manifest: BackupManifest = read_json(root, MANIFEST_PATH)?;
     validate_backup_manifest(&manifest)?;
     let workspace_path = if manifest.schema_version == 1 {
         LEGACY_PROJECTS_PATH
@@ -677,15 +674,12 @@ fn parse_prepared_session(
     }
     let tags = read_backup_tags(root, &manifest)?;
     let history_items = read_backup_history_items(root, &manifest)?;
-    let (automation_profiles, migrated_tag_rules) =
-        read_backup_automation_profiles(root, &manifest)?;
-    let mut automation_rules = read_backup_automation_rules(root, &manifest)?;
+    let (raw_rule_count, automation_rules) = read_backup_automation_rules(root, &manifest)?;
     ensure_count(
         manifest.counts.automation_rules,
-        automation_rules.len(),
+        raw_rule_count,
         "automation-rule",
     )?;
-    automation_rules.extend(migrated_tag_rules);
     let automation_processed_entries = read_json(root, AUTOMATION_PROCESSED_PATH)?;
     let analytics_content = fs::read_to_string(root.join(ANALYTICS_PATH)).map_err(archive_error)?;
     validate_analytics(&analytics_content)?;
@@ -695,15 +689,7 @@ fn parse_prepared_session(
         .map(ToOwned::to_owned)
         .collect::<HashSet<_>>();
     expected_paths.insert(workspace_path.to_string());
-    if manifest.schema_version >= 3
-        && manifest.counts.automation_profiles > 0
-        && !paths.contains(AUTOMATION_PROFILES_PATH)
-    {
-        return Err(invalid_backup(format!(
-            "Backup is missing required entry: {AUTOMATION_PROFILES_PATH}"
-        )));
-    }
-    if manifest.schema_version >= 3 && paths.contains(AUTOMATION_PROFILES_PATH) {
+    if manifest.schema_version <= 3 && paths.contains(AUTOMATION_PROFILES_PATH) {
         expected_paths.insert(AUTOMATION_PROFILES_PATH.to_string());
     }
     let history = parse_history(root, paths, &mut expected_paths, history_items)?;
@@ -719,11 +705,10 @@ fn parse_prepared_session(
     }
 
     let automation = AutomationRepositoryState {
-        profiles: automation_profiles,
         rules: automation_rules,
         processed_entries: automation_processed_entries,
     };
-    let dataset = BackupDataset {
+    let mut dataset = BackupDataset {
         config,
         tags,
         history,
@@ -731,6 +716,24 @@ fn parse_prepared_session(
         analytics_content,
     };
     validate_counts(&manifest, &dataset)?;
+
+    // Legacy bundles advertise raw counts that include rules and processed
+    // entries this import drops; report what the restore will actually write.
+    if manifest.schema_version < BACKUP_SCHEMA_VERSION {
+        let kept_rule_ids = dataset
+            .automation
+            .rules
+            .iter()
+            .map(|rule| rule.id.as_str())
+            .collect::<HashSet<_>>();
+        dataset
+            .automation
+            .processed_entries
+            .retain(|entry| kept_rule_ids.contains(entry.rule_id.as_str()));
+        manifest.counts.automation_rules = dataset.automation.rules.len() as u64;
+        manifest.counts.automation_processed_entries =
+            dataset.automation.processed_entries.len() as u64;
+    }
 
     Ok(PreparedBackupSession {
         import_id,
@@ -756,7 +759,6 @@ fn session_into_preview(
         analytics_content,
     } = dataset;
     let automation_rules = to_values(&automation.rules)?;
-    let automation_profiles = to_values(&automation.profiles)?;
     let automation_processed_entries = to_values(&automation.processed_entries)?;
 
     Ok(PreparedBackupImport {
@@ -765,7 +767,6 @@ fn session_into_preview(
         manifest,
         config,
         tags: to_values(&tags)?,
-        automation_profiles,
         automation_rules,
         automation_processed_entries,
         analytics_content,
@@ -788,106 +789,23 @@ fn read_backup_tags(root: &Path, manifest: &BackupManifest) -> Result<Vec<TagRec
         .collect())
 }
 
-fn read_backup_automation_profiles(
-    root: &Path,
-    manifest: &BackupManifest,
-) -> Result<(Vec<AutomationProfileRecord>, Vec<AutomationRuleRecord>), BackupError> {
-    if manifest.schema_version >= 3 {
-        if !root.join(AUTOMATION_PROFILES_PATH).exists() {
-            return Ok((Vec::new(), Vec::new()));
-        }
-        return Ok((read_json(root, AUTOMATION_PROFILES_PATH)?, Vec::new()));
+fn extract_legacy_project_id(object: &serde_json::Map<String, Value>) -> String {
+    if let Some(project_id) = object.get("projectId").and_then(Value::as_str) {
+        return project_id.trim().to_string();
     }
-
-    let source_path = if manifest.schema_version == 1 {
-        LEGACY_PROJECTS_PATH
-    } else {
-        TAGS_PATH
-    };
-    let tags: Vec<Value> = read_json(root, source_path)?;
-    let mut profiles = Vec::with_capacity(tags.len());
-    let mut rules = Vec::with_capacity(tags.len());
-    for (index, source) in tags.iter().enumerate() {
-        let tag = normalize_tag_value(source);
-        let profile_id = format!("migrated-tag-profile:{}", tag.id);
-        let defaults = source.get("defaults").unwrap_or(&Value::Null);
-        profiles.push(AutomationProfileRecord {
-            id: profile_id.clone(),
-            name: tag.name.clone(),
-            translation_language: legacy_string(defaults, "translationLanguage", "zh"),
-            polish_preset_id: legacy_string(defaults, "polishPresetId", "general"),
-            summary_template_id: legacy_string(defaults, "summaryTemplateId", "general"),
-            enabled_text_replacement_set_ids: legacy_string_array(
-                defaults,
-                "enabledTextReplacementSetIds",
-            ),
-            enabled_hotword_set_ids: legacy_string_array(defaults, "enabledHotwordSetIds"),
-            enabled_polish_keyword_set_ids: legacy_string_array(
-                defaults,
-                "enabledPolishKeywordSetIds",
-            ),
-            enabled_speaker_profile_ids: legacy_string_array(defaults, "enabledSpeakerProfileIds"),
-            created_at: i64::try_from(tag.created_at).unwrap_or_default(),
-            updated_at: i64::try_from(tag.updated_at).unwrap_or_default(),
-        });
-        rules.push(AutomationRuleRecord {
-            id: format!("migrated-tag-rule:{}", tag.id),
-            name: tag.name,
-            kind: "tag".to_string(),
-            priority: -(index as i64),
-            profile_id: Some(profile_id),
-            profile_source: "explicit".to_string(),
-            save_history: true,
-            tag_ids: vec![tag.id],
-            preset_id: "custom".to_string(),
-            watch_directory: String::new(),
-            recursive: false,
-            enabled: true,
-            actions: AutomationRuleInputActions::default(),
-            stage_config: AutomationRuleRecordStageConfig {
-                auto_polish: false,
-                polish_preset_id: "general".to_string(),
-                auto_translate: false,
-                translation_language: "zh".to_string(),
-                export_enabled: false,
-            },
-            export_config: AutomationRuleRecordExportConfig {
-                directory: String::new(),
-                format: "txt".to_string(),
-                mode: "original".to_string(),
-                prefix: String::new(),
-            },
-            created_at: i64::try_from(tag.created_at).unwrap_or_default(),
-            updated_at: i64::try_from(tag.updated_at).unwrap_or_default(),
-            migration_notice: None,
-        });
-    }
-    Ok((profiles, rules))
-}
-
-fn legacy_string(value: &Value, key: &str, fallback: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(fallback)
-        .to_string()
-}
-
-fn legacy_string_array(value: &Value, key: &str) -> Vec<String> {
-    value
-        .get(key)
+    object
+        .get("tagIds")
         .and_then(Value::as_array)
-        .map(|values| {
+        .and_then(|values| {
             values
                 .iter()
                 .filter_map(Value::as_str)
+                .map(str::trim)
+                .find(|id| !matches!(*id, "" | "inbox" | "none"))
                 .map(ToOwned::to_owned)
-                .collect()
         })
         .unwrap_or_default()
 }
-
 fn read_backup_history_items(
     root: &Path,
     manifest: &BackupManifest,
@@ -919,63 +837,63 @@ fn read_backup_history_items(
 fn read_backup_automation_rules(
     root: &Path,
     manifest: &BackupManifest,
-) -> Result<Vec<AutomationRuleRecord>, BackupError> {
-    if manifest.schema_version >= 3 {
-        return read_json(root, AUTOMATION_RULES_PATH);
+) -> Result<(usize, Vec<AutomationRuleRecord>), BackupError> {
+    let rules: Vec<Value> = read_json(root, AUTOMATION_RULES_PATH)?;
+    let raw_count = rules.len();
+    if manifest.schema_version >= BACKUP_SCHEMA_VERSION {
+        let parsed = serde_json::from_value(Value::Array(rules)).map_err(|error| {
+            invalid_backup(format!("Backup automation rules are invalid: {error}"))
+        })?;
+        return Ok((raw_count, parsed));
     }
-    let mut rules: Vec<Value> = read_json(root, AUTOMATION_RULES_PATH)?;
-    for rule in &mut rules {
+    let mut normalized = Vec::with_capacity(rules.len());
+    for mut rule in rules {
         let Some(object) = rule.as_object_mut() else {
-            continue;
+            return Err(invalid_backup(
+                "Backup automation rules are invalid: expected an object.",
+            ));
         };
-        if manifest.schema_version == 1 {
-            let project_id = object
-                .remove("projectId")
-                .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                .unwrap_or_default();
-            object.insert("saveHistory".to_string(), Value::Bool(project_id != "none"));
-            object.insert(
-                "tagIds".to_string(),
-                serde_json::json!(if matches!(project_id.as_str(), "" | "inbox" | "none") {
-                    Vec::<String>::new()
-                } else {
-                    vec![project_id]
-                }),
-            );
+        if object.get("kind").and_then(Value::as_str) == Some("tag") {
+            continue;
         }
-        let stage = object
-            .get("stageConfig")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
-        let had_legacy_actions = stage
-            .get("autoPolish")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-            || stage
-                .get("autoTranslate")
+        let mut project_id = extract_legacy_project_id(object);
+        if manifest.schema_version == 1 {
+            let save_history = project_id != "none";
+            object.insert("saveHistory".to_string(), Value::Bool(save_history));
+            if matches!(project_id.as_str(), "" | "inbox" | "none") {
+                project_id.clear();
+            }
+        } else {
+            let save_history = object
+                .get("saveHistory")
                 .and_then(Value::as_bool)
-                .unwrap_or(false);
-        let mut disabled_stage = stage.as_object().cloned().unwrap_or_default();
-        disabled_stage.insert("autoPolish".to_string(), Value::Bool(false));
-        disabled_stage.insert("autoTranslate".to_string(), Value::Bool(false));
-        object.insert("stageConfig".to_string(), Value::Object(disabled_stage));
-        object.insert("kind".to_string(), Value::String("file".to_string()));
-        object.insert("priority".to_string(), serde_json::json!(0));
-        object.insert("profileId".to_string(), Value::Null);
-        object.insert(
-            "profileSource".to_string(),
-            Value::String("tag_match".to_string()),
-        );
-        object.insert("actions".to_string(), serde_json::json!({}));
-        object.insert(
-            "migrationNotice".to_string(),
-            if had_legacy_actions { Value::String(
-                "Legacy automatic polish/translation was disabled during migration. Configure a Tag automation to enable it.".to_string(),
-            ) } else { Value::Null },
-        );
+                .unwrap_or(true);
+            if !save_history || project_id == "none" {
+                project_id.clear();
+            }
+        }
+        object.insert("projectId".to_string(), Value::String(project_id));
+        for legacy_key in [
+            "kind",
+            "priority",
+            "profileId",
+            "profileSource",
+            "tagIds",
+            "presetId",
+            "actions",
+            "migrationNotice",
+        ] {
+            object.remove(legacy_key);
+        }
+        if let Some(stage) = object.get_mut("stageConfig").and_then(Value::as_object_mut) {
+            stage.remove("exportEnabled");
+        }
+        let parsed: AutomationRuleRecord = serde_json::from_value(rule).map_err(|error| {
+            invalid_backup(format!("Backup automation rules are invalid: {error}"))
+        })?;
+        normalized.push(parsed);
     }
-    serde_json::from_value(Value::Array(rules))
-        .map_err(|error| invalid_backup(format!("Backup automation rules are invalid: {error}")))
+    Ok((raw_count, normalized))
 }
 
 fn parse_history(
@@ -1169,12 +1087,6 @@ fn build_archive_entries(
             dataset.analytics_content.as_bytes().to_vec(),
         ),
     ];
-    if manifest.schema_version >= 3 {
-        entries.push(json_bytes(
-            AUTOMATION_PROFILES_PATH,
-            &dataset.automation.profiles,
-        )?);
-    }
 
     let item_ids = dataset
         .history
@@ -1375,14 +1287,7 @@ fn validate_counts(manifest: &BackupManifest, dataset: &BackupDataset) -> Result
         dataset.history.summary_files.len(),
         "summary",
     )?;
-    if manifest.schema_version >= 3 {
-        ensure_count(
-            manifest.counts.automation_profiles,
-            dataset.automation.profiles.len(),
-            "automation-profile",
-        )?;
-    }
-    if manifest.schema_version >= 3 {
+    if manifest.schema_version >= BACKUP_SCHEMA_VERSION {
         ensure_count(
             manifest.counts.automation_rules,
             dataset.automation.rules.len(),

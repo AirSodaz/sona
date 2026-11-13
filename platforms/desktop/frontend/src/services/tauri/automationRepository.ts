@@ -1,23 +1,18 @@
+import type { AutomationProcessedRecord_Serialize, AutomationRuleRecord } from '../../bindings';
 import type {
-  AutomationProcessedRecord_Serialize,
-  AutomationProfileRecord,
-  AutomationRuleRecord,
-  TagRecord,
-} from '../../bindings';
-import type {
-  AutomationActions,
+  AutomationExportConfig,
   AutomationProcessedEntry,
-  AutomationProfile,
   AutomationRule,
   AutomationRuleValidationResult,
+  AutomationStageConfig,
 } from '../../types/automation';
 import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
+import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
 export interface AutomationRepositoryState {
-  profiles: AutomationProfile[];
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
 }
@@ -25,70 +20,48 @@ export interface AutomationRepositoryState {
 const EXPORT_FORMATS = new Set(['srt', 'json', 'txt', 'vtt', 'md']);
 const EXPORT_MODES = new Set(['original', 'translation', 'bilingual']);
 const PROCESSED_STATUSES = new Set(['pending', 'complete', 'error', 'discarded']);
-const AUTOMATION_PRESET_IDS = new Set([
-  'meeting_notes',
-  'lecture_notes',
-  'bilingual_subtitles',
-  'custom',
-]);
-
-function normalizeActions(actions?: Partial<AutomationActions>): AutomationActions {
-  return {
-    autoPolish: actions?.autoPolish === true,
-    autoTranslate: actions?.autoTranslate === true,
-    autoSummary: actions?.autoSummary === true,
-  };
-}
-
-function normalizeProfile(record: AutomationProfileRecord): AutomationProfile {
-  return { ...record };
-}
 
 function normalizeAutomationRule(record: AutomationRuleRecord): AutomationRule {
+  const exportConfig: AutomationExportConfig = {
+    directory: record.exportConfig.directory || '',
+    format: (EXPORT_FORMATS.has(record.exportConfig.format)
+      ? record.exportConfig.format
+      : 'txt') as ExportFormat,
+    mode: (EXPORT_MODES.has(record.exportConfig.mode)
+      ? record.exportConfig.mode
+      : 'original') as ExportMode,
+    prefix: record.exportConfig.prefix || '',
+  };
+
+  const stageConfig: AutomationStageConfig = {
+    autoPolish: Boolean(record.stageConfig.autoPolish),
+    polishPresetId: record.stageConfig.polishPresetId || 'general',
+    autoTranslate: Boolean(record.stageConfig.autoTranslate),
+    translationLanguage: record.stageConfig.translationLanguage || 'en',
+  };
+
   return {
-    ...record,
-    migrationNotice: record.migrationNotice ?? undefined,
-    kind: record.kind === 'tag' ? 'tag' : 'file',
-    priority: Number(record.priority || 0),
-    profileId: record.profileId ?? undefined,
-    profileSource: record.profileSource || 'tag_match',
-    actions: normalizeActions(record.actions),
-    tagIds: record.tagIds || [],
-    presetId: AUTOMATION_PRESET_IDS.has(record.presetId)
-      ? (record.presetId as AutomationRule['presetId'])
-      : 'custom',
-    stageConfig: {
-      ...record.stageConfig,
-      polishPresetId: record.stageConfig.polishPresetId || undefined,
-      translationLanguage: record.stageConfig.translationLanguage || undefined,
-    },
-    exportConfig: {
-      ...record.exportConfig,
-      format: EXPORT_FORMATS.has(record.exportConfig.format)
-        ? (record.exportConfig.format as AutomationRule['exportConfig']['format'])
-        : 'txt',
-      mode: EXPORT_MODES.has(record.exportConfig.mode)
-        ? (record.exportConfig.mode as AutomationRule['exportConfig']['mode'])
-        : 'original',
-      prefix: record.exportConfig.prefix || undefined,
-    },
+    id: record.id,
+    name: record.name,
+    saveHistory: record.saveHistory,
+    projectId: record.projectId || '',
+    watchDirectory: record.watchDirectory,
+    recursive: record.recursive,
+    enabled: record.enabled,
+    stageConfig,
+    exportConfig,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
   };
 }
 
 function normalizeAutomationProcessedEntry(
   record: AutomationProcessedRecord_Serialize
 ): AutomationProcessedEntry {
-  const extendedRecord = record as AutomationProcessedRecord_Serialize & {
-    kind?: string;
-    inputVersion?: string;
-    attempt?: number;
-  };
   return {
     id: record.id,
     ruleId: record.ruleId,
-    kind: extendedRecord.kind === 'tag' ? 'tag' : 'file',
-    inputVersion: extendedRecord.inputVersion || record.sourceFingerprint,
-    attempt: Number(extendedRecord.attempt || 1),
+    attempt: Number(record.attempt || 1),
     filePath: record.filePath,
     sourceFingerprint: record.sourceFingerprint,
     size: record.size,
@@ -106,7 +79,6 @@ function normalizeAutomationProcessedEntry(
 export async function automationLoadRepositoryState(): Promise<AutomationRepositoryState> {
   const state = await invokeTauri(TauriCommand.automationRepository.loadState);
   return {
-    profiles: state.profiles.map(normalizeProfile),
     rules: state.rules.map(normalizeAutomationRule),
     processedEntries: state.processedEntries.map(normalizeAutomationProcessedEntry),
   };
@@ -114,24 +86,28 @@ export async function automationLoadRepositoryState(): Promise<AutomationReposit
 
 function toAutomationRuleInput(rule: AutomationRule) {
   return {
-    ...rule,
-    kind: rule.kind ?? 'file',
-    priority: rule.priority ?? 0,
-    profileSource: rule.profileSource ?? 'tag_match',
-    actions: normalizeActions(rule.actions),
-    saveHistory: rule.saveHistory ?? true,
-    tagIds: rule.tagIds ?? [],
+    id: rule.id,
+    name: rule.name,
+    saveHistory: rule.saveHistory,
+    projectId: rule.projectId,
+    watchDirectory: rule.watchDirectory,
+    recursive: rule.recursive,
+    enabled: rule.enabled,
+    stageConfig: {
+      autoPolish: rule.stageConfig.autoPolish,
+      polishPresetId: rule.stageConfig.polishPresetId || 'general',
+      autoTranslate: rule.stageConfig.autoTranslate,
+      translationLanguage: rule.stageConfig.translationLanguage || 'en',
+    },
+    exportConfig: {
+      directory: rule.exportConfig.directory,
+      format: rule.exportConfig.format,
+      mode: rule.exportConfig.mode,
+      prefix: rule.exportConfig.prefix,
+    },
+    createdAt: rule.createdAt,
+    updatedAt: rule.updatedAt,
   };
-}
-
-function toAutomationProfileInput(profile: AutomationProfile) {
-  return { ...profile };
-}
-
-export async function automationPersistProfiles(profiles: AutomationProfile[]): Promise<void> {
-  await invokeTauri(TauriCommand.automationRepository.persistProfiles, {
-    profiles: profiles.map(toAutomationProfileInput),
-  });
 }
 
 export async function automationPersistRules(rules: AutomationRule[]): Promise<void> {
@@ -149,12 +125,10 @@ export async function automationPersistProcessedEntries(
 }
 
 export async function automationPersistRepositoryState(
-  profiles: AutomationProfile[],
   rules: AutomationRule[],
   processedEntries: AutomationProcessedEntry[]
 ): Promise<void> {
   await invokeTauri(TauriCommand.automationRepository.persistState, {
-    profiles: profiles.map(toAutomationProfileInput),
     rules: rules.map(toAutomationRuleInput),
     processedEntries,
   });
@@ -163,11 +137,25 @@ export async function automationPersistRepositoryState(
 export async function automationValidateRuleActivation(
   rule: AutomationRule,
   globalConfig: AppConfig,
-  tags: ProjectRecord[] | TagRecord[] | TagRecord | null
+  projects: ProjectRecord[] = []
 ): Promise<AutomationRuleValidationResult> {
   return invokeTauri(TauriCommand.automationRepository.validateActivation, {
-    rule: toAutomationRuleInput(rule),
+    rule: {
+      name: rule.name,
+      saveHistory: rule.saveHistory,
+      projectId: rule.projectId,
+      watchDirectory: rule.watchDirectory,
+      recursive: rule.recursive,
+      stageConfig: {
+        autoPolish: rule.stageConfig.autoPolish,
+        autoTranslate: rule.stageConfig.autoTranslate,
+      },
+      exportConfig: {
+        directory: rule.exportConfig.directory,
+        mode: rule.exportConfig.mode,
+      },
+    },
     globalConfig,
-    tags: Array.isArray(tags) ? tags : tags ? [tags] : [],
+    projects,
   });
 }

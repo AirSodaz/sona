@@ -7,7 +7,6 @@ import {
   setFeatureModelSelection,
   updateProviderSetting,
 } from '../../../services/llm/state';
-import { useAutomationStore } from '../../../stores/automationStore';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { SettingsNavigationProvider } from '../SettingsNavigationContext';
@@ -16,7 +15,6 @@ import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
 vi.mock('../../../services/automation/automationRepository', () => ({
   loadAutomationRepositoryState: vi.fn(),
   persistAutomationProcessedEntries: vi.fn().mockResolvedValue(undefined),
-  persistAutomationProfiles: vi.fn().mockResolvedValue(undefined),
   persistAutomationRepositoryState: vi.fn().mockResolvedValue(undefined),
   persistAutomationRules: vi.fn().mockResolvedValue(undefined),
   validateAutomationRuleActivation: vi.fn().mockResolvedValue(undefined),
@@ -94,23 +92,6 @@ describe('SettingsVocabularyTab', () => {
       ],
       activeProjectId: null,
     });
-    useAutomationStore.setState({
-      profiles: [
-        {
-          id: 'profile-1',
-          name: 'Team profile',
-          translationLanguage: 'en',
-          polishPresetId: 'custom-team',
-          summaryTemplateId: 'summary-team',
-          enabledTextReplacementSetIds: ['text-1'],
-          enabledHotwordSetIds: ['hot-1'],
-          enabledPolishKeywordSetIds: ['kw-1'],
-          enabledSpeakerProfileIds: ['speaker-1'],
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ],
-    });
   });
 
   it('renders secondary category tabs and switches between recognition and prompts sections', () => {
@@ -185,7 +166,6 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([]);
       expect(useConfigStore.getState().config.summaryTemplateId).toBe('general');
-      expect(useAutomationStore.getState().profiles[0].summaryTemplateId).toBe('general');
     });
   });
 
@@ -220,7 +200,6 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
       expect(useConfigStore.getState().config.polishPresetId).toBe('clean');
-      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('clean');
     });
   });
 
@@ -237,7 +216,6 @@ describe('SettingsVocabularyTab', () => {
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.speakerProfiles).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledSpeakerProfileIds).toEqual([]);
     });
   });
 
@@ -347,17 +325,17 @@ describe('SettingsVocabularyTab', () => {
     render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Polish Automation & Presets');
+    expect(screen.getAllByText('Default Polish Preset').length).toBeGreaterThan(0);
     expect(screen.queryByText('Translation Automation')).toBeNull();
     expect(screen.queryByText('Summary Automation & Default')).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));
-    expect(screen.queryByText('Summary Automation & Templates')).toBeNull();
-    expect(screen.queryByText('Polish Automation & Presets')).toBeNull();
+    expect(screen.queryByText('Custom Summary Templates')).toBeNull();
+    expect(screen.queryAllByText('Default Polish Preset')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Summary' }));
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Summary Automation & Templates');
+    screen.getByText('Custom Summary Templates');
     expect(screen.queryByText('Translation Automation')).toBeNull();
 
     const promptsTablist = screen.getByRole('tablist', {
@@ -365,7 +343,7 @@ describe('SettingsVocabularyTab', () => {
     });
     fireEvent.keyDown(promptsTablist, { key: 'ArrowRight' });
     expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
-    screen.getByText('Polish Automation & Presets');
+    expect(screen.getAllByText('Default Polish Preset').length).toBeGreaterThan(0);
 
     fireEvent.keyDown(promptsTablist, { key: 'ArrowLeft' });
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
@@ -375,19 +353,17 @@ describe('SettingsVocabularyTab', () => {
     render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     const polishTab = screen.getByRole('tab', { name: 'Polish' });
-    expect(polishTab.getAttribute('data-tooltip')).toBe('Auto polish and style presets');
+    expect(polishTab.getAttribute('data-tooltip')).toBe('Presets and style prompts');
     expect(polishTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(polishTab.getAttribute('title')).toBeNull();
 
     const translationTab = screen.getByRole('tab', { name: 'Translation' });
-    expect(translationTab.getAttribute('data-tooltip')).toBe(
-      'Auto translation and default target language'
-    );
+    expect(translationTab.getAttribute('data-tooltip')).toBe('Default target language');
     expect(translationTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(translationTab.getAttribute('title')).toBeNull();
 
     const summaryTab = screen.getByRole('tab', { name: 'Summary' });
-    expect(summaryTab.getAttribute('data-tooltip')).toBe('Auto summary and custom templates');
+    expect(summaryTab.getAttribute('data-tooltip')).toBe('Summary templates');
     expect(summaryTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(summaryTab.getAttribute('title')).toBeNull();
   });

@@ -59,10 +59,6 @@ vi.mock('../settings/SettingsVocabularyTab', () => ({
   SettingsVocabularyTab: () => <div>Vocabulary Tab</div>,
 }));
 
-vi.mock('../settings/SettingsAutomationTab', () => ({
-  SettingsAutomationTab: () => <div>Automation Tab</div>,
-}));
-
 vi.mock('../settings/SettingsModelsTab', () => ({
   SettingsModelsTab: () => <div>Models Tab</div>,
 }));

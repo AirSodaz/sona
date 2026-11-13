@@ -27,7 +27,7 @@ import { DEFAULT_EMBY_TOOL_OVERRIDES } from '../types/emby';
 // ---------------------------------------------------------------------------
 // Default values
 // ---------------------------------------------------------------------------
-export const CURRENT_CONFIG_VERSION = 8;
+export const CURRENT_CONFIG_VERSION = 9;
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
@@ -150,16 +150,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   // LLM Assistant
   llmSettings: createLlmSettings(),
   summaryEnabled: true,
-  autoSummary: false,
   summaryTemplateId: 'general',
   summaryCustomTemplates: [],
   translationLanguage: 'zh',
-  autoTranslate: false,
   polishKeywords: '',
   polishPresetId: 'general',
   polishCustomPresets: [],
-  autoPolish: false,
-  autoPolishFrequency: 5,
   llmRequestTimeoutSeconds: 180,
   localModelReleaseMode: 'standard',
   gameModeEnabled: false,
@@ -332,16 +328,12 @@ const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'llmSettings',
   'summaryEnabled',
-  'autoSummary',
   'translationLanguage',
-  'autoTranslate',
   'summaryTemplateId',
   'summaryCustomTemplates',
   'polishKeywords',
   'polishPresetId',
   'polishCustomPresets',
-  'autoPolish',
-  'autoPolishFrequency',
   'llmRequestTimeoutSeconds',
   'localModelReleaseMode',
   'gameModeEnabled',

@@ -1,33 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  AutomationProcessedEntry,
-  AutomationProfile,
-  AutomationRule,
-} from '../../types/automation';
+import type { AutomationProcessedEntry, AutomationRule } from '../../types/automation';
+import type { AppConfig } from '../../types/config';
+import type { ProjectRecord } from '../../types/project';
 
 const testContext = vi.hoisted(() => ({
   automationLoadRepositoryStateMock: vi.fn(),
   automationPersistProcessedEntriesMock: vi.fn(),
-  automationPersistProfilesMock: vi.fn(),
   automationPersistRepositoryStateMock: vi.fn(),
   automationPersistRulesMock: vi.fn(),
   automationValidateRuleActivationMock: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  BaseDirectory: {
-    AppLocalData: 'AppLocalData',
-  },
-  exists: vi.fn().mockResolvedValue(true),
-  mkdir: vi.fn().mockResolvedValue(undefined),
-  readTextFile: vi.fn().mockResolvedValue('[]'),
-  writeTextFile: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../tauri/automationRepository', () => ({
   automationLoadRepositoryState: testContext.automationLoadRepositoryStateMock,
   automationPersistProcessedEntries: testContext.automationPersistProcessedEntriesMock,
-  automationPersistProfiles: testContext.automationPersistProfilesMock,
   automationPersistRepositoryState: testContext.automationPersistRepositoryStateMock,
   automationPersistRules: testContext.automationPersistRulesMock,
   automationValidateRuleActivation: testContext.automationValidateRuleActivationMock,
@@ -39,7 +25,6 @@ import {
   loadAutomationRepositoryState,
   loadAutomationRules,
   saveAutomationProcessedEntries,
-  saveAutomationProfiles,
   saveAutomationRepositoryState,
   saveAutomationRules,
   validateAutomationRuleForActivation,
@@ -49,38 +34,21 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   return {
     id: 'rule-1',
     name: 'Meeting Inbox',
+    saveHistory: true,
     projectId: 'project-1',
-    presetId: 'meeting_notes',
     watchDirectory: 'C:\\watch',
     recursive: true,
     enabled: false,
     stageConfig: {
       autoPolish: false,
       autoTranslate: false,
-      exportEnabled: true,
     },
     exportConfig: {
-      directory: 'C:\\exports',
+      directory: '',
       format: 'txt',
       mode: 'original',
+      prefix: '',
     },
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides,
-  };
-}
-
-function createProfile(overrides: Partial<AutomationProfile> = {}): AutomationProfile {
-  return {
-    id: 'profile-1',
-    name: 'Default Profile',
-    translationLanguage: 'en',
-    polishPresetId: 'default',
-    summaryTemplateId: 'default',
-    enabledTextReplacementSetIds: [],
-    enabledHotwordSetIds: [],
-    enabledPolishKeywordSetIds: [],
-    enabledSpeakerProfileIds: [],
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
@@ -96,6 +64,7 @@ describe('automationService repository persistence', () => {
     const rule = createRule();
     const processedEntry: AutomationProcessedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\meeting.wav',
       sourceFingerprint: 'fingerprint',
       size: 10,
@@ -120,10 +89,10 @@ describe('automationService repository persistence', () => {
   });
 
   it('persists repository data through native repository commands', async () => {
-    const profile = createProfile();
     const rule = createRule();
     const processedEntry: AutomationProcessedEntry = {
       ruleId: rule.id,
+      attempt: 1,
       filePath: 'C:\\watch\\meeting.wav',
       sourceFingerprint: 'fingerprint',
       size: 10,
@@ -132,18 +101,15 @@ describe('automationService repository persistence', () => {
       processedAt: 30,
     };
 
-    await saveAutomationProfiles([profile]);
     await saveAutomationRules([rule]);
     await saveAutomationProcessedEntries([processedEntry]);
-    await saveAutomationRepositoryState([profile], [rule], [processedEntry]);
+    await saveAutomationRepositoryState([rule], [processedEntry]);
 
-    expect(testContext.automationPersistProfilesMock).toHaveBeenCalledWith([profile]);
     expect(testContext.automationPersistRulesMock).toHaveBeenCalledWith([rule]);
     expect(testContext.automationPersistProcessedEntriesMock).toHaveBeenCalledWith([
       processedEntry,
     ]);
     expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith(
-      [profile],
       [rule],
       [processedEntry]
     );
@@ -151,18 +117,20 @@ describe('automationService repository persistence', () => {
 
   it('delegates activation validation to the native repository command', async () => {
     const rule = createRule({ enabled: true });
-    const config = { batchModelPath: 'C:\\models\\sensevoice' } as any;
-    const project = { id: 'project-1', name: 'Team Sync' } as any;
+    const config = {
+      batchModelPath: 'C:\\models\\sensevoice',
+    } as AppConfig;
+    const projects = [{ id: 'project-1', name: 'Team Sync' } as ProjectRecord];
     testContext.automationValidateRuleActivationMock.mockResolvedValue({ valid: true });
 
-    await expect(validateAutomationRuleForActivation(rule, config, project)).resolves.toEqual({
+    await expect(validateAutomationRuleForActivation(rule, config, projects)).resolves.toEqual({
       valid: true,
     });
 
     expect(testContext.automationValidateRuleActivationMock).toHaveBeenCalledWith(
       rule,
       config,
-      project
+      projects
     );
   });
 });

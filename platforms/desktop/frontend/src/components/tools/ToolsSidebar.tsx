@@ -1,4 +1,4 @@
-import { Bot, Keyboard, Server, Subtitles, Terminal, Tv } from 'lucide-react';
+import { Bot, FolderSync, Keyboard, Server, Subtitles, Terminal, Tv } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import {
   listMediaServerProfiles,
   testMediaServerConnection,
 } from '../../services/mediaServer/mediaServerService';
+import { useAutomationStore } from '../../stores/automationStore';
 import { useCliStore } from '../../stores/cliStore';
 import {
   useApiServerConfig,
@@ -122,6 +123,32 @@ export function ToolsSidebar(): React.JSX.Element {
       unmounted = true;
     };
   }, [setEmbyServerName]);
+  const automationRules = useAutomationStore((state) => state.rules);
+  const automationRuntimeStates = useAutomationStore((state) => state.runtimeStates);
+  const automationProcessedEntries = useAutomationStore((state) => state.processedEntries);
+  const automationStatus = automationRules.some(
+    (rule) =>
+      automationRuntimeStates[rule.id]?.status === 'error' ||
+      automationProcessedEntries.some(
+        (entry) => entry.ruleId === rule.id && entry.status === 'error'
+      )
+  )
+    ? {
+        tone: 'error' as const,
+        text: t('automation.status.error', { defaultValue: 'Error' }),
+      }
+    : automationRules.some((rule) => rule.enabled)
+      ? {
+          tone: 'active' as const,
+          text: t('automation.watching_count', {
+            defaultValue: 'Watching · {{count}}',
+            count: automationRules.filter((rule) => rule.enabled).length,
+          }),
+        }
+      : {
+          tone: 'inactive' as const,
+          text: t('automation.status.stopped', { defaultValue: 'Stopped' }),
+        };
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',
@@ -174,6 +201,16 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: isApiActive ? 'active' : 'inactive',
     },
     {
+      id: 'automation',
+      nameKey: 'tools.automation',
+      defaultName: 'Automation',
+      descKey: 'tools.automation_desc',
+      defaultDesc: 'Watch folders and route recordings into projects or exports',
+      Icon: FolderSync,
+      statusText: automationStatus.text,
+      statusType: automationStatus.tone,
+    },
+    {
       id: 'mcp',
       nameKey: 'tools.mcp',
       defaultName: 'MCP Agents',
@@ -222,6 +259,7 @@ export function ToolsSidebar(): React.JSX.Element {
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
+    activeTool === 'automation' ||
     activeTool === 'mcp' ||
     activeTool === 'cli' ||
     activeTool === 'emby_sync'

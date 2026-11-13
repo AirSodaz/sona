@@ -30,7 +30,7 @@ class UniffiDataTransferMappingTest {
 
         val mapped = manifest.toApplication()
 
-        assertEquals(3, mapped.schemaVersion)
+        assertEquals(4, mapped.schemaVersion)
         assertEquals("1.2.3", mapped.appVersion)
         assertEquals(8, mapped.counts.analyticsFiles)
         assertEquals(1, mapped.counts.projects)
@@ -45,11 +45,11 @@ class UniffiDataTransferMappingTest {
     }
 
     private fun ffiManifest(analytics: ULong) = FfiBackupManifestV1(
-        3uL,
+        4uL,
         "2026-07-29T00:00:00Z",
         "1.2.3",
         "lightweight",
         FfiBackupManifestScopesV1(true, true, true, true, true),
-        FfiBackupManifestCountsV1(1uL, 2uL, 3uL, 4uL, 5uL, 6uL, 7uL, analytics),
+        FfiBackupManifestCountsV1(1uL, 2uL, 3uL, 4uL, 6uL, 7uL, analytics),
     )
 }

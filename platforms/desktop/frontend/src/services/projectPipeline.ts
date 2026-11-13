@@ -10,14 +10,15 @@ export type { EffectivePipelineSnapshot };
 function globalDefaults(config: AppConfig): ProjectPipelineConfig {
   return {
     enabled: false,
-    autoPolish: config.autoPolish ?? false,
+    autoPolish: false,
+    autoPolishFrequency: 5,
     polishPresetId: config.polishPresetId,
-    autoTranslate: config.autoTranslate ?? false,
+    autoTranslate: false,
     targetLanguage: config.translationLanguage,
-    autoSummary: config.autoSummary ?? false,
+    autoSummary: false,
     summaryTemplateId: config.summaryTemplateId,
-    autoExport: false,
     customTerms: [],
+    autoExport: false,
   };
 }
 
@@ -33,9 +34,13 @@ export function resolveItemPipeline(
   if (!project?.pipeline?.enabled) {
     return { ...defaults, isProjectPipeline: false };
   }
+  // Mirrors `core::project::resolve_item_pipeline`: a non-positive frequency means
+  // "unset", never "polish on every segment".
+  const frequency = project.pipeline.autoPolishFrequency ?? 0;
   return {
     ...defaults,
     ...project.pipeline,
+    autoPolishFrequency: frequency > 0 ? frequency : 5,
     polishPresetId: project.pipeline.polishPresetId ?? defaults.polishPresetId,
     targetLanguage: project.pipeline.targetLanguage ?? defaults.targetLanguage,
     summaryTemplateId: project.pipeline.summaryTemplateId ?? defaults.summaryTemplateId,

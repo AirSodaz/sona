@@ -407,7 +407,7 @@ Sona provides 14 structured settings areas, and features a client-side search ba
 - `Settings > Vocabulary`
   organized into three dedicated sub-tabs: `Recognition` (text replacement and hotword sets), `Prompts` (polish context presets and summary templates), and `Speakers` (speaker profile voiceprints and sample enrollment)
 - `Settings > Automation`
-  watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
+  watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running (includes migration banner and deep link to `Tools > Automation`)
 - `Settings > Storage Management`
   storage paths, custom FFmpeg binary path, disk analysis, audio retention cleanup policies, and WebView cache cleanup
 - `Settings > Cloud Sync`

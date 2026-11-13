@@ -130,7 +130,7 @@ class DataRecoveryViewModelTest {
             "1.0",
             "lightweight",
             BackupScopes(true, true, true, true, true),
-            BackupCounts(2, 3, 4, 0, 0, 0, 0, 0),
+            BackupCounts(2, 3, 4, 0, 0, 0, 0),
         )
     }
 }

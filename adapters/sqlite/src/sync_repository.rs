@@ -1263,10 +1263,12 @@ fn apply_remote_segment_in_transaction(
 
     let mut result = SyncRemoteApplyResult::default();
     for operation in &segment.operations {
-        let operation = canonicalize_operation(operation);
+        let Some(operation) = canonicalize_incoming_operation(operation) else {
+            continue;
+        };
         validate_operation(&operation)
             .map_err(|error| DatabaseError::Internal(error.to_string()))?;
-        if !operation_allowed(configured_preset, &operation)
+        if !operation_allowed_incoming(configured_preset, &operation)
             && !matches!(operation.kind, SyncOperationKind::DeleteEntity)
         {
             return Err(DatabaseError::Internal(format!(
@@ -1541,8 +1543,72 @@ fn canonicalize_operation(operation: &SyncOperation) -> SyncOperation {
     operation
 }
 
+/// Translates retired wire fields into their current equivalents before the
+/// LWW merge reads the field version row.
+fn canonicalize_incoming_operation(operation: &SyncOperation) -> Option<SyncOperation> {
+    let mut operation = canonicalize_operation(operation);
+    if operation.entity.kind == SyncEntityKind::AutomationRule
+        && let SyncOperationKind::SetField { field, value } = &operation.kind
+        && field == "tagIds"
+    {
+        let project_id = value
+            .as_array()?
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .find(|id| !matches!(*id, "" | "inbox" | "none"))?;
+        operation.kind = SyncOperationKind::SetField {
+            field: "projectId".to_string(),
+            value: Value::String(project_id.to_string()),
+        };
+    }
+    Some(operation)
+}
+
 fn operation_field(kind: &SyncOperationKind) -> &str {
     kind.field().unwrap_or(DELETE_FIELD)
+}
+
+fn operation_allowed_incoming(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
+    if operation_allowed(preset, operation) {
+        return true;
+    }
+    if !preset_allows(preset, operation.entity.kind) {
+        return false;
+    }
+    let Some(field) = operation.kind.field() else {
+        return true;
+    };
+    match operation.entity.kind {
+        SyncEntityKind::Setting => {
+            field == "value" && retired_setting_entity_key(&operation.entity.id).is_some()
+        }
+        SyncEntityKind::AutomationProfile => matches!(
+            field,
+            "name"
+                | "translationLanguage"
+                | "polishPresetId"
+                | "summaryTemplateId"
+                | "enabledTextReplacementSetIds"
+                | "enabledHotwordSetIds"
+                | "enabledPolishKeywordSetIds"
+                | "enabledSpeakerProfileIds"
+                | "createdAt"
+                | "updatedAt"
+        ),
+        SyncEntityKind::AutomationRule => matches!(
+            field,
+            "kind"
+                | "priority"
+                | "profileId"
+                | "profileSource"
+                | "presetId"
+                | "stageExportEnabled"
+                | "actionAutoSummary"
+                | "migrationNotice"
+        ),
+        _ => false,
+    }
 }
 
 fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
@@ -1608,43 +1674,22 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
             field,
             "name" | "enabled" | "scope" | "projectIds" | "sortOrder" | "createdAt" | "updatedAt"
         ),
-        SyncEntityKind::AutomationProfile => matches!(
-            field,
-            "name"
-                | "translationLanguage"
-                | "polishPresetId"
-                | "summaryTemplateId"
-                | "enabledTextReplacementSetIds"
-                | "enabledHotwordSetIds"
-                | "enabledPolishKeywordSetIds"
-                | "enabledSpeakerProfileIds"
-                | "createdAt"
-                | "updatedAt"
-        ),
+        SyncEntityKind::AutomationProfile => false,
         SyncEntityKind::AutomationRule => matches!(
             field,
             "name"
                 | "projectId"
-                | "kind"
-                | "priority"
-                | "profileId"
-                | "profileSource"
                 | "saveHistory"
-                | "tagIds"
-                | "presetId"
                 | "recursive"
                 | "stageAutoPolish"
                 | "stagePolishPresetId"
                 | "stageAutoTranslate"
                 | "stageTranslationLanguage"
-                | "stageExportEnabled"
-                | "actionAutoSummary"
                 | "exportFormat"
                 | "exportMode"
                 | "exportPrefix"
                 | "createdAt"
                 | "updatedAt"
-                | "migrationNotice"
         ),
         SyncEntityKind::CredentialProfile => {
             matches!(
@@ -1680,10 +1725,14 @@ fn apply_domain_delete(
 ) -> Result<(), DatabaseError> {
     match kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => {
-            let _ = transaction.execute(
+            transaction.execute(
+                "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
+                [entity_id],
+            )?;
+            transaction.execute(
                 "DELETE FROM project_pipelines WHERE project_id = ?1",
                 [entity_id],
-            );
+            )?;
             execute_delete(transaction, "projects", "id", entity_id)
         }
         SyncEntityKind::HistoryItem => {
@@ -1731,9 +1780,7 @@ fn apply_domain_delete(
         SyncEntityKind::SpeakerProfile => {
             execute_delete(transaction, "speaker_profiles", "id", entity_id)
         }
-        SyncEntityKind::AutomationProfile => {
-            execute_delete(transaction, "automation_profiles", "id", entity_id)
-        }
+        SyncEntityKind::AutomationProfile => Ok(()),
         SyncEntityKind::AutomationRule => {
             execute_delete(transaction, "automation_rules", "id", entity_id)
         }
@@ -1829,9 +1876,7 @@ fn apply_domain_field(
                 ("updatedAt", "updated_at"),
             ],
         ),
-        SyncEntityKind::AutomationProfile => {
-            apply_automation_profile_field(transaction, entity_id, field, value)
-        }
+        SyncEntityKind::AutomationProfile => Ok(()),
         SyncEntityKind::AutomationRule => {
             apply_automation_rule_field(transaction, entity_id, field, value)
         }
@@ -1948,6 +1993,10 @@ fn apply_app_config_field(
     field: &str,
     value: &Value,
 ) -> Result<(), DatabaseError> {
+    if retired_setting_entity_key(entity_id).is_some() {
+        require_field(field, "value")?;
+        return Ok(());
+    }
     let Some(setting_key) = portable_setting_entity_key(entity_id) else {
         return unsupported_field(SyncEntityKind::Setting, field);
     };
@@ -1975,6 +2024,9 @@ fn remove_app_config_field(
     transaction: &Transaction<'_>,
     entity_id: &str,
 ) -> Result<(), DatabaseError> {
+    if retired_setting_entity_key(entity_id).is_some() {
+        return Ok(());
+    }
     let setting_key = portable_setting_entity_key(entity_id)
         .ok_or_else(|| DatabaseError::Internal("Sync setting entity ID is invalid.".to_string()))?;
     let Some(current) = transaction
@@ -2015,14 +2067,24 @@ fn operation_allowed_field_for_setting(field: &str) -> bool {
             | "polishPresetId"
             | "polishContext"
             | "polishScenario"
-            | "autoPolish"
-            | "autoPolishFrequency"
+    )
+}
+
+fn retired_setting_key(field: &str) -> bool {
+    matches!(
+        field,
+        "autoPolish" | "autoPolishFrequency" | "autoTranslate" | "autoSummary"
     )
 }
 
 fn portable_setting_entity_key(entity_id: &str) -> Option<&str> {
     let setting_key = entity_id.strip_prefix("app-config::")?;
     operation_allowed_field_for_setting(setting_key).then_some(setting_key)
+}
+
+fn retired_setting_entity_key(entity_id: &str) -> Option<&str> {
+    let setting_key = entity_id.strip_prefix("app-config::")?;
+    retired_setting_key(setting_key).then_some(setting_key)
 }
 
 fn apply_simple_record_field(
@@ -2111,123 +2173,57 @@ fn apply_automation_rule_field(
     field: &str,
     value: &Value,
 ) -> Result<(), DatabaseError> {
+    if matches!(
+        field,
+        "kind"
+            | "priority"
+            | "profileId"
+            | "profileSource"
+            | "presetId"
+            | "stageExportEnabled"
+            | "actionAutoSummary"
+            | "migrationNotice"
+            | "tagIds"
+    ) {
+        return Ok(());
+    }
     transaction.execute(
         "INSERT OR IGNORE INTO automation_rules (id) VALUES (?1)",
         [entity_id],
     )?;
-    if field == "tagIds" {
-        let tag_ids = json_string_array(value, field)?;
-        transaction.execute(
-            "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
-            [entity_id],
-        )?;
-        for tag_id in tag_ids {
-            transaction.execute(
-                "INSERT OR IGNORE INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
-                params![entity_id, tag_id],
-            )?;
-        }
-        return Ok(());
-    }
     if field == "projectId" {
-        let project_id = value.as_str().unwrap_or_default();
-        transaction.execute(
-            "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
-            [entity_id],
-        )?;
-        transaction.execute(
-            "UPDATE automation_rules SET save_history = ?1 WHERE id = ?2",
-            params![(project_id != "none") as i64, entity_id],
-        )?;
-        if !matches!(project_id, "" | "inbox" | "none") {
+        let project_id = value.as_str().unwrap_or_default().trim();
+        if project_id == "none" {
             transaction.execute(
-                "INSERT OR IGNORE INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
-                params![entity_id, project_id],
+                "UPDATE automation_rules SET project_id = '', save_history = 0 WHERE id = ?1",
+                [entity_id],
+            )?;
+        } else {
+            transaction.execute(
+                "UPDATE automation_rules SET project_id = ?1 WHERE id = ?2",
+                params![project_id, entity_id],
             )?;
         }
         return Ok(());
     }
     let column = match field {
         "name" => "name",
-        "kind" => "kind",
-        "priority" => "priority",
-        "profileId" => "profile_id",
-        "profileSource" => "profile_source",
         "saveHistory" => "save_history",
-        "presetId" => "preset_id",
         "recursive" => "recursive",
         "stageAutoPolish" => "stage_auto_polish",
         "stagePolishPresetId" => "stage_polish_preset_id",
         "stageAutoTranslate" => "stage_auto_translate",
         "stageTranslationLanguage" => "stage_translation_language",
-        "stageExportEnabled" => "stage_export_enabled",
-        "actionAutoSummary" => "action_auto_summary",
         "exportFormat" => "export_format",
         "exportMode" => "export_mode",
         "exportPrefix" => "export_prefix",
         "createdAt" => "created_at",
         "updatedAt" => "updated_at",
-        "migrationNotice" => "migration_notice",
         _ => return unsupported_field(SyncEntityKind::AutomationRule, field),
     };
     update_json_column(
         transaction,
         "automation_rules",
-        "id",
-        entity_id,
-        column,
-        value,
-    )
-}
-
-fn apply_automation_profile_field(
-    transaction: &Transaction<'_>,
-    entity_id: &str,
-    field: &str,
-    value: &Value,
-) -> Result<(), DatabaseError> {
-    transaction.execute(
-        "INSERT OR IGNORE INTO automation_profiles (id) VALUES (?1)",
-        [entity_id],
-    )?;
-    if let Some(link_kind) = match field {
-        "enabledTextReplacementSetIds" => Some("text_replacement"),
-        "enabledHotwordSetIds" => Some("hotword"),
-        "enabledPolishKeywordSetIds" => Some("polish_keyword"),
-        "enabledSpeakerProfileIds" => Some("speaker_profile"),
-        _ => None,
-    } {
-        let targets = json_string_array(value, field)?;
-        transaction.execute(
-            "DELETE FROM automation_profile_links WHERE profile_id = ?1 AND kind = ?2",
-            params![entity_id, link_kind],
-        )?;
-        for (sort_order, target_id) in targets.iter().enumerate() {
-            transaction.execute(
-                "INSERT INTO automation_profile_links (profile_id, kind, target_id, sort_order)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    entity_id,
-                    link_kind,
-                    target_id,
-                    usize_to_i64(sort_order, "sort order")?
-                ],
-            )?;
-        }
-        return Ok(());
-    }
-    let column = match field {
-        "name" => "name",
-        "translationLanguage" => "translation_language",
-        "polishPresetId" => "polish_preset_id",
-        "summaryTemplateId" => "summary_template_id",
-        "createdAt" => "created_at",
-        "updatedAt" => "updated_at",
-        _ => return unsupported_field(SyncEntityKind::AutomationProfile, field),
-    };
-    update_json_column(
-        transaction,
-        "automation_profiles",
         "id",
         entity_id,
         column,

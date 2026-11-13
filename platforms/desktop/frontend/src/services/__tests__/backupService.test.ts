@@ -200,7 +200,7 @@ import { applyImportBackup, exportBackup, prepareImportBackup } from '../backupS
 
 function makeManifest() {
   return {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     createdAt: '2026-04-29T00:00:00.000Z',
     appVersion: packageJson.version,
     historyMode: 'light' as const,
@@ -216,7 +216,6 @@ function makeManifest() {
       historyItems: 1,
       transcriptFiles: 1,
       summaryFiles: 1,
-      automationProfiles: 0,
       automationRules: 1,
       automationProcessedEntries: 1,
       analyticsFiles: 1,
@@ -309,13 +308,12 @@ describe('backupService', () => {
           updatedAt: 2,
         },
       ],
-      automationProfiles: [],
       automationRules: [
         {
           id: 'rule-1',
           name: 'Imported rule',
           projectId: 'project-1',
-          presetId: 'meeting_notes',
+          saveHistory: true,
           watchDirectory: 'C:\\watch',
           recursive: true,
           enabled: true,
@@ -328,6 +326,7 @@ describe('backupService', () => {
       automationProcessedEntries: [
         {
           ruleId: 'rule-1',
+          attempt: 1,
           filePath: 'C:\\watch\\meeting.wav',
           sourceFingerprint: 'fp-1',
           size: 42,
@@ -367,7 +366,6 @@ describe('backupService', () => {
       manifest: makeManifest(),
       config: { theme: 'dark' },
       tags: [{ id: 'tag-sparse' }],
-      automationProfiles: [],
       automationRules: [{ id: 'rule-sparse' }],
       automationProcessedEntries: [{ ruleId: 'rule-sparse' }],
       analyticsContent: '{"schemaVersion":1}',
@@ -406,25 +404,24 @@ describe('backupService', () => {
           updatedAt: 2,
         },
       ],
-      automationProfiles: [],
       automationRules: [
         {
           id: 'rule-1',
           name: 'Imported rule',
           projectId: 'project-1',
-          presetId: 'meeting_notes',
+          saveHistory: true,
           watchDirectory: 'C:\\watch',
           recursive: true,
           enabled: true,
           stageConfig: {
             autoPolish: true,
             autoTranslate: false,
-            exportEnabled: true,
           },
           exportConfig: {
             directory: 'C:\\exports',
             format: 'txt',
             mode: 'original',
+            prefix: '',
           },
           createdAt: 1,
           updatedAt: 2,
@@ -433,6 +430,7 @@ describe('backupService', () => {
       automationProcessedEntries: [
         {
           ruleId: 'rule-1',
+          attempt: 1,
           filePath: 'C:\\watch\\meeting.wav',
           sourceFingerprint: 'fp-1',
           size: 42,

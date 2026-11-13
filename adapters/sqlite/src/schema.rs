@@ -1,6 +1,7 @@
 use super::{Database, DatabaseError};
+use rusqlite::OptionalExtension;
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 10;
+pub const CURRENT_SCHEMA_VERSION: i64 = 11;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
 
 /// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
@@ -31,7 +32,7 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
             )?;
         } else {
             // Legacy v7 and earlier schemas (the tag era) are deprecated and no longer
-            // auto-migrated. Only v8 -> v9 -> v10 migrations remain active.
+            // auto-migrated. Only v8 -> v9 -> v10 -> v11 migrations remain active.
             if applied_version < 9 {
                 migrate_v9(tx)?;
                 tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
@@ -39,6 +40,10 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
             if applied_version < 10 {
                 migrate_v10(tx)?;
                 tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [10])?;
+            }
+            if applied_version < 11 {
+                migrate_v11(tx)?;
+                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [11])?;
             }
         }
         Ok(())
@@ -88,7 +93,8 @@ fn initialize_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite:
     migrate_v7(tx)?;
     migrate_v8(tx)?;
     migrate_v9(tx)?;
-    migrate_v10(tx)
+    migrate_v10(tx)?;
+    migrate_v11(tx)
 }
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
@@ -741,10 +747,282 @@ fn migrate_v10(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Moves legacy per-rule export settings into the owning project's pipeline.
+///
+/// Before v11, a save-history rule owned its export directory. Post-v11 exports
+/// are resolved from `project_pipelines`, so upgrading without this backfill
+/// silently stops exporting. Must run before `automation_rules` is rebuilt and
+/// `stage_export_enabled` disappears.
+fn backfill_automation_export_pipelines(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<(i64, i64), rusqlite::Error> {
+    if !has_table(tx, "project_pipelines")?
+        || !has_table(tx, "automation_rules")?
+        || !has_table(tx, "projects")?
+        || !has_column(tx, "automation_rules", "stage_export_enabled")?
+        || !has_column(tx, "automation_rules", "export_directory")?
+        || !has_column(tx, "automation_rules", "export_format")?
+        || !has_column(tx, "automation_rules", "export_prefix")?
+    {
+        return Ok((0, 0));
+    }
+
+    // v9 dropped automation_rules.project_id, so legacy rules keep their
+    // destination only in automation_rule_projects. Resolve the same way the
+    // migrate_v11 rebuild does.
+    let rule_project_expr = if has_column(tx, "automation_rules", "project_id")? {
+        "COALESCE(r.project_id, '')"
+    } else {
+        "''"
+    };
+    let project_id_expr = if has_table(tx, "automation_rule_projects")? {
+        format!(
+            "COALESCE((SELECT arp.project_id FROM automation_rule_projects arp WHERE arp.rule_id = r.id ORDER BY arp.rowid LIMIT 1), {rule_project_expr})"
+        )
+    } else {
+        rule_project_expr.to_string()
+    };
+    let save_history_expr = if has_column(tx, "automation_rules", "save_history")? {
+        "r.save_history <> 0"
+    } else if has_column(tx, "automation_rules", "project_id")? {
+        "r.project_id <> 'none'"
+    } else {
+        "1"
+    };
+    // Tag-kind rules are deleted by this migration; they never own an export target.
+    let exclude_tag_rules = if has_column(tx, "automation_rules", "kind")? {
+        "AND r.kind <> 'tag'"
+    } else {
+        ""
+    };
+
+    let candidates: Vec<(String, String, String, String, String)> = {
+        let mut stmt = tx.prepare(&format!(
+            "SELECT c.id, c.project_id, c.directory, c.export_format, c.export_prefix
+             FROM (
+                 SELECT r.id AS id,
+                        {project_id_expr} AS project_id,
+                        TRIM(r.export_directory) AS directory,
+                        r.export_format AS export_format,
+                        r.export_prefix AS export_prefix
+                 FROM automation_rules AS r
+                 WHERE {save_history_expr}
+                   AND r.stage_export_enabled <> 0
+                   AND TRIM(r.export_directory) <> ''
+                   {exclude_tag_rules}
+             ) AS c
+             ORDER BY c.id"
+        ))?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    if candidates.is_empty() {
+        return Ok((0, 0));
+    }
+
+    let mut backfilled = 0;
+    let mut skipped = 0;
+    for (rule_id, project_id, directory, format, prefix) in candidates {
+        // Inbox has no `projects` row, so its export target cannot live in a pipeline.
+        // Leave the rule directory in place (inert) and report it instead.
+        if matches!(project_id.as_str(), "" | "inbox" | "none") {
+            skipped += 1;
+            continue;
+        }
+        let project_exists: bool = tx
+            .query_row(
+                "SELECT 1 FROM projects WHERE id = ?1",
+                [&project_id],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !project_exists {
+            skipped += 1;
+            continue;
+        }
+
+        if !crate::project::merge_rule_export_into_pipeline(
+            tx,
+            &project_id,
+            &directory,
+            &format,
+            &prefix,
+        )? {
+            continue;
+        }
+
+        tx.execute(
+            "UPDATE automation_rules SET export_directory = '', export_prefix = '' WHERE id = ?1",
+            rusqlite::params![rule_id],
+        )?;
+        backfilled += 1;
+    }
+
+    Ok((backfilled, skipped))
+}
+
+fn migrate_v11(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    let (export_backfilled, export_skipped) = backfill_automation_export_pipelines(tx)?;
+    let legacy_tag_rules: i64 = if has_column(tx, "automation_rules", "kind")? {
+        tx.query_row(
+            "SELECT COUNT(*) FROM automation_rules WHERE kind = 'tag'",
+            [],
+            |row| row.get(0),
+        )?
+    } else {
+        0
+    };
+    let legacy_profiles: i64 = if has_table(tx, "automation_profiles")? {
+        tx.query_row("SELECT COUNT(*) FROM automation_profiles", [], |row| {
+            row.get(0)
+        })?
+    } else {
+        0
+    };
+
+    tx.execute_batch(
+        "DROP TABLE IF EXISTS automation_profile_links;
+         DROP TABLE IF EXISTS automation_profiles;",
+    )?;
+
+    if has_table(tx, "automation_rules")? {
+        if has_column(tx, "automation_rules", "kind")? {
+            tx.execute("DELETE FROM automation_rules WHERE kind = 'tag'", [])?;
+        }
+        tx.execute_batch(
+            "CREATE TABLE automation_rules_v11 (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT '',
+                project_id TEXT NOT NULL DEFAULT '',
+                save_history INTEGER NOT NULL DEFAULT 1,
+                watch_directory TEXT NOT NULL DEFAULT '',
+                recursive INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                stage_auto_polish INTEGER NOT NULL DEFAULT 0,
+                stage_polish_preset_id TEXT NOT NULL DEFAULT 'general',
+                stage_auto_translate INTEGER NOT NULL DEFAULT 0,
+                stage_translation_language TEXT NOT NULL DEFAULT 'en',
+                export_directory TEXT NOT NULL DEFAULT '',
+                export_format TEXT NOT NULL DEFAULT 'txt',
+                export_mode TEXT NOT NULL DEFAULT 'original',
+                export_prefix TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL DEFAULT 0
+            );",
+        )?;
+
+        let save_history_expr = if has_column(tx, "automation_rules", "save_history")? {
+            "r.save_history"
+        } else {
+            "1"
+        };
+        let has_rule_projects = has_table(tx, "automation_rule_projects")?;
+        let has_rule_project_col = has_column(tx, "automation_rules", "project_id")?;
+        let project_id_expr = if has_rule_projects && has_rule_project_col {
+            format!(
+                "CASE WHEN ({save_history_expr}) = 0 THEN '' ELSE COALESCE((SELECT arp.project_id FROM automation_rule_projects arp WHERE arp.rule_id = r.id ORDER BY arp.rowid LIMIT 1), COALESCE(r.project_id, '')) END"
+            )
+        } else if has_rule_projects {
+            format!(
+                "CASE WHEN ({save_history_expr}) = 0 THEN '' ELSE COALESCE((SELECT arp.project_id FROM automation_rule_projects arp WHERE arp.rule_id = r.id ORDER BY arp.rowid LIMIT 1), '') END"
+            )
+        } else if has_rule_project_col {
+            format!(
+                "CASE WHEN ({save_history_expr}) = 0 THEN '' ELSE COALESCE(r.project_id, '') END"
+            )
+        } else {
+            "''".to_string()
+        };
+
+        let insert_sql = format!(
+            "INSERT INTO automation_rules_v11 (
+                id, name, project_id, save_history, watch_directory, recursive, enabled,
+                stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
+                stage_translation_language, export_directory, export_format, export_mode,
+                export_prefix, created_at, updated_at
+            )
+            SELECT
+                r.id, r.name, {project_id_expr}, {save_history_expr}, r.watch_directory, r.recursive, r.enabled,
+                r.stage_auto_polish, r.stage_polish_preset_id, r.stage_auto_translate,
+                r.stage_translation_language, r.export_directory, r.export_format, r.export_mode,
+                r.export_prefix, r.created_at, r.updated_at
+            FROM automation_rules AS r;"
+        );
+        tx.execute_batch(&insert_sql)?;
+        tx.execute_batch(
+            "DROP TABLE automation_rules;
+             ALTER TABLE automation_rules_v11 RENAME TO automation_rules;
+             CREATE INDEX IF NOT EXISTS idx_automation_rules_project_id
+                 ON automation_rules(project_id);",
+        )?;
+    }
+
+    tx.execute("DROP TABLE IF EXISTS automation_rule_projects", [])?;
+
+    if has_table(tx, "automation_processed")? {
+        if has_column(tx, "automation_processed", "kind")? {
+            tx.execute("DELETE FROM automation_processed WHERE kind = 'tag'", [])?;
+        }
+        tx.execute("DROP INDEX IF EXISTS idx_automation_processed_tag_run", [])?;
+        if has_column(tx, "automation_processed", "kind")? {
+            tx.execute("ALTER TABLE automation_processed DROP COLUMN kind", [])?;
+        }
+        if has_column(tx, "automation_processed", "input_version")? {
+            tx.execute(
+                "ALTER TABLE automation_processed DROP COLUMN input_version",
+                [],
+            )?;
+        }
+    }
+
+    if has_table(tx, "task_ledger")? {
+        for col in [
+            "tag_automation_rule_id",
+            "automation_profile_id",
+            "automation_profile_source",
+        ] {
+            if has_column(tx, "task_ledger", col)? {
+                tx.execute(&format!("ALTER TABLE task_ledger DROP COLUMN {col}"), [])?;
+            }
+        }
+    }
+
+    if has_table(tx, "app_settings")? {
+        tx.execute(
+            "INSERT INTO app_settings (key, value)
+             VALUES ('automation-migration-v11-report',
+                     json_object('legacyTagRules', ?1,
+                                 'legacyProfiles', ?2,
+                                 'exportBackfilled', ?3,
+                                 'exportSkipped', ?4))
+             ON CONFLICT(key) DO NOTHING",
+            rusqlite::params![
+                legacy_tag_rules,
+                legacy_profiles,
+                export_backfilled,
+                export_skipped
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Database;
+    use serde_json::{Value, json};
 
     fn schema_versions(db: &Database) -> Vec<i64> {
         db.with_connection(|conn| {
@@ -816,7 +1094,7 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![10]);
+        assert_eq!(schema_versions(&db), vec![11]);
     }
 
     #[test]
@@ -837,20 +1115,23 @@ mod tests {
                     "updated_at",
                 ]
             );
-            assert_eq!(
-                table_columns(conn, "automation_rule_projects"),
-                vec!["rule_id", "project_id"]
-            );
             assert!(table_columns(conn, "history_items").contains(&"deleted_at".to_string()));
             assert!(table_columns(conn, "history_items").contains(&"project_id".to_string()));
 
-            for table in ["tags", "history_item_tags", "automation_rule_tags"] {
+            for table in [
+                "tags",
+                "history_item_tags",
+                "automation_rule_tags",
+                "automation_rule_projects",
+                "automation_profiles",
+                "automation_profile_links",
+            ] {
                 let exists: i64 = conn.query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
                     [table],
                     |row| row.get(0),
                 )?;
-                assert_eq!(exists, 0, "Table {table} should not exist in v10");
+                assert_eq!(exists, 0, "Table {table} should not exist in v11");
             }
             Ok(())
         })
@@ -994,7 +1275,7 @@ mod tests {
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (11)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (12)", [])?;
             Ok(())
         })
         .unwrap();
@@ -1003,11 +1284,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 11,
-                current: 10
+                found: 12,
+                current: 11
             }
         ));
-        assert_eq!(schema_versions(&db), vec![10, 11]);
+        assert_eq!(schema_versions(&db), vec![11, 12]);
     }
 
     #[test]
@@ -1031,7 +1312,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v10() {
+    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v11() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         connection
             .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
@@ -1092,7 +1373,7 @@ mod tests {
         drop(disk_conn_v8);
 
         let db_v8 = Database::open(temp_v8.path()).unwrap();
-        assert_eq!(schema_versions(&db_v8), vec![7, 8, 9, 10]);
+        assert_eq!(schema_versions(&db_v8), vec![7, 8, 9, 10, 11]);
     }
 
     #[test]
@@ -1234,10 +1515,6 @@ mod tests {
             "vocabulary_rules",
             "speaker_profiles",
             "speaker_profile_samples",
-            "automation_profiles",
-            "automation_profile_links",
-            "automation_rules",
-            "automation_rule_projects",
             "automation_processed",
             "task_ledger",
             "history_items_fts",
@@ -1251,13 +1528,20 @@ mod tests {
                     })?;
                 assert!(count >= 0, "Table {table} should exist");
             }
-            for dead_table in ["tags", "history_item_tags", "automation_rule_tags"] {
+            for dead_table in [
+                "tags",
+                "history_item_tags",
+                "automation_rule_tags",
+                "automation_profiles",
+                "automation_profile_links",
+                "automation_rule_projects",
+            ] {
                 let exists: i64 = conn.query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
                     [dead_table],
                     |row| row.get(0),
                 )?;
-                assert_eq!(exists, 0, "Table {dead_table} should not exist in v10");
+                assert_eq!(exists, 0, "Table {dead_table} should not exist in v11");
             }
             // Verify analytics.llm_usage table exists in attached database
             let count: i64 =
@@ -1288,15 +1572,12 @@ mod tests {
                 ]
             );
             assert_eq!(
-                table_columns(conn, "automation_profile_links"),
-                vec!["profile_id", "kind", "target_id", "sort_order"]
-            );
-            assert_eq!(
                 table_columns(conn, "automation_rules"),
                 vec![
                     "id",
                     "name",
-                    "preset_id",
+                    "project_id",
+                    "save_history",
                     "watch_directory",
                     "recursive",
                     "enabled",
@@ -1304,20 +1585,12 @@ mod tests {
                     "stage_polish_preset_id",
                     "stage_auto_translate",
                     "stage_translation_language",
-                    "stage_export_enabled",
                     "export_directory",
                     "export_format",
                     "export_mode",
                     "export_prefix",
                     "created_at",
                     "updated_at",
-                    "save_history",
-                    "kind",
-                    "priority",
-                    "profile_id",
-                    "profile_source",
-                    "action_auto_summary",
-                    "migration_notice",
                 ]
             );
             assert_eq!(
@@ -1334,8 +1607,6 @@ mod tests {
                     "history_id",
                     "export_path",
                     "error_message",
-                    "kind",
-                    "input_version",
                     "attempt",
                 ]
             );
@@ -1362,9 +1633,6 @@ mod tests {
                     "target_language",
                     "version",
                     "tag_ids",
-                    "tag_automation_rule_id",
-                    "automation_profile_id",
-                    "automation_profile_source",
                 ]
             );
 
@@ -1378,7 +1646,7 @@ mod tests {
                     !table_columns(conn, table)
                         .iter()
                         .any(|column| column == removed_column),
-                    "{table}.{removed_column} should not remain in the v1 baseline"
+                    "{table}.{removed_column} should not remain in the baseline"
                 );
             }
 
@@ -1388,32 +1656,276 @@ mod tests {
     }
 
     #[test]
-    fn tag_automation_runs_are_unique_by_rule_history_and_input_version() {
-        let db = Database::open_in_memory().unwrap();
-        db.with_connection(|conn| {
-            conn.execute(
-                "INSERT INTO automation_processed (
-                    id, rule_id, kind, input_version, history_id, status, attempt
-                 ) VALUES ('run-1', 'rule-1', 'tag', 'input-1', 'history-1', 'complete', 1)",
-                [],
-            )?;
-            let duplicate = conn.execute(
-                "INSERT INTO automation_processed (
-                    id, rule_id, kind, input_version, history_id, status, attempt
-                 ) VALUES ('run-2', 'rule-1', 'tag', 'input-1', 'history-1', 'pending', 2)",
-                [],
-            );
-            assert!(duplicate.is_err());
+    fn schema_v11_migrates_v10_automation_rules_and_drops_legacy_tables_and_columns() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        migrate_v7(&tx).unwrap();
+        migrate_v8(&tx).unwrap();
+        migrate_v9(&tx).unwrap();
+        migrate_v10(&tx).unwrap();
 
-            conn.execute(
-                "INSERT INTO automation_processed (
-                    id, rule_id, kind, input_version, history_id, status, attempt
-                 ) VALUES ('run-3', 'rule-1', 'tag', 'input-2', 'history-1', 'complete', 1)",
-                [],
-            )?;
-            Ok(())
-        })
+        tx.execute(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('proj-1', 'Project One', 1, 1)",
+            [],
+        )
         .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rules (
+                id, name, kind, save_history, watch_directory,
+                stage_export_enabled, export_directory, export_format, export_prefix
+             )
+             VALUES
+                ('file-proj', 'File Project', 'file', 1, 'C:\\watch', 1, 'C:\\out', 'txt', ''),
+                ('file-export', 'File Export', 'file', 0, 'C:\\raw', 1, 'C:\\raw', 'txt', ''),
+                ('file-inbox', 'File Inbox', 'file', 1, 'C:\\inbox-watch', 1, 'C:\\inbox-out', 'txt', ''),
+                ('tag-rule', 'Tag Rule', 'tag', 1, '', 0, '', 'txt', '')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rule_projects (rule_id, project_id)
+             VALUES ('file-proj', 'proj-1'), ('file-export', 'proj-1'), ('tag-rule', 'proj-1')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_processed (id, rule_id, kind, input_version, file_path)
+             VALUES
+                ('proc-file', 'file-proj', 'file', 'v1', 'C:\\watch\\a.wav'),
+                ('proc-tag', 'tag-rule', 'tag', 'v1', '')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO task_ledger (id, tag_automation_rule_id, automation_profile_id, automation_profile_source)
+             VALUES ('task-1', 'tag-rule', 'prof-1', 'explicit')",
+            [],
+        )
+        .unwrap();
+
+        migrate_v11(&tx).unwrap();
+        // Idempotent re-run on already migrated schema
+        migrate_v11(&tx).unwrap();
+
+        assert!(!has_table(&tx, "automation_profiles").unwrap());
+        assert!(!has_table(&tx, "automation_profile_links").unwrap());
+        assert!(!has_table(&tx, "automation_rule_projects").unwrap());
+
+        let rules_count: i64 = tx
+            .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rules_count, 3);
+
+        let file_proj_pid: String = tx
+            .query_row(
+                "SELECT project_id FROM automation_rules WHERE id = 'file-proj'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(file_proj_pid, "proj-1");
+
+        let file_export_pid: String = tx
+            .query_row(
+                "SELECT project_id FROM automation_rules WHERE id = 'file-export'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(file_export_pid, "");
+
+        let proc_count: i64 = tx
+            .query_row("SELECT COUNT(*) FROM automation_processed", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(proc_count, 1);
+        assert!(!has_column(&tx, "automation_processed", "kind").unwrap());
+        assert!(!has_column(&tx, "automation_processed", "input_version").unwrap());
+        assert!(!has_column(&tx, "task_ledger", "tag_automation_rule_id").unwrap());
+        assert!(!has_column(&tx, "task_ledger", "automation_profile_id").unwrap());
+        assert!(!has_column(&tx, "task_ledger", "automation_profile_source").unwrap());
+
+        // Legacy export settings moved into the owning project's pipeline.
+        let pipeline_json: String = tx
+            .query_row(
+                "SELECT pipeline_json FROM project_pipelines WHERE project_id = 'proj-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let pipeline: Value = serde_json::from_str(&pipeline_json).unwrap();
+        assert_eq!(pipeline["autoExport"], json!(true));
+        assert_eq!(pipeline["exportDirectory"], json!("C:\\out"));
+        assert_eq!(pipeline["enabled"], json!(true));
+
+        let rule_export_directory: String = tx
+            .query_row(
+                "SELECT export_directory FROM automation_rules WHERE id = 'file-proj'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_export_directory, "");
+
+        let report: String = tx
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'automation-migration-v11-report'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let report: Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(report["legacyTagRules"], json!(1));
+        assert_eq!(report["exportBackfilled"], json!(1));
+        // `file-inbox` resolves to no project, so its destination cannot be carried
+        // into a pipeline; it is reported instead of being silently dropped.
+        assert_eq!(report["exportSkipped"], json!(1));
+
+        let preserved: (
+            String,
+            String,
+            i64,
+            i64,
+            i64,
+            String,
+            i64,
+            String,
+            String,
+            String,
+            String,
+        ) = tx
+            .query_row(
+                "SELECT name, watch_directory, recursive, enabled, stage_auto_polish,
+                        stage_polish_preset_id, stage_auto_translate, stage_translation_language,
+                        export_format, export_mode, export_prefix
+                   FROM automation_rules WHERE id = 'file-proj'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            preserved,
+            (
+                "File Project".to_string(),
+                "C:\\watch".to_string(),
+                0,
+                0,
+                0,
+                "general".to_string(),
+                0,
+                "en".to_string(),
+                "txt".to_string(),
+                "original".to_string(),
+                "".to_string(),
+            )
+        );
+
+        // Column shape must match a freshly created database.
+        let fresh = Database::open_in_memory().unwrap();
+        let fresh_columns = fresh
+            .with_connection(|conn| Ok(table_columns(conn, "automation_rules")))
+            .unwrap();
+        assert_eq!(table_columns(&tx, "automation_rules"), fresh_columns);
+
+        tx.commit().unwrap();
+    }
+
+    #[test]
+    fn schema_v11_export_backfill_never_reenables_a_disabled_pipeline() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        migrate_v7(&tx).unwrap();
+        migrate_v8(&tx).unwrap();
+        migrate_v9(&tx).unwrap();
+        migrate_v10(&tx).unwrap();
+
+        tx.execute(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('proj-2', 'Project Two', 1, 1)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at)
+             VALUES ('proj-2', '{\"enabled\":false,\"autoPolish\":true}', 1)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rules (
+                id, name, kind, save_history, watch_directory,
+                stage_export_enabled, export_directory, export_format, export_prefix
+             )
+             VALUES ('file-disabled', 'File Disabled', 'file', 1, 'C:\\watch', 1, 'C:\\out2', 'srt', 'call')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rule_projects (rule_id, project_id)
+             VALUES ('file-disabled', 'proj-2')",
+            [],
+        )
+        .unwrap();
+
+        migrate_v11(&tx).unwrap();
+
+        let pipeline_json: String = tx
+            .query_row(
+                "SELECT pipeline_json FROM project_pipelines WHERE project_id = 'proj-2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let pipeline: Value = serde_json::from_str(&pipeline_json).unwrap();
+        assert_eq!(pipeline["enabled"], json!(false));
+        assert_eq!(pipeline["autoPolish"], json!(true));
+        assert_eq!(pipeline["autoExport"], json!(true));
+        assert_eq!(pipeline["exportDirectory"], json!("C:\\out2"));
+        assert_eq!(pipeline["exportFormat"], json!("srt"));
+        assert_eq!(pipeline["exportFileNamePrefix"], json!("call"));
+
+        let rule_export_directory: String = tx
+            .query_row(
+                "SELECT export_directory FROM automation_rules WHERE id = 'file-disabled'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_export_directory, "");
+
+        tx.commit().unwrap();
     }
 
     #[test]

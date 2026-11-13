@@ -9,7 +9,7 @@ use crate::tag::TagRecord;
 
 use super::BackupError;
 
-pub const BACKUP_SCHEMA_VERSION: u64 = 3;
+pub const BACKUP_SCHEMA_VERSION: u64 = 4;
 pub const BACKUP_HISTORY_MODE: &str = "light";
 
 #[derive(Clone, Debug)]
@@ -123,9 +123,6 @@ pub struct BackupManifestCounts {
     pub transcript_files: u64,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub summary_files: u64,
-    #[serde(default)]
-    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub automation_profiles: u64,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub automation_rules: u64,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
@@ -149,12 +146,6 @@ pub struct PreparedBackupImport {
         specta(type = Vec<specta_typescript::Unknown>)
     )]
     pub tags: Vec<Value>,
-    #[serde(default)]
-    #[cfg_attr(
-        feature = "specta",
-        specta(type = Vec<specta_typescript::Unknown>)
-    )]
-    pub automation_profiles: Vec<Value>,
     #[cfg_attr(
         feature = "specta",
         specta(type = Vec<specta_typescript::Unknown>)
@@ -176,7 +167,6 @@ pub fn build_backup_manifest(
     history_item_count: usize,
     transcript_file_count: usize,
     summary_file_count: usize,
-    automation_profile_count: usize,
     automation_rule_count: usize,
     automation_processed_entry_count: usize,
 ) -> Result<BackupManifest, BackupError> {
@@ -200,7 +190,6 @@ pub fn build_backup_manifest(
             history_items: history_item_count as u64,
             transcript_files: transcript_file_count as u64,
             summary_files: summary_file_count as u64,
-            automation_profiles: automation_profile_count as u64,
             automation_rules: automation_rule_count as u64,
             automation_processed_entries: automation_processed_entry_count as u64,
             analytics_files: 1,
@@ -209,7 +198,7 @@ pub fn build_backup_manifest(
 }
 
 pub fn validate_backup_manifest(manifest: &BackupManifest) -> Result<(), BackupError> {
-    if !matches!(manifest.schema_version, 1 | 2 | BACKUP_SCHEMA_VERSION) {
+    if !matches!(manifest.schema_version, 1 | 2 | 3 | BACKUP_SCHEMA_VERSION) {
         return Err(BackupError::InvalidBackup(format!(
             "Unsupported backup schema version: {}",
             manifest.schema_version

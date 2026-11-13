@@ -135,6 +135,68 @@ describe('PipelineExecutionEngine', () => {
     expect(result.exportPath).toBe('/path/to/export.txt');
   });
 
+  it('prefers the explicit exportMode over the pipeline value', async () => {
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: true,
+      enabled: true,
+      autoPolish: false,
+      autoTranslate: true,
+      autoSummary: false,
+      autoExport: true,
+      exportDirectory: '/exports',
+      exportFormat: 'txt',
+      exportMode: 'translation',
+    };
+
+    await engine.execute({
+      historyId: 'hist-1',
+      segments: mockSegments,
+      pipeline,
+      globalConfig: baseConfig,
+      exportMode: 'original',
+    });
+
+    expect(mockPorts.exportService.exportTranscriptToDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'original' })
+    );
+  });
+
+  it('still exports when the auto-summary stage rejects', async () => {
+    vi.mocked(mockPorts.summaryService.retrySummaryTranscriptJob).mockRejectedValueOnce(
+      new Error('Summary is disabled.')
+    );
+
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: true,
+      enabled: true,
+      autoPolish: false,
+      autoTranslate: false,
+      autoSummary: true,
+      autoExport: true,
+      exportDirectory: '/exports',
+      exportFormat: 'txt',
+    };
+
+    const onExportComplete = vi.fn();
+
+    await engine.execute({
+      historyId: 'hist-4',
+      segments: mockSegments,
+      pipeline,
+      globalConfig: baseConfig,
+      onExportComplete,
+    });
+
+    expect(mockPorts.summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith(
+      expect.objectContaining({ historyId: 'hist-4', allowWhenSummaryDisabled: true })
+    );
+    expect(mockPorts.summaryService.persistSummary).not.toHaveBeenCalled();
+    expect(mockPorts.exportService.exportTranscriptToDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ directory: '/exports' })
+    );
+    expect(onExportComplete).toHaveBeenCalledWith('/path/to/export.txt');
+  });
+
   it('falls back to global configs when project overrides are omitted', async () => {
     const pipeline: EffectivePipelineSnapshot = {
       isProjectPipeline: false,

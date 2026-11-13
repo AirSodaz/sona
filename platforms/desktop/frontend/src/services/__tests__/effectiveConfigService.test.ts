@@ -30,8 +30,6 @@ function createBaseConfig(): AppConfig {
       { id: 'speaker-a', name: 'Alice', enabled: true, samples: [] },
       { id: 'speaker-b', name: 'Bob', enabled: false, samples: [] },
     ],
-    autoPolish: false,
-    autoPolishFrequency: 5,
     voiceTypingEnabled: false,
     voiceTypingShortcut: 'Alt+V',
     voiceTypingMode: 'hold',

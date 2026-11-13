@@ -54,7 +54,6 @@ import { TranscriptWorkbench } from './transcript/TranscriptWorkbench';
 
 interface ProjectsViewProps {
   isActive?: boolean;
-  onOpenAutomationSettings?: (tagId: string) => void;
 }
 interface WorkspaceMenuSnapshot {
   contextId: string;

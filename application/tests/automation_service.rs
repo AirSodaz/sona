@@ -1,4 +1,4 @@
-﻿use serde_json::{Value, json};
+use serde_json::{Value, json};
 use sona_application::automation::{AutomationRepositoryService, AutomationValidationService};
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
@@ -30,15 +30,6 @@ impl AutomationStore for MemoryStore {
     fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), AutomationError> {
         self.calls.lock().unwrap().push("replace_rules");
         self.state.lock().unwrap().rules = rules.to_vec();
-        Ok(())
-    }
-
-    fn replace_profiles(
-        &self,
-        profiles: &[sona_core::automation::repository::AutomationProfileRecord],
-    ) -> Result<(), AutomationError> {
-        self.calls.lock().unwrap().push("replace_profiles");
-        self.state.lock().unwrap().profiles = profiles.to_vec();
         Ok(())
     }
 
@@ -118,7 +109,6 @@ fn replace_state_normalizes_defaults_and_generates_only_missing_ids() {
 
     service
         .replace_state(AutomationRepositoryInput {
-            profiles: vec![],
             rules: vec![rule_input(
                 json!({"id":"kept", "name":"Rule", "createdAt":-5}),
             )],
@@ -130,7 +120,6 @@ fn replace_state_normalizes_defaults_and_generates_only_missing_ids() {
 
     let state = store.state.lock().unwrap().clone();
     assert_eq!(state.rules[0].id, "kept");
-    assert_eq!(state.rules[0].preset_id, "custom");
     assert_eq!(state.rules[0].stage_config.polish_preset_id, "general");
     assert_eq!(state.rules[0].export_config.format, "txt");
     assert_eq!(state.rules[0].created_at, -5);
@@ -176,7 +165,6 @@ fn normalization_uses_all_designed_defaults() {
 
     AutomationRepositoryService::new(&store, &ids)
         .replace_state(AutomationRepositoryInput {
-            profiles: vec![],
             rules: vec![rule_input(json!({}))],
             processed_entries: vec![processed_input(json!({}))],
         })
@@ -186,14 +174,12 @@ fn normalization_uses_all_designed_defaults() {
     assert_eq!(
         serde_json::to_value(&state.rules[0]).unwrap(),
         json!({
-            "id": "rule-1", "name": "", "kind": "file", "priority": 0,
-            "profileSource": "tag_match", "saveHistory": true, "tagIds": [], "presetId": "custom",
+            "id": "rule-1", "name": "", "saveHistory": true, "projectId": "",
             "watchDirectory": "", "recursive": false, "enabled": false,
             "stageConfig": {
                 "autoPolish": false, "polishPresetId": "general", "autoTranslate": false,
-                "translationLanguage": "en", "exportEnabled": false
+                "translationLanguage": "en"
             },
-            "actions": {"autoPolish": false, "autoTranslate": false, "autoSummary": false},
             "exportConfig": {"directory": "", "format": "txt", "mode": "original", "prefix": ""},
             "createdAt": 0, "updatedAt": 0
         })
@@ -201,7 +187,7 @@ fn normalization_uses_all_designed_defaults() {
     assert_eq!(
         serde_json::to_value(&state.processed_entries[0]).unwrap(),
         json!({
-            "id": "entry-1", "ruleId": "", "kind": "file", "inputVersion": "",
+            "id": "entry-1", "ruleId": "",
             "attempt": 1, "filePath": "", "sourceFingerprint": "",
             "size": 0, "mtimeMs": 0, "status": "complete", "processedAt": 0
         })
@@ -246,7 +232,7 @@ fn load_state_returns_store_records_without_renormalizing() {
         .unwrap()
         .rules
         .push(rule_record_with(|rule| {
-            rule.preset_id.clear();
+            rule.export_config.format.clear();
             rule.created_at = -9;
         }));
     let ids = SequenceIds(Mutex::new(vec![]));
@@ -255,7 +241,7 @@ fn load_state_returns_store_records_without_renormalizing() {
         .load_state()
         .unwrap();
 
-    assert_eq!(state.rules[0].preset_id, "");
+    assert_eq!(state.rules[0].export_config.format, "");
     assert_eq!(state.rules[0].created_at, -9);
     assert_eq!(store.calls.lock().unwrap().as_slice(), ["load_state"]);
 }
@@ -282,7 +268,6 @@ fn full_state_normalizes_both_collections_before_calling_store() {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = AutomationRepositoryService::new(&store, &ids).replace_state(
             AutomationRepositoryInput {
-                profiles: vec![],
                 rules: vec![rule_input(json!({}))],
                 processed_entries: vec![processed_input(json!({}))],
             },
@@ -303,22 +288,42 @@ fn validation_prepares_export_directory_only_after_safe_preconditions() {
         metadata_failure: None,
     };
     let service = AutomationValidationService::new(&fs);
-    let rule = sample_rule("C:\\watch", "C:\\exports");
+    let mut rule = sample_rule("C:\\watch", "C:\\exports");
+    rule.save_history = false;
+    rule.project_id.clear();
     let result = service
-        .validate_rule_activation(
-            &rule,
-            &json!({"offlineModelPath":"C:\\models\\batch"}),
-            &[json!({"id":"tag-1"})],
-        )
+        .validate_rule_activation(&rule, &json!({"offlineModelPath":"C:\\models\\batch"}), &[])
         .unwrap();
     assert!(result.valid);
     assert_eq!(fs.created.lock().unwrap().as_slice(), ["C:\\exports"]);
 }
 
 #[test]
+fn save_history_rule_does_not_require_or_create_export_directory() {
+    let fs = FakeFileSystem {
+        existing: Mutex::new(vec!["C:\\watch".into()]),
+        create_succeeds: true,
+        ..FakeFileSystem::default()
+    };
+    let mut rule = sample_rule("C:\\watch", "");
+    rule.save_history = true;
+    rule.project_id = "proj-1".into();
+
+    let result = AutomationValidationService::new(&fs)
+        .validate_rule_activation(&rule, &online_config(), &[json!({"id": "proj-1"})])
+        .unwrap();
+
+    assert!(result.valid, "{result:?}");
+    assert!(fs.created.lock().unwrap().is_empty());
+}
+
+#[test]
 fn invalid_name_does_not_create_export_directory() {
     assert_precondition_invalid(
-        |rule| rule.name.clear(),
+        |rule| {
+            rule.save_history = false;
+            rule.name.clear();
+        },
         None,
         "automation.name_required",
         "Rule name is required.",
@@ -326,20 +331,23 @@ fn invalid_name_does_not_create_export_directory() {
 }
 
 #[test]
-fn missing_tag_does_not_create_export_directory() {
+fn missing_project_does_not_create_export_directory() {
     assert_precondition_invalid(
         |_| {},
         None,
-        "automation.tag_missing",
-        "One or more selected tags are missing.",
+        "automation.project_missing",
+        "The selected project does not exist.",
     );
 }
 
 #[test]
 fn empty_watch_path_does_not_create_export_directory() {
     assert_precondition_invalid(
-        |rule| rule.watch_directory.clear(),
-        Some(json!({"id": "tag-1"})),
+        |rule| {
+            rule.save_history = false;
+            rule.watch_directory.clear();
+        },
+        None,
         "automation.watch_directory_required",
         "Choose a watch directory.",
     );
@@ -348,8 +356,11 @@ fn empty_watch_path_does_not_create_export_directory() {
 #[test]
 fn empty_export_path_does_not_create_export_directory() {
     assert_precondition_invalid(
-        |rule| rule.export_config.directory.clear(),
-        Some(json!({"id": "tag-1"})),
+        |rule| {
+            rule.save_history = false;
+            rule.export_config.directory.clear();
+        },
+        None,
         "automation.output_directory_required",
         "Choose an output directory.",
     );
@@ -359,10 +370,11 @@ fn empty_export_path_does_not_create_export_directory() {
 fn equal_normalized_paths_do_not_create_export_directory() {
     assert_precondition_invalid(
         |rule| {
+            rule.save_history = false;
             rule.watch_directory = " C:/WATCH/ ".into();
             rule.export_config.directory = "c:\\watch".into();
         },
-        Some(json!({"id": "tag-1"})),
+        None,
         "automation.same_directory",
         "Watch and output directories must be different.",
     );
@@ -374,12 +386,10 @@ fn missing_watch_directory_does_not_create_export_directory() {
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
+    let mut rule = sample_rule("C:\\missing", "C:\\exports");
+    rule.save_history = false;
     let result = AutomationValidationService::new(&fs)
-        .validate_rule_activation(
-            &sample_rule("C:\\missing", "C:\\exports"),
-            &online_config(),
-            &[json!({"id":"tag-1"})],
-        )
+        .validate_rule_activation(&rule, &online_config(), &[])
         .unwrap();
 
     assert_invalid(
@@ -397,10 +407,12 @@ fn export_directory_creation_failure_preserves_filesystem_error() {
         create_succeeds: false,
         ..FakeFileSystem::default()
     };
+    let mut rule = sample_rule("C:\\watch", "C:\\exports");
+    rule.save_history = false;
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &sample_rule("C:\\watch", "C:\\exports"),
+        &rule,
         &online_config(),
-        &[json!({"id":"tag-1"})],
+        &[],
     );
 
     assert!(matches!(result, Err(AutomationError::FileSystem(_))));
@@ -414,10 +426,12 @@ fn existing_export_path_still_propagates_directory_creation_failure() {
         create_succeeds: false,
         ..FakeFileSystem::default()
     };
+    let mut rule = sample_rule("C:\\watch", "C:\\exports");
+    rule.save_history = false;
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &sample_rule("C:\\watch", "C:\\exports"),
+        &rule,
         &online_config(),
-        &[json!({"id":"tag-1"})],
+        &[],
     );
 
     assert!(matches!(result, Err(AutomationError::FileSystem(_))));
@@ -484,12 +498,10 @@ fn online_asr_does_not_require_a_local_model() {
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
+    let mut rule = sample_rule("C:\\watch", "C:\\exports");
+    rule.save_history = false;
     let result = AutomationValidationService::new(&fs)
-        .validate_rule_activation(
-            &sample_rule("C:\\watch", "C:\\exports"),
-            &online_config(),
-            &[json!({"id":"tag-1"})],
-        )
+        .validate_rule_activation(&rule, &online_config(), &[json!({"id":"tag-1"})])
         .unwrap();
 
     assert!(result.valid, "{result:?}");
@@ -506,8 +518,9 @@ fn sample_rule(watch_directory: &str, export_directory: &str) -> AutomationRule 
     AutomationRule {
         name: "Rule".into(),
         save_history: true,
-        tag_ids: vec!["tag-1".into()],
+        project_id: "tag-1".into(),
         watch_directory: watch_directory.into(),
+        recursive: false,
         stage_config: AutomationRuleStageConfig {
             auto_polish: false,
             auto_translate: false,
@@ -567,15 +580,13 @@ fn processed_input(value: Value) -> AutomationProcessedInput {
 
 fn rule_record_with(overrides: impl FnOnce(&mut AutomationRuleRecord)) -> AutomationRuleRecord {
     let mut rule: AutomationRuleRecord = serde_json::from_value(json!({
-        "id": "rule-1", "name": "Rule", "saveHistory": true, "tagIds": ["tag-1"], "presetId": "custom",
-        "kind": "file", "priority": 0, "profileSource": "tag_match",
+        "id": "rule-1", "name": "Rule", "saveHistory": true, "projectId": "tag-1",
         "watchDirectory": "C:\\watch", "recursive": false, "enabled": false,
         "stageConfig": {
             "autoPolish": false, "polishPresetId": "general", "autoTranslate": false,
-            "translationLanguage": "en", "exportEnabled": false
+            "translationLanguage": "en"
         },
         "exportConfig": {"directory": "C:\\exports", "format": "txt", "mode": "original", "prefix": ""},
-        "actions": {"autoPolish": false, "autoTranslate": false, "autoSummary": false},
         "createdAt": 0, "updatedAt": 0
     }))
     .unwrap();

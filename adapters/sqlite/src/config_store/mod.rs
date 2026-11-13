@@ -40,8 +40,6 @@ const PORTABLE_CONFIG_FIELDS: &[&str] = &[
     "polishPresetId",
     "polishContext",
     "polishScenario",
-    "autoPolish",
-    "autoPolishFrequency",
 ];
 
 pub(crate) fn load_state_in_transaction(

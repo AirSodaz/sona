@@ -5,9 +5,9 @@ use serde_json::{Value, json};
 use sona_application::config::AppConfigRepositoryService;
 use sona_core::config::{
     AppConfigLibrary, AppConfigRepositorySnapshot, AppConfigStartupProjection, AppConfigStore,
-    AppConfigStoredState, ConfigError, HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord,
-    PolishPresetRecord, SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
-    TextReplacementRuleRecord, TextReplacementSetRecord,
+    AppConfigStoredState, CURRENT_CONFIG_VERSION, ConfigError, HotwordRuleRecord, HotwordSetRecord,
+    PolishKeywordSetRecord, PolishPresetRecord, SpeakerProfileRecord, SpeakerProfileSampleRecord,
+    SummaryTemplateRecord, TextReplacementRuleRecord, TextReplacementSetRecord,
 };
 use sona_core::ports::time::{ClockError, ClockPort};
 
@@ -873,7 +873,7 @@ fn save_uses_projection_and_version_defaults_for_wrong_types() {
         .unwrap();
 
     let stored = store.state.lock().unwrap().clone().unwrap();
-    assert_eq!(stored.config_version, 8);
+    assert_eq!(stored.config_version, CURRENT_CONFIG_VERSION);
     assert_eq!(stored.startup_projection, empty_projection());
 }
 

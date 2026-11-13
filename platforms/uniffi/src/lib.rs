@@ -38,11 +38,10 @@ pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
     FfiAsrRuntimeMetricsSnapshotV1, FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent,
-    FfiAudioSourceV1, FfiAudioUsageCategoryV1, FfiAutomationActionsV1, FfiAutomationExportConfigV1,
-    FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1,
-    FfiAutomationProfileRecordV1, FfiAutomationProjectReferenceV1, FfiAutomationRepositoryInputV1,
-    FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1,
-    FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1,
+    FfiAudioSourceV1, FfiAudioUsageCategoryV1, FfiAutomationExportConfigV1,
+    FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationProjectReferenceV1,
+    FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1,
+    FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1,
     FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
     FfiAutomationValidationStageConfigV1, FfiBackupApplyResultV1, FfiBackupManifestCountsV1,
     FfiBackupManifestScopesV1, FfiBackupManifestV1, FfiBatchSegmentationMode,
@@ -2691,7 +2690,7 @@ mod tests {
         let config: serde_json::Value =
             serde_json::from_str(&config_bridge::default_config_json()).unwrap();
 
-        assert_eq!(config["configVersion"], 8);
+        assert_eq!(config["configVersion"], 9);
         assert_eq!(
             config["asr"]["selections"]["batch"]["mode"],
             serde_json::json!("batch")
@@ -2740,7 +2739,7 @@ mod tests {
             serde_json::from_str(&migrated.config_json).unwrap();
 
         assert!(migrated.migrated);
-        assert_eq!(migrated_config["configVersion"], 8);
+        assert_eq!(migrated_config["configVersion"], 9);
         assert_eq!(migrated_config["summaryEnabled"], true);
 
         let effective = config_bridge::resolve_effective_config_json(
@@ -2902,10 +2901,7 @@ mod automation_tests {
         )
         .unwrap();
 
-        assert_eq!(
-            output,
-            r#"{"profiles":[],"rules":[],"processedEntries":[]}"#
-        );
+        assert_eq!(output, r#"{"rules":[],"processedEntries":[]}"#);
     }
 
     #[test]
@@ -2920,8 +2916,10 @@ mod automation_tests {
         let output = automation_bridge::validate_automation_rule_activation_json(
             json!({
                 "name": "Rule",
-                "projectId": "inbox",
+                "saveHistory": false,
+                "projectId": "",
                 "watchDirectory": watch_directory,
+                "stageConfig": {},
                 "exportConfig": {
                     "directory": output_directory,
                     "mode": "original"

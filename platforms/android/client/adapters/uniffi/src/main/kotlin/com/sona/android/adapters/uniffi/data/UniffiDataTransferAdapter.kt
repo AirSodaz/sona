@@ -91,7 +91,6 @@ internal fun FfiBackupManifestV1.toApplication() = BackupManifest(
         historyItems = counts.historyItems.toLongChecked("History count"),
         transcriptFiles = counts.transcriptFiles.toLongChecked("Transcript count"),
         summaryFiles = counts.summaryFiles.toLongChecked("Summary count"),
-        automationProfiles = counts.automationProfiles.toLongChecked("Automation profile count"),
         automationRules = counts.automationRules.toLongChecked("Automation rule count"),
         automationProcessedEntries = counts.automationProcessedEntries.toLongChecked("Automation processed count"),
         analyticsFiles = counts.analyticsFiles.toLongChecked("Analytics count"),

@@ -36,6 +36,7 @@ interface RetrySummaryTranscriptJobOptions {
   templateId?: SummaryTemplateId;
   config?: AppConfig;
   priority?: LlmJobPriority;
+  allowWhenSummaryDisabled?: boolean;
 }
 
 type SummaryTargetOptions =
@@ -243,6 +244,7 @@ export class SummaryService {
     templateId,
     config,
     priority,
+    allowWhenSummaryDisabled,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
     await this.runSummaryTranscriptJob({
       segments,
@@ -251,6 +253,7 @@ export class SummaryService {
       templateId,
       config,
       priority,
+      allowWhenSummaryDisabled,
     });
   }
 
@@ -275,11 +278,12 @@ export class SummaryService {
     templateId,
     config: configOverride,
     priority,
+    allowWhenSummaryDisabled,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = configOverride ?? this.ports.getEffectiveConfigSnapshot();
 
-    if (config.summaryEnabled === false) {
+    if (config.summaryEnabled === false && !allowWhenSummaryDisabled) {
       throw new Error('Summary is disabled.');
     }
 

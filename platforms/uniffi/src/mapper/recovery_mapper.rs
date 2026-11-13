@@ -100,7 +100,6 @@ pub struct FfiRecoveryItemInputV1 {
     pub automation_rule_id: Option<String>,
     pub automation_rule_name: Option<String>,
     pub resolved_config_snapshot_json: Option<String>,
-    pub automation_resolution_snapshot_json: Option<String>,
     pub export_config_json: Option<String>,
     pub stage_config_json: Option<String>,
     pub source_fingerprint: Option<String>,
@@ -137,7 +136,6 @@ pub struct FfiRecoveredQueueItemV1 {
     pub automation_rule_id: Option<String>,
     pub automation_rule_name: Option<String>,
     pub resolved_config_snapshot_json: Option<String>,
-    pub automation_resolution_snapshot_json: Option<String>,
     pub export_config_json: String,
     pub stage_config_json: String,
     pub source_fingerprint: Option<String>,
@@ -290,7 +288,6 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             automation_rule_id,
             automation_rule_name,
             resolved_config_snapshot_json,
-            automation_resolution_snapshot_json,
             export_config_json,
             stage_config_json,
             source_fingerprint,
@@ -342,10 +339,6 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             resolved_config_snapshot: parse_json_leaf(
                 "resolved_config_snapshot_json",
                 resolved_config_snapshot_json,
-            )?,
-            automation_resolution_snapshot: parse_json_leaf(
-                "automation_resolution_snapshot_json",
-                automation_resolution_snapshot_json,
             )?,
             export_config: parse_json_leaf("export_config_json", export_config_json)?,
             stage_config: parse_json_leaf("stage_config_json", stage_config_json)?,
@@ -602,11 +595,6 @@ impl TryFrom<RecoveredQueueItem> for FfiRecoveredQueueItemV1 {
                 .resolved_config_snapshot
                 .as_ref()
                 .map(|value| serialize_json_leaf("resolved_config_snapshot_json", value))
-                .transpose()?,
-            automation_resolution_snapshot_json: value
-                .automation_resolution_snapshot
-                .as_ref()
-                .map(|value| serialize_json_leaf("automation_resolution_snapshot_json", value))
                 .transpose()?,
             export_config_json: serialize_json_leaf("export_config_json", &value.export_config)?,
             stage_config_json: serialize_json_leaf("stage_config_json", &value.stage_config)?,

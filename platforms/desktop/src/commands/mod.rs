@@ -43,7 +43,6 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::storage::storage_open_path,
         crate::commands::automation::automation_load_repository_state,
         crate::commands::automation::automation_persist_rules,
-        crate::commands::automation::automation_persist_profiles,
         crate::commands::automation::automation_persist_processed_entries,
         crate::commands::automation::automation_persist_repository_state,
         crate::commands::automation::automation_validate_rule_activation,

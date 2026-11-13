@@ -23,9 +23,11 @@ pub struct AutomationRule {
     #[serde(default = "default_save_history")]
     pub save_history: bool,
     #[serde(default)]
-    pub tag_ids: Vec<String>,
+    pub project_id: String,
     #[serde(default)]
     pub watch_directory: String,
+    #[serde(default)]
+    pub recursive: bool,
     #[serde(default)]
     pub stage_config: AutomationRuleStageConfig,
     #[serde(default)]

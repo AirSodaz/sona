@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use serde_json::json;
 use sona_core::automation::repository::{
-    AutomationProfileRecord, AutomationRuleInputActions, AutomationRuleRecord,
-    AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
+    AutomationRuleRecord, AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig,
+    AutomationStore,
 };
 use sona_core::history::HistoryIdGenerator;
 use sona_core::history::mutation_repository::{
@@ -12,9 +12,9 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::ports::time::ClockPort;
 use sona_core::sync::{
-    HybridLogicalClock, SyncCausalContext, SyncConflictResolution, SyncEntityKey, SyncEntityKind,
-    SyncLocalRepository, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedSegment,
-    SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
+    HybridLogicalClock, SyncCausalContext, SyncConflict, SyncConflictKind, SyncConflictResolution,
+    SyncEntityKey, SyncEntityKind, SyncLocalRepository, SyncOperation, SyncOperationKind,
+    SyncPresetV1, SyncPublishedSegment, SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
 };
 use sona_core::tag::{TagRecord, TagStore};
 use sona_sqlite::{
@@ -722,27 +722,16 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
     let rule = AutomationRuleRecord {
         id: "rule-1".to_string(),
         name: "Portable rule".to_string(),
-        kind: "file".to_string(),
-        priority: 0,
-        profile_id: None,
-        profile_source: "tag_match".to_string(),
         save_history: true,
-        tag_ids: Vec::new(),
-        preset_id: "custom".to_string(),
+        project_id: "project-1".to_string(),
         watch_directory: "C:\\private\\watch".to_string(),
         recursive: true,
         enabled: true,
-        actions: AutomationRuleInputActions {
-            auto_polish: true,
-            auto_translate: true,
-            auto_summary: false,
-        },
         stage_config: AutomationRuleRecordStageConfig {
             auto_polish: true,
             polish_preset_id: "general".to_string(),
             auto_translate: true,
             translation_language: "ja".to_string(),
-            export_enabled: true,
         },
         export_config: AutomationRuleRecordExportConfig {
             directory: "C:\\private\\export".to_string(),
@@ -752,7 +741,6 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
         },
         created_at: 1_000,
         updated_at: 2_000,
-        migration_notice: None,
     };
 
     AutomationStore::replace_rules(&automation, &[rule]).unwrap();
@@ -766,9 +754,10 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
         .collect::<Vec<_>>();
     assert!(fields.contains(&"name"));
     assert!(fields.contains(&"saveHistory"));
-    assert!(fields.contains(&"tagIds"));
+    assert!(fields.contains(&"projectId"));
     assert!(fields.contains(&"stageAutoTranslate"));
     assert!(fields.contains(&"exportFormat"));
+    assert!(!fields.contains(&"tagIds"));
     assert!(!fields.contains(&"watchDirectory"));
     assert!(!fields.contains(&"exportDirectory"));
     assert!(!fields.contains(&"enabled"));
@@ -778,7 +767,7 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
 }
 
 #[test]
-fn automation_profiles_and_typed_rule_fields_round_trip_through_sync() {
+fn typed_rule_fields_round_trip_and_tolerate_legacy_remote_operations() {
     let source_db = Arc::new(Database::open_in_memory().unwrap());
     let source_sync = SqliteSyncRepository::initialize(
         Arc::clone(&source_db),
@@ -788,55 +777,29 @@ fn automation_profiles_and_typed_rule_fields_round_trip_through_sync() {
     )
     .unwrap();
     let source_automation = SqliteAutomationRepository::new(Arc::clone(&source_db));
-    let profile = AutomationProfileRecord {
-        id: "profile-1".to_string(),
-        name: "Meeting profile".to_string(),
-        translation_language: "ja".to_string(),
-        polish_preset_id: "concise".to_string(),
-        summary_template_id: "minutes".to_string(),
-        enabled_text_replacement_set_ids: vec!["replacement-1".to_string()],
-        enabled_hotword_set_ids: vec!["hotword-1".to_string()],
-        enabled_polish_keyword_set_ids: vec!["keyword-1".to_string()],
-        enabled_speaker_profile_ids: vec!["speaker-1".to_string()],
-        created_at: 1_000,
-        updated_at: 2_000,
-    };
-    AutomationStore::replace_profiles(&source_automation, std::slice::from_ref(&profile)).unwrap();
 
     let mut rule = AutomationRuleRecord {
-        id: "tag-rule-1".to_string(),
-        name: "Meeting post-processing".to_string(),
-        kind: "tag".to_string(),
-        priority: 42,
-        profile_id: Some(profile.id.clone()),
-        profile_source: "explicit".to_string(),
+        id: "rule-1".to_string(),
+        name: "Meeting import".to_string(),
         save_history: true,
-        tag_ids: Vec::new(),
-        preset_id: "custom".to_string(),
+        project_id: "proj-1".to_string(),
         watch_directory: String::new(),
-        recursive: false,
+        recursive: true,
         enabled: true,
-        actions: AutomationRuleInputActions {
-            auto_polish: true,
-            auto_translate: true,
-            auto_summary: true,
-        },
         stage_config: AutomationRuleRecordStageConfig {
             auto_polish: true,
             polish_preset_id: "concise".to_string(),
             auto_translate: true,
             translation_language: "ja".to_string(),
-            export_enabled: false,
         },
         export_config: AutomationRuleRecordExportConfig {
             directory: String::new(),
-            format: "txt".to_string(),
-            mode: "original".to_string(),
-            prefix: String::new(),
+            format: "srt".to_string(),
+            mode: "bilingual".to_string(),
+            prefix: "done-".to_string(),
         },
         created_at: 1_000,
         updated_at: 2_000,
-        migration_notice: Some("migrated".to_string()),
     };
     AutomationStore::replace_rules(&source_automation, std::slice::from_ref(&rule)).unwrap();
 
@@ -844,16 +807,8 @@ fn automation_profiles_and_typed_rule_fields_round_trip_through_sync() {
         .load_pending_operations(SyncPresetV1::Full, 256, usize::MAX)
         .unwrap();
     assert!(operations.iter().any(|operation| {
-        operation.entity.kind == SyncEntityKind::AutomationProfile
-            && operation.kind.field() == Some("enabledHotwordSetIds")
-    }));
-    assert!(operations.iter().any(|operation| {
         operation.entity.kind == SyncEntityKind::AutomationRule
-            && operation.kind.field() == Some("kind")
-    }));
-    assert!(operations.iter().any(|operation| {
-        operation.entity.kind == SyncEntityKind::AutomationRule
-            && operation.kind.field() == Some("actionAutoSummary")
+            && operation.kind.field() == Some("projectId")
     }));
 
     let target_db = Arc::new(Database::open_in_memory().unwrap());
@@ -874,19 +829,117 @@ fn automation_profiles_and_typed_rule_fields_round_trip_through_sync() {
         .unwrap();
     let target_automation = SqliteAutomationRepository::new(Arc::clone(&target_db));
     let state = AutomationStore::load_state(&target_automation).unwrap();
-    assert_eq!(state.profiles, vec![profile.clone()]);
     rule.enabled = false;
     assert_eq!(state.rules, vec![rule]);
 
-    AutomationStore::replace_profiles(&source_automation, &[]).unwrap();
-    let pending = source_sync
-        .load_pending_operations(SyncPresetV1::Full, 256, usize::MAX)
+    // Mixed-version receive tolerance: legacy AutomationProfile, retired Setting keys,
+    // retired AutomationRule fields, and tagIds -> projectId backfill.
+    let legacy_ops = vec![
+        SyncOperation {
+            operation_id: "legacy-op-1".to_string(),
+            source_device_id: "device-old".to_string(),
+            source_sequence: 1,
+            causal_context: SyncCausalContext::default(),
+            version: SyncVersion {
+                clock: HybridLogicalClock {
+                    physical_ms: 3_000,
+                    logical: 0,
+                },
+                device_id: "device-old".to_string(),
+                operation_id: "legacy-op-1".to_string(),
+            },
+            entity: SyncEntityKey {
+                kind: SyncEntityKind::Setting,
+                id: "app-config::autoPolish".to_string(),
+            },
+            kind: SyncOperationKind::SetField {
+                field: "value".to_string(),
+                value: json!(true),
+            },
+        },
+        SyncOperation {
+            operation_id: "legacy-op-2".to_string(),
+            source_device_id: "device-old".to_string(),
+            source_sequence: 1,
+            causal_context: SyncCausalContext::default(),
+            version: SyncVersion {
+                clock: HybridLogicalClock {
+                    physical_ms: 3_001,
+                    logical: 0,
+                },
+                device_id: "device-old".to_string(),
+                operation_id: "legacy-op-2".to_string(),
+            },
+            entity: SyncEntityKey {
+                kind: SyncEntityKind::AutomationProfile,
+                id: "profile-legacy".to_string(),
+            },
+            kind: SyncOperationKind::SetField {
+                field: "name".to_string(),
+                value: json!("Legacy Profile"),
+            },
+        },
+        SyncOperation {
+            operation_id: "legacy-op-3".to_string(),
+            source_device_id: "device-old".to_string(),
+            source_sequence: 1,
+            causal_context: SyncCausalContext::default(),
+            version: SyncVersion {
+                clock: HybridLogicalClock {
+                    physical_ms: 3_002,
+                    logical: 0,
+                },
+                device_id: "device-old".to_string(),
+                operation_id: "legacy-op-3".to_string(),
+            },
+            entity: SyncEntityKey {
+                kind: SyncEntityKind::AutomationRule,
+                id: "rule-legacy".to_string(),
+            },
+            kind: SyncOperationKind::SetField {
+                field: "tagIds".to_string(),
+                value: json!(["proj-from-tag"]),
+            },
+        },
+        SyncOperation {
+            operation_id: "legacy-op-4".to_string(),
+            source_device_id: "device-old".to_string(),
+            source_sequence: 1,
+            causal_context: SyncCausalContext::default(),
+            version: SyncVersion {
+                clock: HybridLogicalClock {
+                    physical_ms: 3_003,
+                    logical: 0,
+                },
+                device_id: "device-old".to_string(),
+                operation_id: "legacy-op-4".to_string(),
+            },
+            entity: SyncEntityKey {
+                kind: SyncEntityKind::AutomationRule,
+                id: "rule-legacy".to_string(),
+            },
+            kind: SyncOperationKind::SetField {
+                field: "actionAutoSummary".to_string(),
+                value: json!(true),
+            },
+        },
+    ];
+    target_sync
+        .apply_remote_segment(&SyncRemoteSegment {
+            device_id: "device-old".to_string(),
+            sequence: 1,
+            cipher_hash: "hash-legacy".to_string(),
+            operations: legacy_ops,
+        })
         .unwrap();
-    assert!(pending.iter().any(|operation| {
-        operation.entity.kind == SyncEntityKind::AutomationProfile
-            && operation.entity.id == profile.id
-            && matches!(operation.kind, SyncOperationKind::DeleteEntity)
-    }));
+    let state_after = AutomationStore::load_state(&target_automation).unwrap();
+    let legacy_rule = state_after
+        .rules
+        .iter()
+        .find(|r| r.id == "rule-legacy")
+        .expect("legacy rule should be applied");
+    assert_eq!(legacy_rule.project_id, "proj-from-tag");
+    assert!(legacy_rule.save_history);
 }
 
 #[test]
@@ -1288,4 +1341,371 @@ fn sync_repository_factory_opens_initializes_previews_and_exposes_application_st
 
     reopened.disconnect().unwrap();
     assert!(factory.open().unwrap().is_none());
+}
+
+fn rule_field_operation(
+    operation_id: &str,
+    physical_ms: u64,
+    entity_id: &str,
+    field: &str,
+    value: serde_json::Value,
+) -> SyncOperation {
+    SyncOperation {
+        operation_id: operation_id.to_string(),
+        source_device_id: "device-old".to_string(),
+        source_sequence: 1,
+        causal_context: SyncCausalContext::default(),
+        version: SyncVersion {
+            clock: HybridLogicalClock {
+                physical_ms,
+                logical: 0,
+            },
+            device_id: "device-old".to_string(),
+            operation_id: operation_id.to_string(),
+        },
+        entity: SyncEntityKey {
+            kind: SyncEntityKind::AutomationRule,
+            id: entity_id.to_string(),
+        },
+        kind: SyncOperationKind::SetField {
+            field: field.to_string(),
+            value,
+        },
+    }
+}
+
+#[test]
+fn retired_rule_fields_do_not_create_rule_rows() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-phantom".to_string(),
+        operations: vec![rule_field_operation(
+            "phantom-op-1",
+            3_000,
+            "rule-phantom",
+            "profileId",
+            json!("profile-legacy"),
+        )],
+    })
+    .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    assert!(state.rules.iter().all(|rule| rule.id != "rule-phantom"));
+}
+
+#[test]
+fn legacy_tag_ids_backfill_does_not_clobber_newer_save_history() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+    AutomationStore::replace_rules(
+        &automation,
+        &[AutomationRuleRecord {
+            id: "rule-1".to_string(),
+            name: "Export only".to_string(),
+            save_history: true,
+            project_id: "proj-1".to_string(),
+            watch_directory: String::new(),
+            recursive: false,
+            enabled: true,
+            stage_config: AutomationRuleRecordStageConfig {
+                auto_polish: false,
+                polish_preset_id: "general".to_string(),
+                auto_translate: false,
+                translation_language: "en".to_string(),
+            },
+            export_config: AutomationRuleRecordExportConfig {
+                directory: String::new(),
+                format: "srt".to_string(),
+                mode: "original".to_string(),
+                prefix: String::new(),
+            },
+            created_at: 1_000,
+            updated_at: 2_000,
+        }],
+    )
+    .unwrap();
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-legacy-tags".to_string(),
+        operations: vec![
+            rule_field_operation("history-op-1", 4_000, "rule-1", "saveHistory", json!(false)),
+            rule_field_operation(
+                "history-op-2",
+                3_000,
+                "rule-1",
+                "tagIds",
+                json!(["proj-from-tag"]),
+            ),
+        ],
+    })
+    .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    let rule = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-1")
+        .expect("rule should still exist");
+    assert_eq!(rule.project_id, "proj-from-tag");
+    assert!(!rule.save_history);
+}
+
+#[test]
+fn sync_changelog_emits_none_sentinel_for_export_only_rules() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+    AutomationStore::replace_rules(
+        &automation,
+        &[AutomationRuleRecord {
+            id: "rule-1".to_string(),
+            name: "Export only".to_string(),
+            save_history: false,
+            project_id: "proj-x".to_string(),
+            watch_directory: String::new(),
+            recursive: false,
+            enabled: true,
+            stage_config: AutomationRuleRecordStageConfig {
+                auto_polish: false,
+                polish_preset_id: "general".to_string(),
+                auto_translate: false,
+                translation_language: "en".to_string(),
+            },
+            export_config: AutomationRuleRecordExportConfig {
+                directory: String::new(),
+                format: "srt".to_string(),
+                mode: "original".to_string(),
+                prefix: String::new(),
+            },
+            created_at: 1_000,
+            updated_at: 2_000,
+        }],
+    )
+    .unwrap();
+
+    let pending = sync
+        .load_pending_operations(SyncPresetV1::Full, 256, usize::MAX)
+        .unwrap();
+    let project_id_operation = pending
+        .iter()
+        .find(|operation| {
+            operation.entity.kind == SyncEntityKind::AutomationRule
+                && operation.kind.field() == Some("projectId")
+        })
+        .expect("projectId should be captured");
+    assert_eq!(
+        project_id_operation.kind,
+        SyncOperationKind::SetField {
+            field: "projectId".to_string(),
+            value: json!("none"),
+        }
+    );
+}
+
+fn save_history_rule_record() -> AutomationRuleRecord {
+    AutomationRuleRecord {
+        id: "rule-1".to_string(),
+        name: "Export only".to_string(),
+        save_history: true,
+        project_id: "proj-1".to_string(),
+        watch_directory: String::new(),
+        recursive: false,
+        enabled: true,
+        stage_config: AutomationRuleRecordStageConfig {
+            auto_polish: false,
+            polish_preset_id: "general".to_string(),
+            auto_translate: false,
+            translation_language: "en".to_string(),
+        },
+        export_config: AutomationRuleRecordExportConfig {
+            directory: String::new(),
+            format: "srt".to_string(),
+            mode: "original".to_string(),
+            prefix: String::new(),
+        },
+        created_at: 1_000,
+        updated_at: 2_000,
+    }
+}
+
+fn seed_save_history_rule(db: &Arc<Database>) -> SqliteAutomationRepository {
+    let automation = SqliteAutomationRepository::new(Arc::clone(db));
+    AutomationStore::replace_rules(&automation, &[save_history_rule_record()]).unwrap();
+    automation
+}
+
+fn stored_rule(automation: &SqliteAutomationRepository, rule_id: &str) -> AutomationRuleRecord {
+    AutomationStore::load_state(automation)
+        .unwrap()
+        .rules
+        .into_iter()
+        .find(|rule| rule.id == rule_id)
+        .expect("rule should still exist")
+}
+
+#[test]
+fn legacy_tag_ids_backfill_loses_to_newer_project_id() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-legacy-tag-ids".to_string(),
+        operations: vec![rule_field_operation(
+            "tag-op-old",
+            1_500,
+            "rule-1",
+            "tagIds",
+            json!(["proj-from-tag"]),
+        )],
+    })
+    .unwrap();
+
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn legacy_tag_ids_without_project_is_ignored() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    let result = sync
+        .apply_remote_segment(&SyncRemoteSegment {
+            device_id: "device-old".to_string(),
+            sequence: 1,
+            cipher_hash: "hash-legacy-tag-ids-empty".to_string(),
+            operations: vec![rule_field_operation(
+                "tag-op-empty",
+                4_000,
+                "rule-1",
+                "tagIds",
+                json!([]),
+            )],
+        })
+        .unwrap();
+
+    // A canonicalized-away operation was never applied, so it must not be counted.
+    assert_eq!(result.applied_operation_count, 0);
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn resolving_a_persisted_legacy_tag_ids_conflict_succeeds() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let automation = seed_save_history_rule(&db);
+
+    let conflict = SyncConflict {
+        kind: SyncConflictKind::ConcurrentWrite,
+        winner: rule_field_operation("op-winner", 5_000, "rule-1", "projectId", json!("proj-1")),
+        loser: rule_field_operation("op-loser", 4_000, "rule-1", "tagIds", json!(["tag-1"])),
+    };
+    let entity_kind = serde_json::to_string(&SyncEntityKind::AutomationRule).unwrap();
+    db.with_rw_transaction(|tx| {
+        tx.execute(
+            "INSERT INTO sync_conflicts (
+                conflict_id, entity_kind, entity_id, field_name,
+                conflict_json, created_at, resolved_at
+             ) VALUES ('conflict-legacy-tagids', ?, 'rule-1', 'tagIds', ?, 1, NULL)",
+            rusqlite::params![entity_kind, serde_json::to_string(&conflict).unwrap()],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(sync.unresolved_conflict_count().unwrap(), 1);
+
+    sync.resolve_conflict(
+        "conflict-legacy-tagids",
+        SyncConflictResolution::UseConflicting,
+        6_000,
+    )
+    .unwrap();
+
+    assert_eq!(sync.unresolved_conflict_count().unwrap(), 0);
+    assert_eq!(stored_rule(&automation, "rule-1").project_id, "proj-1");
+}
+
+#[test]
+fn remote_rule_field_outside_allowlist_rolls_back() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let _automation = seed_save_history_rule(&db);
+
+    let result = sync.apply_remote_segment(&SyncRemoteSegment {
+        device_id: "device-old".to_string(),
+        sequence: 1,
+        cipher_hash: "hash-unsupported-rule-field".to_string(),
+        operations: vec![rule_field_operation(
+            "op-x",
+            4_000,
+            "rule-1",
+            "watchDirectory",
+            json!("C:\\x"),
+        )],
+    });
+
+    assert!(result.is_err());
+    let cursor_count: i64 = db
+        .with_connection(|connection| {
+            connection
+                .query_row("SELECT COUNT(*) FROM sync_device_cursors", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .map_err(DatabaseError::QueryError)
+        })
+        .unwrap();
+    assert_eq!(cursor_count, 0);
 }

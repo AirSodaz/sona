@@ -10,7 +10,6 @@ import { SettingsNavigationProvider } from './settings/SettingsNavigationContext
 import { SettingsSidebarGroupHeader, SettingsTabButton } from './settings/SettingsTabButton';
 import {
   loadSettingsAboutTab,
-  loadSettingsAutomationTab,
   loadSettingsDashboardTab,
   loadSettingsGeneralTab,
   loadSettingsLLMServiceTab,
@@ -94,7 +93,6 @@ const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
 const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
-const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
 const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
@@ -165,7 +163,7 @@ function renderSettingsPane(
         />
       );
     case 'automation':
-      return <SettingsAutomationTab />;
+      return <SettingsMigratedBanner tool="automation" onClose={onClose} />;
     case 'storage':
       return <SettingsStorageTab />;
     case 'sync':
@@ -467,7 +465,12 @@ export function Settings({
       const findAndScroll = () => {
         const modal = modalRef.current;
         let el: HTMLElement | null = null;
-        if (hit.tab === 'subtitle' || hit.tab === 'api_server' || hit.tab === 'mcp') {
+        if (
+          hit.tab === 'subtitle' ||
+          hit.tab === 'api_server' ||
+          hit.tab === 'mcp' ||
+          hit.tab === 'automation'
+        ) {
           const tool = hit.tab === 'subtitle' ? hit.subTab || 'subtitles' : hit.tab;
           el = modal?.querySelector<HTMLElement>(`#settings-panel-migrated-${tool}`) ?? null;
         } else {

@@ -1,10 +1,16 @@
 use std::sync::Arc;
 
+use sona_core::automation::repository::{
+    AutomationRuleRecord, AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig,
+    AutomationStore,
+};
 use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::project::ports::ProjectRepository;
 use sona_core::project::{ProjectCreateInput, ProjectPipelineConfig};
 use sona_core::tag::{TagError, TagIdGenerator, TagRecord, TagStore};
-use sona_sqlite::{Database, SqliteProjectAdapter, SqliteProjectRepository};
+use sona_sqlite::{
+    Database, SqliteAutomationRepository, SqliteProjectAdapter, SqliteProjectRepository,
+};
 
 struct FixedIds;
 impl TagIdGenerator for FixedIds {
@@ -174,4 +180,142 @@ fn project_adapter_full_lifecycle_and_cascade_delete() {
         Ok(())
     })
     .unwrap();
+}
+
+fn automation_rule(project_id: &str) -> AutomationRuleRecord {
+    AutomationRuleRecord {
+        id: "rule-1".to_string(),
+        name: "Rule".to_string(),
+        save_history: true,
+        project_id: project_id.to_string(),
+        watch_directory: "C:/watch".to_string(),
+        recursive: false,
+        enabled: true,
+        stage_config: AutomationRuleRecordStageConfig {
+            auto_polish: false,
+            polish_preset_id: "general".to_string(),
+            auto_translate: false,
+            translation_language: "en".to_string(),
+        },
+        export_config: AutomationRuleRecordExportConfig {
+            directory: String::new(),
+            format: "srt".to_string(),
+            mode: "original".to_string(),
+            prefix: String::new(),
+        },
+        created_at: 1_000,
+        updated_at: 2_000,
+    }
+}
+
+fn keeper_rule() -> AutomationRuleRecord {
+    let mut keeper = automation_rule("proj-2");
+    keeper.id = "rule-keeper".to_string();
+    keeper
+}
+
+fn seed_rule(automation: &SqliteAutomationRepository, project_id: &str) -> String {
+    AutomationStore::replace_rules(automation, &[automation_rule(project_id)]).unwrap();
+    AutomationStore::load_state(automation).unwrap().rules[0]
+        .project_id
+        .clone()
+}
+
+fn seed_rules(automation: &SqliteAutomationRepository, rules: &[AutomationRuleRecord]) {
+    AutomationStore::replace_rules(automation, rules).unwrap();
+}
+
+#[test]
+fn project_deletion_and_replacement_clear_rule_project_ids() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let repository = SqliteProjectRepository::new(Arc::clone(&db));
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    let loaded_project_id = || {
+        AutomationStore::load_state(&automation).unwrap().rules[0]
+            .project_id
+            .clone()
+    };
+    let loaded_rules = || AutomationStore::load_state(&automation).unwrap().rules;
+
+    // Deleting every project clears every rule link and disables the rule.
+    assert_eq!(seed_rule(&automation, "proj-1"), "proj-1");
+    repository.replace_tags(Vec::new()).unwrap();
+    assert_eq!(loaded_project_id(), "");
+    assert!(!loaded_rules()[0].enabled);
+
+    // Replacing projects keeps links to surviving projects only.
+    repository
+        .replace_tags(vec![tag("proj-1", "Kept", "#2563EB", 0)])
+        .unwrap();
+    assert_eq!(seed_rule(&automation, "proj-1"), "proj-1");
+    repository
+        .replace_tags(vec![tag("proj-1", "Kept", "#2563EB", 0)])
+        .unwrap();
+    assert_eq!(loaded_project_id(), "proj-1");
+    assert!(loaded_rules()[0].enabled);
+    repository
+        .replace_tags(vec![tag("proj-2", "Other", "#DC2626", 0)])
+        .unwrap();
+    assert_eq!(loaded_project_id(), "");
+    assert!(!loaded_rules()[0].enabled);
+
+    // Deleting a single project clears only that project's links.
+    repository
+        .replace_tags(vec![
+            tag("proj-1", "Kept", "#2563EB", 0),
+            tag("proj-2", "Other", "#DC2626", 1),
+        ])
+        .unwrap();
+    seed_rules(&automation, &[automation_rule("proj-1"), keeper_rule()]);
+    repository.delete_tag("proj-1").unwrap();
+    let rules = loaded_rules();
+    let cleared = rules.iter().find(|rule| rule.id == "rule-1").unwrap();
+    assert_eq!(cleared.project_id, "");
+    assert!(!cleared.enabled);
+    let keeper = rules.iter().find(|rule| rule.id == "rule-keeper").unwrap();
+    assert_eq!(keeper.project_id, "proj-2");
+    assert!(keeper.enabled);
+}
+
+#[test]
+fn project_cascade_disables_rules_that_lose_their_project() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let adapter =
+        SqliteProjectAdapter::new(Arc::clone(&db), Arc::new(FixedIds), Arc::new(FixedClock));
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    adapter
+        .replace_tags(vec![
+            tag("proj-1", "One", "#2563EB", 0),
+            tag("proj-2", "Two", "#DC2626", 1),
+        ])
+        .unwrap();
+
+    let mut affected = automation_rule("proj-1");
+    affected.id = "rule-affected".to_string();
+    let mut survivor = automation_rule("proj-2");
+    survivor.id = "rule-survivor".to_string();
+    AutomationStore::replace_rules(&automation, &[affected, survivor]).unwrap();
+
+    adapter
+        .delete_project_with_cascade("proj-1", "moveToInbox")
+        .unwrap();
+
+    let state = AutomationStore::load_state(&automation).unwrap();
+    let affected = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-affected")
+        .unwrap();
+    assert_eq!(affected.project_id, "");
+    assert!(!affected.enabled);
+
+    let survivor = state
+        .rules
+        .iter()
+        .find(|rule| rule.id == "rule-survivor")
+        .unwrap();
+    assert_eq!(survivor.project_id, "proj-2");
+    assert!(survivor.enabled);
 }

@@ -248,14 +248,14 @@ impl OnlineSpeakerTracker {
     }
 
     pub fn is_enabled(&self) -> bool {
-        if self.embedding_index.is_some() {
-            return true;
-        }
         #[cfg(test)]
-        if self.mock_enabled {
-            return true;
+        {
+            self.mock_enabled || self.embedding_index.is_some()
         }
-        false
+        #[cfg(not(test))]
+        {
+            self.embedding_index.is_some()
+        }
     }
 
     #[cfg(test)]

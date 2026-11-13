@@ -906,11 +906,7 @@ fn should_fallback_to_cleaned_text(cleaned_text: &str, formatted_text: &str) -> 
     }
 
     let cleaned_digits = extract_ascii_digits(cleaned_text);
-    if !cleaned_digits.is_empty() && extract_ascii_digits(formatted_text) != cleaned_digits {
-        return true;
-    }
-
-    false
+    !cleaned_digits.is_empty() && extract_ascii_digits(formatted_text) != cleaned_digits
 }
 
 pub fn select_final_transcript_text(cleaned_text: &str, formatted_text: &str) -> String {

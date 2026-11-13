@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
+import { ToolAutomationPanel } from './panels/automation/ToolAutomationPanel';
 import { ToolApiServerPanel } from './panels/ToolApiServerPanel';
 import { ToolCliPanel } from './panels/ToolCliPanel';
 import { ToolEmbySyncPanel } from './panels/ToolEmbySyncPanel';
@@ -22,6 +23,7 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
+    activeTool === 'automation' ||
     activeTool === 'mcp' ||
     activeTool === 'cli' ||
     activeTool === 'emby_sync'
@@ -57,6 +59,9 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
         </div>
         <div style={{ display: resolvedTool === 'api_server' ? 'block' : 'none' }}>
           <ToolApiServerPanel />
+        </div>
+        <div style={{ display: resolvedTool === 'automation' ? 'block' : 'none' }}>
+          <ToolAutomationPanel />
         </div>
         <div style={{ display: resolvedTool === 'mcp' ? 'block' : 'none' }}>
           <ToolMcpPanel />

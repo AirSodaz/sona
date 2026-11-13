@@ -290,16 +290,12 @@ export interface LlmAssistantConfig {
   llmSettings?: LlmSettings;
   /** Whether Summary is available in the transcript editor. Default: true. */
   summaryEnabled?: boolean;
-  /** Whether to automatically generate summary after transcription. Default: false. */
-  autoSummary?: boolean;
   /** Selected global summary template id. */
   summaryTemplateId?: SummaryTemplateId;
   /** User-defined summary templates. */
   summaryCustomTemplates?: SummaryCustomTemplate[];
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
-  /** Whether to automatically translate transcript after completion. Default: false. */
-  autoTranslate?: boolean;
   /** Keywords for polishing. */
   polishKeywords?: string;
   /** Selected global polish preset id. */
@@ -310,10 +306,6 @@ export interface LlmAssistantConfig {
   polishContext?: string;
   /** Deprecated legacy scenario, retained only for migration. */
   polishScenario?: string;
-  /** Whether to automatically polish the transcript. */
-  autoPolish?: boolean;
-  /** Frequency of auto-polishing in segments (for live recording). */
-  autoPolishFrequency?: number;
   /** Global LLM Request timeout in seconds. */
   llmRequestTimeoutSeconds?: number;
   /** Local model VRAM release mode: 'immediate', 'standard' (5min idle TTL), or 'never'. */
@@ -401,7 +393,7 @@ export interface VocabularyConfig {
 
 /** Base application configuration fields. */
 export interface BaseConfig {
-  /** Schema version for the configuration file. Current version: 8. */
+  /** Schema version for the configuration file. Current version: 9. */
   configVersion?: number;
 }
 

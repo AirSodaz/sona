@@ -104,8 +104,6 @@ function validateManifest(raw: unknown): BackupManifestV1 {
       historyItems: typeof counts.historyItems === 'number' ? counts.historyItems : 0,
       transcriptFiles: typeof counts.transcriptFiles === 'number' ? counts.transcriptFiles : 0,
       summaryFiles: typeof counts.summaryFiles === 'number' ? counts.summaryFiles : 0,
-      automationProfiles:
-        typeof counts.automationProfiles === 'number' ? counts.automationProfiles : 0,
       automationRules: typeof counts.automationRules === 'number' ? counts.automationRules : 0,
       automationProcessedEntries:
         typeof counts.automationProcessedEntries === 'number'

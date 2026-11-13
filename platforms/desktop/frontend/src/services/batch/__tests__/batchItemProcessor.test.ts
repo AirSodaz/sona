@@ -742,9 +742,10 @@ describe('BatchItemProcessor', () => {
       segments: [],
       projectId: 'proj-1',
       exportConfig: {
-        mode: 'original',
+        mode: 'translation',
         format: 'srt',
         directory: '/custom/export',
+        prefix: '',
       },
       pipelineSnapshot: {
         isProjectPipeline: true,
@@ -753,6 +754,7 @@ describe('BatchItemProcessor', () => {
         autoTranslate: false,
         autoSummary: false,
         autoExport: false,
+        exportMode: 'original',
       },
     };
 
@@ -771,6 +773,7 @@ describe('BatchItemProcessor', () => {
 
     expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
       expect.objectContaining({
+        exportMode: 'original',
         pipeline: expect.objectContaining({
           autoExport: true,
           exportDirectory: '/custom/export',

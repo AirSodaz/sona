@@ -1012,8 +1012,6 @@ describe('LiveRecord', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        autoPolish: false,
-        autoPolishFrequency: 1,
         polishPresetId: 'clean',
       },
     });
@@ -1030,6 +1028,7 @@ describe('LiveRecord', () => {
             ...DEFAULT_PROJECT_PIPELINE,
             enabled: true,
             autoPolish: true,
+            autoPolishFrequency: 1,
             polishPresetId: 'formal',
           },
         },
@@ -1129,7 +1128,6 @@ describe('LiveRecord', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        autoTranslate: false,
       },
     });
     useProjectStore.setState({

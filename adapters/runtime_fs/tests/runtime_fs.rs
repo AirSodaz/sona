@@ -115,10 +115,34 @@ fn native_automation_validation_entrypoint_probes_paths_and_prepares_export_dire
     let model_path = dir.path().join("model.onnx");
     std::fs::create_dir(&watch_directory).unwrap();
     std::fs::write(&model_path, b"model").unwrap();
+    let project_rule: AutomationRule = serde_json::from_value(serde_json::json!({
+        "name": "Project Rule",
+        "saveHistory": true,
+        "projectId": "inbox",
+        "watchDirectory": watch_directory,
+        "stageConfig": {},
+        "exportConfig": {
+            "directory": export_directory,
+            "mode": "original"
+        }
+    }))
+    .unwrap();
+    let project_result = validate_native_automation_rule_activation(
+        &project_rule,
+        &serde_json::json!({"offlineModelPath": model_path}),
+        &[],
+    )
+    .unwrap();
+    assert!(
+        project_result.valid,
+        "unexpected validation result: {project_result:?}"
+    );
+    assert!(!export_directory.exists());
+
     let rule: AutomationRule = serde_json::from_value(serde_json::json!({
         "name": "Rule",
-        "saveHistory": true,
-        "tagIds": [],
+        "saveHistory": false,
+        "projectId": "",
         "watchDirectory": watch_directory,
         "stageConfig": {},
         "exportConfig": {

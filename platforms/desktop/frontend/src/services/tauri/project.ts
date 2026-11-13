@@ -18,6 +18,8 @@ function normalizeProject(record: GeneratedProjectRecord): ProjectRecord {
         ...DEFAULT_PROJECT_PIPELINE,
         enabled: record.pipeline.enabled ?? false,
         autoPolish: record.pipeline.autoPolish ?? false,
+        autoPolishFrequency:
+          record.pipeline.autoPolishFrequency ?? DEFAULT_PROJECT_PIPELINE.autoPolishFrequency,
         polishPresetId: record.pipeline.polishPresetId ?? undefined,
         polishPromptOverride: record.pipeline.polishPromptOverride ?? undefined,
         autoTranslate: record.pipeline.autoTranslate ?? false,

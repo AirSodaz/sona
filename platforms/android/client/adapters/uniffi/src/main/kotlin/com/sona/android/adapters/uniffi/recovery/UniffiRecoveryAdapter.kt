@@ -56,7 +56,6 @@ internal fun RecoveryItemInput.toFfi() = FfiRecoveryItemInputV1(
     automationRuleId = null,
     automationRuleName = null,
     resolvedConfigSnapshotJson = payload,
-    automationResolutionSnapshotJson = null,
     exportConfigJson = "{}",
     stageConfigJson = "{}",
     sourceFingerprint = null,
