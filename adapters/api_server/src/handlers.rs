@@ -577,10 +577,10 @@ pub async fn handle_job_audio(
             .into());
     }
 
-    let res = ServeFile::new(file_path)
-        .oneshot(req)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let res = match ServeFile::new(file_path).oneshot(req).await {
+        Ok(res) => res,
+        Err(err) => match err {},
+    };
     Ok(res.into_response())
 }
 
