@@ -126,11 +126,7 @@ fn should_upgrade_config(config: &Value) -> bool {
         }
     }
 
-    if !has_valid_or_legacy_current_asr_config(config) {
-        return true;
-    }
-
-    false
+    !has_valid_or_legacy_current_asr_config(config)
 }
 
 fn normalize_current_config(existing: Value) -> Value {
@@ -1380,16 +1376,11 @@ fn has_valid_asr_config(config: &Value) -> bool {
         }
     }
 
-    if config
+    config
         .get("asr")
         .and_then(|v| v.get("providers"))
         .and_then(Value::as_object)
-        .is_none()
-    {
-        return false;
-    }
-
-    true
+        .is_some()
 }
 
 fn has_valid_or_legacy_current_asr_config(config: &Value) -> bool {
