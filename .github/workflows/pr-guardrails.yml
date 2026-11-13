@@ -97,6 +97,8 @@ jobs:
       - name: Compile desktop tests
         run: |
           rm -rf target/debug/examples
+          find target/debug -xtype l -delete 2>/dev/null || true
+          rm -f target/debug/deps/libllama* target/debug/deps/libggml* target/debug/libllama* target/debug/libggml*
           cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
 
       - name: Sync desktop llama.cpp runtime libraries
