@@ -616,13 +616,61 @@ test('desktop bundle preparer skips broken release symlinks in favor of CMake ou
   );
 });
 
+test('desktop bundle preparer collects llama.cpp libraries from nested Cargo build output', async () => {
+  const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const runtimeLibDir = path.join(root, 'runtime-libs');
+  const buildOutputDir = path.join(
+    root,
+    'target',
+    target,
+    'release',
+    'build',
+    'llama-cpp-sys-2',
+    'c947df35c6f6cbf0',
+    'out',
+    'bin',
+  );
+  writeLlamaCppRuntimeLibraries(buildOutputDir, target);
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+
+  stageLlamaCppRuntimeLibraries(root, target, runtimeLibDir);
+
+  assert.deepEqual(
+    fs.readdirSync(runtimeLibDir).sort(),
+    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll'],
+  );
+});
+
+test('desktop bundle preparer stages llama.cpp libraries from LLAMA_CPP_LIB_DIR', async () => {
+  const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-unknown-linux-gnu';
+  const prebuiltDir = path.join(root, 'prebuilt-llama');
+  const runtimeLibDir = path.join(root, 'runtime-libs');
+  writeLlamaCppRuntimeLibraries(prebuiltDir, target);
+  fs.mkdirSync(path.join(root, 'target', target, 'release'), { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+
+  stageLlamaCppRuntimeLibraries(root, target, runtimeLibDir, { llamaLibDir: prebuiltDir });
+
+  assert.deepEqual(
+    fs.readdirSync(runtimeLibDir).sort(),
+    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so'],
+  );
+});
+
 test('desktop bundle preparer cleans up dangling runtime symlinks in target release and deps directories', async () => {
   const { cleanupDanglingRuntimeSymlinks } = await loadDesktopBundlePreparer();
   const root = makeTempRepo();
   const target = 'x86_64-unknown-linux-gnu';
   const releaseDir = path.join(root, 'target', target, 'release');
   const depsDir = path.join(releaseDir, 'deps');
+  const buildDir = path.join(releaseDir, 'build');
+  const buildDepsDir = path.join(buildDir, 'deps');
   fs.mkdirSync(depsDir, { recursive: true });
+  fs.mkdirSync(buildDepsDir, { recursive: true });
 
   const validFile = path.join(releaseDir, 'real.txt');
   fs.writeFileSync(validFile, 'content');
@@ -632,6 +680,10 @@ test('desktop bundle preparer cleans up dangling runtime symlinks in target rele
   fs.symlinkSync('libllama.so.0', brokenReleaseSymlink, 'file');
   const brokenDepsSymlink = path.join(depsDir, 'libllama.so');
   fs.symlinkSync('libllama.so.0', brokenDepsSymlink, 'file');
+  const brokenBuildSymlink = path.join(buildDir, 'libllama.so');
+  fs.symlinkSync('libllama.so.0', brokenBuildSymlink, 'file');
+  const brokenBuildDepsSymlink = path.join(buildDepsDir, 'libllama.so');
+  fs.symlinkSync('libllama.so.0', brokenBuildDepsSymlink, 'file');
 
   cleanupDanglingRuntimeSymlinks(root, target);
 
@@ -639,4 +691,19 @@ test('desktop bundle preparer cleans up dangling runtime symlinks in target rele
   assert.equal(fs.existsSync(validFile), true);
   assert.equal(fs.readdirSync(depsDir).includes('libllama.so'), false);
   assert.equal(fs.readdirSync(releaseDir).includes('libllama.so'), false);
+  assert.equal(fs.readdirSync(buildDir).includes('libllama.so'), false);
+  assert.equal(fs.readdirSync(buildDepsDir).includes('libllama.so'), false);
+});
+
+test('desktop bundle preparer ensures cargo build and deps directories exist', async () => {
+  const { ensureCargoBuildDirectories } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+
+  ensureCargoBuildDirectories(root, target);
+
+  assert.equal(fs.existsSync(path.join(root, 'target', target, 'release', 'build', 'deps')), true);
+  assert.equal(fs.existsSync(path.join(root, 'target', target, 'release', 'deps')), true);
+  assert.equal(fs.existsSync(path.join(root, 'target', 'release', 'build', 'deps')), true);
+  assert.equal(fs.existsSync(path.join(root, 'target', 'debug', 'build', 'deps')), true);
 });

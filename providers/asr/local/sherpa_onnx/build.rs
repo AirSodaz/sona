@@ -9,7 +9,12 @@ fn main() {
 
     if let Ok(out_dir) = env::var("OUT_DIR") {
         let out_path = PathBuf::from(out_dir);
-        if let Some(profile_dir) = out_path.ancestors().nth(3) {
+        let profile_dir = out_path
+            .ancestors()
+            .find(|p| p.file_name().and_then(|n| n.to_str()) == Some("build"))
+            .and_then(|p| p.parent())
+            .or_else(|| out_path.ancestors().nth(3));
+        if let Some(profile_dir) = profile_dir {
             let deps_dir = profile_dir.join("deps");
             let _ = fs::create_dir_all(&deps_dir);
             copy_runtime_libs(profile_dir, &deps_dir);

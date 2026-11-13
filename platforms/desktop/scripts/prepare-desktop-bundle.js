@@ -35,6 +35,7 @@ export async function prepareDesktopBundle({
   configPath = path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json'),
   ffmpegLockPath = path.join(repoRoot, 'platforms', 'desktop', 'packaging', 'ffmpeg-sources.json'),
   sherpaLibDir = process.env.SHERPA_ONNX_LIB_DIR,
+  llamaLibDir = process.env.LLAMA_CPP_LIB_DIR,
   runCommand = runRequired,
   readMacDylibDependencies = listMacDylibDependencies,
   includeFfmpeg = false,
@@ -51,11 +52,14 @@ export async function prepareDesktopBundle({
   fs.mkdirSync(sidecarsDir, { recursive: true });
   fs.mkdirSync(runtimeLibDir, { recursive: true });
 
+  ensureCargoBuildDirectories(repoRoot, target);
+  cleanupDanglingRuntimeSymlinks(repoRoot, target);
+
   stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir);
   buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
   buildStandaloneMcp(repoRoot, target, runCommand);
   buildStandaloneBinShim(repoRoot, target, runCommand);
-  stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir);
+  stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir, { llamaLibDir });
   cleanupDanglingRuntimeSymlinks(repoRoot, target);
   if (target.includes('apple')) {
     rebaseMacDylibs(runtimeLibDir, runCommand, readMacDylibDependencies);
@@ -340,7 +344,10 @@ export function stageLlamaCppRuntimeLibraries(
   repoRoot,
   target,
   runtimeLibDir,
-  { buildSharedLibs = process.env.LLAMA_BUILD_SHARED_LIBS } = {},
+  {
+    buildSharedLibs = process.env.LLAMA_BUILD_SHARED_LIBS,
+    llamaLibDir = process.env.LLAMA_CPP_LIB_DIR,
+  } = {},
 ) {
   if (buildSharedLibs === '0') return;
 
@@ -348,23 +355,48 @@ export function stageLlamaCppRuntimeLibraries(
   const buildDir = path.join(releaseDir, 'build');
   const buildOutputs = fs.existsSync(buildDir)
     ? fs.readdirSync(buildDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith('llama-cpp-sys-'))
-      .map((entry) => path.join(buildDir, entry.name, 'out'))
-      .filter((directoryPath) => fs.existsSync(directoryPath))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('llama-cpp-sys'))
+      .flatMap((entry) => {
+        const directOut = path.join(buildDir, entry.name, 'out');
+        if (fs.existsSync(directOut)) return [directOut];
+        const nestedDir = path.join(buildDir, entry.name);
+        return fs.readdirSync(nestedDir, { withFileTypes: true })
+          .filter((subEntry) => subEntry.isDirectory())
+          .map((subEntry) => path.join(nestedDir, subEntry.name, 'out'))
+          .filter((directoryPath) => fs.existsSync(directoryPath));
+      })
     : [];
   const releaseFiles = fs.existsSync(releaseDir)
     ? fs.readdirSync(releaseDir, { withFileTypes: true })
       .filter((entry) => entry.isFile() || entry.isSymbolicLink())
       .map((entry) => path.join(releaseDir, entry.name))
     : [];
-  const sourceFiles = [...releaseFiles, ...buildOutputs.flatMap((directoryPath) => walkFiles(directoryPath))]
-    .filter((filePath) => (
-      isLlamaCppDynamicLibrary(path.basename(filePath), target)
-      && fs.existsSync(filePath)
-    ));
+  const prebuiltFiles = llamaLibDir && fs.existsSync(llamaLibDir)
+    ? walkFiles(llamaLibDir)
+    : [];
+  const sourceFiles = [
+    ...releaseFiles,
+    ...buildOutputs.flatMap((directoryPath) => walkFiles(directoryPath)),
+    ...prebuiltFiles,
+  ].filter((filePath) => (
+    isLlamaCppDynamicLibrary(path.basename(filePath), target)
+    && fs.existsSync(filePath)
+  ));
 
   for (const sourcePath of sourceFiles) {
-    fs.copyFileSync(sourcePath, path.join(runtimeLibDir, path.basename(sourcePath)));
+    const fileName = path.basename(sourcePath);
+    fs.copyFileSync(sourcePath, path.join(runtimeLibDir, fileName));
+    if (fs.existsSync(releaseDir)) {
+      try {
+        fs.copyFileSync(sourcePath, path.join(releaseDir, fileName));
+      } catch {}
+    }
+    const releaseDepsDir = path.join(releaseDir, 'deps');
+    if (fs.existsSync(releaseDepsDir)) {
+      try {
+        fs.copyFileSync(sourcePath, path.join(releaseDepsDir, fileName));
+      } catch {}
+    }
   }
 
   const stagedNames = fs.readdirSync(runtimeLibDir);
@@ -377,11 +409,33 @@ export function stageLlamaCppRuntimeLibraries(
   }
 }
 
+export function ensureCargoBuildDirectories(repoRoot, target) {
+  const dirs = [
+    path.join(repoRoot, 'target', target, 'release', 'build', 'deps'),
+    path.join(repoRoot, 'target', target, 'release', 'deps'),
+    path.join(repoRoot, 'target', target, 'debug', 'build', 'deps'),
+    path.join(repoRoot, 'target', target, 'debug', 'deps'),
+    path.join(repoRoot, 'target', 'release', 'build', 'deps'),
+    path.join(repoRoot, 'target', 'release', 'deps'),
+    path.join(repoRoot, 'target', 'debug', 'build', 'deps'),
+    path.join(repoRoot, 'target', 'debug', 'deps'),
+  ];
+  for (const dir of dirs) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
 export function cleanupDanglingRuntimeSymlinks(repoRoot, target) {
   if (!target.includes('linux')) return;
 
   const releaseDir = path.join(repoRoot, 'target', target, 'release');
-  const checkDirs = [releaseDir, path.join(releaseDir, 'deps'), path.join(releaseDir, 'examples')];
+  const checkDirs = [
+    releaseDir,
+    path.join(releaseDir, 'deps'),
+    path.join(releaseDir, 'examples'),
+    path.join(releaseDir, 'build'),
+    path.join(releaseDir, 'build', 'deps'),
+  ];
 
   for (const dir of checkDirs) {
     if (!fs.existsSync(dir)) continue;
@@ -587,6 +641,8 @@ async function main() {
     repoRoot,
     readFlagValue(commandArgs, '--ffmpeg-lock') ?? 'platforms/desktop/packaging/ffmpeg-sources.json',
   );
+  const sherpaLibDir = readFlagValue(commandArgs, '--sherpa-lib') ?? process.env.SHERPA_ONNX_LIB_DIR;
+  const llamaLibDir = readFlagValue(commandArgs, '--llama-lib') ?? process.env.LLAMA_CPP_LIB_DIR;
   const includeFfmpeg =
     commandArgs.includes('--with-ffmpeg') ||
     process.env.SONA_BUNDLE_FFMPEG === '1';
@@ -595,6 +651,8 @@ async function main() {
     target,
     configPath,
     ffmpegLockPath,
+    sherpaLibDir,
+    llamaLibDir,
     includeFfmpeg,
   });
   console.log(`[bundle] Prepared ${prepared.target} (ffmpeg: ${includeFfmpeg ? 'bundled' : 'excluded'}): ${prepared.configPath}`);

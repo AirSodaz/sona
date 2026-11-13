@@ -77,12 +77,16 @@ jobs:
 
       - name: Sync llama.cpp runtime libraries
         run: |
+          mkdir -p target/debug/deps target/debug/build/deps
           rm -rf target/debug/examples
-          for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib; do
+          shopt -s nullglob
+          for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib target/debug/build/llama-cpp-sys-2/*/out/lib; do
             if [ -d "$out_lib" ]; then
-              mkdir -p target/debug/deps
+              mkdir -p target/debug/deps target/debug/build/deps
               cp -a --remove-destination "$out_lib"/* target/debug/ 2>/dev/null || true
               cp -a --remove-destination "$out_lib"/* target/debug/deps/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/build/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/build/deps/ 2>/dev/null || true
             fi
           done
           find target/debug -xtype l -delete 2>/dev/null || true
@@ -96,19 +100,24 @@ jobs:
           node --test scripts/mcp-integration.test.js
       - name: Compile desktop tests
         run: |
+          mkdir -p target/debug/deps target/debug/build/deps
           rm -rf target/debug/examples
           find target/debug -xtype l -delete 2>/dev/null || true
-          rm -f target/debug/deps/libllama* target/debug/deps/libggml* target/debug/libllama* target/debug/libggml*
+          rm -f target/debug/deps/libllama* target/debug/deps/libggml* target/debug/libllama* target/debug/libggml* target/debug/build/libllama* target/debug/build/libggml* target/debug/build/deps/libllama* target/debug/build/deps/libggml*
           cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
 
       - name: Sync desktop llama.cpp runtime libraries
         run: |
+          mkdir -p target/debug/deps target/debug/build/deps
           rm -rf target/debug/examples
-          for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib; do
+          shopt -s nullglob
+          for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib target/debug/build/llama-cpp-sys-2/*/out/lib; do
             if [ -d "$out_lib" ]; then
-              mkdir -p target/debug/deps
+              mkdir -p target/debug/deps target/debug/build/deps
               cp -a --remove-destination "$out_lib"/* target/debug/ 2>/dev/null || true
               cp -a --remove-destination "$out_lib"/* target/debug/deps/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/build/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/build/deps/ 2>/dev/null || true
             fi
           done
           find target/debug -xtype l -delete 2>/dev/null || true

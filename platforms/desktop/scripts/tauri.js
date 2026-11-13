@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -68,6 +69,8 @@ function prepareDesktopBundle(commandArgs) {
         ),
       }
     : process.env;
+  fs.mkdirSync(path.join(repoRoot, 'target', target, 'release', 'build', 'deps'), { recursive: true });
+  fs.mkdirSync(path.join(repoRoot, 'target', 'release', 'build', 'deps'), { recursive: true });
   runRequired(
     'prepare desktop bundle',
     process.execPath,
@@ -79,6 +82,8 @@ function prepareDesktopBundle(commandArgs) {
       target,
       '--config',
       baseConfig,
+      ...(process.env.SHERPA_ONNX_LIB_DIR ? ['--sherpa-lib', process.env.SHERPA_ONNX_LIB_DIR] : []),
+      ...(process.env.LLAMA_CPP_LIB_DIR ? ['--llama-lib', process.env.LLAMA_CPP_LIB_DIR] : []),
     ],
     {
       cwd: repoRoot,
