@@ -127,6 +127,17 @@ jobs:
         if: startsWith(matrix.platform, 'windows')
         uses: ./.github/actions/setup-windows-build-env
 
+      - name: Install sccache with Windows Rust response-file support
+        if: startsWith(matrix.platform, 'windows')
+        shell: pwsh
+        run: |
+          # Keep Rust caching enabled while upstream sccache binaries lack the fix.
+          $env:RUSTC_WRAPPER = ''
+          "RUSTC_WRAPPER=" >> $env:GITHUB_ENV
+          cargo install --git https://github.com/AirSodaz/sccache sccache --rev 35ad0291761a8ffaa07d0ef75c30ab311ce24334 --locked --bin sccache --root "$env:RUNNER_TEMP/sccache-response-files" --force
+          "$env:RUNNER_TEMP/sccache-response-files/bin" >> $env:GITHUB_PATH
+          "RUSTC_WRAPPER=sccache" >> $env:GITHUB_ENV
+
       - name: Build the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
