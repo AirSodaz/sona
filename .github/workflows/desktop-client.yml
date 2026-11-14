@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ""
+      experimental_sccache_ref:
+        description: Build sccache from this repository ref for an isolated experiment
+        required: false
+        type: string
+        default: ""
     secrets:
       TAURI_SIGNING_PRIVATE_KEY:
         required: false
@@ -34,18 +39,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin --features llama-metal"
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin --features llama-metal"
-          - platform: "ubuntu-22.04"
-            args: "--target x86_64-unknown-linux-gnu --features llama-vulkan"
-          - platform: "windows-latest"
-            args: "--target x86_64-pc-windows-msvc --features llama-vulkan"
-          - platform: "windows-latest"
-            args: "--target aarch64-pc-windows-msvc"
+      matrix: ${{ fromJSON(inputs.experimental_sccache_ref != '' && '{"include":[{"platform":"windows-latest","args":"--target x86_64-pc-windows-msvc --features llama-vulkan"},{"platform":"windows-latest","args":"--target aarch64-pc-windows-msvc"}]}' || '{"include":[{"platform":"macos-latest","args":"--target aarch64-apple-darwin --features llama-metal"},{"platform":"macos-latest","args":"--target x86_64-apple-darwin --features llama-metal"},{"platform":"ubuntu-22.04","args":"--target x86_64-unknown-linux-gnu --features llama-vulkan"},{"platform":"windows-latest","args":"--target x86_64-pc-windows-msvc --features llama-vulkan"},{"platform":"windows-latest","args":"--target aarch64-pc-windows-msvc"}]}')}}
     env:
       LLAMA_CPP_REF: b10405
       SHERPA_ONNX_VERSION: 2.0.1
@@ -80,6 +74,14 @@ jobs:
 
       - name: Setup sccache
         uses: ./.github/actions/setup-sccache
+
+      - name: Checkout experimental sccache
+        if: inputs.experimental_sccache_ref != ''
+        uses: actions/checkout@v6
+        with:
+          repository: AirSodaz/sccache
+          ref: ${{ inputs.experimental_sccache_ref }}
+          path: .sccache-experiment
 
       - name: Setup Node.js and dependencies
         uses: ./.github/actions/setup-node-pnpm
@@ -126,6 +128,16 @@ jobs:
       - name: Configure Windows build environment
         if: startsWith(matrix.platform, 'windows')
         uses: ./.github/actions/setup-windows-build-env
+
+      - name: Build experimental sccache
+        if: inputs.experimental_sccache_ref != ''
+        shell: pwsh
+        run: |
+          $env:RUSTC_WRAPPER = ''
+          "RUSTC_WRAPPER=" >> $env:GITHUB_ENV
+          cargo install --path .sccache-experiment --locked --bin sccache --root "$env:RUNNER_TEMP/sccache-experiment" --force
+          "$env:RUNNER_TEMP/sccache-experiment/bin" >> $env:GITHUB_PATH
+          "RUSTC_WRAPPER=sccache" >> $env:GITHUB_ENV
 
       - name: Build the app
         env:

@@ -69,6 +69,7 @@ jobs:
 
   android-client:
     needs: prepare
+    if: github.ref != 'refs/heads/fix/rust-response-experiment'
     permissions:
       contents: read
     uses: ./.github/workflows/android-client.yml
@@ -87,13 +88,14 @@ jobs:
       artifact_prefix: nightly-assets-desktop
       channel: nightly
       version_name: ${{ needs.prepare.outputs.version }}
+      experimental_sccache_ref: ${{ github.ref == 'refs/heads/fix/rust-response-experiment' && 'fix/rust-response-files' || '' }}
     secrets:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
   publish-nightly:
     needs: [check-commits, prepare, build-tauri, android-client]
-    if: needs.build-tauri.result == 'success' && needs.android-client.result == 'success'
+    if: github.ref != 'refs/heads/fix/rust-response-experiment' && needs.build-tauri.result == 'success' && needs.android-client.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
