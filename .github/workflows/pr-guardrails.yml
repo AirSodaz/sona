@@ -72,6 +72,9 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
 
+      - name: Prepare llama.cpp runtime output directories
+        run: mkdir -p target/debug/deps target/debug/build/deps
+
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
