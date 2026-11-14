@@ -55,6 +55,7 @@ function formatSession(sessionId: string | null | undefined): string {
 export class RecognizerLifecycle {
   private isRunning = false;
   private externalSourceToken: string | null = null;
+  private drainingRecording = false;
 
   constructor(private readonly instanceId: string) {}
 
@@ -67,6 +68,11 @@ export class RecognizerLifecycle {
     onError: RecognizerErrorCallback,
     options?: RecognizerCallbackOptions
   ): void {
+    this.drainingRecording = false;
+    if (this.instanceId === 'record') {
+      globalListeners.get(this.instanceId)?.();
+      globalListeners.delete(this.instanceId);
+    }
     const existingRegistration = instanceCallbacks.get(this.instanceId);
     if (isDiagnosticsInstance(this.instanceId) && existingRegistration) {
       logger.info(
@@ -145,6 +151,28 @@ export class RecognizerLifecycle {
   async ensureGlobalBus(): Promise<void> {
     if (globalListeners.has(this.instanceId)) return;
 
+    const registration = instanceCallbacks.get(this.instanceId);
+    if (this.instanceId === 'record' && registration?.sessionId) {
+      const unlisten = await listen<{ sessionId: string; stage: string; update: TranscriptUpdate }>(
+        `recording-translation-${registration.sessionId}`,
+        ({ payload }) => {
+          if (
+            payload.sessionId !== registration.sessionId ||
+            payload.stage === 'background_complete'
+          )
+            return;
+          if (
+            this.drainingRecording &&
+            (payload.stage === 'enrichment' || payload.stage === 'catchup_translation')
+          )
+            return;
+          registration.onUpdate(normalizeTranscriptUpdate(payload.update));
+        }
+      );
+      globalListeners.set(this.instanceId, unlisten);
+      return;
+    }
+
     const eventName = buildRecognizerOutputEvent(this.instanceId);
     const unlisten = await listen<TranscriptUpdate>(eventName, (event) => {
       const update = normalizeTranscriptUpdate(event.payload);
@@ -195,7 +223,8 @@ export class RecognizerLifecycle {
   async startExternal(
     asrRequest: AsrTranscriptionRequest,
     onError: RecognizerErrorCallback,
-    gain = 1
+    gain = 1,
+    recordingSessionId?: string
   ): Promise<void> {
     if (this.isRunning) return;
     let sourceToken: string | null = null;
@@ -206,6 +235,7 @@ export class RecognizerLifecycle {
         consumerId: this.instanceId,
         sourceToken,
         gain,
+        recordingSessionId,
         asrRequest,
       });
       this.externalSourceToken = sourceToken;
@@ -223,17 +253,30 @@ export class RecognizerLifecycle {
     }
   }
 
-  async stopExternal(): Promise<void> {
-    if (!this.isRunning || !this.externalSourceToken) return;
+  async stopExternal(recordingSessionId?: string): Promise<void> {
+    if (recordingSessionId) this.beginRecordingStop();
+    if (!this.isRunning || !this.externalSourceToken) {
+      if (recordingSessionId) {
+        try {
+          await stopLiveTranscription(this.instanceId, recordingSessionId);
+        } finally {
+          this.clearStoppedRecordingCallback();
+        }
+        return;
+      }
+      this.clearStoppedRecordingCallback();
+      return;
+    }
     const sourceToken = this.externalSourceToken;
     this.externalSourceToken = null;
     try {
-      await stopLiveTranscription(this.instanceId);
+      await stopLiveTranscription(this.instanceId, recordingSessionId);
     } finally {
       await retireExternalLiveSource(sourceToken).catch((error) => {
         logger.error('Failed to retire external live source:', error);
       });
       this.isRunning = false;
+      this.clearStoppedRecordingCallback();
     }
   }
 
@@ -250,6 +293,19 @@ export class RecognizerLifecycle {
   markStopped(): void {
     this.isRunning = false;
     this.externalSourceToken = null;
+    this.clearStoppedRecordingCallback();
+  }
+
+  beginRecordingStop(): void {
+    this.drainingRecording = true;
+  }
+
+  private clearStoppedRecordingCallback(): void {
+    if (this.instanceId !== 'record' || !this.drainingRecording) return;
+    globalListeners.get(this.instanceId)?.();
+    globalListeners.delete(this.instanceId);
+    instanceCallbacks.delete(this.instanceId);
+    this.drainingRecording = false;
   }
 }
 

@@ -7,8 +7,19 @@ import type { LiveRecordingDraftHandle } from '../services/historyService';
 import { historyService } from '../services/historyService';
 import { pipelineExecutionEngine } from '../services/pipeline/pipelineExecutionEngine';
 import { type EffectivePipelineSnapshot, resolveItemPipeline } from '../services/projectPipeline';
+import {
+  collectRecordingTranslations,
+  mergeRecordingTranslations,
+  type RecordingTranslationDrain,
+  waitForRecordingSegmentTasks,
+} from '../services/recordingPostProcessing';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
+import {
+  createTaskTarget,
+  resolveLatestSegmentsForTarget,
+  runWithDocumentLock,
+} from '../services/task/taskTarget';
 import { audioDeleteRecordingFile } from '../services/tauri/audio';
 import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
 import { writeFile } from '../services/tauri/platform/fs';
@@ -34,7 +45,7 @@ import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { createAudioRecorderCapture, getSupportedMimeType } from './audioRecorder/capture';
 import { createRecordingPersistence } from './audioRecorder/persistence';
-import { createRecordController, type RecordController } from './audioRecorder/recordController';
+import { createRecordController } from './audioRecorder/recordController';
 import { createRecordSessionController } from './audioRecorder/session';
 import { createRecordTimingController } from './audioRecorder/timing';
 import type {
@@ -53,6 +64,12 @@ export { getSupportedMimeType };
 interface UseAudioRecorderProps {
   inputSource: InputSource;
   onSegment: (update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => void;
+}
+
+interface RecordingAutomationSnapshot {
+  config: ReturnType<typeof getEffectiveConfigSnapshot>;
+  projectId: string | null;
+  pipeline: EffectivePipelineSnapshot;
 }
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
@@ -82,12 +99,14 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   const segmentTimeOffsetSecondsRef = useRef(0);
   const recordTimelineCursorSecondsRef = useRef(0);
   const liveDraftRef = useRef<LiveRecordingDraftHandle | null>(null);
-  const recordControllerRef = useRef<RecordController | null>(null);
-  const recordingAutomationSnapshotRef = useRef<{
-    config: ReturnType<typeof getEffectiveConfigSnapshot>;
-    projectId: string | null;
-    pipeline: EffectivePipelineSnapshot;
-  } | null>(null);
+  const recordingTranslationDrainsRef = useRef(new Map<string, RecordingTranslationDrain>());
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
+  const pendingDiscardRef = useRef(false);
+  const stopRecordingRef = useRef<((options?: { discard?: boolean }) => Promise<void>) | null>(
+    null
+  );
+  const pendingRecordingSnapshotRef = useRef<RecordingAutomationSnapshot | null>(null);
+  const recordingSnapshotsRef = useRef(new Map<string, RecordingAutomationSnapshot>());
 
   const [isInitializing, setIsInitializing] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -173,10 +192,21 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       createRecordingPersistence({
         logger,
         history: {
-          createLiveRecordingDraft: (...args) => historyService.createLiveRecordingDraft(...args),
+          createLiveRecordingDraft: async (...args) => {
+            const snapshot = pendingRecordingSnapshotRef.current;
+            const draft = await historyService.createLiveRecordingDraft(...args);
+            if (snapshot) recordingSnapshotsRef.current.set(draft.item.id, snapshot);
+            return draft;
+          },
           completeLiveRecordingDraft: (...args) =>
             historyService.completeLiveRecordingDraft(...args),
-          discardLiveRecordingDraft: (...args) => historyService.discardLiveRecordingDraft(...args),
+          discardLiveRecordingDraft: async (...args) => {
+            try {
+              await historyService.discardLiveRecordingDraft(...args);
+            } finally {
+              recordingSnapshotsRef.current.delete(args[0]);
+            }
+          },
           saveRecording: (...args) => historyService.saveRecording(...args),
           saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
           loadTranscript: (...args) => historyService.loadTranscript(...args),
@@ -188,7 +218,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           const sessions = useTranscriptStore.getState().sessions;
           const recordingSegments = recSessionId ? sessions[recSessionId]?.segments : undefined;
           return {
-            config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
+            config:
+              (recSessionId
+                ? recordingSnapshotsRef.current.get(recSessionId)?.config
+                : undefined) ??
+              pendingRecordingSnapshotRef.current?.config ??
+              getEffectiveConfigSnapshot(),
             segments: recordingSegments ?? useTranscriptSessionStore.getState().segments,
             setAudioUrl: (url: string | null) => {
               if (recSessionId) {
@@ -228,7 +263,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           };
         },
         getActiveProjectId: () =>
-          recordingAutomationSnapshotRef.current?.projectId ??
+          pendingRecordingSnapshotRef.current?.projectId ??
           useProjectStore.getState().activeProjectId,
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
         upsertHistoryItem: (item) => useHistoryStore.getState().upsertItem(item),
@@ -238,11 +273,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments, explicitProjectId) => {
-          const snapshot = recordingAutomationSnapshotRef.current;
           const originSessionId =
-            recordSessionIdRef.current ||
-            useTranscriptStore.getState().recordingSessionId ||
-            historyId;
+            Object.entries(useTranscriptStore.getState().sessions).find(
+              ([id, session]) => id === historyId || session.sourceHistoryId === historyId
+            )?.[0] ?? historyId;
+          const snapshot = recordingSnapshotsRef.current.get(originSessionId);
+          recordingSnapshotsRef.current.delete(originSessionId);
           const session = originSessionId
             ? useTranscriptStore.getState().sessions[originSessionId]
             : undefined;
@@ -258,6 +294,33 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                   useProjectStore.getState().projects,
                   effectiveConfig
                 ));
+          const drain = recordingTranslationDrainsRef.current.get(originSessionId);
+          // Transfer ownership to this saved recording before yielding to another recording.
+          recordingTranslationDrainsRef.current.delete(originSessionId);
+          await waitForRecordingSegmentTasks(originSessionId);
+          if (drain) {
+            try {
+              await drain.complete;
+              const target = createTaskTarget({ sessionId: originSessionId, historyId });
+              await runWithDocumentLock(
+                target,
+                { taskType: 'liveTranslation', lockEditor: false },
+                async () => {
+                  const latest = await resolveLatestSegmentsForTarget(target, segments, {
+                    allowEmpty: true,
+                  });
+                  segments = mergeRecordingTranslations(latest, drain.translations);
+                  if (segments.some((segment, index) => segment !== latest[index])) {
+                    await useHistoryStore
+                      .getState()
+                      .commitSystemTranscriptUpdate(historyId, segments);
+                  }
+                }
+              );
+            } finally {
+              drain.dispose();
+            }
+          }
           const hasAnyPostProcess =
             pipeline.autoPolish ||
             pipeline.autoTranslate ||
@@ -351,7 +414,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       logger.info(
         `[useAudioRecorder] Record update received. session=${meta.sessionId ?? 'none'} phase=${meta.phase} accepted=${meta.accepted} removes=${normalizedUpdate.removeIds.length} upserts=${normalizedUpdate.upsertSegments.length} offset=${segmentTimeOffsetSecondsRef.current.toFixed(3)}`
       );
-      onSegmentRef.current(normalizedUpdate, meta);
+      onSegmentRef.current(normalizedUpdate, {
+        ...meta,
+        config: meta.sessionId
+          ? recordingSnapshotsRef.current.get(meta.sessionId)?.config
+          : undefined,
+      });
     },
     [session, timing]
   );
@@ -365,7 +433,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       setIsPaused(false);
       // Keep `isRecording` active until `stopRecording()` finishes finalizing and archiving
       // the live draft so Channel 1 locks hold and no duplicate recording starts mid-flush.
-      void recordControllerRef.current?.stopRecording().finally(() => {
+      void stopRecordingRef.current?.().finally(() => {
         setIsRecording(false);
       });
     },
@@ -428,7 +496,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       timing,
       persistence,
     });
-    recordControllerRef.current = controller;
     return controller;
   }, [
     capture,
@@ -465,11 +532,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         useProjectStore.getState().projects,
         effectiveConfig
       );
-      recordingAutomationSnapshotRef.current = {
+      pendingRecordingSnapshotRef.current = structuredClone({
         projectId: targetProjectId,
         pipeline,
         config: effectiveConfig,
-      };
+      });
       const activeRecSessionId =
         recordSessionIdRef.current ?? useTranscriptStore.getState().recordingSessionId;
       if (activeRecSessionId) {
@@ -503,10 +570,44 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
   const stopRecording = useCallback(
     async (options?: { discard?: boolean }) => {
-      return recordController.stopRecording(options);
+      if (stopPromiseRef.current) {
+        if (options?.discard) pendingDiscardRef.current = true;
+        return stopPromiseRef.current;
+      }
+      const sessionId = recordSessionIdRef.current;
+      if (!sessionId) return;
+      const stopping = (async () => {
+        const drain = await collectRecordingTranslations(sessionId);
+        recordingTranslationDrainsRef.current.set(sessionId, drain);
+        try {
+          await recordController.stopRecording(
+            pendingDiscardRef.current ? { discard: true } : options
+          );
+        } finally {
+          // `postProcessSavedItem` claims the drain synchronously inside the awaited stop and
+          // owns its disposal; anything still registered here was never claimed (discarded or
+          // empty recording) and must not keep its listener or quit-blocking task alive.
+          const unclaimed = recordingTranslationDrainsRef.current.get(sessionId);
+          if (unclaimed) {
+            unclaimed.dispose();
+            recordingTranslationDrainsRef.current.delete(sessionId);
+          }
+        }
+      })();
+      stopPromiseRef.current = stopping;
+      try {
+        await stopping;
+      } finally {
+        pendingDiscardRef.current = false;
+        recordingTranslationDrainsRef.current.delete(sessionId);
+        recordingSnapshotsRef.current.delete(sessionId);
+        stopPromiseRef.current = null;
+      }
     },
     [recordController]
   );
+
+  stopRecordingRef.current = stopRecording;
 
   const pauseRecording = useCallback(async () => {
     peakLevelRef.current = 0;

@@ -111,6 +111,7 @@ export async function resolveLatestSegmentsForTarget(
   fallbackSegments: TranscriptSegment[],
   options?: {
     loadTranscript?: (historyId: string) => Promise<TranscriptSegment[] | null>;
+    allowEmpty?: boolean;
   }
 ): Promise<TranscriptSegment[]> {
   const latestHistoryId = resolveTargetHistoryId(target);
@@ -118,7 +119,7 @@ export async function resolveLatestSegmentsForTarget(
 
   if (target.sessionId) {
     const boundSession = sessions[target.sessionId];
-    if (boundSession && boundSession.segments.length > 0) {
+    if (boundSession && (options?.allowEmpty || boundSession.segments.length > 0)) {
       const boundHistoryId = normalizeHistoryId(boundSession.sourceHistoryId);
       if (boundHistoryId === latestHistoryId || (!latestHistoryId && !boundHistoryId)) {
         return boundSession.segments;
@@ -130,7 +131,7 @@ export async function resolveLatestSegmentsForTarget(
     const residentMatch = Object.values(sessions).find(
       (session) =>
         normalizeHistoryId(session.sourceHistoryId) === latestHistoryId &&
-        session.segments.length > 0
+        (options?.allowEmpty || session.segments.length > 0)
     );
     if (residentMatch) {
       return residentMatch.segments;
@@ -139,7 +140,7 @@ export async function resolveLatestSegmentsForTarget(
     const loader = options?.loadTranscript ?? ((id: string) => historyService.loadTranscript(id));
     try {
       const loaded = await loader(latestHistoryId);
-      if (loaded && loaded.length > 0) {
+      if (loaded && (options?.allowEmpty || loaded.length > 0)) {
         return loaded;
       }
     } catch {

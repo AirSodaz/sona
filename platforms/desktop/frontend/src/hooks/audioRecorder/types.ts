@@ -19,6 +19,7 @@ export interface RecordSegmentDeliveryMeta {
   phase: RecordSessionPhase;
   isRecording: boolean;
   accepted: boolean;
+  config?: AppConfig;
 }
 
 export interface MutableRefLike<T> {

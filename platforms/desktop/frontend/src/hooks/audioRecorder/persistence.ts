@@ -100,11 +100,9 @@ export function createRecordingPersistence({
     if (completedSegments?.length && postProcessSavedItem) {
       const capturedProjectId = newItem.tagIds?.[0] ?? newItem.projectId ?? null;
       void trackQuitBlockingTask(
-        Promise.resolve()
-          .then(() => postProcessSavedItem(newItem.id, completedSegments, capturedProjectId))
-          .catch((error) => {
-            logger.error('[useAudioRecorder] Detached post-process pipeline failed:', error);
-          })
+        postProcessSavedItem(newItem.id, completedSegments, capturedProjectId).catch((error) => {
+          logger.error('[useAudioRecorder] Detached post-process pipeline failed:', error);
+        })
       );
     }
   }

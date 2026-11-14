@@ -543,7 +543,7 @@ export function createAudioRecorderCapture({
         refs.nativeAudioUnlistenRef.current = null;
       }
       try {
-        savedWavPath = await transcriptionService.stopNativeCapture();
+        savedWavPath = await transcriptionService.stopNativeCapture(sessionId);
         logger.info('[useAudioRecorder] Saved raw audio to:', savedWavPath);
       } catch (error) {
         logger.error(

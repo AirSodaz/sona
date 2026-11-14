@@ -8,6 +8,7 @@ import {
 import { pipelineExecutionEngine } from '../../services/pipeline/pipelineExecutionEngine';
 import { polishService } from '../../services/polishService';
 import { useConfigStore } from '../../stores/configStore';
+import { useHistoryStore } from '../../stores/historyStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore as useCanonicalTranscriptStore } from '../../stores/transcriptStore';
@@ -22,9 +23,32 @@ vi.mock('@tauri-apps/api/core', () => ({
   convertFileSrc: vi.fn((path: string) => `asset://${path}`),
 }));
 
+type RecordingEventEnvelope = { payload: Record<string, unknown> };
+
+const recordingEvents = vi.hoisted(
+  () => new Map<string, Set<(event: RecordingEventEnvelope) => void>>()
+);
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn().mockResolvedValue(() => {}),
+  listen: vi.fn(async (event: string, callback: (event: RecordingEventEnvelope) => void) => {
+    const callbacks = recordingEvents.get(event) ?? new Set();
+    callbacks.add(callback);
+    recordingEvents.set(event, callbacks);
+    return () => {
+      callbacks.delete(callback);
+      if (callbacks.size === 0) recordingEvents.delete(event);
+    };
+  }),
 }));
+
+function emitRecordingEvent(sessionId: string, payload: Record<string, unknown>) {
+  for (const callback of [...(recordingEvents.get(`recording-translation-${sessionId}`) ?? [])]) {
+    callback({ payload: { sessionId, ...payload } });
+  }
+}
+
+function completeRecordingTranslations(sessionId: string) {
+  emitRecordingEvent(sessionId, { stage: 'background_complete' });
+}
 
 // Hoist mocks to share between singleton and class instances
 const transcriptionMocks = vi.hoisted(() => {
@@ -152,6 +176,7 @@ describe('LiveRecord', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers();
+    recordingEvents.clear();
     capturedOnSegment = null;
     localStorage.clear();
     mockInvoke.mockResolvedValue(undefined);
@@ -311,11 +336,15 @@ describe('LiveRecord', () => {
     mockStartExternal.mockImplementation((...args: any[]) => mockStart(...args));
     mockStop.mockClear();
     mockStopNativeCapture.mockReset();
-    mockStopNativeCapture.mockImplementation(async () => {
+    mockStopNativeCapture.mockImplementation(async (sessionId?: string) => {
       await mockStop();
+      if (sessionId) completeRecordingTranslations(sessionId);
       return '/mock/path/to/audio.wav';
     });
-    mockSoftStop.mockClear();
+    mockSoftStop.mockReset();
+    mockSoftStop.mockImplementation(async (sessionId?: string) => {
+      if (sessionId) completeRecordingTranslations(sessionId);
+    });
     mockPauseStream.mockClear();
     mockResumeStream.mockClear();
     mockPrepare.mockClear();
@@ -1118,6 +1147,193 @@ describe('LiveRecord', () => {
     expect(setActiveProjectSpy).not.toHaveBeenCalled();
     expect(useProjectStore.getState().activeProjectId).toBe('proj-b');
     polishSpy.mockRestore();
+  });
+
+  it('continues the old recording pipeline and saves its translations after a new recording starts', async () => {
+    const execute = vi
+      .spyOn(pipelineExecutionEngine, 'execute')
+      .mockResolvedValue({ segments: [] });
+    const commit = vi
+      .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')
+      .mockImplementation(async (id, segments) => {
+        useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segments);
+        return createCompletedHistoryItem(id);
+      });
+    const initialConfig = useConfigStore.getState().config;
+    useProjectStore.setState({
+      activeProjectId: 'old-project',
+      projects: [
+        {
+          id: 'old-project',
+          name: 'Old',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoTranslate: true,
+            targetLanguage: 'ja',
+          },
+        },
+      ],
+    });
+    mockStopNativeCapture.mockImplementation(async () => '/mock/audio.wav');
+    mockSoftStop.mockResolvedValue(undefined);
+    render(<LiveRecord />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const oldId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    act(() =>
+      capturedOnSegment({ id: 'same-id', text: 'Old text', start: 0, end: 1, isFinal: true })
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(useCanonicalTranscriptStore.getState().recordingSessionId).toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+    act(() => {
+      useConfigStore.setState({ config: { ...initialConfig, translationLanguage: 'fr' } });
+      useProjectStore.setState({ activeProjectId: 'next-project' });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const nextId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    expect(nextId).not.toBe(oldId);
+    act(() =>
+      capturedOnSegment({ id: 'same-id', text: 'New text', start: 0, end: 2, isFinal: true })
+    );
+    await act(async () => {
+      emitRecordingEvent(oldId, {
+        stage: 'enrichment',
+        update: {
+          removeIds: [],
+          upsertSegments: [
+            {
+              id: 'same-id',
+              text: 'Old text',
+              start: 0,
+              end: 1,
+              isFinal: true,
+              translation: '旧翻译',
+            },
+          ],
+        },
+      });
+      completeRecordingTranslations(oldId);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(commit).toHaveBeenCalledWith(
+      oldId,
+      expect.arrayContaining([expect.objectContaining({ text: 'Old text', translation: '旧翻译' })])
+    );
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        historyId: oldId,
+        sessionId: oldId,
+        projectId: 'old-project',
+        pipeline: expect.objectContaining({ targetLanguage: 'ja' }),
+        globalConfig: expect.objectContaining({
+          translationLanguage: initialConfig.translationLanguage,
+        }),
+      })
+    );
+    expect(useCanonicalTranscriptStore.getState().sessions[nextId].segments[0]).toMatchObject({
+      text: 'New text',
+    });
+    expect(
+      useCanonicalTranscriptStore.getState().sessions[nextId].segments[0].translation
+    ).toBeUndefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+      completeRecordingTranslations(nextId);
+    });
+    execute.mockRestore();
+    commit.mockRestore();
+  });
+
+  it('keeps a cleared transcript empty when the old recording translation finishes', async () => {
+    const commit = vi
+      .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')
+      .mockImplementation(async (id, segments) => {
+        useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segments);
+        return createCompletedHistoryItem(id);
+      });
+    mockStopNativeCapture.mockImplementation(async () => '/mock/audio.wav');
+    mockSoftStop.mockResolvedValue(undefined);
+    render(<LiveRecord />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const oldId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    const segment = { id: 'removed', text: 'Old text', start: 0, end: 1, isFinal: true };
+    act(() => capturedOnSegment(segment));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    act(() => useCanonicalTranscriptStore.getState().setSegmentsForHistory(oldId, []));
+    await act(async () => {
+      emitRecordingEvent(oldId, {
+        stage: 'enrichment',
+        update: {
+          removeIds: [],
+          upsertSegments: [{ ...segment, translation: 'Late translation' }],
+        },
+      });
+      completeRecordingTranslations(oldId);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(commit).not.toHaveBeenCalled();
+    expect(useCanonicalTranscriptStore.getState().sessions[oldId].segments).toEqual([]);
+    commit.mockRestore();
+  });
+
+  it('merges translations that arrive after the stop promise resolves', async () => {
+    const commit = vi
+      .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')
+      .mockImplementation(async (id, segments) => {
+        useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segments);
+        return createCompletedHistoryItem(id);
+      });
+    mockStopNativeCapture.mockImplementation(async () => '/mock/audio.wav');
+    mockSoftStop.mockResolvedValue(undefined);
+    render(<LiveRecord />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const sessionId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    act(() => capturedOnSegment({ id: 'late-1', text: 'Hello', start: 0, end: 1, isFinal: true }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(commit).not.toHaveBeenCalled();
+    await act(async () => {
+      emitRecordingEvent(sessionId, {
+        stage: 'enrichment',
+        update: {
+          removeIds: [],
+          upsertSegments: [
+            { id: 'late-1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: '你好' },
+          ],
+        },
+      });
+      completeRecordingTranslations(sessionId);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(commit).toHaveBeenCalledWith(
+      sessionId,
+      expect.arrayContaining([expect.objectContaining({ id: 'late-1', translation: '你好' })])
+    );
+    commit.mockRestore();
   });
 
   it('honors mid-recording updates to session pipelineSnapshot during post-processing', async () => {

@@ -43,6 +43,7 @@ pub async fn start_external_live_transcription(
     consumer_id: String,
     source_token: String,
     gain: f32,
+    recording_session_id: Option<String>,
     asr_request: AsrTranscriptionRequest,
 ) -> Result<sona_application::live_transcription::LiveTranscriptionSubscription, AsrPortError> {
     let (source, source_cursor) = services
@@ -50,10 +51,16 @@ pub async fn start_external_live_transcription(
         .external_source(&source_token)
         .await
         .ok_or_else(|| AsrPortError::invalid_request("External live source token is invalid"))?;
-    let observer = Arc::new(TauriAsrRuntimeObserver::new(
-        services.emitter.clone(),
-        services.asr.metrics_store(),
-    )) as Arc<dyn AsrRuntimeObserver>;
+    let observer = Arc::new(match recording_session_id {
+        Some(session_id) => TauriAsrRuntimeObserver::for_recording(
+            services.emitter.clone(),
+            services.asr.metrics_store(),
+            session_id,
+        ),
+        None => {
+            TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store())
+        }
+    }) as Arc<dyn AsrRuntimeObserver>;
     if services
         .asr
         .live_coordinator()
@@ -130,6 +137,7 @@ pub async fn start_native_live_transcription(
     device_name: Option<String>,
     output_path: Option<String>,
     gain: f32,
+    recording_session_id: Option<String>,
     asr_request: AsrTranscriptionRequest,
 ) -> Result<LiveNativeTranscriptionStart, AsrPortError> {
     let _op_guard = services.recording_session.lock_operation().await;
@@ -159,8 +167,16 @@ pub async fn start_native_live_transcription(
         }
     };
     let segments_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let observer_inner =
-        TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store());
+    let observer_inner = match recording_session_id {
+        Some(session_id) => TauriAsrRuntimeObserver::for_recording(
+            services.emitter.clone(),
+            services.asr.metrics_store(),
+            session_id,
+        ),
+        None => {
+            TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store())
+        }
+    };
     let observer = Arc::new(
         crate::platform::agent_control::AgentAsrRuntimeObserver::new(
             observer_inner,
@@ -264,22 +280,55 @@ pub struct LiveNativeTranscriptionStart {
     pub subscription: sona_application::live_transcription::LiveTranscriptionSubscription,
 }
 
+async fn release_live_consumer(
+    services: &DesktopServices,
+    consumer_id: &str,
+    recording_session_id: Option<String>,
+) -> Result<(), AsrPortError> {
+    let observer = recording_session_id.map(|session_id| {
+        Arc::new(TauriAsrRuntimeObserver::for_recording(
+            services.emitter.clone(),
+            services.asr.metrics_store(),
+            session_id,
+        )) as Arc<dyn AsrRuntimeObserver>
+    });
+    if !services
+        .asr
+        .live_coordinator()
+        .has_consumer(consumer_id)
+        .await
+    {
+        if let Some(observer) = observer {
+            observer.on_transcript_update(&sona_core::ports::asr::AsrTranscriptUpdateEvent {
+                instance_id: consumer_id.to_string(),
+                stage: "background_complete".to_string(),
+                update: sona_core::transcription::transcript::TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: Vec::new(),
+                },
+            });
+        }
+        return Ok(());
+    }
+    if let Some(observer) = observer {
+        services
+            .asr
+            .live_coordinator()
+            .release_with_background_translations(consumer_id, observer)
+            .await
+    } else {
+        services.asr.live_coordinator().release(consumer_id).await
+    }
+}
+
 #[tauri::command(async)]
 pub async fn stop_live_transcription(
     app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
+    recording_session_id: Option<String>,
 ) -> Result<(), AsrPortError> {
-    let res = if services
-        .asr
-        .live_coordinator()
-        .has_consumer(&consumer_id)
-        .await
-    {
-        services.asr.live_coordinator().release(&consumer_id).await
-    } else {
-        Ok(())
-    };
+    let res = release_live_consumer(&services, &consumer_id, recording_session_id).await;
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
         if services.local_model_pool.should_purge_on_task_end() {
@@ -362,6 +411,7 @@ pub async fn resume_native_live_transcription(
     consumer_id: String,
     source_kind: String,
     gain: f32,
+    recording_session_id: Option<String>,
     asr_request: AsrTranscriptionRequest,
 ) -> Result<LiveNativeTranscriptionStart, AsrPortError> {
     let lease = crate::integrations::audio::set_native_live_capture_paused(
@@ -371,10 +421,16 @@ pub async fn resume_native_live_transcription(
         false,
     )
     .map_err(|err| AsrPortError::runtime(err.to_string()))?;
-    let observer = Arc::new(TauriAsrRuntimeObserver::new(
-        services.emitter.clone(),
-        services.asr.metrics_store(),
-    )) as Arc<dyn AsrRuntimeObserver>;
+    let observer = Arc::new(match recording_session_id {
+        Some(session_id) => TauriAsrRuntimeObserver::for_recording(
+            services.emitter.clone(),
+            services.asr.metrics_store(),
+            session_id,
+        ),
+        None => {
+            TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store())
+        }
+    }) as Arc<dyn AsrRuntimeObserver>;
     configure_realtime_translation(&services);
     match services
         .asr
@@ -431,6 +487,7 @@ pub async fn stop_native_live_transcription(
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
+    recording_session_id: Option<String>,
 ) -> Result<String, AsrPortError> {
     let capture_result = match crate::integrations::audio::stop_native_live_capture(
         &services.audio,
@@ -468,16 +525,7 @@ pub async fn stop_native_live_transcription(
             }
         }
     };
-    let release_result = if services
-        .asr
-        .live_coordinator()
-        .has_consumer(&consumer_id)
-        .await
-    {
-        services.asr.live_coordinator().release(&consumer_id).await
-    } else {
-        Ok(())
-    };
+    let release_result = release_live_consumer(&services, &consumer_id, recording_session_id).await;
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
         if services.local_model_pool.should_purge_on_task_end() {
@@ -871,47 +919,15 @@ pub async fn toggle_live_translation(
         .set_translation(Some(Arc::clone(&coordinator)));
 
     if let Some(segments) = catchup_segments.filter(|s| !s.is_empty()) {
-        let live_coord = services.asr.live_coordinator().clone();
-        let recording_session = services.recording_session.clone();
         let active_consumer = {
             let guard = services.recording_session.lock().await;
             guard.as_ref().map(|s| s.consumer_id.clone())
         };
-        tokio::spawn(async move {
-            for seg in segments {
-                let still_active = if let Some(consumer_id) = &active_consumer {
-                    let guard = recording_session.lock().await;
-                    guard
-                        .as_ref()
-                        .is_some_and(|s| s.consumer_id == *consumer_id && !s.is_paused)
-                } else {
-                    live_coord.is_active().await
-                };
-                let is_current = live_coord
-                    .current_translation()
-                    .is_some_and(|c| Arc::ptr_eq(&c, &coordinator));
-                if !still_active || !is_current {
-                    break;
-                }
-
-                if !seg.is_final {
-                    continue;
-                }
-                let text = seg.text.trim();
-                if text.is_empty() {
-                    continue;
-                }
-
-                let mut update = sona_core::transcription::transcript::TranscriptUpdate {
-                    remove_ids: Vec::new(),
-                    upsert_segments: vec![seg],
-                };
-                coordinator.enrich_update(&mut update).await;
-                live_coord
-                    .broadcast_transcript_update_for_consumer(active_consumer.as_deref(), update)
-                    .await;
-            }
-        });
+        services
+            .asr
+            .live_coordinator()
+            .enqueue_translation_catchup(active_consumer.as_deref(), coordinator, segments)
+            .await;
     }
 
     Ok(())

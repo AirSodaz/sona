@@ -277,9 +277,8 @@ export function createRecordController({
     try {
       const savedWavPath = await capture.stopCaptureForSession(sessionId);
 
-      // Stop recognizer delivery before we persist outputs so no late segment
-      // can land after the saved recording has already been finalized.
-      await transcriptionService.softStop();
+      // Drain ASR before saving; final translations continue on the session-scoped channel.
+      await transcriptionService.softStop(sessionId);
       finalizeLastSegmentForSession(sessionId);
       const latestSegments = useTranscriptStore.getState().sessions[sessionId]?.segments ?? [];
       if (liveDraft?.item.id) {

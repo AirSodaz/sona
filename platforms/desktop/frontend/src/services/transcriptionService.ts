@@ -70,6 +70,7 @@ export class TranscriptionService {
   private externalGain = 1;
   private preparedNativeConfig: ServiceConfig | null = null;
   private activeProjectId: string | null = null;
+  private recordingSessionId: string | undefined;
 
   constructor(
     private readonly instanceId: string = 'default',
@@ -107,7 +108,7 @@ export class TranscriptionService {
     const config = await this.prepareSharedStart(onUpdate, onError, options);
     await prepareLiveTranscription(config);
     const gain = options?.gain ?? 1;
-    await this.lifecycle.startExternal(config, onError, gain);
+    await this.lifecycle.startExternal(config, onError, gain, this.recordingSessionId);
     this.runningConfig = config;
     this.transport = 'external';
     this.nativeSourceKind = null;
@@ -144,6 +145,7 @@ export class TranscriptionService {
       deviceName: options.deviceName,
       outputPath: options.outputPath ?? null,
       gain: options.gain ?? 1,
+      recordingSessionId: this.recordingSessionId,
       asrRequest: config,
     });
     this.lifecycle.markNativeRunning();
@@ -160,6 +162,8 @@ export class TranscriptionService {
     options?: StartOptions
   ): Promise<ServiceConfig> {
     this.onError = onError;
+    this.recordingSessionId =
+      this.instanceId === 'record' ? (options?.callbackSessionId ?? undefined) : undefined;
     const config = this._buildStreamingServiceConfig();
     if (!isTranscriptionRequestConfigured(config)) {
       const errorMessage = 'ASR is not configured';
@@ -238,7 +242,8 @@ export class TranscriptionService {
     this.transport = 'idle';
   }
 
-  async stopNativeCapture(): Promise<string> {
+  async stopNativeCapture(recordingSessionId?: string): Promise<string> {
+    if (recordingSessionId) this.lifecycle.beginRecordingStop();
     this.preparedNativeConfig = null;
     if (this.transport !== 'native' || !this.nativeSourceKind) {
       return '';
@@ -247,7 +252,11 @@ export class TranscriptionService {
       ? this.runningConfig.engine === 'local'
       : (this.ports.getEffectiveConfigSnapshot().asr?.selections?.live?.engine ?? 'local') ===
         'local';
-    const path = await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+    const path = await stopNativeLiveTranscription(
+      this.instanceId,
+      this.nativeSourceKind,
+      recordingSessionId
+    );
     this.lifecycle.markStopped();
     this.runningConfig = null;
     this.transport = 'idle';
@@ -256,11 +265,20 @@ export class TranscriptionService {
     return path;
   }
 
-  async softStop(): Promise<void> {
+  async softStop(recordingSessionId?: string): Promise<void> {
+    if (recordingSessionId) this.lifecycle.beginRecordingStop();
     this.preparedNativeConfig = null;
     if (this.transport === 'native' && this.nativeSourceKind) {
       try {
-        await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+        if (recordingSessionId) {
+          await stopNativeLiveTranscription(
+            this.instanceId,
+            this.nativeSourceKind,
+            recordingSessionId
+          );
+        } else {
+          await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+        }
       } finally {
         this.lifecycle.markStopped();
         this.runningConfig = null;
@@ -271,7 +289,7 @@ export class TranscriptionService {
     }
     if (this.transport === 'external') {
       try {
-        await this.lifecycle.stopExternal();
+        await this.lifecycle.stopExternal(recordingSessionId);
       } finally {
         this.runningConfig = null;
         this.transport = 'idle';
@@ -300,6 +318,7 @@ export class TranscriptionService {
         consumerId: this.instanceId,
         sourceKind: this.nativeSourceKind,
         gain: this.nativeGain,
+        recordingSessionId: this.recordingSessionId,
         asrRequest: this.runningConfig,
       });
       this.lifecycle.markNativeRunning();
@@ -309,7 +328,8 @@ export class TranscriptionService {
       await this.lifecycle.startExternal(
         this.runningConfig,
         (error) => this.onError?.(error),
-        this.externalGain
+        this.externalGain,
+        this.recordingSessionId
       );
       return;
     }
@@ -330,6 +350,7 @@ export class TranscriptionService {
           consumerId: this.instanceId,
           sourceKind: this.nativeSourceKind,
           gain: this.nativeGain,
+          recordingSessionId: this.recordingSessionId,
           asrRequest: config,
         });
         this.lifecycle.markNativeRunning();
@@ -352,7 +373,8 @@ export class TranscriptionService {
         await this.lifecycle.startExternal(
           config,
           (error) => this.onError?.(error),
-          this.externalGain
+          this.externalGain,
+          this.recordingSessionId
         );
         this.runningConfig = config;
       } catch (error) {

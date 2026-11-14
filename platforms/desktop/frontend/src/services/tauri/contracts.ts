@@ -493,6 +493,7 @@ type ManualTauriCommandContractMap = {
       consumerId: string;
       sourceToken: string;
       gain: number;
+      recordingSessionId?: string;
       asrRequest: CoreAsrTranscriptionRequest;
     };
     result: LiveTranscriptionSubscription;
@@ -512,6 +513,7 @@ type ManualTauriCommandContractMap = {
       deviceName: string | null;
       outputPath: string | null;
       gain: number;
+      recordingSessionId?: string;
       asrRequest: CoreAsrTranscriptionRequest;
     };
     result: LiveNativeTranscriptionStart;
@@ -525,16 +527,17 @@ type ManualTauriCommandContractMap = {
       consumerId: string;
       sourceKind: 'system' | 'microphone';
       gain: number;
+      recordingSessionId?: string;
       asrRequest: CoreAsrTranscriptionRequest;
     };
     result: LiveNativeTranscriptionStart;
   };
   [TauriCommand.recognizer.stopNativeLive]: {
-    args: { consumerId: string; sourceKind: 'system' | 'microphone' };
+    args: { consumerId: string; sourceKind: 'system' | 'microphone'; recordingSessionId?: string };
     result: string;
   };
   [TauriCommand.recognizer.stopLive]: {
-    args: { consumerId: string };
+    args: { consumerId: string; recordingSessionId?: string };
     result: undefined;
   };
   [TauriCommand.recognizer.getLiveMetrics]: {

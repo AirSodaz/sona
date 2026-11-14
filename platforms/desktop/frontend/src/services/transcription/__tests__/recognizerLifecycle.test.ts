@@ -154,4 +154,53 @@ describe('RecognizerLifecycle', () => {
   it('builds the recognizer output event name from the instance id', () => {
     expect(buildRecognizerOutputEvent('voice-typing')).toBe('recognizer-output-voice-typing');
   });
+
+  it('delivers stop-time ASR finals but hands enrichment to the old session background channel', async () => {
+    const RecognizerLifecycle = await loadLifecycle();
+    const lifecycle = new RecognizerLifecycle('record');
+    const oldUpdate = vi.fn();
+    lifecycle.registerCallback(oldUpdate, vi.fn(), { sessionId: 'old' });
+    await lifecycle.ensureGlobalBus();
+    const oldListener = mocks.listenCallbacks['recording-translation-old'];
+    const update = {
+      removeIds: [],
+      upsertSegments: [{ id: 'seg', text: 'old', start: 0, end: 1, isFinal: true }],
+    };
+    lifecycle.beginRecordingStop();
+    oldListener({ payload: { sessionId: 'old', stage: 'final', update } });
+    expect(oldUpdate).toHaveBeenCalledOnce();
+    oldListener({ payload: { sessionId: 'old', stage: 'enrichment', update } });
+    expect(oldUpdate).toHaveBeenCalledOnce();
+    lifecycle.markStopped();
+    expect(mocks.listenCallbacks['recording-translation-old']).toBeUndefined();
+    const nextUpdate = vi.fn();
+    lifecycle.registerCallback(nextUpdate, vi.fn(), { sessionId: 'next' });
+    await lifecycle.ensureGlobalBus();
+    oldListener({ payload: { sessionId: 'old', stage: 'final', update } });
+    expect(nextUpdate).not.toHaveBeenCalled();
+    mocks.listenCallbacks['recording-translation-next']({
+      payload: { sessionId: 'next', stage: 'final', update },
+    });
+    expect(nextUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('opts in to background release for a paused external recording and clears its callback', async () => {
+    const RecognizerLifecycle = await loadLifecycle();
+    const lifecycle = new RecognizerLifecycle('record');
+    lifecycle.registerCallback(vi.fn(), vi.fn(), { sessionId: 'paused' });
+    await lifecycle.ensureGlobalBus();
+    await lifecycle.stopExternal('paused');
+    expect(mocks.stopLiveTranscription).toHaveBeenCalledWith('record', 'paused');
+    expect(mocks.listenCallbacks['recording-translation-paused']).toBeUndefined();
+  });
+
+  it('clears the recording listener and registration when the stop invoke fails', async () => {
+    const RecognizerLifecycle = await loadLifecycle();
+    const lifecycle = new RecognizerLifecycle('record');
+    lifecycle.registerCallback(vi.fn(), vi.fn(), { sessionId: 'failed' });
+    await lifecycle.ensureGlobalBus();
+    mocks.stopLiveTranscription.mockRejectedValueOnce(new Error('release failed'));
+    await expect(lifecycle.stopExternal('failed')).rejects.toThrow('release failed');
+    expect(mocks.listenCallbacks['recording-translation-failed']).toBeUndefined();
+  });
 });

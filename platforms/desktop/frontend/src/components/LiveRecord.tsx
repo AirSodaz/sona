@@ -7,6 +7,7 @@ import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAu
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { polishService } from '../services/polishService';
 import { resolveItemPipeline } from '../services/projectPipeline';
+import { trackRecordingSegmentTask } from '../services/recordingPostProcessing';
 import { useConfigStore } from '../stores/configStore';
 import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -96,7 +97,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
     // Auto-Polish Logic
-    const baseConfig = useConfigStore.getState().config;
+    const baseConfig = meta.config ?? useConfigStore.getState().config;
     const targetSessionId = meta.sessionId;
     const recSession = targetSessionId
       ? useTranscriptStore.getState().sessions[targetSessionId]
@@ -121,7 +122,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
           polishedIdsRef.current.add(s.id);
         });
 
-        polishService
+        const task = polishService
           .polishSegmentsWithConfig(
             {
               ...baseConfig,
@@ -143,6 +144,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
           .catch((err) => {
             logger.error('[LiveRecord] Auto-polish failed:', err);
           });
+        if (targetSessionId) trackRecordingSegmentTask(targetSessionId, task);
       }
     }
   }, []);

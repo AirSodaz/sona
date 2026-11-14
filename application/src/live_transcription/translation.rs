@@ -74,8 +74,13 @@ impl StreamingTranslationCoordinator {
         max_remaining
     }
 
-    pub fn clear(&self) {
-        self.states.lock().clear();
+    pub(super) fn fresh(&self) -> Self {
+        Self::new(
+            Arc::clone(&self.engine),
+            &self.source_lang,
+            &self.target_lang,
+        )
+        .with_debounce(self.debounce_ms, self.min_char_delta)
     }
     pub fn remove_states(&self, ids: &[String]) {
         if ids.is_empty() {
