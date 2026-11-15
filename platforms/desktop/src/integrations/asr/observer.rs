@@ -59,9 +59,10 @@ impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
                     "update": event.update,
                 }),
             ) {
+                // Do not log the session id: CodeQL treats the recording session identifier as
+                // sensitive (`rust/cleartext-logging`), and the event target already carries it.
                 log::warn!(
-                    "[ASR] failed to emit {} for stage {}: {error}",
-                    recording_translation_event(session_id),
+                    "[ASR] failed to emit recording translation update for stage {}: {error}",
                     event.stage
                 );
             }
