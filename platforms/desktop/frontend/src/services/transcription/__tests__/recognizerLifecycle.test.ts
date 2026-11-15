@@ -171,12 +171,19 @@ describe('RecognizerLifecycle', () => {
     expect(oldUpdate).toHaveBeenCalledOnce();
     oldListener({ payload: { sessionId: 'old', stage: 'enrichment', update } });
     expect(oldUpdate).toHaveBeenCalledOnce();
+    // The stop invoke resolves before the backend's queued flush events reach JS.
     lifecycle.markStopped();
+    oldListener({ payload: { sessionId: 'old', stage: 'final', update } });
+    expect(oldUpdate).toHaveBeenCalledTimes(2);
+    oldListener({ payload: { sessionId: 'old', stage: 'background_complete', update } });
     expect(mocks.listenCallbacks['recording-translation-old']).toBeUndefined();
     const nextUpdate = vi.fn();
     lifecycle.registerCallback(nextUpdate, vi.fn(), { sessionId: 'next' });
     await lifecycle.ensureGlobalBus();
-    oldListener({ payload: { sessionId: 'old', stage: 'final', update } });
+    // A late event for the finished session must not reach the new registration.
+    mocks.listenCallbacks['recording-translation-next']({
+      payload: { sessionId: 'old', stage: 'final', update },
+    });
     expect(nextUpdate).not.toHaveBeenCalled();
     mocks.listenCallbacks['recording-translation-next']({
       payload: { sessionId: 'next', stage: 'final', update },
@@ -184,13 +191,23 @@ describe('RecognizerLifecycle', () => {
     expect(nextUpdate).toHaveBeenCalledOnce();
   });
 
-  it('opts in to background release for a paused external recording and clears its callback', async () => {
+  it('keeps the recording bus until the background drain reports completion', async () => {
     const RecognizerLifecycle = await loadLifecycle();
     const lifecycle = new RecognizerLifecycle('record');
     lifecycle.registerCallback(vi.fn(), vi.fn(), { sessionId: 'paused' });
     await lifecycle.ensureGlobalBus();
     await lifecycle.stopExternal('paused');
     expect(mocks.stopLiveTranscription).toHaveBeenCalledWith('record', 'paused');
+    expect(mocks.listenCallbacks['recording-translation-paused']).toBeDefined();
+    lifecycle.markStopped();
+    expect(mocks.listenCallbacks['recording-translation-paused']).toBeDefined();
+    mocks.listenCallbacks['recording-translation-paused']({
+      payload: {
+        sessionId: 'paused',
+        stage: 'background_complete',
+        update: { removeIds: [], upsertSegments: [] },
+      },
+    });
     expect(mocks.listenCallbacks['recording-translation-paused']).toBeUndefined();
   });
 

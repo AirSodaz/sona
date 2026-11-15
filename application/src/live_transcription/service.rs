@@ -13,7 +13,11 @@ use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 use super::translation::StreamingTranslationCoordinator;
 
-const BACKGROUND_TRANSLATION_BUDGET: std::time::Duration = std::time::Duration::from_millis(8_000);
+/// Slack added to the engine's per-segment ceiling when bounding the stop-time drain.
+const BACKGROUND_TRANSLATION_MARGIN: std::time::Duration = std::time::Duration::from_millis(2_000);
+/// Barrier used when no translation coordinator is installed (nothing can be pending).
+const BACKGROUND_TRANSLATION_FALLBACK_BUDGET: std::time::Duration =
+    std::time::Duration::from_millis(1_000);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct LiveSourceEpoch {
@@ -269,14 +273,23 @@ impl SubscriberMailbox {
         std::mem::take(&mut *self.pending_translations.lock())
     }
 
-    async fn finish_translations(self: Arc<Self>, consumer_id: String) {
+    async fn finish_translations(
+        self: Arc<Self>,
+        consumer_id: String,
+        budget: std::time::Duration,
+    ) {
         let handles = self.take_pending_translations();
+        let pending = handles.len();
         let drained = async move {
             for handle in handles {
                 let _ = handle.await;
             }
         };
-        let _ = tokio::time::timeout(BACKGROUND_TRANSLATION_BUDGET, drained).await;
+        if tokio::time::timeout(budget, drained).await.is_err() {
+            log::warn!(
+                "[ASR] background translation drain expired after {budget:?} with {pending} pending task(s); dropping remaining enrichment for consumer {consumer_id}"
+            );
+        }
         if let Some(observer) = self.background_observer.lock().take() {
             observer.on_transcript_update(&AsrTranscriptUpdateEvent {
                 instance_id: consumer_id,
@@ -786,7 +799,12 @@ impl LiveTranscriptionCoordinator {
             }
         };
         if let Some(mailbox) = completion_mailbox {
-            tokio::spawn(mailbox.finish_translations(consumer_id.to_string()));
+            let budget = self
+                .current_translation()
+                .map_or(BACKGROUND_TRANSLATION_FALLBACK_BUDGET, |translator| {
+                    translator.final_translation_timeout() + BACKGROUND_TRANSLATION_MARGIN
+                });
+            tokio::spawn(mailbox.finish_translations(consumer_id.to_string(), budget));
         }
         result
     }
@@ -912,6 +930,9 @@ impl LiveTranscriptionCoordinator {
                         .map(|segment| vec![segment])
                         .collect(),
                     "catchup_translation",
+                    // The caller installed this translator for the catch-up it asked for; a
+                    // concurrent supersede must not turn the request into a silent no-op.
+                    true,
                 );
             }
         }
@@ -1063,6 +1084,7 @@ impl AsrRuntimeObserver for ReplayObserver {
                 Arc::clone(translator),
                 vec![update.upsert_segments],
                 "enrichment",
+                false,
             );
         }
     }
@@ -1114,6 +1136,7 @@ impl CoordinatorInner {
         translator: Arc<StreamingTranslationCoordinator>,
         batches: Vec<Vec<TranscriptSegment>>,
         stage: &'static str,
+        keep_when_superseded: bool,
     ) {
         let this = Arc::clone(self);
         let target = Arc::clone(&mailbox);
@@ -1124,7 +1147,13 @@ impl CoordinatorInner {
                     .read()
                     .as_ref()
                     .is_some_and(|current| Arc::ptr_eq(current, &translator));
-                if !is_current && target.background_observer.lock().is_none() {
+                if !keep_when_superseded
+                    && !is_current
+                    && target.background_observer.lock().is_none()
+                {
+                    log::debug!(
+                        "[ASR] dropping queued {stage} batches for consumer {consumer_id}: translator superseded"
+                    );
                     break;
                 }
                 let mut update = TranscriptUpdate {
@@ -1147,12 +1176,14 @@ impl CoordinatorInner {
                 let background = target.background_observer.lock();
                 if let Some(observer) = background.as_ref() {
                     observer.on_transcript_update(&event);
-                } else if this
-                    .translation
-                    .read()
-                    .as_ref()
-                    .is_some_and(|current| Arc::ptr_eq(current, &translator))
+                } else if keep_when_superseded
+                    || this
+                        .translation
+                        .read()
+                        .as_ref()
+                        .is_some_and(|current| Arc::ptr_eq(current, &translator))
                 {
+                    // The mailbox is this subscription's own; a closed one drops it.
                     target.push_transcript(event);
                 }
             }
@@ -1244,6 +1275,7 @@ impl CoordinatorInner {
                     Arc::clone(&translator),
                     vec![final_segments],
                     "enrichment",
+                    false,
                 );
             }
 

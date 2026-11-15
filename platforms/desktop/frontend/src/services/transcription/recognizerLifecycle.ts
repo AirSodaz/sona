@@ -156,11 +156,17 @@ export class RecognizerLifecycle {
       const unlisten = await listen<{ sessionId: string; stage: string; update: TranscriptUpdate }>(
         `recording-translation-${registration.sessionId}`,
         ({ payload }) => {
-          if (
-            payload.sessionId !== registration.sessionId ||
-            payload.stage === 'background_complete'
-          )
+          if (payload.sessionId !== registration.sessionId) return;
+          if (payload.stage === 'background_complete') {
+            // The backend emits this after flushing ASR and draining translations, so every
+            // final update for this session has already been delivered on this channel.
+            if (
+              instanceCallbacks.get(this.instanceId)?.registrationId === registration.registrationId
+            ) {
+              this.clearStoppedRecordingCallback();
+            }
             return;
+          }
           if (
             this.drainingRecording &&
             (payload.stage === 'enrichment' || payload.stage === 'catchup_translation')
@@ -259,8 +265,10 @@ export class RecognizerLifecycle {
       if (recordingSessionId) {
         try {
           await stopLiveTranscription(this.instanceId, recordingSessionId);
-        } finally {
+        } catch (error) {
+          // No completion sentinel can arrive; release the recording bus now.
           this.clearStoppedRecordingCallback();
+          throw error;
         }
         return;
       }
@@ -271,12 +279,14 @@ export class RecognizerLifecycle {
     this.externalSourceToken = null;
     try {
       await stopLiveTranscription(this.instanceId, recordingSessionId);
+    } catch (error) {
+      this.clearStoppedRecordingCallback();
+      throw error;
     } finally {
       await retireExternalLiveSource(sourceToken).catch((error) => {
         logger.error('Failed to retire external live source:', error);
       });
       this.isRunning = false;
-      this.clearStoppedRecordingCallback();
     }
   }
 
@@ -293,11 +303,18 @@ export class RecognizerLifecycle {
   markStopped(): void {
     this.isRunning = false;
     this.externalSourceToken = null;
-    this.clearStoppedRecordingCallback();
   }
 
   beginRecordingStop(): void {
     this.drainingRecording = true;
+  }
+
+  /**
+   * Release the recording bus without waiting for `background_complete`, for stops whose
+   * invoke failed and can therefore never produce the sentinel.
+   */
+  abortRecordingDrain(): void {
+    this.clearStoppedRecordingCallback();
   }
 
   private clearStoppedRecordingCallback(): void {

@@ -215,6 +215,8 @@ export class TranscriptionService {
           error
         );
       } finally {
+        // No session-scoped completion is requested here, so nothing can settle an armed drain.
+        this.lifecycle.abortRecordingDrain();
         this.runningConfig = null;
         this.transport = 'idle';
       }
@@ -230,6 +232,7 @@ export class TranscriptionService {
           error
         );
       } finally {
+        this.lifecycle.abortRecordingDrain();
         this.lifecycle.markStopped();
         this.runningConfig = null;
         this.transport = 'idle';
@@ -252,23 +255,30 @@ export class TranscriptionService {
       ? this.runningConfig.engine === 'local'
       : (this.ports.getEffectiveConfigSnapshot().asr?.selections?.live?.engine ?? 'local') ===
         'local';
-    const path = await stopNativeLiveTranscription(
-      this.instanceId,
-      this.nativeSourceKind,
-      recordingSessionId
-    );
-    this.lifecycle.markStopped();
-    this.runningConfig = null;
-    this.transport = 'idle';
-    this.nativeSourceKind = null;
-    this._checkLiveDiarizationDegraded(wasLocal);
-    return path;
+    try {
+      return await stopNativeLiveTranscription(
+        this.instanceId,
+        this.nativeSourceKind,
+        recordingSessionId
+      );
+    } catch (error) {
+      // The release never ran, so no `background_complete` can arrive; release the bus here
+      // instead of leaving the drain armed and the session still marked native.
+      this.lifecycle.abortRecordingDrain();
+      throw error;
+    } finally {
+      this.lifecycle.markStopped();
+      this.runningConfig = null;
+      this.transport = 'idle';
+      this.nativeSourceKind = null;
+      this._checkLiveDiarizationDegraded(wasLocal);
+    }
   }
 
   async softStop(recordingSessionId?: string): Promise<void> {
-    if (recordingSessionId) this.lifecycle.beginRecordingStop();
     this.preparedNativeConfig = null;
     if (this.transport === 'native' && this.nativeSourceKind) {
+      if (recordingSessionId) this.lifecycle.beginRecordingStop();
       try {
         if (recordingSessionId) {
           await stopNativeLiveTranscription(
@@ -279,6 +289,9 @@ export class TranscriptionService {
         } else {
           await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
         }
+      } catch (error) {
+        if (recordingSessionId) this.lifecycle.abortRecordingDrain();
+        throw error;
       } finally {
         this.lifecycle.markStopped();
         this.runningConfig = null;
@@ -296,6 +309,8 @@ export class TranscriptionService {
       }
       return;
     }
+    // Nothing left to stop: the drain armed by an earlier stop stays armed until its own
+    // `background_complete`, so this path must not touch it.
     this.runningConfig = null;
     this.transport = 'idle';
   }

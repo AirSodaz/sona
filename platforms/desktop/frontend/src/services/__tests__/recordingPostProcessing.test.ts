@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TranscriptSegment } from '../../types/transcript';
 import {
   collectRecordingTranslations,
+  markRecordingSegmentSystemRewrite,
   mergeRecordingTranslations,
   trackRecordingSegmentTask,
   waitForRecordingSegmentTasks,
@@ -11,9 +12,14 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
   unlisten: vi.fn(),
   track: vi.fn(<T>(promise: Promise<T>) => promise),
+  failNextListen: { value: false },
 }));
 vi.mock('../tauri/platform/events', () => ({
   listen: vi.fn(async (name: string, listener: (event: { payload: unknown }) => void) => {
+    if (mocks.failNextListen.value) {
+      mocks.failNextListen.value = false;
+      throw new Error('listen unavailable');
+    }
     mocks.listeners.set(name, listener);
     return () => {
       mocks.listeners.delete(name);
@@ -60,16 +66,43 @@ describe('recording translation drain', () => {
     const original: TranscriptSegment = { id: 'a', text: 'Hello', start: 5, end: 6, isFinal: true };
     const edited = { ...original, id: 'b', text: 'Edited' };
     const translated = { ...original, start: 0, end: 1, translation: '你好' };
-    const result = mergeRecordingTranslations(
-      [original, edited],
-      new Map([
+    const result = mergeRecordingTranslations([original, edited], {
+      translations: new Map([
         ['a', translated],
         ['b', { ...translated, id: 'b' }],
         ['deleted', { ...translated, id: 'deleted' }],
-      ])
-    );
+      ]),
+      systemRewritten: new Set<string>(),
+    });
     expect(result).toEqual([{ ...original, translation: '你好' }, edited]);
     expect(result[1]).toBe(edited);
+  });
+
+  it('accepts a drained translation across an app rewrite but not across a user edit', async () => {
+    const drain = await collectRecordingTranslations('rewritten');
+    emit('rewritten', 'enrichment', [
+      {
+        id: 'polished',
+        text: 'hello world',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        translation: '你好世界',
+      },
+      { id: 'edited', text: 'hello world', start: 0, end: 2, isFinal: true, translation: '你好' },
+    ]);
+    emit('rewritten', 'background_complete');
+    await drain.complete;
+    // Only the polish rewrite is announced; the other text change is the user's.
+    markRecordingSegmentSystemRewrite('rewritten', 'polished');
+    const segments: TranscriptSegment[] = [
+      { id: 'polished', text: 'Hello, world.', start: 0, end: 1, isFinal: true },
+      { id: 'edited', text: 'Changed by hand', start: 0, end: 2, isFinal: true },
+    ];
+    const result = mergeRecordingTranslations(segments, drain);
+    expect(result[0].translation).toBe('你好世界');
+    expect(result[1]).toBe(segments[1]);
+    drain.dispose();
   });
 
   it('cleans up after empty completion or a discarded recording', async () => {
@@ -95,6 +128,15 @@ describe('recording translation drain', () => {
     expect(settled).toHaveBeenCalledOnce();
     expect(mocks.listeners.has('recording-translation-silent')).toBe(false);
     vi.useRealTimers();
+  });
+
+  it('settles immediately when the drain listener cannot be registered', async () => {
+    mocks.failNextListen.value = true;
+    const drain = await collectRecordingTranslations('unavailable');
+    // No sentinel can arrive without a listener, so the drain must not wait out the timeout.
+    await drain.complete;
+    expect(drain.translations.size).toBe(0);
+    expect(mocks.listeners.has('recording-translation-unavailable')).toBe(false);
   });
 
   it('waits for in-flight polish on the old recording without waiting for the next recording', async () => {

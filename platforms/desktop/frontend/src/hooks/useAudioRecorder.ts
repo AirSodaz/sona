@@ -306,11 +306,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 target,
                 { taskType: 'liveTranslation', lockEditor: false },
                 async () => {
+                  const savedIds = new Set(segments.map((segment) => segment.id));
                   const latest = await resolveLatestSegmentsForTarget(target, segments, {
                     allowEmpty: true,
                   });
-                  segments = mergeRecordingTranslations(latest, drain.translations);
-                  if (segments.some((segment, index) => segment !== latest[index])) {
+                  segments = mergeRecordingTranslations(latest, drain);
+                  // A final that landed after the draft was saved is stored here too; a segment
+                  // the user deleted must stay deleted, so only unknown ids count as late.
+                  const hasLateFinal = segments.some(
+                    (segment) => segment.isFinal && !savedIds.has(segment.id)
+                  );
+                  if (
+                    hasLateFinal ||
+                    segments.some((segment, index) => segment !== latest[index])
+                  ) {
                     await useHistoryStore
                       .getState()
                       .commitSystemTranscriptUpdate(historyId, segments);

@@ -51,7 +51,7 @@ pub async fn start_external_live_transcription(
         .external_source(&source_token)
         .await
         .ok_or_else(|| AsrPortError::invalid_request("External live source token is invalid"))?;
-    let observer = Arc::new(match recording_session_id {
+    let observer = Arc::new(match recording_session_key(recording_session_id) {
         Some(session_id) => TauriAsrRuntimeObserver::for_recording(
             services.emitter.clone(),
             services.asr.metrics_store(),
@@ -167,7 +167,7 @@ pub async fn start_native_live_transcription(
         }
     };
     let segments_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let observer_inner = match recording_session_id {
+    let observer_inner = match recording_session_key(recording_session_id) {
         Some(session_id) => TauriAsrRuntimeObserver::for_recording(
             services.emitter.clone(),
             services.asr.metrics_store(),
@@ -280,18 +280,52 @@ pub struct LiveNativeTranscriptionStart {
     pub subscription: sona_application::live_transcription::LiveTranscriptionSubscription,
 }
 
+/// Empty ids would address an event channel no listener can subscribe to.
+fn recording_session_key(session_id: Option<String>) -> Option<String> {
+    session_id.filter(|id| !id.trim().is_empty())
+}
+
+/// Stop-time drain observer for a recording session.
+///
+/// Mirrors the live recording observer chain (event channel + agent-control segment
+/// buffer) so translations delivered after the stop invoke still reach the session
+/// snapshot that agent-control persists.
+async fn recording_drain_observer(
+    services: &DesktopServices,
+    consumer_id: &str,
+    session_id: &str,
+) -> Arc<dyn AsrRuntimeObserver> {
+    let inner = TauriAsrRuntimeObserver::for_recording(
+        services.emitter.clone(),
+        services.asr.metrics_store(),
+        session_id.to_string(),
+    );
+    let segments = {
+        let guard = services.recording_session.lock().await;
+        guard
+            .as_ref()
+            .filter(|active| active.consumer_id == consumer_id)
+            .map(|active| Arc::clone(&active.segments))
+    };
+    match segments {
+        Some(segments) => {
+            Arc::new(crate::platform::agent_control::AgentAsrRuntimeObserver::new(inner, segments))
+                as Arc<dyn AsrRuntimeObserver>
+        }
+        None => Arc::new(inner) as Arc<dyn AsrRuntimeObserver>,
+    }
+}
+
 async fn release_live_consumer(
     services: &DesktopServices,
     consumer_id: &str,
     recording_session_id: Option<String>,
 ) -> Result<(), AsrPortError> {
-    let observer = recording_session_id.map(|session_id| {
-        Arc::new(TauriAsrRuntimeObserver::for_recording(
-            services.emitter.clone(),
-            services.asr.metrics_store(),
-            session_id,
-        )) as Arc<dyn AsrRuntimeObserver>
-    });
+    let session_id = recording_session_key(recording_session_id);
+    let observer = match &session_id {
+        Some(session_id) => Some(recording_drain_observer(services, consumer_id, session_id).await),
+        None => None,
+    };
     if !services
         .asr
         .live_coordinator()
@@ -421,7 +455,7 @@ pub async fn resume_native_live_transcription(
         false,
     )
     .map_err(|err| AsrPortError::runtime(err.to_string()))?;
-    let observer = Arc::new(match recording_session_id {
+    let observer = Arc::new(match recording_session_key(recording_session_id) {
         Some(session_id) => TauriAsrRuntimeObserver::for_recording(
             services.emitter.clone(),
             services.asr.metrics_store(),

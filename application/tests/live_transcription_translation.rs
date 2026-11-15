@@ -1021,6 +1021,71 @@ async fn background_translation_timeout_still_delivers_completion() {
         "background_complete"
     );
 }
+#[tokio::test(start_paused = true)]
+async fn background_drain_barrier_covers_the_engine_ceiling() {
+    let engine = Arc::new(SlowOnlineTranslationEngine {
+        delay: Duration::from_millis(10_000),
+    });
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(Arc::new(StreamingTranslationCoordinator::new(
+            Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+            "en",
+            "zh",
+        ))),
+    );
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("ceiling", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap();
+    coordinator
+        .enqueue_translation_catchup(
+            Some("record"),
+            coordinator.current_translation().unwrap(),
+            vec![make_segment(
+                "seg-1",
+                "I like to read books every day.",
+                true,
+            )],
+        )
+        .await;
+    let background = Arc::new(RecordingObserver::default());
+    coordinator
+        .release_with_background_translations("record", background.clone())
+        .await
+        .unwrap();
+    // Exactly the online ceiling: the barrier must not cut a translation the engine answers.
+    tokio::time::advance(Duration::from_millis(10_100)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    let updates = background.updates.lock().unwrap();
+    let translated = updates.iter().position(|event| {
+        event.update.upsert_segments.iter().any(|segment| {
+            segment.translation.as_deref() == Some("在线译:[I like to read books every day.]")
+        })
+    });
+    let completed = updates
+        .iter()
+        .position(|event| event.stage == "background_complete");
+    assert!(
+        translated.is_some(),
+        "a translation inside the engine ceiling must survive the drain barrier"
+    );
+    assert!(
+        translated < completed,
+        "completion must follow the drained translation"
+    );
+}
+
 #[tokio::test]
 async fn test_language_detection_and_same_language_skip() {
     let engine = Arc::new(MockTranslationEngine::new());
@@ -1273,6 +1338,28 @@ async fn test_final_translation_with_timeline_normalization() {
 
 struct MockOnlineTranslationEngine {
     call_count: Mutex<usize>,
+}
+
+/// Online engine that takes its full per-segment ceiling, to pin the drain barrier above it.
+struct SlowOnlineTranslationEngine {
+    delay: Duration,
+}
+
+#[async_trait]
+impl TranslationEnginePort for SlowOnlineTranslationEngine {
+    async fn translate(
+        &self,
+        text: &str,
+        _source_lang: &str,
+        _target_lang: &str,
+    ) -> Result<String, TranslationPortError> {
+        tokio::time::sleep(self.delay).await;
+        Ok(format!("在线译:[{text}]"))
+    }
+
+    fn engine_kind(&self) -> TranslationEngineKind {
+        TranslationEngineKind::Online
+    }
 }
 
 #[async_trait]

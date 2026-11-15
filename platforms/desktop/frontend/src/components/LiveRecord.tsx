@@ -7,7 +7,10 @@ import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAu
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { polishService } from '../services/polishService';
 import { resolveItemPipeline } from '../services/projectPipeline';
-import { trackRecordingSegmentTask } from '../services/recordingPostProcessing';
+import {
+  markRecordingSegmentSystemRewrite,
+  trackRecordingSegmentTask,
+} from '../services/recordingPostProcessing';
 import { useConfigStore } from '../stores/configStore';
 import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -132,6 +135,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (chunk) => {
               chunk.forEach((polishedSegment) => {
                 if (targetSessionId) {
+                  // Lets a drained translation survive this rewrite; user edits still do not.
+                  markRecordingSegmentSystemRewrite(targetSessionId, polishedSegment.id);
                   updateTranscriptSegmentForSession(targetSessionId, polishedSegment.id, {
                     text: polishedSegment.text,
                   });
