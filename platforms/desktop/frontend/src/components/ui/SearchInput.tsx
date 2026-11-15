@@ -10,6 +10,7 @@ export interface SearchInputProps
   onChange?: React.ChangeEventHandler<HTMLInputElement>;
   onClear?: () => void;
   clearLabel?: string;
+  showClearButton?: boolean;
   suffix?: React.ReactNode;
   size?: 'sm' | 'md';
   wrapperClassName?: string;
@@ -22,6 +23,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
     onValueChange,
     onClear,
     clearLabel = 'Clear search',
+    showClearButton = true,
     suffix,
     size = 'md',
     wrapperClassName = '',
@@ -45,17 +47,27 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
     [forwardedRef]
   );
 
-  const handleClear = () => {
+  const handleClear = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (disabled || readOnly) return;
     if (onClear) onClear();
     else onValueChange('');
     requestAnimationFrame(() => localRef.current?.focus());
   };
 
+  const handleWrapperClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, select, textarea')) {
+      return;
+    }
+    localRef.current?.focus();
+  };
+
   return (
     <div
       className={`sona-search-input sona-search-input--${size} ${wrapperClassName}`.trim()}
       data-testid="search-input"
+      onClick={handleWrapperClick}
     >
       <Search className="sona-search-input__icon" aria-hidden="true" />
       <input
@@ -71,7 +83,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
         }}
         onKeyDown={onKeyDown}
       />
-      {value && !readOnly && (
+      {showClearButton && value && !readOnly && (
         <button
           type="button"
           className="sona-search-input__clear"

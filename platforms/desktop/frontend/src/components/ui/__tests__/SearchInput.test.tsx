@@ -140,4 +140,45 @@ describe('SearchInput', () => {
     expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
     expect(readOnlyClear).not.toHaveBeenCalled();
   });
+
+  it('focuses input when clicking the search icon or wrapper', () => {
+    render(<SearchInput aria-label="Search" value="" onValueChange={vi.fn()} />);
+    const input = screen.getByRole('textbox', { name: 'Search' });
+    const wrapper = screen.getByTestId('search-input');
+    const icon = wrapper.querySelector('.sona-search-input__icon');
+    expect(icon).toBeTruthy();
+
+    fireEvent.click(icon!);
+    expect(document.activeElement).toBe(input);
+
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+
+    fireEvent.click(wrapper);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('hides the clear button when showClearButton is false', () => {
+    render(
+      <SearchInput
+        aria-label="Search"
+        value="query"
+        onValueChange={vi.fn()}
+        showClearButton={false}
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+  });
+
+  it('stops click propagation when clicking the clear button', () => {
+    const parentClick = vi.fn();
+    render(
+      <div onClick={parentClick}>
+        <SearchInput aria-label="Search" value="query" onValueChange={vi.fn()} />
+      </div>
+    );
+    const clearButton = screen.getByRole('button', { name: 'Clear search' });
+    fireEvent.click(clearButton);
+    expect(parentClick).not.toHaveBeenCalled();
+  });
 });
