@@ -1,5 +1,5 @@
-﻿use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
-use super::recognizer_output_event;
+use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
+use super::{recognizer_output_event, recording_translation_event};
 use crate::platform::event::EventEmitterPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -8,16 +8,66 @@ use std::sync::Arc;
 pub(crate) struct TauriAsrRuntimeObserver {
     emitter: Arc<dyn EventEmitterPort>,
     metrics: AsrMetricsStore,
+    recording_session_id: Option<String>,
 }
 
 impl TauriAsrRuntimeObserver {
     pub(crate) fn new(emitter: Arc<dyn EventEmitterPort>, metrics: AsrMetricsStore) -> Self {
-        Self { emitter, metrics }
+        Self {
+            emitter,
+            metrics,
+            recording_session_id: None,
+        }
+    }
+
+    pub(crate) fn for_recording(
+        emitter: Arc<dyn EventEmitterPort>,
+        metrics: AsrMetricsStore,
+        session_id: String,
+    ) -> Self {
+        Self {
+            emitter,
+            metrics,
+            recording_session_id: Some(session_id),
+        }
     }
 }
 
 impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
+    fn on_translation_drain_started(&self, _instance_id: &str, budget: std::time::Duration) {
+        if let Some(session_id) = &self.recording_session_id
+            && let Err(error) = self.emitter.emit(
+                &recording_translation_event(session_id),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "stage": "background_started",
+                    "timeoutMs": u64::try_from(budget.as_millis()).unwrap_or(u64::MAX),
+                }),
+            )
+        {
+            log::warn!("[ASR] failed to emit recording translation drain budget: {error}");
+        }
+    }
+
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
+        if let Some(session_id) = &self.recording_session_id {
+            if let Err(error) = self.emitter.emit(
+                &recording_translation_event(session_id),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "stage": event.stage,
+                    "update": event.update,
+                }),
+            ) {
+                // Do not log the session id: CodeQL treats the recording session identifier as
+                // sensitive (`rust/cleartext-logging`), and the event target already carries it.
+                log::warn!(
+                    "[ASR] failed to emit recording translation update for stage {}: {error}",
+                    event.stage
+                );
+            }
+            return;
+        }
         let payload = match serde_json::to_value(&event.update) {
             Ok(payload) => payload,
             Err(error) => {
@@ -104,6 +154,50 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].0, "recognizer-output-live-1");
         assert_eq!(emitted[0].1, serde_json::to_value(event.update).unwrap());
+    }
+
+    #[test]
+    fn recording_drain_budget_uses_the_session_channel() {
+        let emitter = Arc::new(MockEventEmitter::new());
+        let observer = TauriAsrRuntimeObserver::for_recording(
+            emitter.clone(),
+            new_metrics_store(),
+            "old-session".to_string(),
+        );
+        observer.on_translation_drain_started("record", std::time::Duration::from_secs(42));
+        let emitted = emitter.emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "recording-translation-old-session");
+        assert_eq!(emitted[0].1["sessionId"], "old-session");
+        assert_eq!(emitted[0].1["stage"], "background_started");
+        assert_eq!(emitted[0].1["timeoutMs"], 42_000);
+    }
+
+    #[test]
+    fn recording_background_updates_use_the_session_channel() {
+        let emitter = Arc::new(MockEventEmitter::new());
+        let observer = TauriAsrRuntimeObserver::for_recording(
+            emitter.clone(),
+            new_metrics_store(),
+            "old-session".to_string(),
+        );
+        observer.on_transcript_update(&AsrTranscriptUpdateEvent {
+            instance_id: "record".to_string(),
+            stage: "background_complete".to_string(),
+            update: TranscriptUpdate {
+                remove_ids: Vec::new(),
+                upsert_segments: Vec::new(),
+            },
+        });
+        let emitted = emitter.emitted.lock().unwrap();
+        assert_eq!(
+            emitted.len(),
+            1,
+            "recording updates must not also reach the instance channel"
+        );
+        assert_eq!(emitted[0].0, "recording-translation-old-session");
+        assert_eq!(emitted[0].1["sessionId"], "old-session");
+        assert_eq!(emitted[0].1["stage"], "background_complete");
     }
 
     #[test]

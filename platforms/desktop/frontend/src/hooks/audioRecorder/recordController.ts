@@ -41,7 +41,7 @@ interface RecordControllerCapture {
   startFileRecording: (sessionId: string) => boolean;
   cleanupPartialStart: (sessionId: string) => Promise<void>;
   stopCaptureForSession: (sessionId: string) => Promise<string | null>;
-  stopFileRecording: () => Promise<void>;
+  stopFileRecording: () => Promise<boolean>;
   teardownWebCaptureResources: () => Promise<void>;
   pauseCapture: (sessionId: string) => Promise<void>;
   resumeCapture: (sessionId: string) => Promise<void>;
@@ -82,7 +82,7 @@ interface RecordControllerPersistence {
     draft: LiveRecordingDraftHandle,
     savedWavPath: string,
     duration: number
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 }
 
 interface CreateRecordControllerArgs {
@@ -103,9 +103,14 @@ interface CreateRecordControllerArgs {
   timing: RecordControllerTiming;
   persistence: RecordControllerPersistence;
 }
+export interface RecordStopOptions {
+  discard?: boolean;
+  /** Consulted at the discard decision so a request that lands mid-stop is still honoured. */
+  isDiscardRequested?: () => boolean;
+}
 export interface RecordController {
   startRecording: () => Promise<boolean>;
-  stopRecording: (options?: { discard?: boolean }) => Promise<void>;
+  stopRecording: (options?: RecordStopOptions) => Promise<void>;
   pauseRecording: () => Promise<void>;
   resumeRecording: () => Promise<void>;
 }
@@ -259,7 +264,7 @@ export function createRecordController({
     }
   }
 
-  async function stopRecording(options?: { discard?: boolean }): Promise<void> {
+  async function stopRecording(options?: RecordStopOptions): Promise<void> {
     const sessionId = session.getSessionId();
     if (!sessionId) {
       return;
@@ -277,16 +282,17 @@ export function createRecordController({
     try {
       const savedWavPath = await capture.stopCaptureForSession(sessionId);
 
-      // Stop recognizer delivery before we persist outputs so no late segment
-      // can land after the saved recording has already been finalized.
-      await transcriptionService.softStop();
+      // Drain ASR before saving; final translations continue on the session-scoped channel.
+      await transcriptionService.softStop(sessionId);
       finalizeLastSegmentForSession(sessionId);
       const latestSegments = useTranscriptStore.getState().sessions[sessionId]?.segments ?? [];
       if (liveDraft?.item.id) {
         await flushPendingAutoSave(liveDraft.item.id, latestSegments);
       }
 
-      if (!liveDraft || latestSegments.length === 0 || options?.discard) {
+      const discardRequested = () =>
+        options?.discard === true || options?.isDiscardRequested?.() === true;
+      if (!liveDraft || latestSegments.length === 0 || discardRequested()) {
         shouldEvictDiscardedSession = true;
         liveDraftRef.current = null;
         await capture.stopFileRecording();
@@ -319,15 +325,22 @@ export function createRecordController({
       }
 
       if (usingNativeCaptureRef.current) {
-        if (savedWavPath) {
-          await persistence.persistNativeRecording(liveDraft, savedWavPath, duration);
+        const persisted = savedWavPath
+          ? await persistence.persistNativeRecording(liveDraft, savedWavPath, duration)
+          : true;
+        if (!persisted) {
+          // The persistence layer honored a discard that arrived after the decision above.
+          shouldEvictDiscardedSession = true;
         }
         liveDraftRef.current = null;
         usingNativeCaptureRef.current = false;
         timing.clearFinalizedDurationSeconds();
       }
 
-      await capture.stopFileRecording();
+      const webPersisted = await capture.stopFileRecording();
+      if (!webPersisted && discardRequested()) {
+        shouldEvictDiscardedSession = true;
+      }
       await capture.teardownWebCaptureResources();
 
       if (config.muteDuringRecording) {

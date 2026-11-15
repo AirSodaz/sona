@@ -139,6 +139,7 @@ export async function startExternalLiveTranscription(request: {
   consumerId: string;
   sourceToken: string;
   gain: number;
+  recordingSessionId?: string;
   asrRequest: AsrTranscriptionRequest;
 }) {
   return invokeTauri(TauriCommand.recognizer.startExternalLive, {
@@ -164,6 +165,7 @@ export interface StartNativeLiveTranscriptionRequest {
   deviceName: string | null;
   outputPath: string | null;
   gain: number;
+  recordingSessionId?: string;
   asrRequest: AsrTranscriptionRequest;
 }
 
@@ -185,6 +187,7 @@ export async function resumeNativeLiveTranscription(request: {
   consumerId: string;
   sourceKind: 'system' | 'microphone';
   gain: number;
+  recordingSessionId?: string;
   asrRequest: AsrTranscriptionRequest;
 }) {
   return invokeTauri(TauriCommand.recognizer.resumeNativeLive, {
@@ -195,13 +198,24 @@ export async function resumeNativeLiveTranscription(request: {
 
 export async function stopNativeLiveTranscription(
   consumerId: string,
-  sourceKind: 'system' | 'microphone'
+  sourceKind: 'system' | 'microphone',
+  recordingSessionId?: string
 ): Promise<string> {
-  return invokeTauri(TauriCommand.recognizer.stopNativeLive, { consumerId, sourceKind });
+  return invokeTauri(TauriCommand.recognizer.stopNativeLive, {
+    consumerId,
+    sourceKind,
+    ...(recordingSessionId ? { recordingSessionId } : {}),
+  });
 }
 
-export async function stopLiveTranscription(consumerId: string): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.stopLive, { consumerId });
+export async function stopLiveTranscription(
+  consumerId: string,
+  recordingSessionId?: string
+): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.stopLive, {
+    consumerId,
+    ...(recordingSessionId ? { recordingSessionId } : {}),
+  });
 }
 
 export async function getLiveTranscriptionMetrics() {

@@ -369,4 +369,48 @@ describe('createRecordingPersistence', () => {
       expect(hasActiveBackgroundQuitTasks()).toBe(false);
     });
   });
+
+  it('discards a draft when the discard request lands at the commit point', async () => {
+    const transcriptState: RecordingPersistenceTranscriptState = {
+      config: {} as RecordingPersistenceTranscriptState['config'],
+      segments: [{ id: 'seg-1', text: 'hello', start: 0, end: 1, isFinal: true }],
+      setAudioUrl: vi.fn(),
+      setSegments: vi.fn(),
+    };
+    const completeLiveRecordingDraft = vi.fn();
+    const discardLiveRecordingDraft = vi.fn().mockResolvedValue(undefined);
+    const removeFile = vi.fn().mockResolvedValue(undefined);
+    let discardRequested = false;
+    const persistence = createRecordingPersistence({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      history: {
+        createLiveRecordingDraft: vi.fn(),
+        completeLiveRecordingDraft,
+        discardLiveRecordingDraft,
+        saveRecording: vi.fn(),
+        saveNativeRecording: vi.fn(),
+      },
+      getTranscriptState: () => transcriptState,
+      getActiveProjectId: () => 'project-1',
+      addHistoryItem: vi.fn(),
+      upsertHistoryItem: vi.fn(),
+      removeHistoryItem: vi.fn(),
+      persistSummary: vi.fn().mockResolvedValue(undefined),
+      annotateSegmentsForFile: vi.fn(async (_filePath, segments) => segments),
+      syncSavedRecordingMeta: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      removeFile,
+      fileSrcFromPath: (filePath) => `file://${filePath}`,
+      shouldDiscard: () => discardRequested,
+    });
+    const draft = createDraftHandle('late-discard');
+
+    discardRequested = true;
+    const saved = await persistence.persistNativeRecording(draft, 'C:/history/late.wav', 3);
+
+    expect(saved).toBe(false);
+    expect(completeLiveRecordingDraft).not.toHaveBeenCalled();
+    expect(removeFile).toHaveBeenCalledWith('C:/history/late.wav');
+    expect(discardLiveRecordingDraft).toHaveBeenCalledWith('late-discard');
+  });
 });

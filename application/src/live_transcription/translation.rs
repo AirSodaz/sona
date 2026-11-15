@@ -74,8 +74,25 @@ impl StreamingTranslationCoordinator {
         max_remaining
     }
 
-    pub fn clear(&self) {
-        self.states.lock().clear();
+    /// Per-segment ceiling for a final translation. The stop-time drain derives its bound from
+    /// this multiplied by the number of pending segments, so it can never cut a translation the
+    /// engine would still answer.
+    pub fn final_translation_timeout(&self) -> Duration {
+        match self.engine.engine_kind() {
+            sona_core::ports::translation::TranslationEngineKind::Online => {
+                Duration::from_millis(10_000)
+            }
+            _ => Duration::from_millis(5_000),
+        }
+    }
+
+    pub(super) fn fresh(&self) -> Self {
+        Self::new(
+            Arc::clone(&self.engine),
+            &self.source_lang,
+            &self.target_lang,
+        )
+        .with_debounce(self.debounce_ms, self.min_char_delta)
     }
     pub fn remove_states(&self, ids: &[String]) {
         if ids.is_empty() {
@@ -177,12 +194,7 @@ impl StreamingTranslationCoordinator {
             }
 
             if segment.is_final {
-                let timeout_duration = match self.engine.engine_kind() {
-                    sona_core::ports::translation::TranslationEngineKind::Online => {
-                        Duration::from_millis(10_000)
-                    }
-                    _ => Duration::from_millis(5_000),
-                };
+                let timeout_duration = self.final_translation_timeout();
                 let translate_fut = self
                     .engine
                     .translate(text, effective_source, effective_target);

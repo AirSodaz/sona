@@ -74,4 +74,17 @@ export function buildRecognizerOutputEvent(instanceId: string): `recognizer-outp
   return `recognizer-output-${instanceId}`;
 }
 
-export type TauriEventName = DeepValueOf<typeof TauriEvent> | `recognizer-output-${string}`;
+/**
+ * Session-scoped channel for a recording's live ASR and stop-time translation drain. Must match
+ * `recording_translation_event` in `integrations/asr/mod.rs`.
+ */
+export function buildRecordingTranslationEvent(
+  sessionId: string
+): `recording-translation-${string}` {
+  return `recording-translation-${sessionId}`;
+}
+
+export type TauriEventName =
+  | DeepValueOf<typeof TauriEvent>
+  | `recognizer-output-${string}`
+  | `recording-translation-${string}`;

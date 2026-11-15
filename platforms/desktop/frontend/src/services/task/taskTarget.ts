@@ -111,6 +111,12 @@ export async function resolveLatestSegmentsForTarget(
   fallbackSegments: TranscriptSegment[],
   options?: {
     loadTranscript?: (historyId: string) => Promise<TranscriptSegment[] | null>;
+    /**
+     * Prefer the target's own bound session even when it holds no segments, so a transcript the
+     * user cleared is not resurrected. Never applies to a resident/loaded transcript: an empty
+     * one there means "not available yet", not "intentionally empty".
+     */
+    allowEmpty?: boolean;
   }
 ): Promise<TranscriptSegment[]> {
   const latestHistoryId = resolveTargetHistoryId(target);
@@ -118,7 +124,7 @@ export async function resolveLatestSegmentsForTarget(
 
   if (target.sessionId) {
     const boundSession = sessions[target.sessionId];
-    if (boundSession && boundSession.segments.length > 0) {
+    if (boundSession && (options?.allowEmpty || boundSession.segments.length > 0)) {
       const boundHistoryId = normalizeHistoryId(boundSession.sourceHistoryId);
       if (boundHistoryId === latestHistoryId || (!latestHistoryId && !boundHistoryId)) {
         return boundSession.segments;

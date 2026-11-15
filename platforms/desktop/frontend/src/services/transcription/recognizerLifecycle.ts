@@ -2,7 +2,7 @@ import type { TranscriptUpdate } from '../../types/transcript';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import type { AsrTranscriptionRequest } from '../asrConfigService';
-import { buildRecognizerOutputEvent } from '../tauri/events';
+import { buildRecognizerOutputEvent, buildRecordingTranslationEvent } from '../tauri/events';
 import { listen, type UnlistenFn } from '../tauri/platform/events';
 import {
   createExternalLiveSource,
@@ -55,6 +55,7 @@ function formatSession(sessionId: string | null | undefined): string {
 export class RecognizerLifecycle {
   private isRunning = false;
   private externalSourceToken: string | null = null;
+  private drainingRecording = false;
 
   constructor(private readonly instanceId: string) {}
 
@@ -67,6 +68,11 @@ export class RecognizerLifecycle {
     onError: RecognizerErrorCallback,
     options?: RecognizerCallbackOptions
   ): void {
+    this.drainingRecording = false;
+    if (this.instanceId === 'record') {
+      globalListeners.get(this.instanceId)?.();
+      globalListeners.delete(this.instanceId);
+    }
     const existingRegistration = instanceCallbacks.get(this.instanceId);
     if (isDiagnosticsInstance(this.instanceId) && existingRegistration) {
       logger.info(
@@ -145,6 +151,39 @@ export class RecognizerLifecycle {
   async ensureGlobalBus(): Promise<void> {
     if (globalListeners.has(this.instanceId)) return;
 
+    const registration = instanceCallbacks.get(this.instanceId);
+    if (this.instanceId === 'record' && registration?.sessionId) {
+      const unlisten = await listen<{ sessionId: string; stage: string; update: TranscriptUpdate }>(
+        buildRecordingTranslationEvent(registration.sessionId),
+        ({ payload }) => {
+          if (payload.sessionId !== registration.sessionId) return;
+          if (payload.stage === 'background_started') return;
+          if (payload.stage === 'background_complete') {
+            // The backend emits this after flushing ASR and draining translations, so every
+            // final update for this session has already been delivered on this channel.
+            if (
+              instanceCallbacks.get(this.instanceId)?.registrationId === registration.registrationId
+            ) {
+              this.clearStoppedRecordingCallback();
+            }
+            return;
+          }
+          if (
+            this.drainingRecording &&
+            (payload.stage === 'enrichment' || payload.stage === 'catchup_translation')
+          )
+            return;
+          try {
+            registration.onUpdate(normalizeTranscriptUpdate(payload.update));
+          } catch (error) {
+            logger.error(`[TranscriptionService:BUS] Error in ${this.instanceId} callback:`, error);
+          }
+        }
+      );
+      globalListeners.set(this.instanceId, unlisten);
+      return;
+    }
+
     const eventName = buildRecognizerOutputEvent(this.instanceId);
     const unlisten = await listen<TranscriptUpdate>(eventName, (event) => {
       const update = normalizeTranscriptUpdate(event.payload);
@@ -195,7 +234,8 @@ export class RecognizerLifecycle {
   async startExternal(
     asrRequest: AsrTranscriptionRequest,
     onError: RecognizerErrorCallback,
-    gain = 1
+    gain = 1,
+    recordingSessionId?: string
   ): Promise<void> {
     if (this.isRunning) return;
     let sourceToken: string | null = null;
@@ -206,6 +246,7 @@ export class RecognizerLifecycle {
         consumerId: this.instanceId,
         sourceToken,
         gain,
+        recordingSessionId,
         asrRequest,
       });
       this.externalSourceToken = sourceToken;
@@ -223,12 +264,29 @@ export class RecognizerLifecycle {
     }
   }
 
-  async stopExternal(): Promise<void> {
-    if (!this.isRunning || !this.externalSourceToken) return;
+  async stopExternal(recordingSessionId?: string): Promise<void> {
+    if (recordingSessionId) this.beginRecordingStop();
+    if (!this.isRunning || !this.externalSourceToken) {
+      if (recordingSessionId) {
+        try {
+          await stopLiveTranscription(this.instanceId, recordingSessionId);
+        } catch (error) {
+          // No completion sentinel can arrive; release the recording bus now.
+          this.clearStoppedRecordingCallback();
+          throw error;
+        }
+        return;
+      }
+      this.clearStoppedRecordingCallback();
+      return;
+    }
     const sourceToken = this.externalSourceToken;
     this.externalSourceToken = null;
     try {
-      await stopLiveTranscription(this.instanceId);
+      await stopLiveTranscription(this.instanceId, recordingSessionId);
+    } catch (error) {
+      this.clearStoppedRecordingCallback();
+      throw error;
     } finally {
       await retireExternalLiveSource(sourceToken).catch((error) => {
         logger.error('Failed to retire external live source:', error);
@@ -250,6 +308,26 @@ export class RecognizerLifecycle {
   markStopped(): void {
     this.isRunning = false;
     this.externalSourceToken = null;
+  }
+
+  beginRecordingStop(): void {
+    this.drainingRecording = true;
+  }
+
+  /**
+   * Release the recording bus without waiting for `background_complete`, for stops whose
+   * invoke failed and can therefore never produce the sentinel.
+   */
+  abortRecordingDrain(): void {
+    this.clearStoppedRecordingCallback();
+  }
+
+  private clearStoppedRecordingCallback(): void {
+    if (this.instanceId !== 'record' || !this.drainingRecording) return;
+    globalListeners.get(this.instanceId)?.();
+    globalListeners.delete(this.instanceId);
+    instanceCallbacks.delete(this.instanceId);
+    this.drainingRecording = false;
   }
 }
 

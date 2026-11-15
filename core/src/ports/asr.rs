@@ -351,6 +351,9 @@ pub trait AsrRuntimeObserver: Send + Sync {
     fn on_streaming_error(&self, _event: &AsrStreamingErrorEvent) {}
 
     fn on_stream_boundary(&self, _event: &AsrStreamBoundaryEvent) {}
+
+    /// Announces the bounded work remaining after a consumer stops receiving live audio.
+    fn on_translation_drain_started(&self, _instance_id: &str, _budget: std::time::Duration) {}
 }
 
 #[derive(Debug, Default, Clone, Copy)]
