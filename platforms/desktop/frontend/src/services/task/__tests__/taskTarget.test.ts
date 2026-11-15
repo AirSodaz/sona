@@ -11,6 +11,14 @@ const savedSegment: TranscriptSegment = {
   isFinal: true,
 };
 
+const fallbackSegment: TranscriptSegment = {
+  id: 'fallback-1',
+  text: 'Stale caller snapshot',
+  start: 0,
+  end: 1,
+  isFinal: true,
+};
+
 describe('resolveLatestSegmentsForTarget', () => {
   beforeEach(() => {
     useTranscriptStore.setState({
@@ -33,7 +41,7 @@ describe('resolveLatestSegmentsForTarget', () => {
 
     const segments = await resolveLatestSegmentsForTarget(
       createTaskTarget({ sessionId: 'live', historyId: 'history-1' }),
-      [savedSegment],
+      [fallbackSegment],
       { allowEmpty: true, loadTranscript: async () => [savedSegment] }
     );
 

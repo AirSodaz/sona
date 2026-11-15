@@ -53,14 +53,30 @@ export const registerActiveRecorderStopHandler = (
 };
 
 export const stopActiveRecording = async (options?: { discard?: boolean }): Promise<boolean> => {
+  const handler = activeRecorderStopHandler;
   if (isStoppingRecording) {
+    if (options?.discard) {
+      // The stop in flight re-reads the discard flag at its last safe point.
+      if (!handler) {
+        logger.warn(
+          '[TranscriptCoordinator] Discard request ignored: no handler registered for stop in-flight'
+        );
+        return false;
+      }
+      try {
+        await handler({ discard: true });
+        return true;
+      } catch (error) {
+        logger.error('Failed to forward discard to in-flight recording stop:', error);
+        return false;
+      }
+    }
     logger.warn(
       '[TranscriptCoordinator] Stop active recording invocation ignored: stop already in-flight'
     );
     return false;
   }
 
-  const handler = activeRecorderStopHandler;
   if (!handler) {
     logger.warn(
       '[TranscriptCoordinator] Stop active recording invocation ignored: no handler registered'
@@ -69,7 +85,6 @@ export const stopActiveRecording = async (options?: { discard?: boolean }): Prom
   }
 
   isStoppingRecording = true;
-  activeRecorderStopHandler = null;
   try {
     await handler(options);
     return true;

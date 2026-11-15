@@ -50,6 +50,24 @@ describe('transcriptCoordinator stopActiveRecording hardening', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('no handler registered'));
   });
 
+  it('forwards a discard request to the stop already in flight', async () => {
+    const pendingStop = Promise.withResolvers<void>();
+    const slowHandler = vi.fn().mockImplementation(() => pendingStop.promise);
+
+    registerActiveRecorderStopHandler(slowHandler);
+
+    const firstStopPromise = stopActiveRecording();
+    const forwarded = stopActiveRecording({ discard: true });
+    await Promise.resolve();
+
+    expect(slowHandler).toHaveBeenNthCalledWith(1, undefined);
+    expect(slowHandler).toHaveBeenNthCalledWith(2, { discard: true });
+
+    pendingStop.resolve();
+    await expect(forwarded).resolves.toBe(true);
+    await expect(firstStopPromise).resolves.toBe(true);
+  });
+
   it('prevents concurrent overlapping invocations with isStoppingRecording guard', async () => {
     let resolveHandler!: () => void;
     const pendingPromise = new Promise<void>((res) => {

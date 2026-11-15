@@ -87,11 +87,29 @@ export interface RecordingTranslationDrain {
  */
 const systemRewrittenSegments = new Map<string, Map<string, string>>();
 
+/**
+ * Sessions whose drain is gone. Polish keeps streaming after a discard or after the bounded
+ * wait, and a late marker would otherwise recreate `systemRewrittenSegments` forever.
+ * Bounded: only the most recent sessions can still receive a late marker.
+ */
+const closedDrainSessions = new Set<string>();
+const MAX_CLOSED_DRAIN_SESSIONS = 32;
+
+function closeDrainSession(sessionId: string): void {
+  closedDrainSessions.delete(sessionId);
+  closedDrainSessions.add(sessionId);
+  if (closedDrainSessions.size > MAX_CLOSED_DRAIN_SESSIONS) {
+    const oldest = closedDrainSessions.values().next().value;
+    if (oldest !== undefined) closedDrainSessions.delete(oldest);
+  }
+}
+
 export function markRecordingSegmentSystemRewrite(
   sessionId: string,
   segmentId: string,
   rewrittenText: string
 ): void {
+  if (closedDrainSessions.has(sessionId)) return;
   const rewrites = systemRewrittenSegments.get(sessionId) ?? new Map<string, string>();
   systemRewrittenSegments.set(sessionId, rewrites);
   rewrites.set(segmentId, rewrittenText);
@@ -102,6 +120,8 @@ export async function collectRecordingTranslations(
   sessionId: string
 ): Promise<RecordingTranslationDrain> {
   const translations = new Map<string, TranscriptSegment>();
+  // A recording session id is unique, so a tombstone can only belong to a previous run.
+  closedDrainSessions.delete(sessionId);
   // Same instance the marker writes into, so rewrites recorded after this point still land.
   const systemRewritten = systemRewrittenSegments.get(sessionId) ?? new Map<string, string>();
   systemRewrittenSegments.set(sessionId, systemRewritten);
@@ -124,6 +144,7 @@ export async function collectRecordingTranslations(
     clearTimeout(timeoutId);
     unlisten?.();
     systemRewrittenSegments.delete(sessionId);
+    closeDrainSession(sessionId);
     completion.resolve();
   };
   const armTimeout = (timeoutMs: number) => {
@@ -179,11 +200,17 @@ export async function collectRecordingTranslations(
   };
 }
 
-/** Late translations only patch unchanged source text, preserving edits and speaker metadata. */
+/**
+ * Late translations only patch unchanged source text and untouched translations, preserving
+ * edits and speaker metadata. Pass the snapshot taken before the drain started as
+ * `baselineSegments`; a translation the user changed since then wins over the drained one.
+ */
 export function mergeRecordingTranslations(
   segments: TranscriptSegment[],
-  drain: Pick<RecordingTranslationDrain, 'translations' | 'systemRewritten'>
+  drain: Pick<RecordingTranslationDrain, 'translations' | 'systemRewritten'>,
+  baselineSegments: TranscriptSegment[] = segments
 ): TranscriptSegment[] {
+  const baseline = new Map(baselineSegments.map((segment) => [segment.id, segment]));
   return segments.map((segment) => {
     const translated = drain.translations.get(segment.id);
     if (!translated) return segment;
@@ -195,9 +222,11 @@ export function mergeRecordingTranslations(
     ) {
       return segment;
     }
-    if (translated.translation === segment.translation && !segment.draftTranslation) {
-      return segment;
-    }
+    // The user edited or cleared the translation, or is mid-edit: their value wins.
+    if (segment.draftTranslation) return segment;
+    const saved = baseline.get(segment.id);
+    if (saved && saved.translation !== segment.translation) return segment;
+    if (translated.translation === segment.translation) return segment;
     return { ...segment, translation: translated.translation, draftTranslation: undefined };
   });
 }

@@ -62,6 +62,8 @@ interface CreateRecordingPersistenceArgs {
   writeFile: (filePath: string, contents: Uint8Array) => Promise<void>;
   removeFile: (filePath: string) => Promise<void>;
   fileSrcFromPath: (filePath: string) => string;
+  /** Late discard requests are re-checked at the commit point, not only at the stop decision. */
+  shouldDiscard?: () => boolean;
 }
 
 export function createRecordingPersistence({
@@ -80,6 +82,7 @@ export function createRecordingPersistence({
   writeFile,
   removeFile,
   fileSrcFromPath,
+  shouldDiscard = () => false,
 }: CreateRecordingPersistenceArgs) {
   async function persistSavedItem(
     newItem: HistoryItem,
@@ -205,21 +208,40 @@ export function createRecordingPersistence({
     removeHistoryItem(draft.item.id);
   }
 
+  async function discardPersistedDraft(
+    draft: LiveRecordingDraftHandle,
+    audioPath?: string | null
+  ): Promise<void> {
+    if (audioPath) {
+      try {
+        await removeFile(audioPath);
+      } catch (error) {
+        logger.warn('[useAudioRecorder] Failed to delete discarded recording audio:', error);
+      }
+    }
+    await discardLiveRecordingDraft(draft);
+  }
+
   async function persistBrowserRecording(
     draft: LiveRecordingDraftHandle,
     blob: Blob,
     duration: number
-  ): Promise<void> {
+  ): Promise<boolean> {
     const transcriptState = getTranscriptState();
     const segments = transcriptState.segments;
 
-    if (segments.length === 0) {
-      await discardLiveRecordingDraft(draft);
-      return;
+    if (segments.length === 0 || shouldDiscard()) {
+      await discardPersistedDraft(draft);
+      return false;
     }
 
     try {
       await writeRecordedBlobToPath(blob, draft.audioAbsolutePath);
+      // A discard that lands while the blob is written must still win over the save.
+      if (shouldDiscard()) {
+        await discardPersistedDraft(draft, draft.audioAbsolutePath);
+        return false;
+      }
       transcriptState.setAudioUrl(fileSrcFromPath(draft.audioAbsolutePath));
 
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
@@ -227,6 +249,7 @@ export function createRecordingPersistence({
       void trackQuitBlockingTask(
         applyBackgroundSpeakerAnnotation(draft.item.id, draft.audioAbsolutePath, segments)
       );
+      return true;
     } catch (error) {
       logger.error('[useAudioRecorder] Failed to persist browser recording draft:', error);
       throw error;
@@ -237,11 +260,16 @@ export function createRecordingPersistence({
     draft: LiveRecordingDraftHandle,
     savedWavPath: string,
     duration: number
-  ): Promise<void> {
+  ): Promise<boolean> {
     const transcriptState = getTranscriptState();
     const segments = transcriptState.segments;
 
     if (segments.length > 0) {
+      // Re-check at the commit point: a discard requested after the stop decision must win.
+      if (shouldDiscard()) {
+        await discardPersistedDraft(draft, savedWavPath);
+        return false;
+      }
       if (savedWavPath) {
         transcriptState.setAudioUrl(fileSrcFromPath(savedWavPath));
       }
@@ -252,7 +280,7 @@ export function createRecordingPersistence({
           applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments)
         );
       }
-      return;
+      return true;
     }
 
     if (savedWavPath) {
@@ -264,6 +292,7 @@ export function createRecordingPersistence({
       }
     }
     await discardLiveRecordingDraft(draft);
+    return false;
   }
 
   return {

@@ -246,11 +246,11 @@ export class TranscriptionService {
   }
 
   async stopNativeCapture(recordingSessionId?: string): Promise<string> {
-    if (recordingSessionId) this.lifecycle.beginRecordingStop();
     this.preparedNativeConfig = null;
     if (this.transport !== 'native' || !this.nativeSourceKind) {
       return '';
     }
+    if (recordingSessionId) this.lifecycle.beginRecordingStop();
     const wasLocal = this.runningConfig
       ? this.runningConfig.engine === 'local'
       : (this.ports.getEffectiveConfigSnapshot().asr?.selections?.live?.engine ?? 'local') ===

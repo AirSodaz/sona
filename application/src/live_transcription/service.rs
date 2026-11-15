@@ -1021,13 +1021,23 @@ impl LiveTranscriptionCoordinator {
             "live-replay-{}",
             self.inner.next_pipeline_id.fetch_add(1, Ordering::Relaxed)
         );
+        // Reuse the translator frozen at handover. `spawn_translations` only delivers to the
+        // session while the drain observer accepts it, so a translation toggle during the replay
+        // must not seed it with a translator whose results would be discarded.
+        let translator = {
+            let background = mailbox.background_observer.lock();
+            match background.as_ref() {
+                Some(observer) => observer.translator.clone(),
+                None => self.current_translation(),
+            }
+        };
         let observer = Arc::new(ReplayObserver {
             consumer_id: consumer_id.to_string(),
             output_policy,
             mailbox: Arc::clone(&mailbox),
             visible_partial_ids,
             coordinator: Arc::downgrade(&self.inner),
-            translator: self.current_translation(),
+            translator,
         });
         let session = match self
             .inner
@@ -1180,6 +1190,19 @@ impl CoordinatorInner {
         let segment_count = batches.iter().map(Vec::len).sum::<usize>();
         let handle = tokio::spawn(async move {
             for segments in batches {
+                // Reject a translator the handover already froze out before paying for the
+                // engine call; the delivery check below closes the remaining race.
+                if target
+                    .background_observer
+                    .lock()
+                    .as_ref()
+                    .is_some_and(|background| !background.accepts(&translator))
+                {
+                    log::debug!(
+                        "[ASR] dropping queued {stage} batches for consumer {consumer_id}: frozen translator rejected it"
+                    );
+                    break;
+                }
                 let is_current = this
                     .translation
                     .read()

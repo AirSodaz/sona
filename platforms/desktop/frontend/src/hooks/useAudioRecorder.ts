@@ -312,7 +312,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                   const latest = await resolveLatestSegmentsForTarget(target, segments, {
                     allowEmpty: true,
                   });
-                  segments = mergeRecordingTranslations(latest, drain);
+                  segments = mergeRecordingTranslations(latest, drain, segments);
                   // A final that landed after the draft was saved is stored here too; a segment
                   // the user deleted must stay deleted, so only unknown ids count as late.
                   const hasLateFinal = segments.some(
@@ -380,20 +380,22 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         writeFile: (filePath, contents) => writeFile(filePath, contents),
         removeFile: (filePath) => audioDeleteRecordingFile(filePath),
         fileSrcFromPath: convertManagedAudioFileSrc,
+        // Read at the commit point so a discard forwarded mid-stop still wins.
+        shouldDiscard: () => pendingDiscardRef.current,
       }),
     []
   );
 
   const handleWebRecordingStop = useCallback(
-    async (blob: Blob, mimeType: string) => {
+    async (blob: Blob, mimeType: string): Promise<boolean> => {
       const persistedBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
       const liveDraft = liveDraftRef.current;
       if (!liveDraft) {
         timing.clearFinalizedDurationSeconds();
-        return;
+        return false;
       }
       try {
-        await persistence.persistBrowserRecording(
+        return await persistence.persistBrowserRecording(
           liveDraft,
           persistedBlob,
           timing.getFinalizedDurationSeconds() ?? timing.getRecordedDurationSeconds()

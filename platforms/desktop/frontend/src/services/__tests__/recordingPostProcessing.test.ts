@@ -128,6 +128,57 @@ describe('recording translation drain', () => {
     drain.dispose();
   });
 
+  it('keeps a translation the user changed after the save', () => {
+    const saved: TranscriptSegment = {
+      id: 'a',
+      text: 'Hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      translation: 'Stored',
+    };
+    const edited: TranscriptSegment = { ...saved, translation: 'User edit' };
+    const result = mergeRecordingTranslations(
+      [edited],
+      {
+        translations: new Map([['a', { ...saved, translation: 'Drained' }]]),
+        systemRewritten: new Map<string, string>(),
+      },
+      [saved]
+    );
+    expect(result[0]).toBe(edited);
+  });
+
+  it('keeps a translation draft the user is editing', () => {
+    const saved: TranscriptSegment = {
+      id: 'a',
+      text: 'Hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    };
+    const editing: TranscriptSegment = { ...saved, draftTranslation: 'Typing' };
+    const result = mergeRecordingTranslations(
+      [editing],
+      {
+        translations: new Map([['a', { ...saved, translation: 'Drained' }]]),
+        systemRewritten: new Map<string, string>(),
+      },
+      [saved]
+    );
+    expect(result[0]).toBe(editing);
+  });
+
+  it('does not resurrect app rewrites for a session whose drain was disposed', async () => {
+    const first = await collectRecordingTranslations('closed-session');
+    first.dispose();
+    // Late polish chunks keep arriving; they must not recreate the module-level map.
+    markRecordingSegmentSystemRewrite('closed-session', 'seg-1', 'Polished');
+    const next = await collectRecordingTranslations('closed-session');
+    expect(next.systemRewritten.size).toBe(0);
+    next.dispose();
+  });
+
   it('stops waiting for a polish task that never settles', async () => {
     vi.useFakeTimers();
     const stuck = Promise.withResolvers<void>();

@@ -40,7 +40,7 @@ interface CreateAudioRecorderCaptureArgs {
   canMutateActiveRecordResources: (sessionId: string) => boolean;
   rollbackRecognizer: (sessionId: string, reason: string) => Promise<void>;
   setPeakFromInt16: (samples: Int16Array) => void;
-  onWebRecordingStop: (blob: Blob, mimeType: string) => Promise<void>;
+  onWebRecordingStop: (blob: Blob, mimeType: string) => Promise<boolean>;
   setIsRecording: (value: boolean) => void;
   setIsPaused: (value: boolean) => void;
 }
@@ -60,8 +60,8 @@ export function createAudioRecorderCapture({
   type NativePeakEventName =
     | typeof TauriEvent.audio.systemPeak
     | typeof TauriEvent.audio.microphonePeak;
-  let pendingWebRecordingStop: Promise<void> | null = null;
-  let resolvePendingWebRecordingStop: (() => void) | null = null;
+  let pendingWebRecordingStop: Promise<boolean> | null = null;
+  let resolvePendingWebRecordingStop: ((persisted: boolean) => void) | null = null;
   let webCleanup: (() => void) | null = null;
 
   function registerNativeUnlisten(unlisten: () => void) {
@@ -504,12 +504,16 @@ export function createAudioRecorderCapture({
     recorder.onstop = () => {
       const type = refs.mimeTypeRef.current || recorder.mimeType || 'audio/webm';
       const blob = new Blob(chunks, { type });
+      let persisted = false;
       void onWebRecordingStop(blob, type)
+        .then((saved) => {
+          persisted = saved;
+        })
         .catch((error) => {
           logger.error('[useAudioRecorder] Failed to persist MediaRecorder fallback audio:', error);
         })
         .finally(() => {
-          resolvePendingWebRecordingStop?.();
+          resolvePendingWebRecordingStop?.(persisted);
           resolvePendingWebRecordingStop = null;
           pendingWebRecordingStop = null;
         });
@@ -519,19 +523,21 @@ export function createAudioRecorderCapture({
     return activateRecordSession(sessionId);
   }
 
-  async function stopFileRecording(): Promise<void> {
+  async function stopFileRecording(): Promise<boolean> {
     const recorder = refs.mediaRecorderRef.current;
+    let persisted = false;
     if (recorder && recorder.state !== 'inactive') {
-      pendingWebRecordingStop = new Promise((resolve) => {
-        resolvePendingWebRecordingStop = resolve;
-      });
+      const stopSignal = Promise.withResolvers<boolean>();
+      pendingWebRecordingStop = stopSignal.promise;
+      resolvePendingWebRecordingStop = stopSignal.resolve;
       recorder.stop();
-      await pendingWebRecordingStop;
+      persisted = await pendingWebRecordingStop;
     } else if (pendingWebRecordingStop) {
-      await pendingWebRecordingStop;
+      persisted = await pendingWebRecordingStop;
     }
     setIsRecording(false);
     setIsPaused(false);
+    return persisted;
   }
 
   async function stopCaptureForSession(sessionId: string): Promise<string | null> {

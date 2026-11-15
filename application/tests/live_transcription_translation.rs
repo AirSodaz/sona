@@ -1337,6 +1337,127 @@ async fn background_drain_barrier_covers_the_engine_ceiling() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn background_release_without_pending_work_still_announces_completion() {
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(Arc::new(StreamingTranslationCoordinator::new(
+            Arc::new(MockTranslationEngine::new()),
+            "en",
+            "zh",
+        ))),
+    );
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("idle", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap();
+    let background = Arc::new(RecordingObserver::default());
+    coordinator
+        .release_with_background_translations("record", background.clone())
+        .await
+        .unwrap();
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    let updates = background.updates.lock().unwrap();
+    assert_eq!(
+        updates.len(),
+        1,
+        "a quiet stop must still deliver exactly one completion sentinel"
+    );
+    assert_eq!(updates[0].stage, "background_complete");
+    drop(updates);
+    // One segment's ceiling (5s for OnnxNmt) with max(1), plus the fixed margin.
+    assert_eq!(
+        *background.drain_budgets.lock().unwrap(),
+        vec![Duration::from_secs(7)]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn background_drain_keeps_translator_state_after_a_new_recording_clears_it() {
+    let factory = Arc::new(TestFactory::default());
+    let engine = Arc::new(MockTranslationEngine::new());
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(Arc::new(
+            StreamingTranslationCoordinator::new(Arc::clone(&engine) as _, "en", "zh")
+                .with_debounce(10, 1),
+        )),
+    );
+    let foreground = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("fresh", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            foreground.clone() as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .unwrap();
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Build the frozen prefix and draft translation of the in-flight final.
+    session.emit("I like to", 1.0, false);
+    for _ in 0..5 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(40)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    session.emit("I like to read books", 2.0, false);
+    for _ in 0..5 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(40)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+
+    // The final only finishes after the release, so `clear_translation` runs mid-flight.
+    engine.set_fail_on("I like to read books every day.");
+    engine.set_delay(Duration::from_millis(500));
+    session.emit("I like to read books every day.", 3.0, true);
+    let background = Arc::new(RecordingObserver::default());
+    coordinator
+        .release_with_background_translations("record", background.clone())
+        .await
+        .unwrap();
+    for _ in 0..5 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(700)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+
+    let updates = background.updates.lock().unwrap();
+    assert!(
+        updates.iter().any(|event| event
+            .update
+            .upsert_segments
+            .iter()
+            .any(|segment| segment.translation.as_deref() == Some("我喜欢看书"))),
+        "the draining translator must keep its fallback state after clear_translation"
+    );
+    assert_eq!(updates.last().unwrap().stage, "background_complete");
+}
+
 #[tokio::test]
 async fn test_language_detection_and_same_language_skip() {
     let engine = Arc::new(MockTranslationEngine::new());
