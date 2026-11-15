@@ -10,7 +10,6 @@ import {
   Lightbulb,
   Power,
   RefreshCw,
-  Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -29,6 +28,7 @@ import type { AppConfig, McpPermissionMode } from '../../types/config';
 import { ClientLogo } from '../icons/ClientLogos';
 import { Switch } from '../Switch';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { SearchInput } from '../ui/SearchInput';
 import {
   SegmentedSubTabs,
   SettingsAccordion,
@@ -765,18 +765,20 @@ export function SettingsMcpTab(): React.JSX.Element {
               onChange={(val) => setFilterStatus(val as 'all' | 'success' | 'blocked' | 'error')}
             />
 
-            <div className="mcp-log-search-box">
-              <Search size={14} color="var(--color-text-muted)" />
-              <input
-                type="text"
-                className="mcp-log-search-input"
-                placeholder={t('settings.mcp.search_placeholder', {
-                  defaultValue: 'Search method or summary...',
-                })}
-                value={filter?.query || ''}
-                onChange={(e) => setFilterQuery(e.target.value)}
-              />
-            </div>
+            <SearchInput
+              size="sm"
+              wrapperClassName="mcp-log-search-box"
+              placeholder={t('settings.mcp.search_placeholder', {
+                defaultValue: 'Search method or summary...',
+              })}
+              value={filter?.query || ''}
+              onValueChange={setFilterQuery}
+              aria-label={t('settings.mcp.search_placeholder', {
+                defaultValue: 'Search method or summary...',
+              })}
+              onClear={() => setFilterQuery('')}
+              clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+            />
           </div>
 
           <div className="mcp-log-table">

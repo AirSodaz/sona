@@ -31,6 +31,7 @@ import { RobotIcon } from '../Icons';
 import { ProviderLogo } from '../icons/ProviderLogos';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { SearchInput } from '../ui/SearchInput';
 import { FeatureCard } from './llm/FeatureCard';
 import {
   getCurrentLlmSettings,
@@ -637,18 +638,20 @@ export function SettingsLLMServiceTab({
         {!providerToAdd ? (
           <>
             <div className="add-provider-search">
-              <input
+              <SearchInput
                 ref={searchInputRef}
+                size="sm"
                 aria-label={t('settings.llm.search_providers', {
                   defaultValue: 'Search providers…',
                 })}
-                className="settings-input"
                 type="text"
                 value={providerSearch}
-                onChange={(e) => setProviderSearch(e.target.value)}
+                onValueChange={setProviderSearch}
                 placeholder={t('settings.llm.search_providers', {
                   defaultValue: 'Search providers…',
                 })}
+                onClear={() => setProviderSearch('')}
+                clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
               />
             </div>
             {(() => {

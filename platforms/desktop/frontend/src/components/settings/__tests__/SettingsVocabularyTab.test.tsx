@@ -237,7 +237,7 @@ describe('SettingsVocabularyTab', () => {
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
     expect((searchInput as HTMLInputElement).value).toBe('Alice');
 
-    const clearButton = screen.getByRole('button', { name: 'Clear' });
+    const clearButton = screen.getByRole('button', { name: 'Clear search' });
     fireEvent.click(clearButton);
     expect((searchInput as HTMLInputElement).value).toBe('');
   });

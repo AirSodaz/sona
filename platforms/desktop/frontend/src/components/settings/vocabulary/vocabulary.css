@@ -157,49 +157,10 @@
   background: var(--color-bg-secondary);
 }
 
-/* Search input */
+/* Search layout */
 .dict-search-wrap {
-  position: relative;
   width: 220px;
-}
-
-.dict-search-wrap .settings-input,
-.dict-search-wrap input {
-  padding-left: 32px;
-  padding-right: 28px;
-  box-sizing: border-box;
-}
-
-.dict-search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
-.dict-search-clear {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  border-radius: 4px;
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.dict-search-clear:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-hover);
+  max-width: 100%;
 }
 
 /* --- Card Containers --------------------------------------------------- */

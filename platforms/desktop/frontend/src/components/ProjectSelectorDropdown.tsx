@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SearchInput } from './ui/SearchInput';
 
 function InboxIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
   return (
@@ -56,26 +57,6 @@ function CheckIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
       {...props}
     >
       <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function SearchIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
@@ -229,21 +210,25 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
                 event.preventDefault();
                 setIndex((value) => Math.max(value - 1, 0));
               }
-              if (event.key === 'Enter') choose(options[index]);
+              if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                choose(options[index]);
+              }
             }}
           >
-            <label className="project-selector-search">
-              <SearchIcon />
-              <input
+            <div className="project-selector-search">
+              <SearchInput
                 autoFocus
+                size="sm"
                 value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
+                onValueChange={(value) => {
+                  setQuery(value);
                   setIndex(0);
                 }}
                 placeholder={t('projects.search_projects', { defaultValue: 'Search projects...' })}
+                aria-label={t('projects.search_projects', { defaultValue: 'Search projects...' })}
+                clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
               />
-            </label>
+            </div>
 
             <button
               type="button"

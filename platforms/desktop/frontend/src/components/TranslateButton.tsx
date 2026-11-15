@@ -38,6 +38,7 @@ import {
   ViewIcon,
   ViewOffIcon,
 } from './Icons';
+import { SearchInput } from './ui/SearchInput';
 
 function SwapIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
   return (
@@ -869,13 +870,17 @@ export function TranslateButton({
           ) : (
             <>
               <div style={{ padding: '4px 8px 8px 8px' }}>
-                <input
-                  type="text"
+                <SearchInput
+                  size="sm"
                   placeholder={t('translation.search_placeholder', {
                     defaultValue: 'Search languages...',
                   })}
+                  aria-label={t('translation.search_placeholder', {
+                    defaultValue: 'Search languages...',
+                  })}
+                  clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onValueChange={setSearchQuery}
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown') {
@@ -891,17 +896,6 @@ export function TranslateButton({
                     } else {
                       e.stopPropagation();
                     }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    fontSize: '0.8rem',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-bg-primary)',
-                    color: 'var(--color-text-primary)',
-                    outline: 'none',
-                    boxSizing: 'border-box',
                   }}
                 />
               </div>

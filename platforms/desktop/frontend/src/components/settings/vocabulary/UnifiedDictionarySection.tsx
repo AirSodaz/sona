@@ -11,7 +11,6 @@ import {
   HelpCircle,
   Pencil,
   Plus,
-  Search,
   Sparkles,
   Trash2,
   Wand2,
@@ -37,6 +36,7 @@ import {
 } from '../../../utils/yamlDictionaryParser';
 import { Dropdown } from '../../Dropdown';
 import { Modal } from '../../Modal';
+import { SearchInput } from '../../ui/SearchInput';
 import { SegmentedSubTabs, SettingsSection } from '../SettingsLayout';
 import './vocabulary.css';
 
@@ -745,34 +745,19 @@ export function UnifiedDictionarySection({
             </div>
 
             {/* Search Box */}
-            <div className="dict-search-wrap">
-              <Search size={14} className="dict-search-icon" />
-              <input
-                type="text"
-                className="settings-input"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('settings.dict_search_placeholder', {
-                  defaultValue: 'Search hotwords or replacements...',
-                })}
-                style={{
-                  width: '100%',
-                  height: '30px',
-                  paddingLeft: '30px',
-                  paddingRight: searchQuery ? '26px' : '10px',
-                  fontSize: '0.75rem',
-                }}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="dict-search-clear"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
+            <SearchInput
+              size="sm"
+              wrapperClassName="dict-search-wrap"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              aria-label={t('settings.dict_search_placeholder', {
+                defaultValue: 'Search hotwords or replacements...',
+              })}
+              placeholder={t('settings.dict_search_placeholder', {
+                defaultValue: 'Search hotwords or replacements...',
+              })}
+              clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+            />
           </div>
 
           {/* Hotwords Card */}

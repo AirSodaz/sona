@@ -1,4 +1,3 @@
-import { Search, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ModelManagerContextType } from '../../hooks/useModelManager';
@@ -12,6 +11,7 @@ import { resolveModelLabels } from '../../types/modelCatalog';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
 import { RestoreIcon } from '../Icons';
+import { SearchInput } from '../ui/SearchInput';
 import { MirrorDownloadPicker } from './MirrorDownloadPicker';
 import { ModelCard } from './ModelCard';
 import { SettingsAccordion, SettingsSection } from './SettingsLayout';
@@ -198,40 +198,25 @@ export function LocalModelManagementSection({
             options={labelFilterOptions}
             style={{ width: '120px' }}
           />
-          <div className="settings-model-search-wrapper">
-            <Search size={16} className="settings-model-search-icon" />
-            <input
-              id="settings-model-search"
-              className="settings-model-search"
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setSearchQuery('');
-                }
-              }}
-              placeholder={t('settings.model_filter_search_placeholder', {
-                defaultValue: 'Search models…',
-              })}
-              aria-label={t('settings.model_filter_search_placeholder', {
-                defaultValue: 'Search models…',
-              })}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="settings-model-search-clear"
-                onClick={() => {
-                  setSearchQuery('');
-                  document.getElementById('settings-model-search')?.focus();
-                }}
-                aria-label={t('settings.model_search_clear', { defaultValue: 'Clear search' })}
-              >
-                <X size={12} strokeWidth={2.25} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            wrapperClassName="settings-model-search-wrapper"
+            size="md"
+            id="settings-model-search"
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setSearchQuery('');
+              }
+            }}
+            placeholder={t('settings.model_filter_search_placeholder', {
+              defaultValue: 'Search models…',
+            })}
+            aria-label={t('settings.model_filter_search_placeholder', {
+              defaultValue: 'Search models…',
+            })}
+            clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          />
         </div>
       )}
       {isCatalogLoading && !hasLoadedSections && (

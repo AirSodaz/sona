@@ -1,15 +1,8 @@
-import {
-  CheckSquare,
-  LayoutGrid,
-  LayoutList,
-  List,
-  Search,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
+import { CheckSquare, LayoutGrid, LayoutList, List, SlidersHorizontal } from 'lucide-react';
 import type React from 'react';
 import { Dropdown } from '../Dropdown';
 import { FolderIcon } from '../Icons';
+import { SearchInput } from '../ui/SearchInput';
 import type {
   ProjectDateFilter,
   ProjectFilterType,
@@ -87,34 +80,20 @@ export function ProjectsToolbar({
   return (
     <div className="projects-toolbar" data-testid="projects-toolbar-default">
       <div className="projects-toolbar-left">
-        <div className="projects-search">
-          <Search size={16} className="projects-search-icon" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder={searchInputLabel}
-            aria-label={searchInputLabel}
-            aria-activedescendant={
-              currentSearchResultId ? `workspace-search-result-${currentSearchResultId}` : undefined
-            }
-            value={searchQuery}
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            onKeyDown={onSearchInputKeyDown}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              className="projects-search-clear"
-              onClick={() => {
-                onClearSearch();
-                searchInputRef.current?.focus();
-              }}
-              aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
-            >
-              <X size={12} strokeWidth={2.25} />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          ref={searchInputRef}
+          wrapperClassName="projects-search"
+          value={searchQuery}
+          onValueChange={onSearchQueryChange}
+          onClear={onClearSearch}
+          placeholder={searchInputLabel}
+          aria-label={searchInputLabel}
+          clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          aria-activedescendant={
+            currentSearchResultId ? `workspace-search-result-${currentSearchResultId}` : undefined
+          }
+          onKeyDown={onSearchInputKeyDown}
+        />
 
         <div className="projects-filter-menu" ref={filterMenuRef}>
           <button

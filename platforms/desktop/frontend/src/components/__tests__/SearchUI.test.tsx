@@ -24,7 +24,8 @@ vi.mock('../Icons', () => ({
 // Mock translation
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, defaultValue?: string) => defaultValue || key,
+    t: (key: string, options?: string | { defaultValue?: string }) =>
+      typeof options === 'string' ? options : (options?.defaultValue ?? key),
   }),
 }));
 

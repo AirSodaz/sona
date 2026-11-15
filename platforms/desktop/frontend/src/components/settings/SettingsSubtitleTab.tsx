@@ -8,7 +8,6 @@ import {
   Languages,
   Layers,
   Plus,
-  Search,
   SlidersHorizontal,
   Sparkles,
   Subtitles,
@@ -44,6 +43,7 @@ import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { SearchInput } from '../ui/SearchInput';
 import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
   ScenarioCardTabs,
@@ -658,57 +658,18 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
         </div>
 
         {historyItems.length > 0 && (
-          <div style={{ position: 'relative' }}>
-            <Search
-              size={13}
-              style={{
-                position: 'absolute',
-                left: '10px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--color-text-muted)',
-                pointerEvents: 'none',
-              }}
-            />
-            <input
-              type="text"
-              className="settings-input"
-              style={{
-                width: '100%',
-                paddingLeft: '30px',
-                paddingRight: searchQuery ? '28px' : '10px',
-                fontSize: '12px',
-                height: '32px',
-              }}
-              placeholder={t('settings.voice_typing_history_search_placeholder', {
-                defaultValue: 'Search dictation history...',
-              })}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-text-muted)',
-                  cursor: 'pointer',
-                  padding: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                title={t('common.clear', { defaultValue: 'Clear' })}
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            size="sm"
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            placeholder={t('settings.voice_typing_history_search_placeholder', {
+              defaultValue: 'Search dictation history...',
+            })}
+            aria-label={t('settings.voice_typing_history_search_placeholder', {
+              defaultValue: 'Search dictation history...',
+            })}
+            clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          />
         )}
 
         {historyItems.length === 0 ? (
