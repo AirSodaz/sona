@@ -1336,6 +1336,56 @@ describe('LiveRecord', () => {
     commit.mockRestore();
   });
 
+  it('persists every translation when the backend announces a drain longer than thirty seconds', async () => {
+    const commit = vi
+      .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')
+      .mockImplementation(async (id, segments) => {
+        useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segments);
+        return createCompletedHistoryItem(id);
+      });
+    mockStopNativeCapture.mockImplementation(async () => '/mock/audio.wav');
+    mockSoftStop.mockResolvedValue(undefined);
+    render(<LiveRecord />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const sessionId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    const segments = Array.from({ length: 8 }, (_, index) => ({
+      id: `slow-${index}`,
+      text: 'Hello',
+      start: index,
+      end: index + 1,
+      isFinal: true,
+    }));
+    act(() => {
+      for (const segment of segments) capturedOnSegment(segment);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+      emitRecordingEvent(sessionId, { stage: 'background_started', timeoutMs: 42_000 });
+    });
+    for (const segment of segments) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000);
+        emitRecordingEvent(sessionId, {
+          stage: 'catchup_translation',
+          update: { removeIds: [], upsertSegments: [{ ...segment, translation: '你好' }] },
+        });
+      });
+    }
+    await act(async () => {
+      completeRecordingTranslations(sessionId);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(commit).toHaveBeenCalledWith(
+      sessionId,
+      segments.map((segment) => expect.objectContaining({ id: segment.id, translation: '你好' }))
+    );
+    commit.mockRestore();
+  });
+
   it('keeps a drained translation across an auto-polish rewrite', async () => {
     const commit = vi
       .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')

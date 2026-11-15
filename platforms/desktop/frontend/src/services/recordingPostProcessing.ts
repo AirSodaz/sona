@@ -8,18 +8,37 @@ import { listen } from './tauri/platform/events';
 const RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS = 30_000;
 const RECORDING_SEGMENT_TASK_TIMEOUT_MS = 15_000;
 
-const pendingSegmentTasks = new Map<string, Set<Promise<unknown>>>();
+interface RecordingSegmentTask {
+  complete: Promise<void>;
+  release: () => void;
+}
+
+const pendingSegmentTasks = new Map<string, Set<RecordingSegmentTask>>();
 
 export function trackRecordingSegmentTask(sessionId: string, task: Promise<unknown>): void {
-  const tasks = pendingSegmentTasks.get(sessionId) ?? new Set<Promise<unknown>>();
+  const tasks = pendingSegmentTasks.get(sessionId) ?? new Set<RecordingSegmentTask>();
   pendingSegmentTasks.set(sessionId, tasks);
-  const tracked = trackQuitBlockingTask(task);
-  tasks.add(tracked);
-  const cleanup = () => {
-    tasks.delete(tracked);
-    if (tasks.size === 0) pendingSegmentTasks.delete(sessionId);
+  const completion = Promise.withResolvers<void>();
+  let released = false;
+  const tracked: RecordingSegmentTask = {
+    complete: trackQuitBlockingTask(completion.promise),
+    release: () => {
+      if (released) return;
+      released = true;
+      clearTimeout(timeoutId);
+      completion.resolve();
+      tasks.delete(tracked);
+      if (tasks.size === 0) pendingSegmentTasks.delete(sessionId);
+    },
   };
-  void tracked.then(cleanup, cleanup);
+  // The quit guard must settle even if the original job never responds, including for a
+  // discarded recording whose post-processing never calls waitForRecordingSegmentTasks.
+  const timeoutId = setTimeout(() => {
+    logger.warn('[recordingPostProcessing] Segment task timed out', { sessionId });
+    tracked.release();
+  }, RECORDING_SEGMENT_TASK_TIMEOUT_MS);
+  tasks.add(tracked);
+  void task.then(tracked.release, tracked.release);
 }
 
 /**
@@ -32,13 +51,13 @@ export async function waitForRecordingSegmentTasks(
 ): Promise<void> {
   const tasks = pendingSegmentTasks.get(sessionId);
   if (!tasks || tasks.size === 0) return;
-  const timedOut = Promise.withResolvers<void>();
+  const pending = [...tasks];
   const timeoutId = setTimeout(() => {
     logger.warn('[recordingPostProcessing] Segment task wait timed out', { sessionId });
-    timedOut.resolve();
+    for (const task of pending) task.release();
   }, timeoutMs);
   try {
-    await Promise.race([Promise.allSettled([...tasks]), timedOut.promise]);
+    await Promise.all(pending.map((task) => task.complete));
   } finally {
     clearTimeout(timeoutId);
   }
@@ -48,6 +67,7 @@ interface RecordingTranslationEvent {
   sessionId: string;
   stage: string;
   update: TranscriptUpdate;
+  timeoutMs?: number;
 }
 
 export interface RecordingTranslationDrain {
@@ -106,15 +126,31 @@ export async function collectRecordingTranslations(
     systemRewrittenSegments.delete(sessionId);
     completion.resolve();
   };
-  timeoutId = setTimeout(() => {
-    logger.warn('[recordingPostProcessing] Translation drain timed out', { sessionId });
-    settle();
-  }, RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS);
+  const armTimeout = (timeoutMs: number) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      logger.warn('[recordingPostProcessing] Translation drain timed out', { sessionId });
+      settle();
+    }, timeoutMs);
+  };
+  armTimeout(RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS);
   try {
     unlisten = await listen<RecordingTranslationEvent>(
       buildRecordingTranslationEvent(sessionId),
       ({ payload }) => {
         if (disposed || completed || payload.sessionId !== sessionId) return;
+        if (payload.stage === 'background_started') {
+          if (
+            typeof payload.timeoutMs === 'number' &&
+            Number.isFinite(payload.timeoutMs) &&
+            payload.timeoutMs >= 0
+          ) {
+            // The backend budget covers every pending segment. Keep the original watchdog
+            // as transport grace rather than cutting valid work after a fixed 30 seconds.
+            armTimeout(payload.timeoutMs + RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS);
+          }
+          return;
+        }
         if (payload.stage === 'background_complete') {
           settle();
           return;

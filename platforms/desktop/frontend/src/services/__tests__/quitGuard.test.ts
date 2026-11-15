@@ -4,7 +4,15 @@ import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import * as configPersistence from '../configPersistenceService';
-import { hasActiveFrontendQuitTasks, runGuardedQuit } from '../quitGuard';
+import {
+  hasActiveBackgroundQuitTasks,
+  hasActiveFrontendQuitTasks,
+  runGuardedQuit,
+} from '../quitGuard';
+import {
+  trackRecordingSegmentTask,
+  waitForRecordingSegmentTasks,
+} from '../recordingPostProcessing';
 import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -50,6 +58,46 @@ describe('quitGuard', () => {
     expect(
       hasActiveFrontendQuitTasks(useTranscriptStore.getState(), useBatchQueueStore.getState())
     ).toBe(false);
+  });
+
+  it('releases a stuck recording polish quit blocker when the wait times out', async () => {
+    vi.useFakeTimers();
+    const stuck = Promise.withResolvers<void>();
+    try {
+      trackRecordingSegmentTask('stuck-polish', stuck.promise);
+      expect(hasActiveBackgroundQuitTasks()).toBe(true);
+      const waiting = waitForRecordingSegmentTasks('stuck-polish', 1_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await waiting;
+      expect(hasActiveBackgroundQuitTasks()).toBe(false);
+    } finally {
+      stuck.resolve();
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds a discarded recording task and preserves another session blocker', async () => {
+    vi.useFakeTimers();
+    const discarded = Promise.withResolvers<void>();
+    const next = Promise.withResolvers<void>();
+    try {
+      trackRecordingSegmentTask('discarded-polish', discarded.promise);
+      await vi.advanceTimersByTimeAsync(10_000);
+      trackRecordingSegmentTask('next-polish', next.promise);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(hasActiveBackgroundQuitTasks()).toBe(true);
+      // A late response for the expired session must not remove the next session's task.
+      discarded.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(hasActiveBackgroundQuitTasks()).toBe(true);
+      next.resolve();
+      await waitForRecordingSegmentTasks('next-polish');
+      expect(hasActiveBackgroundQuitTasks()).toBe(false);
+    } finally {
+      discarded.resolve();
+      next.resolve();
+      vi.useRealTimers();
+    }
   });
 
   it.each([

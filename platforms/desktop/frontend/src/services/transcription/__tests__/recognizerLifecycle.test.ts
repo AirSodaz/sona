@@ -162,6 +162,8 @@ describe('RecognizerLifecycle', () => {
     lifecycle.registerCallback(oldUpdate, vi.fn(), { sessionId: 'old' });
     await lifecycle.ensureGlobalBus();
     const oldListener = mocks.listenCallbacks['recording-translation-old'];
+    oldListener({ payload: { sessionId: 'old', stage: 'background_started', timeoutMs: 42_000 } });
+    expect(oldUpdate).not.toHaveBeenCalled();
     const update = {
       removeIds: [],
       upsertSegments: [{ id: 'seg', text: 'old', start: 0, end: 1, isFinal: true }],

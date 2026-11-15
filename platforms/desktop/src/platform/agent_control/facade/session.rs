@@ -30,6 +30,10 @@ impl AgentAsrRuntimeObserver {
 }
 
 impl AsrRuntimeObserver for AgentAsrRuntimeObserver {
+    fn on_translation_drain_started(&self, instance_id: &str, budget: std::time::Duration) {
+        self.inner.on_translation_drain_started(instance_id, budget);
+    }
+
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
         self.inner.on_transcript_update(event);
 

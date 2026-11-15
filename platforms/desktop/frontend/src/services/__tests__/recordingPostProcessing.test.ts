@@ -179,6 +179,58 @@ describe('recording translation drain', () => {
     expect(mocks.listeners.has('recording-translation-unavailable')).toBe(false);
   });
 
+  it('keeps every translation when the backend drain budget exceeds thirty seconds', async () => {
+    vi.useFakeTimers();
+    const drain = await collectRecordingTranslations('long-drain');
+    try {
+      const settled = vi.fn();
+      void drain.complete.then(settled);
+      mocks.listeners.get('recording-translation-long-drain')?.({
+        payload: { sessionId: 'long-drain', stage: 'background_started', timeoutMs: 42_000 },
+      });
+      for (let index = 0; index < 8; index++) {
+        await vi.advanceTimersByTimeAsync(4_000);
+        emit('long-drain', 'catchup_translation', [
+          {
+            id: `seg-${index}`,
+            text: 'Hello',
+            start: index,
+            end: index + 1,
+            isFinal: true,
+            translation: '你好',
+          },
+        ]);
+      }
+      expect(settled).not.toHaveBeenCalled();
+      emit('long-drain', 'background_complete');
+      await drain.complete;
+      expect(drain.translations.size).toBe(8);
+    } finally {
+      drain.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains a bounded watchdog when the backend budget is announced but completion is lost', async () => {
+    vi.useFakeTimers();
+    const drain = await collectRecordingTranslations('lost-completion');
+    try {
+      const settled = vi.fn();
+      void drain.complete.then(settled);
+      mocks.listeners.get('recording-translation-lost-completion')?.({
+        payload: { sessionId: 'lost-completion', stage: 'background_started', timeoutMs: 42_000 },
+      });
+      await vi.advanceTimersByTimeAsync(42_000);
+      expect(settled).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await drain.complete;
+      expect(mocks.listeners.has('recording-translation-lost-completion')).toBe(false);
+    } finally {
+      drain.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('waits for in-flight polish on the old recording without waiting for the next recording', async () => {
     const old = Promise.withResolvers<void>();
     const next = Promise.withResolvers<void>();

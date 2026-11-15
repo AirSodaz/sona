@@ -157,6 +157,7 @@ export class RecognizerLifecycle {
         buildRecordingTranslationEvent(registration.sessionId),
         ({ payload }) => {
           if (payload.sessionId !== registration.sessionId) return;
+          if (payload.stage === 'background_started') return;
           if (payload.stage === 'background_complete') {
             // The backend emits this after flushing ASR and draining translations, so every
             // final update for this session has already been delivered on this channel.

@@ -97,9 +97,14 @@ impl TranslationEnginePort for MockTranslationEngine {
 #[derive(Default)]
 struct RecordingObserver {
     updates: Mutex<Vec<AsrTranscriptUpdateEvent>>,
+    drain_budgets: Mutex<Vec<Duration>>,
 }
 
 impl AsrRuntimeObserver for RecordingObserver {
+    fn on_translation_drain_started(&self, _instance_id: &str, budget: Duration) {
+        self.drain_budgets.lock().unwrap().push(budget);
+    }
+
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
         self.updates.lock().unwrap().push(event.clone());
     }
@@ -790,6 +795,161 @@ async fn background_release_allows_reused_consumer_and_preserves_old_translation
 }
 
 #[tokio::test(start_paused = true)]
+async fn catchup_stops_publishing_and_skips_queued_segments_when_disabled() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    engine.set_delay(Duration::from_secs(1));
+    let translator = Arc::new(StreamingTranslationCoordinator::new(
+        engine.clone(),
+        "en",
+        "zh",
+    ));
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translator.clone()),
+    );
+    let observer = Arc::new(RecordingObserver::default());
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("disabled", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            observer.clone(),
+        )
+        .await
+        .unwrap();
+    coordinator
+        .enqueue_translation_catchup(
+            Some("record"),
+            translator,
+            vec![
+                make_segment("seg-1", "Hello", true),
+                make_segment("seg-2", "World", true),
+            ],
+        )
+        .await;
+    tokio::task::yield_now().await;
+    assert_eq!(engine.call_count(), 1);
+    coordinator.set_translation(None);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    assert!(observer.updates.lock().unwrap().is_empty());
+    assert_eq!(
+        engine.call_count(),
+        1,
+        "disabled catchup must not start another segment"
+    );
+    coordinator.release("record").await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn disabled_catchup_does_not_regain_delivery_permission_when_recording_stops() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    engine.set_delay(Duration::from_secs(1));
+    let translator = Arc::new(StreamingTranslationCoordinator::new(engine, "en", "zh"));
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translator.clone()),
+    );
+    let foreground = Arc::new(RecordingObserver::default());
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("disabled-before-stop", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            foreground.clone(),
+        )
+        .await
+        .unwrap();
+    coordinator
+        .enqueue_translation_catchup(
+            Some("record"),
+            translator,
+            vec![make_segment("seg-1", "Hello", true)],
+        )
+        .await;
+    tokio::task::yield_now().await;
+    coordinator.set_translation(None);
+    let background = Arc::new(RecordingObserver::default());
+    coordinator
+        .release_with_background_translations("record", background.clone())
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    assert!(foreground.updates.lock().unwrap().is_empty());
+    let updates = background.updates.lock().unwrap();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].stage, "background_complete");
+}
+
+#[tokio::test(start_paused = true)]
+async fn superseded_catchup_cannot_overwrite_the_new_translation() {
+    let old_engine = Arc::new(MockTranslationEngine::new());
+    old_engine.set_delay(Duration::from_secs(2));
+    old_engine
+        .translations
+        .lock()
+        .unwrap()
+        .insert("Hello".into(), "old language".into());
+    let old_translator = Arc::new(StreamingTranslationCoordinator::new(old_engine, "en", "zh"));
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(old_translator.clone()),
+    );
+    let observer = Arc::new(RecordingObserver::default());
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("superseded", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            observer.clone(),
+        )
+        .await
+        .unwrap();
+    let segments = vec![make_segment("seg-1", "Hello", true)];
+    coordinator
+        .enqueue_translation_catchup(Some("record"), old_translator, segments.clone())
+        .await;
+    tokio::task::yield_now().await;
+
+    let new_engine = Arc::new(MockTranslationEngine::new());
+    new_engine
+        .translations
+        .lock()
+        .unwrap()
+        .insert("Hello".into(), "new language".into());
+    let new_translator = Arc::new(StreamingTranslationCoordinator::new(new_engine, "en", "ja"));
+    coordinator.set_translation(Some(new_translator.clone()));
+    coordinator
+        .enqueue_translation_catchup(Some("record"), new_translator, segments)
+        .await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    let updates = observer.updates.lock().unwrap().clone();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(
+        updates[0].update.upsert_segments[0].translation.as_deref(),
+        Some("new language")
+    );
+    coordinator.release("record").await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
 async fn background_catchup_keeps_its_subscription_and_delivers_each_segment() {
     let engine = Arc::new(MockTranslationEngine::new());
     engine.set_delay(Duration::from_millis(500));
@@ -952,10 +1112,15 @@ async fn background_drain_covers_every_pending_segment() {
         .enqueue_translation_catchup(
             Some("record"),
             translator,
-            vec![
-                make_segment("seg-1", "I like to read books every day.", true),
-                make_segment("seg-2", "I like to read books every day.", true),
-            ],
+            (1..=8)
+                .map(|index| {
+                    make_segment(
+                        &format!("seg-{index}"),
+                        "I like to read books every day.",
+                        true,
+                    )
+                })
+                .collect(),
         )
         .await;
     let background = Arc::new(RecordingObserver::default());
@@ -963,13 +1128,16 @@ async fn background_drain_covers_every_pending_segment() {
         .release_with_background_translations("record", background.clone())
         .await
         .unwrap();
-    // Two segments x 4s of legitimate work: one ceiling plus margin (7s) would cut the second
-    // translation, which the engine does answer.
-    tokio::time::sleep(Duration::from_millis(8_500)).await;
+    // Eight segments x 4s of legitimate work exceed the frontend's original 30s watchdog.
+    tokio::time::sleep(Duration::from_millis(32_500)).await;
     for _ in 0..20 {
         tokio::task::yield_now().await;
     }
     let updates = background.updates.lock().unwrap();
+    assert_eq!(
+        *background.drain_budgets.lock().unwrap(),
+        vec![Duration::from_secs(42)]
+    );
     let mut translated = std::collections::BTreeSet::new();
     for event in updates.iter() {
         for segment in &event.update.upsert_segments {
@@ -980,9 +1148,7 @@ async fn background_drain_covers_every_pending_segment() {
     }
     assert_eq!(
         translated,
-        ["seg-1".to_string(), "seg-2".to_string()]
-            .into_iter()
-            .collect(),
+        (1..=8).map(|index| format!("seg-{index}")).collect(),
         "every drained segment must reach the background observer: {:?}",
         updates
             .iter()

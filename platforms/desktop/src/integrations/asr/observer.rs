@@ -34,6 +34,21 @@ impl TauriAsrRuntimeObserver {
 }
 
 impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
+    fn on_translation_drain_started(&self, _instance_id: &str, budget: std::time::Duration) {
+        if let Some(session_id) = &self.recording_session_id
+            && let Err(error) = self.emitter.emit(
+                &recording_translation_event(session_id),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "stage": "background_started",
+                    "timeoutMs": u64::try_from(budget.as_millis()).unwrap_or(u64::MAX),
+                }),
+            )
+        {
+            log::warn!("[ASR] failed to emit recording translation drain budget: {error}");
+        }
+    }
+
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
         if let Some(session_id) = &self.recording_session_id {
             if let Err(error) = self.emitter.emit(
@@ -138,6 +153,23 @@ mod tests {
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].0, "recognizer-output-live-1");
         assert_eq!(emitted[0].1, serde_json::to_value(event.update).unwrap());
+    }
+
+    #[test]
+    fn recording_drain_budget_uses_the_session_channel() {
+        let emitter = Arc::new(MockEventEmitter::new());
+        let observer = TauriAsrRuntimeObserver::for_recording(
+            emitter.clone(),
+            new_metrics_store(),
+            "old-session".to_string(),
+        );
+        observer.on_translation_drain_started("record", std::time::Duration::from_secs(42));
+        let emitted = emitter.emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "recording-translation-old-session");
+        assert_eq!(emitted[0].1["sessionId"], "old-session");
+        assert_eq!(emitted[0].1["stage"], "background_started");
+        assert_eq!(emitted[0].1["timeoutMs"], 42_000);
     }
 
     #[test]
