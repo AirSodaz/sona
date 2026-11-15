@@ -15,9 +15,19 @@ use super::translation::StreamingTranslationCoordinator;
 
 /// Slack added to the engine's per-segment ceiling when bounding the stop-time drain.
 const BACKGROUND_TRANSLATION_MARGIN: std::time::Duration = std::time::Duration::from_millis(2_000);
-/// Barrier used when no translation coordinator is installed (nothing can be pending).
-const BACKGROUND_TRANSLATION_FALLBACK_BUDGET: std::time::Duration =
-    std::time::Duration::from_millis(1_000);
+/// Ceiling used when no translation coordinator is installed at release time. A coordinator can
+/// still be detached mid-release (`set_translation` takes no lifecycle guard), so this must never
+/// be shorter than the longest engine ceiling; the margin is added on top by
+/// [`translation_budget`].
+const BACKGROUND_TRANSLATION_FALLBACK_CEILING: std::time::Duration =
+    std::time::Duration::from_millis(10_000);
+
+/// A pending translation task translates its segments one at a time, each under its own engine
+/// ceiling, so the drain budget has to cover every segment rather than only one of them.
+fn translation_budget(ceiling: std::time::Duration, segments: usize) -> std::time::Duration {
+    ceiling.saturating_mul(u32::try_from(segments.max(1)).unwrap_or(u32::MAX))
+        + BACKGROUND_TRANSLATION_MARGIN
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct LiveSourceEpoch {
@@ -152,7 +162,7 @@ struct SubscriberMailbox {
     closed: AtomicBool,
     drained: AtomicBool,
     drained_notify: Notify,
-    pending_translations: parking_lot::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    pending_translations: parking_lot::Mutex<Vec<(tokio::task::JoinHandle<()>, usize)>>,
     background_observer: parking_lot::Mutex<Option<Arc<dyn AsrRuntimeObserver>>>,
 }
 
@@ -269,25 +279,27 @@ impl SubscriberMailbox {
         }
     }
 
-    fn take_pending_translations(&self) -> Vec<tokio::task::JoinHandle<()>> {
+    fn take_pending_translations(&self) -> Vec<(tokio::task::JoinHandle<()>, usize)> {
         std::mem::take(&mut *self.pending_translations.lock())
     }
 
     async fn finish_translations(
         self: Arc<Self>,
         consumer_id: String,
-        budget: std::time::Duration,
+        ceiling: std::time::Duration,
     ) {
         let handles = self.take_pending_translations();
         let pending = handles.len();
+        let segments = handles.iter().map(|(_, segments)| *segments).sum::<usize>();
+        let budget = translation_budget(ceiling, segments);
         let drained = async move {
-            for handle in handles {
+            for (handle, _) in handles {
                 let _ = handle.await;
             }
         };
         if tokio::time::timeout(budget, drained).await.is_err() {
             log::warn!(
-                "[ASR] background translation drain expired after {budget:?} with {pending} pending task(s); dropping remaining enrichment for consumer {consumer_id}"
+                "[ASR] background translation drain expired after {budget:?} with {pending} pending task(s) over {segments} segment(s); dropping remaining enrichment for consumer {consumer_id}"
             );
         }
         if let Some(observer) = self.background_observer.lock().take() {
@@ -744,6 +756,12 @@ impl LiveTranscriptionCoordinator {
         } else {
             None
         };
+        // Read the engine ceiling before the match may install a fresh coordinator.
+        let translation_ceiling = self
+            .current_translation()
+            .map_or(BACKGROUND_TRANSLATION_FALLBACK_CEILING, |translator| {
+                translator.final_translation_timeout()
+            });
         let result = match release {
             ReleaseAction::DetachOnly(mailbox) => {
                 drop(feed_guard);
@@ -762,10 +780,12 @@ impl LiveTranscriptionCoordinator {
                 let stop_result = session.stop().await;
                 observer.drain().await;
                 if background_observer.is_none() {
-                    for handle in mailbox.take_pending_translations() {
-                        let _ =
-                            tokio::time::timeout(std::time::Duration::from_millis(5500), handle)
-                                .await;
+                    for (handle, segments) in mailbox.take_pending_translations() {
+                        let _ = tokio::time::timeout(
+                            translation_budget(translation_ceiling, segments),
+                            handle,
+                        )
+                        .await;
                     }
                 }
                 mailbox.close_and_drain().await;
@@ -799,12 +819,7 @@ impl LiveTranscriptionCoordinator {
             }
         };
         if let Some(mailbox) = completion_mailbox {
-            let budget = self
-                .current_translation()
-                .map_or(BACKGROUND_TRANSLATION_FALLBACK_BUDGET, |translator| {
-                    translator.final_translation_timeout() + BACKGROUND_TRANSLATION_MARGIN
-                });
-            tokio::spawn(mailbox.finish_translations(consumer_id.to_string(), budget));
+            tokio::spawn(mailbox.finish_translations(consumer_id.to_string(), translation_ceiling));
         }
         result
     }
@@ -1140,6 +1155,7 @@ impl CoordinatorInner {
     ) {
         let this = Arc::clone(self);
         let target = Arc::clone(&mailbox);
+        let segment_count = batches.iter().map(Vec::len).sum::<usize>();
         let handle = tokio::spawn(async move {
             for segments in batches {
                 let is_current = this
@@ -1189,8 +1205,8 @@ impl CoordinatorInner {
             }
         });
         let mut pending = mailbox.pending_translations.lock();
-        pending.retain(|handle| !handle.is_finished());
-        pending.push(handle);
+        pending.retain(|(handle, _)| !handle.is_finished());
+        pending.push((handle, segment_count));
     }
 
     async fn broadcast_transcript(

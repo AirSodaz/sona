@@ -297,10 +297,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           const drain = recordingTranslationDrainsRef.current.get(originSessionId);
           // Transfer ownership to this saved recording before yielding to another recording.
           recordingTranslationDrainsRef.current.delete(originSessionId);
-          await waitForRecordingSegmentTasks(originSessionId);
           if (drain) {
             try {
+              // Drain first: a final that lands while we wait also starts auto-polish, whose
+              // task must be tracked before the segments are snapshotted for the merge.
               await drain.complete;
+              await waitForRecordingSegmentTasks(originSessionId);
               const target = createTaskTarget({ sessionId: originSessionId, historyId });
               await runWithDocumentLock(
                 target,
@@ -329,6 +331,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             } finally {
               drain.dispose();
             }
+          } else {
+            // No drain was armed for this save; still let in-flight polish settle before the
+            // pipeline reads the segments.
+            await waitForRecordingSegmentTasks(originSessionId);
           }
           const hasAnyPostProcess =
             pipeline.autoPolish ||
@@ -589,9 +595,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         const drain = await collectRecordingTranslations(sessionId);
         recordingTranslationDrainsRef.current.set(sessionId, drain);
         try {
-          await recordController.stopRecording(
-            pendingDiscardRef.current ? { discard: true } : options
-          );
+          await recordController.stopRecording({
+            ...options,
+            discard: options?.discard === true || pendingDiscardRef.current,
+            isDiscardRequested: () => options?.discard === true || pendingDiscardRef.current,
+          });
         } finally {
           // `postProcessSavedItem` claims the drain synchronously inside the awaited stop and
           // owns its disposal; anything still registered here was never claimed (discarded or

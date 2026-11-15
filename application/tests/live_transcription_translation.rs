@@ -905,7 +905,19 @@ async fn background_barrier_is_bounded_by_its_budget() {
         .release_with_background_translations("record", background.clone())
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(8_500)).await;
+    // Every segment spends a full ceiling inside the engine before it times out, so the
+    // barrier must not settle after only one ceiling (5s) has elapsed. `sleep` (unlike
+    // `advance`) lets the paused clock cascade through timers the drain creates as it runs.
+    tokio::time::sleep(Duration::from_millis(9_000)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        background.updates.lock().unwrap().is_empty(),
+        "the drain must not settle while segments are still inside their ceiling"
+    );
+    // 3 segments x 5s ceiling: the bound is derived from the pending work, not one segment.
+    tokio::time::sleep(Duration::from_millis(6_500)).await;
     for _ in 0..20 {
         tokio::task::yield_now().await;
     }
@@ -913,6 +925,79 @@ async fn background_barrier_is_bounded_by_its_budget() {
         background.updates.lock().unwrap().last().unwrap().stage,
         "background_complete"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn background_drain_covers_every_pending_segment() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    engine.set_delay(Duration::from_millis(4_000));
+    let translator = Arc::new(StreamingTranslationCoordinator::new(engine, "en", "zh"));
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::new(TestFactory::default()),
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translator.clone()),
+    );
+    coordinator
+        .acquire(
+            "record",
+            LiveSourceEpoch::new("multi", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap();
+    coordinator
+        .enqueue_translation_catchup(
+            Some("record"),
+            translator,
+            vec![
+                make_segment("seg-1", "I like to read books every day.", true),
+                make_segment("seg-2", "I like to read books every day.", true),
+            ],
+        )
+        .await;
+    let background = Arc::new(RecordingObserver::default());
+    coordinator
+        .release_with_background_translations("record", background.clone())
+        .await
+        .unwrap();
+    // Two segments x 4s of legitimate work: one ceiling plus margin (7s) would cut the second
+    // translation, which the engine does answer.
+    tokio::time::sleep(Duration::from_millis(8_500)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    let updates = background.updates.lock().unwrap();
+    let mut translated = std::collections::BTreeSet::new();
+    for event in updates.iter() {
+        for segment in &event.update.upsert_segments {
+            if segment.translation.is_some() {
+                translated.insert(segment.id.clone());
+            }
+        }
+    }
+    assert_eq!(
+        translated,
+        ["seg-1".to_string(), "seg-2".to_string()]
+            .into_iter()
+            .collect(),
+        "every drained segment must reach the background observer: {:?}",
+        updates
+            .iter()
+            .map(|event| (
+                event.stage.clone(),
+                event
+                    .update
+                    .upsert_segments
+                    .iter()
+                    .map(|s| (s.id.clone(), s.translation.clone()))
+                    .collect::<Vec<_>>()
+            ))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(updates.last().unwrap().stage, "background_complete");
 }
 
 #[tokio::test(start_paused = true)]

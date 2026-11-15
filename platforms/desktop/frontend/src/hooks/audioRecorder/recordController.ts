@@ -103,9 +103,14 @@ interface CreateRecordControllerArgs {
   timing: RecordControllerTiming;
   persistence: RecordControllerPersistence;
 }
+export interface RecordStopOptions {
+  discard?: boolean;
+  /** Consulted at the discard decision so a request that lands mid-stop is still honoured. */
+  isDiscardRequested?: () => boolean;
+}
 export interface RecordController {
   startRecording: () => Promise<boolean>;
-  stopRecording: (options?: { discard?: boolean }) => Promise<void>;
+  stopRecording: (options?: RecordStopOptions) => Promise<void>;
   pauseRecording: () => Promise<void>;
   resumeRecording: () => Promise<void>;
 }
@@ -259,7 +264,7 @@ export function createRecordController({
     }
   }
 
-  async function stopRecording(options?: { discard?: boolean }): Promise<void> {
+  async function stopRecording(options?: RecordStopOptions): Promise<void> {
     const sessionId = session.getSessionId();
     if (!sessionId) {
       return;
@@ -285,7 +290,9 @@ export function createRecordController({
         await flushPendingAutoSave(liveDraft.item.id, latestSegments);
       }
 
-      if (!liveDraft || latestSegments.length === 0 || options?.discard) {
+      const discardRequested =
+        options?.discard === true || options?.isDiscardRequested?.() === true;
+      if (!liveDraft || latestSegments.length === 0 || discardRequested) {
         shouldEvictDiscardedSession = true;
         liveDraftRef.current = null;
         await capture.stopFileRecording();

@@ -2,9 +2,11 @@ import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { trackQuitBlockingTask } from './quitGuard';
+import { buildRecordingTranslationEvent } from './tauri/events';
 import { listen } from './tauri/platform/events';
 
 const RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS = 30_000;
+const RECORDING_SEGMENT_TASK_TIMEOUT_MS = 15_000;
 
 const pendingSegmentTasks = new Map<string, Set<Promise<unknown>>>();
 
@@ -20,8 +22,26 @@ export function trackRecordingSegmentTask(sessionId: string, task: Promise<unkno
   void tracked.then(cleanup, cleanup);
 }
 
-export async function waitForRecordingSegmentTasks(sessionId: string): Promise<void> {
-  await Promise.allSettled(pendingSegmentTasks.get(sessionId) ?? []);
+/**
+ * Waits for the auto-polish tasks a session started. Bounded: a task whose job response never
+ * arrives must not keep the saved recording's post-processing (and the quit guard) pending.
+ */
+export async function waitForRecordingSegmentTasks(
+  sessionId: string,
+  timeoutMs = RECORDING_SEGMENT_TASK_TIMEOUT_MS
+): Promise<void> {
+  const tasks = pendingSegmentTasks.get(sessionId);
+  if (!tasks || tasks.size === 0) return;
+  const timedOut = Promise.withResolvers<void>();
+  const timeoutId = setTimeout(() => {
+    logger.warn('[recordingPostProcessing] Segment task wait timed out', { sessionId });
+    timedOut.resolve();
+  }, timeoutMs);
+  try {
+    await Promise.race([Promise.allSettled([...tasks]), timedOut.promise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 interface RecordingTranslationEvent {
@@ -34,22 +54,27 @@ export interface RecordingTranslationDrain {
   sessionId: string;
   complete: Promise<void>;
   translations: Map<string, TranscriptSegment>;
-  /** Segment ids the app rewrote after translation; alive as long as this drain. */
-  systemRewritten: ReadonlySet<string>;
+  /** Segment id → text the app substituted; alive as long as this drain. */
+  systemRewritten: ReadonlyMap<string, string>;
   dispose: () => void;
 }
 
 /**
- * Segment ids whose text the app rewrote (auto-polish) after the live translation was
- * computed. Only these accept a drained translation whose captured source text no longer
- * matches, so user edits keep their protection. Scoped to the recording session's drain.
+ * Segment ids the app rewrote (auto-polish) after the live translation was computed, mapped to
+ * the text it substituted. A drained translation whose captured source text no longer matches
+ * is accepted only while the segment still holds that rewritten text, so a later user edit
+ * keeps its protection. Scoped to the recording session's drain.
  */
-const systemRewrittenSegments = new Map<string, Set<string>>();
+const systemRewrittenSegments = new Map<string, Map<string, string>>();
 
-export function markRecordingSegmentSystemRewrite(sessionId: string, segmentId: string): void {
-  const ids = systemRewrittenSegments.get(sessionId) ?? new Set<string>();
-  systemRewrittenSegments.set(sessionId, ids);
-  ids.add(segmentId);
+export function markRecordingSegmentSystemRewrite(
+  sessionId: string,
+  segmentId: string,
+  rewrittenText: string
+): void {
+  const rewrites = systemRewrittenSegments.get(sessionId) ?? new Map<string, string>();
+  systemRewrittenSegments.set(sessionId, rewrites);
+  rewrites.set(segmentId, rewrittenText);
 }
 
 /** Installed before stop so even an immediate completion cannot race listener registration. */
@@ -58,7 +83,7 @@ export async function collectRecordingTranslations(
 ): Promise<RecordingTranslationDrain> {
   const translations = new Map<string, TranscriptSegment>();
   // Same instance the marker writes into, so rewrites recorded after this point still land.
-  const systemRewritten = systemRewrittenSegments.get(sessionId) ?? new Set<string>();
+  const systemRewritten = systemRewrittenSegments.get(sessionId) ?? new Map<string, string>();
   systemRewrittenSegments.set(sessionId, systemRewritten);
   const completion = Promise.withResolvers<void>();
   let disposed = false;
@@ -87,7 +112,7 @@ export async function collectRecordingTranslations(
   }, RECORDING_TRANSLATION_DRAIN_TIMEOUT_MS);
   try {
     unlisten = await listen<RecordingTranslationEvent>(
-      `recording-translation-${sessionId}`,
+      buildRecordingTranslationEvent(sessionId),
       ({ payload }) => {
         if (disposed || completed || payload.sessionId !== sessionId) return;
         if (payload.stage === 'background_complete') {
@@ -126,7 +151,14 @@ export function mergeRecordingTranslations(
   return segments.map((segment) => {
     const translated = drain.translations.get(segment.id);
     if (!translated) return segment;
-    if (translated.text !== segment.text && !drain.systemRewritten.has(segment.id)) return segment;
+    // Accept a text mismatch only while the segment still holds the app's own rewrite; a user
+    // edit (which moves the text away from both) keeps protecting the segment.
+    if (
+      translated.text !== segment.text &&
+      drain.systemRewritten.get(segment.id) !== segment.text
+    ) {
+      return segment;
+    }
     if (translated.translation === segment.translation && !segment.draftTranslation) {
       return segment;
     }

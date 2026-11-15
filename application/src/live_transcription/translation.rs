@@ -74,8 +74,9 @@ impl StreamingTranslationCoordinator {
         max_remaining
     }
 
-    /// Per-segment ceiling for a final translation. The background drain barrier is
-    /// derived from this so it can never cut a translation the engine would still answer.
+    /// Per-segment ceiling for a final translation. The stop-time drain derives its bound from
+    /// this multiplied by the number of pending segments, so it can never cut a translation the
+    /// engine would still answer.
     pub fn final_translation_timeout(&self) -> Duration {
         match self.engine.engine_kind() {
             sona_core::ports::translation::TranslationEngineKind::Online => {

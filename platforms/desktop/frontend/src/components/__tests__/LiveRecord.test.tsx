@@ -1336,6 +1336,84 @@ describe('LiveRecord', () => {
     commit.mockRestore();
   });
 
+  it('keeps a drained translation across an auto-polish rewrite', async () => {
+    const commit = vi
+      .spyOn(useHistoryStore.getState(), 'commitSystemTranscriptUpdate')
+      .mockImplementation(async (id, segments) => {
+        useCanonicalTranscriptStore.getState().setSegmentsForHistory(id, segments);
+        return createCompletedHistoryItem(id);
+      });
+    const execute = vi
+      .spyOn(pipelineExecutionEngine, 'execute')
+      .mockResolvedValue({ segments: [] });
+    const polish = vi
+      .spyOn(polishService, 'polishSegmentsWithConfig')
+      .mockImplementation(async (_config, segments, onChunk) => {
+        onChunk?.(segments.map((segment) => ({ ...segment, text: 'Hello, polished.' })));
+        return [];
+      });
+    useProjectStore.setState({
+      activeProjectId: 'polish-project',
+      projects: [
+        {
+          id: 'polish-project',
+          name: 'Polish',
+          createdAt: 1,
+          updatedAt: 1,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoPolish: true,
+            autoPolishFrequency: 1,
+          },
+        },
+      ],
+    });
+    mockStopNativeCapture.mockImplementation(async () => '/mock/audio.wav');
+    mockSoftStop.mockResolvedValue(undefined);
+    render(<LiveRecord />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    const sessionId = useCanonicalTranscriptStore.getState().recordingSessionId!;
+    act(() =>
+      capturedOnSegment({ id: 'polish-1', text: 'Hello', start: 0, end: 1, isFinal: true })
+    );
+    // The app rewrote the text after the live translation was computed.
+    expect(useCanonicalTranscriptStore.getState().sessions[sessionId].segments[0].text).toBe(
+      'Hello, polished.'
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    await act(async () => {
+      emitRecordingEvent(sessionId, {
+        stage: 'enrichment',
+        update: {
+          removeIds: [],
+          upsertSegments: [
+            { id: 'polish-1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: '你好' },
+          ],
+        },
+      });
+      completeRecordingTranslations(sessionId);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    // The drained translation was computed from the pre-polish text but must still be kept,
+    // because the app itself replaced that text.
+    expect(commit).toHaveBeenCalledWith(
+      sessionId,
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'polish-1', text: 'Hello, polished.', translation: '你好' }),
+      ])
+    );
+    polish.mockRestore();
+    execute.mockRestore();
+    commit.mockRestore();
+  });
+
   it('honors mid-recording updates to session pipelineSnapshot during post-processing', async () => {
     const executeSpy = vi
       .spyOn(pipelineExecutionEngine, 'execute')

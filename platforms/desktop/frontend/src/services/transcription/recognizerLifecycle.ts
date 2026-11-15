@@ -2,7 +2,7 @@ import type { TranscriptUpdate } from '../../types/transcript';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import type { AsrTranscriptionRequest } from '../asrConfigService';
-import { buildRecognizerOutputEvent } from '../tauri/events';
+import { buildRecognizerOutputEvent, buildRecordingTranslationEvent } from '../tauri/events';
 import { listen, type UnlistenFn } from '../tauri/platform/events';
 import {
   createExternalLiveSource,
@@ -154,7 +154,7 @@ export class RecognizerLifecycle {
     const registration = instanceCallbacks.get(this.instanceId);
     if (this.instanceId === 'record' && registration?.sessionId) {
       const unlisten = await listen<{ sessionId: string; stage: string; update: TranscriptUpdate }>(
-        `recording-translation-${registration.sessionId}`,
+        buildRecordingTranslationEvent(registration.sessionId),
         ({ payload }) => {
           if (payload.sessionId !== registration.sessionId) return;
           if (payload.stage === 'background_complete') {
@@ -172,7 +172,11 @@ export class RecognizerLifecycle {
             (payload.stage === 'enrichment' || payload.stage === 'catchup_translation')
           )
             return;
-          registration.onUpdate(normalizeTranscriptUpdate(payload.update));
+          try {
+            registration.onUpdate(normalizeTranscriptUpdate(payload.update));
+          } catch (error) {
+            logger.error(`[TranscriptionService:BUS] Error in ${this.instanceId} callback:`, error);
+          }
         }
       );
       globalListeners.set(this.instanceId, unlisten);

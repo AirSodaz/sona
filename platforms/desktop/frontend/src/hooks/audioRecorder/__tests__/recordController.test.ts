@@ -205,6 +205,75 @@ describe('recordController stopRecording and coordinator delegation', () => {
     expect(useTranscriptStore.getState().sessions['rec-session-2']).toBeUndefined();
   });
 
+  it('discards when the request is flagged while the stop is already finalizing', async () => {
+    const liveDraft = createDraftHandle('draft-3');
+    useTranscriptStore.setState({
+      activeSessionId: 'rec-session-3',
+      recordingSessionId: 'rec-session-3',
+    });
+    useTranscriptStore
+      .getState()
+      .setSegmentsForSession('rec-session-3', [
+        { id: 'seg-1', text: 'Hello world', start: 0, end: 2, isFinal: true },
+      ]);
+    const liveDraftRef = createRef<LiveRecordingDraftHandle | null>(liveDraft);
+    const persistNativeRecording = vi.fn().mockResolvedValue(undefined);
+    const discardLiveRecordingDraft = vi.fn().mockResolvedValue(undefined);
+    let discardRequested = false;
+
+    const controller = createRecordController({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      config: { muteDuringRecording: false } as any,
+      inputSource: 'microphone',
+      activeInputSourceRef: createRef('microphone'),
+      usingNativeCaptureRef: createRef(true),
+      liveDraftRef,
+      setAudioUrl: vi.fn(),
+      setAudioFile: vi.fn(),
+      setIsInitializing: vi.fn(),
+      setIsTransitioning: vi.fn(),
+      setIsPaused: vi.fn(),
+      showError: vi.fn().mockResolvedValue(undefined),
+      capture: {
+        tryStartNativeDesktopCapture: vi.fn().mockResolvedValue(true),
+        stopFileRecording: vi.fn().mockResolvedValue(undefined),
+        teardownWebCaptureResources: vi.fn().mockResolvedValue(undefined),
+        // The second stop request arrives here, after the stop has begun.
+        stopCaptureForSession: vi.fn(async () => {
+          discardRequested = true;
+          return 'C:/history/draft-3.wav';
+        }),
+        setSystemAudioMute: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      session: {
+        openRecordSession: () => 'rec-session-3',
+        softStopRecordSessionIfActive: vi.fn().mockResolvedValue(undefined),
+        resetRecordSession: vi.fn(),
+        getSessionId: () => 'rec-session-3',
+        getPhase: () => 'recording',
+        setPhase: vi.fn(),
+        isActiveSession: () => true,
+        shouldFinalizeRecordStartAttempt: () => true,
+      } as any,
+      timing: {
+        clearFinalizedDurationSeconds: vi.fn(),
+        getFinalizedDurationSeconds: () => 2.4,
+        getRecordedDurationSeconds: () => 2.4,
+        finalizeRecordedDurationSeconds: () => 2.4,
+      } as any,
+      persistence: {
+        createLiveRecordingDraft: vi.fn(),
+        discardLiveRecordingDraft,
+        persistNativeRecording,
+      },
+    });
+
+    await controller.stopRecording({ isDiscardRequested: () => discardRequested });
+
+    expect(discardLiveRecordingDraft).toHaveBeenCalledWith(liveDraft);
+    expect(persistNativeRecording).not.toHaveBeenCalled();
+  });
+
   it('evicts the allocated recording session on start failure without disturbing active non-recording session', async () => {
     useTranscriptStore.setState({
       activeSessionId: 'projects-item-1',

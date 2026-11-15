@@ -1,5 +1,5 @@
 use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
-use super::recognizer_output_event;
+use super::{recognizer_output_event, recording_translation_event};
 use crate::platform::event::EventEmitterPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -36,14 +36,20 @@ impl TauriAsrRuntimeObserver {
 impl AsrRuntimeObserver for TauriAsrRuntimeObserver {
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent) {
         if let Some(session_id) = &self.recording_session_id {
-            let _ = self.emitter.emit(
-                &format!("recording-translation-{session_id}"),
+            if let Err(error) = self.emitter.emit(
+                &recording_translation_event(session_id),
                 serde_json::json!({
                     "sessionId": session_id,
                     "stage": event.stage,
                     "update": event.update,
                 }),
-            );
+            ) {
+                log::warn!(
+                    "[ASR] failed to emit {} for stage {}: {error}",
+                    recording_translation_event(session_id),
+                    event.stage
+                );
+            }
             return;
         }
         let payload = match serde_json::to_value(&event.update) {
@@ -151,6 +157,11 @@ mod tests {
             },
         });
         let emitted = emitter.emitted.lock().unwrap();
+        assert_eq!(
+            emitted.len(),
+            1,
+            "recording updates must not also reach the instance channel"
+        );
         assert_eq!(emitted[0].0, "recording-translation-old-session");
         assert_eq!(emitted[0].1["sessionId"], "old-session");
         assert_eq!(emitted[0].1["stage"], "background_complete");

@@ -20,6 +20,13 @@ pub(crate) fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
+/// Session-scoped channel for a recording's live ASR and stop-time translation drain.
+/// Keep in sync with the TS listeners (`buildRecordingTranslationEvent`) and with
+/// `recordingPostProcessing.ts`.
+pub(crate) fn recording_translation_event(session_id: &str) -> String {
+    format!("recording-translation-{session_id}")
+}
+
 pub use adapter::DesktopLocalProviderAdapter;
 pub use factory::{DesktopStreamingAsrFactory, create_desktop_streaming_asr_factory};
 pub(crate) use observer::TauriAsrRuntimeObserver;

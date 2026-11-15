@@ -135,8 +135,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (chunk) => {
               chunk.forEach((polishedSegment) => {
                 if (targetSessionId) {
-                  // Lets a drained translation survive this rewrite; user edits still do not.
-                  markRecordingSegmentSystemRewrite(targetSessionId, polishedSegment.id);
+                  // Lets a drained translation survive this rewrite; a later user edit still
+                  // does not, because the marker remembers the text rewritten here.
+                  markRecordingSegmentSystemRewrite(
+                    targetSessionId,
+                    polishedSegment.id,
+                    polishedSegment.text
+                  );
                   updateTranscriptSegmentForSession(targetSessionId, polishedSegment.id, {
                     text: polishedSegment.text,
                   });

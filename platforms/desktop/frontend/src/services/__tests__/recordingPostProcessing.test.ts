@@ -72,7 +72,7 @@ describe('recording translation drain', () => {
         ['b', { ...translated, id: 'b' }],
         ['deleted', { ...translated, id: 'deleted' }],
       ]),
-      systemRewritten: new Set<string>(),
+      systemRewritten: new Map<string, string>(),
     });
     expect(result).toEqual([{ ...original, translation: '你好' }, edited]);
     expect(result[1]).toBe(edited);
@@ -94,7 +94,7 @@ describe('recording translation drain', () => {
     emit('rewritten', 'background_complete');
     await drain.complete;
     // Only the polish rewrite is announced; the other text change is the user's.
-    markRecordingSegmentSystemRewrite('rewritten', 'polished');
+    markRecordingSegmentSystemRewrite('rewritten', 'polished', 'Hello, world.');
     const segments: TranscriptSegment[] = [
       { id: 'polished', text: 'Hello, world.', start: 0, end: 1, isFinal: true },
       { id: 'edited', text: 'Changed by hand', start: 0, end: 2, isFinal: true },
@@ -103,6 +103,46 @@ describe('recording translation drain', () => {
     expect(result[0].translation).toBe('你好世界');
     expect(result[1]).toBe(segments[1]);
     drain.dispose();
+  });
+
+  it('still protects a segment the user edited after the app rewrote it', async () => {
+    const drain = await collectRecordingTranslations('edit-after-rewrite');
+    emit('edit-after-rewrite', 'enrichment', [
+      {
+        id: 'polished',
+        text: 'hello world',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        translation: '你好世界',
+      },
+    ]);
+    emit('edit-after-rewrite', 'background_complete');
+    await drain.complete;
+    markRecordingSegmentSystemRewrite('edit-after-rewrite', 'polished', 'Hello, world.');
+    const segments: TranscriptSegment[] = [
+      { id: 'polished', text: 'Hello, world. (edited by hand)', start: 0, end: 1, isFinal: true },
+    ];
+    const result = mergeRecordingTranslations(segments, drain);
+    expect(result[0]).toBe(segments[0]);
+    drain.dispose();
+  });
+
+  it('stops waiting for a polish task that never settles', async () => {
+    vi.useFakeTimers();
+    const stuck = Promise.withResolvers<void>();
+    trackRecordingSegmentTask('stuck-polish', stuck.promise);
+    let settled = false;
+    const waiting = waitForRecordingSegmentTasks('stuck-polish', 1_000).then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await waiting;
+    expect(settled).toBe(true);
+    stuck.resolve();
+    vi.useRealTimers();
   });
 
   it('cleans up after empty completion or a discarded recording', async () => {
