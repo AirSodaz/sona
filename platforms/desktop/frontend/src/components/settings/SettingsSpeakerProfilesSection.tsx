@@ -1,14 +1,4 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  Mic,
-  Plus,
-  Search,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, Globe, Mic, Plus, Trash2, Upload } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +17,7 @@ import {
 import { Dropdown } from '../Dropdown';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { SearchInput } from '../ui/SearchInput';
 import { SettingsSection } from './SettingsLayout';
 import './vocabulary/vocabulary.css';
 
@@ -338,36 +329,19 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
             ))}
           </div>
 
-          <div className="dict-search-wrap" style={{ minWidth: '200px' }}>
-            <Search size={14} className="dict-search-icon" />
-            <input
-              type="text"
-              className="settings-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('settings.speaker_search_placeholder', {
-                defaultValue: 'Search speakers...',
-              })}
-              style={{
-                width: '100%',
-                height: '32px',
-                paddingLeft: '32px',
-                paddingRight: searchQuery ? '28px' : '10px',
-                fontSize: '0.8125rem',
-                boxSizing: 'border-box',
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="dict-search-clear"
-                onClick={() => setSearchQuery('')}
-                aria-label={t('common.clear', { defaultValue: 'Clear' })}
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            size="sm"
+            wrapperClassName="dict-search-wrap"
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            aria-label={t('settings.speaker_search_placeholder', {
+              defaultValue: 'Search speakers...',
+            })}
+            placeholder={t('settings.speaker_search_placeholder', {
+              defaultValue: 'Search speakers...',
+            })}
+            clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          />
         </div>
 
         {/* Add Profile Row */}

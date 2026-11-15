@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDownIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
+import { SearchInput } from './ui/SearchInput';
 
 export interface DropdownOption {
   value: string;
@@ -47,7 +49,9 @@ export function Dropdown({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const initialTriggerRectRef = useRef<DOMRect | null>(null);
+  const { t } = useTranslation();
 
   const showSearch = options.length > 10;
   const selectedOption = options.find((opt) => opt.value === value);
@@ -167,8 +171,7 @@ export function Dropdown({
   useEffect(() => {
     if (isOpen && menuRef.current) {
       if (showSearch) {
-        const searchInput =
-          menuRef.current.querySelector<HTMLInputElement>('.dropdown-search-input');
+        const searchInput = searchInputRef.current;
         if (searchInput) {
           requestAnimationFrame(() => searchInput.focus({ preventScroll: true }));
           return;
@@ -232,7 +235,7 @@ export function Dropdown({
     }
 
     if (menuRef.current) {
-      const searchInput = menuRef.current.querySelector<HTMLInputElement>('.dropdown-search-input');
+      const searchInput = searchInputRef.current;
       const buttons = Array.from(
         menuRef.current.querySelectorAll<HTMLButtonElement>('.dropdown-item:not(:disabled)')
       );
@@ -376,23 +379,15 @@ export function Dropdown({
                   zIndex: 10,
                 }}
               >
-                <input
-                  type="text"
-                  className="dropdown-search-input"
+                <SearchInput
+                  ref={searchInputRef}
+                  size="sm"
                   placeholder="Search..."
+                  aria-label={t('common.search', { defaultValue: 'Search options' })}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    border: '1px solid var(--border)',
-                    borderRadius: '4px',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                  }}
-                  onClick={(e) => e.stopPropagation()} // Prevent clicking search from triggering select/close
+                  onValueChange={setSearchQuery}
+                  onClick={(e) => e.stopPropagation()}
+                  clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
                 />
               </div>
             )}

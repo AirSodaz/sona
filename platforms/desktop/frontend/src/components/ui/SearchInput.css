@@ -1,0 +1,181 @@
+.sona-search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px 0 10px;
+  gap: 6px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  box-shadow: none;
+  overflow: hidden;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.sona-search-input--sm {
+  height: 32px;
+  border-radius: var(--radius-sm, 6px);
+}
+
+.sona-search-input:hover {
+  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+}
+
+.sona-search-input:focus-within {
+  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shell-shadow);
+}
+
+.sona-search-input__icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  transition: color var(--transition-fast);
+}
+
+.sona-search-input--sm .sona-search-input__icon {
+  width: 14px;
+  height: 14px;
+}
+
+.sona-search-input:focus-within .sona-search-input__icon {
+  color: var(--color-text-secondary);
+}
+
+.sona-search-input .sona-search-input__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: normal;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.sona-search-input--sm .sona-search-input__field {
+  font-size: 0.8125rem;
+}
+
+.sona-search-input .sona-search-input__field:focus {
+  border: none;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sona-search-input__field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.sona-search-input__field::-webkit-search-cancel-button,
+.sona-search-input__field::-webkit-search-decoration,
+.sona-search-input__field::-webkit-search-results-button,
+.sona-search-input__field::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
+.sona-search-input__clear {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  animation: sona-search-input-clear-enter 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.sona-search-input--sm .sona-search-input__clear {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+}
+
+.sona-search-input__clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  color: var(--color-text-primary);
+  transform: scale(1.05);
+}
+
+.sona-search-input__clear:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+  color: var(--color-text-primary);
+  transform: scale(0.92);
+}
+
+.sona-search-input__clear:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.sona-search-input__clear:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-primary) 42%, transparent);
+  color: var(--color-text-primary);
+}
+
+.sona-search-input__suffix {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+@keyframes sona-search-input-clear-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sona-search-input,
+  .sona-search-input__icon,
+  .sona-search-input__clear {
+    transition: none;
+  }
+  .sona-search-input__clear {
+    animation: none;
+  }
+
+  .sona-search-input__clear:hover,
+  .sona-search-input__clear:active {
+    transform: none;
+  }
+}

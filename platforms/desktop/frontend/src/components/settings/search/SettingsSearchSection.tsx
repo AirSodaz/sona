@@ -1,7 +1,7 @@
-import { Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isAnyDialogOpen } from '../../../stores/dialogStore';
+import { SearchInput } from '../../ui/SearchInput';
 import { SettingsSearchResults } from './SettingsSearchResults';
 import { type SettingsSearchHit, useSettingsSearch } from './useSettingsSearch';
 
@@ -112,51 +112,40 @@ export const SettingsSearchSection = React.forwardRef<
     <>
       <div className={`settings-sidebar-header ${isSidebarScrolled ? 'is-scrolled' : ''}`}>
         <h2 id="settings-title">{t('settings.title')}</h2>
-        <div className="settings-search-bar">
-          <Search size={14} className="settings-search-icon" aria-hidden="true" />
-          <input
-            ref={inputRef}
-            type="search"
-            role="combobox"
-            className="settings-search-input"
-            aria-label={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
-            placeholder={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
-            aria-expanded={hasQuery}
-            aria-haspopup="listbox"
-            aria-autocomplete="list"
-            aria-controls={hasQuery ? 'settings-search-listbox' : undefined}
-            aria-activedescendant={
-              hasQuery && hits[activeIndex]
-                ? `settings-search-result-${hits[activeIndex].id}`
-                : undefined
+        <SearchInput
+          ref={inputRef}
+          wrapperClassName="settings-search-bar"
+          size="sm"
+          type="search"
+          role="combobox"
+          aria-label={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
+          clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          placeholder={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
+          aria-expanded={hasQuery}
+          aria-haspopup="listbox"
+          aria-autocomplete="list"
+          aria-controls={hasQuery ? 'settings-search-listbox' : undefined}
+          aria-activedescendant={
+            hasQuery && hits[activeIndex]
+              ? `settings-search-result-${hits[activeIndex].id}`
+              : undefined
+          }
+          value={searchQuery}
+          onValueChange={(nextQuery) => {
+            if (searchQuery.length > 0 && nextQuery.length === 0) {
+              onQueryEmptied();
             }
-            value={searchQuery}
-            onChange={(e) => {
-              const nextQuery = e.target.value;
-              if (searchQuery.length > 0 && nextQuery.length === 0) {
-                onQueryEmptied();
-              }
-              setSearchQuery(nextQuery);
-              setActiveIndex(0);
-            }}
-            onKeyDown={handleSearchInputKeyDown}
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              className="settings-search-clear"
-              onClick={() => {
-                clearQuery();
-                inputRef.current?.focus();
-              }}
-              aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
-            >
-              <X size={12} />
-            </button>
-          ) : (
-            <kbd className="settings-search-shortcut">{isMac ? '⌘F' : 'Ctrl F'}</kbd>
-          )}
-        </div>
+            setSearchQuery(nextQuery);
+            setActiveIndex(0);
+          }}
+          onKeyDown={handleSearchInputKeyDown}
+          onClear={clearQuery}
+          suffix={
+            !searchQuery ? (
+              <kbd className="settings-search-shortcut">{isMac ? '⌘F' : 'Ctrl F'}</kbd>
+            ) : undefined
+          }
+        />
       </div>
       <div role="status" aria-live="polite" className="settings-search-sr-only">
         {announcement}

@@ -1,8 +1,9 @@
-import { Film, Search, Tv } from 'lucide-react';
+import { Film, Tv } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown, type DropdownOption } from '../../../../components/Dropdown';
+import { SearchInput } from '../../../../components/ui/SearchInput';
 import type { EmbyLibrary } from '../../../../types/emby';
 
 const supportedLanguageOptions: DropdownOption[] = [
@@ -83,21 +84,19 @@ export function EmbyLibraryToolbar({
       {/* 2. Controls: Search (left) & Target Language (right) */}
       <div className="emby-library-controls">
         <div className="emby-controls-row">
-          <div className="emby-search-box">
-            <Search size={14} className="emby-search-icon" aria-hidden="true" />
-            <input
-              type="text"
-              className="emby-search-input"
-              aria-label={t('emby.search_placeholder', {
-                defaultValue: 'Search movies and TV shows...',
-              })}
-              placeholder={t('emby.search_placeholder', {
-                defaultValue: 'Search movies and TV shows...',
-              })}
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
+          <SearchInput
+            size="md"
+            wrapperClassName="emby-search-box"
+            aria-label={t('emby.search_placeholder', {
+              defaultValue: 'Search movies and TV shows...',
+            })}
+            placeholder={t('emby.search_placeholder', {
+              defaultValue: 'Search movies and TV shows...',
+            })}
+            value={searchTerm}
+            onValueChange={onSearchChange}
+            clearLabel={t('common.clear_search', { defaultValue: 'Clear search' })}
+          />
 
           <div className="emby-toolbar-select-group">
             <span className="emby-toolbar-label">

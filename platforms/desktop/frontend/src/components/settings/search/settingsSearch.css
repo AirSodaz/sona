@@ -3,89 +3,7 @@
    ========================================================================== */
 
 .settings-search-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   margin-top: 8px;
-  padding: 0 8px 0 10px;
-  height: 30px;
-  background: var(--color-bg-tertiary, rgba(0, 0, 0, 0.04));
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 6px);
-  box-shadow: var(--apple-control-shadow-flat);
-  transition:
-    background var(--transition-fast, 0.15s ease),
-    border-color var(--transition-fast, 0.15s ease),
-    box-shadow var(--transition-fast, 0.15s ease);
-}
-
-.settings-search-bar:hover {
-  border-color: var(--color-border-hover, var(--color-border));
-}
-
-.settings-search-bar:focus-within {
-  background: var(--apple-field-focus-surface, var(--color-bg-primary, #ffffff));
-  border-color: var(--apple-field-focus-border, var(--color-accent-blue, #3b82f6));
-  box-shadow: var(
-    --apple-field-focus-shadow,
-    0 0 0 2px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 18%, transparent)
-  );
-}
-
-.settings-search-icon {
-  flex-shrink: 0;
-  color: var(--color-text-muted, #9ca3af);
-  pointer-events: none;
-  transition: color var(--transition-fast, 0.15s ease);
-}
-
-.settings-search-bar:focus-within .settings-search-icon {
-  color: var(--color-accent-blue, #3b82f6);
-}
-
-/* Specificity overrides to neutralize controls.css global input styles without !important */
-.settings-modal .settings-search-bar input.settings-search-input,
-.settings-modal .settings-search-bar input[type="text"].settings-search-input,
-.settings-modal .settings-search-bar input[type="search"].settings-search-input {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 0;
-  outline: none;
-  color: var(--color-text-primary, #111827);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  line-height: normal;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.settings-modal .settings-search-bar input.settings-search-input:focus,
-.settings-modal .settings-search-bar input[type="text"].settings-search-input:focus,
-.settings-modal .settings-search-bar input[type="search"].settings-search-input:focus {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  outline: none;
-}
-.settings-search-input::placeholder {
-  color: var(--color-text-muted, #9ca3af);
-  font-size: 0.8125rem;
-}
-
-.settings-search-input::-webkit-search-decoration,
-.settings-search-input::-webkit-search-cancel-button,
-.settings-search-input::-webkit-search-results-button,
-.settings-search-input::-webkit-search-results-decoration {
-  display: none;
-  -webkit-appearance: none;
 }
 
 .settings-search-shortcut {
@@ -106,36 +24,6 @@
   flex-shrink: 0;
 }
 
-.settings-search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
-  color: var(--color-text-secondary, #6b7280);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background var(--transition-fast, 0.15s ease),
-    color var(--transition-fast, 0.15s ease),
-    transform var(--transition-fast, 0.15s ease);
-}
-
-.settings-search-clear:hover {
-  background: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
-  color: var(--color-text-primary, #111827);
-  transform: scale(1.08);
-}
-
-.settings-search-clear:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 42%, transparent);
-  color: var(--color-text-primary, #111827);
-}
 /* --------------------------------------------------------------------------
    Search Results Container
    -------------------------------------------------------------------------- */
