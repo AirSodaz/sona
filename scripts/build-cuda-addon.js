@@ -403,6 +403,7 @@ function buildLlamaCppGgmlCuda({
     '-DCMAKE_BUILD_TYPE=Release',
     '-DGGML_CUDA=ON',
     '-DBUILD_SHARED_LIBS=ON',
+    '-DGGML_BACKEND_DL=ON',
     '-DGGML_CUDA_FORCE_CUBLAS=ON',
     '-DGGML_CUDA_FA_ALL_QUANTS=OFF',
     '-DLLAMA_BUILD_EXAMPLES=OFF',
@@ -453,7 +454,7 @@ function stageCudaAddonFiles({
   llamaLibDir,
   cudaLibPaths = [],
   platform = process.platform,
-  version = '0.2.1',
+  version = '0.3.0',
   cudaVersion = '12.4',
 }) {
   fs.mkdirSync(stagedDir, { recursive: true });
@@ -590,7 +591,7 @@ function runCli() {
     process.exit(1);
   }
 
-  const addonVersion = options['addon-version'] || '0.2.1';
+  const addonVersion = options['addon-version'] || '0.3.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
   const sherpaVersion = options['sherpa-version'] || '2.0.1';
   const ortVersion = options['ort-version'] || '1.28.2';
