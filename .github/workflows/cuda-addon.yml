@@ -44,6 +44,8 @@ jobs:
   prepare-version:
     name: Prepare CUDA Addon Version
     runs-on: ubuntu-latest
+    env:
+      CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
     outputs:
       addon_version: ${{ steps.resolve.outputs.addon_version }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
@@ -59,6 +61,11 @@ jobs:
       - name: Resolve Addon Version
         id: resolve
         run: |
+          if [[ ! "$CUDA_VERSION" =~ ^12\.4(\.[0-9]+)?$ ]]; then
+            echo "Unsupported CUDA version: $CUDA_VERSION. This workflow currently supports CUDA 12.4.x only." >&2
+            exit 1
+          fi
+
           if [[ "${GITHUB_REF}" == refs/tags/cuda-addon-v* ]]; then
             TAG="${GITHUB_REF_NAME}"
             VERSION=$(node scripts/cuda-addon-manifest.js validate-tag --tag "$TAG" | awk '{print $NF}')
