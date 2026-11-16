@@ -12,7 +12,7 @@ runs:
     - name: Cache Vulkan SDK (Windows)
       if: runner.os == 'Windows'
       id: cache-vulkan-win
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: C:\VulkanSDK\${{ inputs.version }}
         key: vulkan-sdk-${{ inputs.version }}-windows
@@ -20,7 +20,7 @@ runs:
     - name: Cache Vulkan SDK (Linux)
       if: runner.os == 'Linux'
       id: cache-vulkan-linux
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/vulkan/${{ inputs.version }}
         key: vulkan-sdk-${{ inputs.version }}-linux-x86_64

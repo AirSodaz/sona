@@ -18,7 +18,7 @@ pub(super) fn current_time_millis() -> u64 {
 
 pub(super) fn capture_process_memory_mb() -> Option<f64> {
     let pid = sysinfo::get_current_pid().ok()?;
-    let mut system = System::new();
+    let mut system = System::new().ok()?;
     system.refresh_processes(ProcessesToUpdate::Some(&[pid]), false);
     system
         .process(pid)

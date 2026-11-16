@@ -273,7 +273,7 @@ function downloadSherpaOnnxCuda({
   return null;
 }
 function downloadLlamaCppCuda({
-  llamaRef = 'b10405',
+  llamaRef = 'b11429',
   cudaVersion = '12.4',
   cacheDir,
   platform = process.platform,
@@ -363,7 +363,7 @@ function collectFilesRecursively(dir, filterRegex) {
 }
 
 function buildLlamaCppGgmlCuda({
-  llamaRef = 'b10405',
+  llamaRef = 'b11429',
   buildRoot,
   cudaArchitectures = '75;80;86;89',
   platform = process.platform,
@@ -594,7 +594,7 @@ function runCli() {
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
   const sherpaVersion = options['sherpa-version'] || '2.0.1';
   const ortVersion = options['ort-version'] || '1.28.2';
-  const llamaRef = options['llama-ref'] || 'b10405';
+  const llamaRef = options['llama-ref'] || 'b11429';
   const outputDir = path.resolve(options['output-dir'] || path.join(repoRoot, 'dist', 'cuda-addon'));
   const cacheDir = path.join(repoRoot, 'target', 'cuda-addon-cache');
   const stageName = `sona-cuda-addon-v${addonVersion}-${process.platform === 'win32' ? 'windows-x64' : 'linux-x64'}`;

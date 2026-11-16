@@ -527,9 +527,15 @@ describe('CaptionWindow', () => {
 
     const originalLine = container.querySelector('.caption-original-line') as HTMLElement;
     expect(originalLine).not.toBeNull();
-    expect(originalLine.style.webkitTextStroke).toBe('3px #000000');
-    expect(originalLine.style.textShadow).toContain('-1px -1px 0 #000000');
-    expect(originalLine.style.textShadow).toContain('0 1px 3px rgba(0, 0, 0, 0.55)');
+    expect(originalLine.style.webkitTextStroke).toMatch(/^3px (?:#000000|rgb\(0, 0, 0\))$/);
+    // jsdom >= 31 serializes text-shadow with the color first and drops the zero blur, so assert
+    // the layer set instead of the exact string.
+    const shadow = originalLine.style.textShadow;
+    for (const offset of ['-1px -1px', '1px -1px', '-1px 1px', '1px 1px']) {
+      expect(shadow).toContain(offset);
+    }
+    expect(shadow.match(/rgb\(0, 0, 0\)|#000000/g) ?? []).toHaveLength(4);
+    expect(shadow).toContain('rgba(0, 0, 0, 0.55)');
   });
 
   it('renders translation_main with translation first, larger font, and original below', async () => {

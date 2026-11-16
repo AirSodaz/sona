@@ -218,8 +218,9 @@ describe('VoiceTypingOverlay', () => {
     render(<VoiceTypingOverlay />);
 
     screen.getByText('正在聆听...');
-    expect(document.documentElement.style.background).toBe('transparent');
-    expect(document.body.style.background).toBe('transparent');
+    // jsdom >= 31 serializes a `transparent` background shorthand as `none`.
+    expect(['transparent', 'none']).toContain(document.documentElement.style.background);
+    expect(['transparent', 'none']).toContain(document.body.style.background);
   });
 
   it('applies the stored dark theme to the auxiliary window root', async () => {

@@ -199,7 +199,7 @@ impl LlamaBatchTranscriptionJob {
             explicit => explicit,
         };
         let enable_gpu = requested == GpuOffload::Enabled;
-        let (model, mtmd) = match init_inference(
+        let (model, mut mtmd) = match init_inference(
             backend,
             &self.model_path,
             &self.mmproj_path,
@@ -260,7 +260,7 @@ impl LlamaBatchTranscriptionJob {
             if let Some(mut segment_result) = transcribe_segment(
                 backend,
                 &model,
-                &mtmd,
+                &mut mtmd,
                 &prompt,
                 add_special,
                 language_forced,
@@ -366,7 +366,7 @@ fn segment_bounds(
 fn transcribe_segment(
     backend: &'static LlamaBackend,
     model: &Arc<LlamaModel>,
-    mtmd: &MtmdContext,
+    mtmd: &mut MtmdContext,
     prompt: &str,
     add_special: bool,
     language_forced: bool,
@@ -420,7 +420,7 @@ fn transcribe_segment(
             )
         })?;
     let n_past = chunks
-        .eval_chunks(mtmd, &context, 0, 0, N_BATCH, true)
+        .eval_chunks(mtmd, &mut context, 0, 0, N_BATCH, true)
         .map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
@@ -442,23 +442,14 @@ fn transcribe_segment(
             return Err(AsrPortError::runtime("Task cancelled."));
         }
         let token = sampler.sample(&context, -1);
-        if model.is_eog_token(token) {
+        if model.vocab().is_eog(token) {
             break;
         }
         sampler.accept(token);
-        generated.push_str(
-            &model
-                .token_to_piece(token, &mut decoder, false, None)
-                .map_err(|error| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Protocol,
-                        format!(
-                            "Failed to decode llama.cpp output token (id={}): {error}",
-                            token.0
-                        ),
-                    )
-                })?,
-        );
+        let piece_bytes = model.vocab().token_to_piece(token, false, None);
+        let mut piece = String::new();
+        let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
+        generated.push_str(&piece);
         generated_tokens = generated_tokens.saturating_add(1);
         if generated_tokens.is_multiple_of(8) {
             observer.on_progress(llama_generation_progress(

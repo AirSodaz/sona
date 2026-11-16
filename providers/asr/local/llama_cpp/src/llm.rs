@@ -8,7 +8,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use sona_core::llm::provider_protocol::{LlmModality, LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmModelsRequest};
@@ -859,19 +859,14 @@ fn run_llama_generation(
     let mut stopped_by_eog = false;
     for _ in 0..generation_limit {
         let token = sampler.sample(&context, -1);
-        if model.is_eog_token(token) {
+        if model.vocab().is_eog(token) {
             stopped_by_eog = true;
             break;
         }
         sampler.accept(token);
-        let piece = model
-            .token_to_piece(token, &mut decoder, false, None)
-            .map_err(|error| {
-                LlmPortError::new(
-                    LlmPortErrorKind::Protocol,
-                    format!("Failed to decode output token: {error}"),
-                )
-            })?;
+        let piece_bytes = model.vocab().token_to_piece(token, false, None);
+        let mut piece = String::new();
+        let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
 
         generated_text.push_str(&piece);
         if let Some(tx) = &delta_sender
@@ -922,10 +917,7 @@ fn run_llama_generation(
         }
     }
     let reasoning_tokens = if let Some(th) = &thought {
-        model
-            .str_to_token(th, AddBos::Never)
-            .map(|t| t.len() as u64)
-            .unwrap_or(0)
+        model.vocab().tokenize(th.as_bytes(), false, true).len() as u64
     } else {
         0
     };
@@ -989,14 +981,7 @@ impl LlamaCppLlmEngine {
             &thinking_level,
         )?;
 
-        let prompt_tokens = model
-            .str_to_token(&prompt, AddBos::Never)
-            .map_err(|error| {
-                LlmPortError::new(
-                    LlmPortErrorKind::Protocol,
-                    format!("Failed to tokenize prompt: {error}"),
-                )
-            })?;
+        let prompt_tokens = model.vocab().tokenize(prompt.as_bytes(), false, true);
 
         if prompt_tokens.is_empty() {
             return Err(LlmPortError::new(

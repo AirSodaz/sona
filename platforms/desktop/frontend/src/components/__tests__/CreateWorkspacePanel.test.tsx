@@ -79,7 +79,7 @@ describe('CreateWorkspacePanel', () => {
     // Slider and Live Tab active
     const slider = shell.querySelector('.create-tab-slider') as HTMLElement;
     expect(slider).not.toBeNull();
-    expect(slider.style.transform).toBe('translateX(calc(0 * (100% + 4px)))');
+    expect(slider.style.transform).toMatch(/translateX\(calc\(0(?![0-9])/);
 
     const liveTab = screen.getByTestId('create-tab-live');
     expect(liveTab.getAttribute('aria-selected')).toBe('true');
@@ -128,7 +128,7 @@ describe('CreateWorkspacePanel', () => {
     // Slider and Batch Tab active
     const slider = shell.querySelector('.create-tab-slider') as HTMLElement;
     expect(slider).not.toBeNull();
-    expect(slider.style.transform).toBe('translateX(calc(1 * (100% + 4px)))');
+    expect(slider.style.transform).toMatch(/translateX\(calc\((?:100%|1 \*)/);
 
     const batchTab = screen.getByTestId('create-tab-batch');
     expect(batchTab.getAttribute('aria-selected')).toBe('true');

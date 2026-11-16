@@ -240,7 +240,7 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
             })?;
 
         let n_past = {
-            let mtmd = self.mtmd.lock().map_err(|_| {
+            let mut mtmd = self.mtmd.lock().map_err(|_| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
                     "llama.cpp multimodal context lock was poisoned.",
@@ -262,7 +262,7 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
                     )
                 })?;
             chunks
-                .eval_chunks(&mtmd, &context, 0, 0, N_BATCH, true)
+                .eval_chunks(&mut mtmd, &mut context, 0, 0, N_BATCH, true)
                 .map_err(|error| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
@@ -285,22 +285,13 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
 
         for token_position in n_past..generation_end {
             let token = sampler.sample(&context, -1);
-            if self.model.is_eog_token(token) {
+            if self.model.vocab().is_eog(token) {
                 break;
             }
             sampler.accept(token);
-            let piece = self
-                .model
-                .token_to_piece(token, &mut decoder, false, None)
-                .map_err(|error| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Protocol,
-                        format!(
-                            "Failed to decode llama.cpp output token (id={}): {error}",
-                            token.0
-                        ),
-                    )
-                })?;
+            let piece_bytes = self.model.vocab().token_to_piece(token, false, None);
+            let mut piece = String::new();
+            let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
             generated.push_str(&piece);
 
             let mut batch = LlamaBatch::new(1, 1);

@@ -3,7 +3,7 @@ description: 'Download and configure llama.cpp prebuilt libraries'
 
 inputs:
   ref:
-    description: 'llama.cpp release tag (e.g. b10405)'
+    description: 'llama.cpp release tag (e.g. b11429)'
   platform:
     description: 'Platform identifier (macos-x64, macos-arm64, linux-x64, linux-vulkan-x64, windows-x64, windows-vulkan-x64, windows-cpu-arm64)'
     required: true

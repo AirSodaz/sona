@@ -1,12 +1,11 @@
 use std::fs::File;
 use std::path::Path;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
+use symphonia::core::codecs::audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::FormatOptions;
+use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 use thiserror::Error;
 
 use super::resampler::{AudioResampleError, resample_mono_to_target};
@@ -102,14 +101,11 @@ impl BuiltinAudioDecoder {
         hint: Hint,
         target_sample_rate: u32,
     ) -> Result<Vec<f32>, AudioDecodeError> {
-        let format_opts = FormatOptions {
-            enable_gapless: true,
-            ..Default::default()
-        };
+        let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
 
-        let probed = symphonia::default::get_probe()
-            .format(&hint, mss, &format_opts, &metadata_opts)
+        let mut format = symphonia::default::get_probe()
+            .probe(&hint, mss, format_opts, metadata_opts)
             .map_err(|e| match e {
                 SymphoniaError::Unsupported(_) => AudioDecodeError::UnsupportedFormat(format!(
                     "Unsupported format or container: {e}"
@@ -118,21 +114,23 @@ impl BuiltinAudioDecoder {
                 other => AudioDecodeError::Decode(other.to_string()),
             })?;
 
-        let mut format = probed.format;
-
         // Find the first supported decodable audio track
-        let decoder_opts = DecoderOptions::default();
+        let decoder_opts = AudioDecoderOptions::default();
         let mut chosen = None;
         let mut last_unsupported_err = None;
 
-        for candidate_track in format
-            .tracks()
-            .iter()
-            .filter(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        {
-            match symphonia::default::get_codecs()
-                .make(&candidate_track.codec_params, &decoder_opts)
-            {
+        for candidate_track in format.tracks() {
+            let Some(params) = candidate_track
+                .codec_params
+                .as_ref()
+                .and_then(|params| params.audio())
+            else {
+                continue;
+            };
+            if params.codec == CODEC_ID_NULL_AUDIO {
+                continue;
+            }
+            match symphonia::default::get_codecs().make_audio_decoder(params, &decoder_opts) {
                 Ok(dec) => {
                     chosen = Some((candidate_track.id, dec));
                     break;
@@ -158,17 +156,13 @@ impl BuiltinAudioDecoder {
         let mut actual_sample_rate = None;
         let mut actual_channels = None;
 
-        let mut sample_buf: Option<SampleBuffer<f32>> = None;
+        let mut interleaved: Vec<f32> = Vec::new();
         let mut mono_samples: Vec<f32> = Vec::new();
 
         loop {
             let packet = match format.next_packet() {
-                Ok(packet) => packet,
-                Err(SymphoniaError::IoError(err))
-                    if err.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
-                    break;
-                }
+                Ok(Some(packet)) => packet,
+                Ok(None) => break,
                 Err(SymphoniaError::ResetRequired) => {
                     decoder.reset();
                     continue;
@@ -183,7 +177,7 @@ impl BuiltinAudioDecoder {
                 }
             };
 
-            if packet.track_id() != track_id {
+            if packet.track_id != track_id {
                 continue;
             }
             match decoder.decode(&packet) {
@@ -191,18 +185,19 @@ impl BuiltinAudioDecoder {
                     if decoded.frames() == 0 {
                         continue;
                     }
-                    let spec = *decoded.spec();
+                    let spec = decoded.spec().clone();
                     if let Some(rate) = actual_sample_rate {
-                        if rate != spec.rate {
+                        if rate != spec.rate() {
                             return Err(AudioDecodeError::Decode(format!(
                                 "Audio stream sample rate changed mid-stream from {} to {}, which is unsupported",
-                                rate, spec.rate
+                                rate,
+                                spec.rate()
                             )));
                         }
                     } else {
-                        actual_sample_rate = Some(spec.rate);
+                        actual_sample_rate = Some(spec.rate());
                     }
-                    let channels = spec.channels.count();
+                    let channels = spec.channels().count();
                     if channels == 0 {
                         continue;
                     }
@@ -216,45 +211,34 @@ impl BuiltinAudioDecoder {
                     } else {
                         actual_channels = Some(channels);
                     }
-                    let required_samples = decoded.capacity() * channels;
-                    if sample_buf
-                        .as_ref()
-                        .is_none_or(|b| b.capacity() < required_samples)
-                    {
-                        sample_buf =
-                            Some(SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
-                    }
-
-                    if let Some(buf) = sample_buf.as_mut() {
-                        buf.copy_interleaved_ref(decoded);
-                        let interleaved = buf.samples();
-                        if channels == 1 {
-                            mono_samples.extend_from_slice(interleaved);
-                        } else if channels == 2 {
-                            mono_samples.reserve(interleaved.len() / 2);
-                            for frame in interleaved.as_chunks::<2>().0 {
-                                mono_samples.push((frame[0] + frame[1]) * 0.5);
-                            }
-                        } else if channels == 6 {
-                            // Standard 5.1 surround layout (ITU-R BS.775):
-                            // 0: FL, 1: FR, 2: FC (Center dialogue), 3: LFE (Subwoofer), 4: BL, 5: BR
-                            // Omit LFE to avoid sub-bass noise; prioritize dialogue in FC.
-                            mono_samples.reserve(interleaved.len() / 6);
-                            for frame in interleaved.as_chunks::<6>().0 {
-                                mono_samples.push(
-                                    frame[0] * 0.2071
-                                        + frame[1] * 0.2071
-                                        + frame[2] * 0.2929
-                                        + frame[4] * 0.1464
-                                        + frame[5] * 0.1464,
-                                );
-                            }
-                        } else {
-                            mono_samples.reserve(interleaved.len() / channels);
-                            for frame in interleaved.chunks_exact(channels) {
-                                let sum: f32 = frame.iter().sum();
-                                mono_samples.push(sum / (channels as f32));
-                            }
+                    decoded.copy_to_vec_interleaved(&mut interleaved);
+                    let interleaved = interleaved.as_slice();
+                    if channels == 1 {
+                        mono_samples.extend_from_slice(interleaved);
+                    } else if channels == 2 {
+                        mono_samples.reserve(interleaved.len() / 2);
+                        for frame in interleaved.as_chunks::<2>().0 {
+                            mono_samples.push((frame[0] + frame[1]) * 0.5);
+                        }
+                    } else if channels == 6 {
+                        // Standard 5.1 surround layout (ITU-R BS.775):
+                        // 0: FL, 1: FR, 2: FC (Center dialogue), 3: LFE (Subwoofer), 4: BL, 5: BR
+                        // Omit LFE to avoid sub-bass noise; prioritize dialogue in FC.
+                        mono_samples.reserve(interleaved.len() / 6);
+                        for frame in interleaved.as_chunks::<6>().0 {
+                            mono_samples.push(
+                                frame[0] * 0.2071
+                                    + frame[1] * 0.2071
+                                    + frame[2] * 0.2929
+                                    + frame[4] * 0.1464
+                                    + frame[5] * 0.1464,
+                            );
+                        }
+                    } else {
+                        mono_samples.reserve(interleaved.len() / channels);
+                        for frame in interleaved.chunks_exact(channels) {
+                            let sum: f32 = frame.iter().sum();
+                            mono_samples.push(sum / (channels as f32));
                         }
                     }
                 }
@@ -284,7 +268,7 @@ impl BuiltinAudioDecoder {
 
         drop(decoder);
         drop(format);
-        drop(sample_buf);
+        drop(interleaved);
 
         // Resample to target_sample_rate if needed
         if input_rate == target_sample_rate {
