@@ -294,6 +294,7 @@ async fn scan_compatible_cuda_addon_release(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use axum::extract::{Path as AxumPath, State};
