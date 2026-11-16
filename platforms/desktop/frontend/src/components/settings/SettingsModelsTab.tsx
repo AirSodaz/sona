@@ -133,57 +133,143 @@ export function SettingsModelsTab({
   }, [isBatchScenario, modelConfig.asr?.selections.batch]);
 
   const [cudaStatus, setCudaStatus] = useState<CudaAddonInspection | null>(null);
+  const [cudaStatusError, setCudaStatusError] = useState<string | null>(null);
+  const [cudaStatusLoading, setCudaStatusLoading] = useState(true);
   const [cudaDownloading, setCudaDownloading] = useState(false);
   const [cudaProgress, setCudaProgress] = useState(0);
+  const cudaMirror = modelConfig.modelDownloadMirror ?? undefined;
 
   useEffect(() => {
     let mounted = true;
     cudaAddonService
-      .getStatus()
+      .getStatus(cudaMirror)
       .then((status) => {
         if (mounted) {
           setCudaStatus(status);
+          setCudaStatusError(status.updateCheckError);
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (mounted) {
+          setCudaStatusError(String(error));
+        }
+      })
+      .finally(() => {
+        if (mounted) setCudaStatusLoading(false);
+      });
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cudaMirror]);
+
+  const refreshCudaStatus = useCallback(async () => {
+    const status = await cudaAddonService.getStatus(cudaMirror);
+    setCudaStatus(status);
+    setCudaStatusError(status.updateCheckError);
+    return status;
+  }, [cudaMirror]);
+
+  const installCudaAddon = useCallback(
+    async (status: CudaAddonInspection, activate: boolean) => {
+      if (!status.downloadUrl || !status.expectedSha256 || !status.requiredVersion) {
+        throw new Error(status.updateCheckError || t('settings.cuda_addon_update_unavailable'));
+      }
+      const updating = status.isInstalled;
+      const confirmed = await useDialogStore.getState().confirm(
+        t(
+          updating ? 'settings.cuda_addon_update_confirm' : 'settings.cuda_addon_download_confirm',
+          {
+            currentVersion: status.version ?? t('settings.cuda_addon_status_not_installed'),
+            requiredVersion: status.requiredVersion,
+          }
+        ),
+        {
+          title: t(
+            updating ? 'settings.cuda_addon_update_title' : 'settings.cuda_addon_download_title'
+          ),
+          confirmLabel: t(updating ? 'settings.cuda_addon_update_action' : 'common.download', {
+            defaultValue: updating ? 'Update' : 'Download',
+          }),
+        }
+      );
+      if (!confirmed) return false;
+
+      setCudaDownloading(true);
+      setCudaProgress(0);
+      try {
+        await cudaAddonService.downloadAndInstall({
+          mirror: cudaMirror,
+          version: status.requiredVersion,
+          customUrl: status.downloadUrl,
+          expectedSha256: status.expectedSha256,
+          onProgress: (progress) => setCudaProgress(progress.progressPercent),
+        });
+        const refreshed = await refreshCudaStatus();
+        if (
+          !refreshed.isInstalled ||
+          !refreshed.isCompatible ||
+          refreshed.version !== status.requiredVersion
+        ) {
+          throw new Error(refreshed.validationError || t('settings.cuda_addon_validation_failed'));
+        }
+        if (activate) {
+          updateConfig({ gpuAcceleration: 'cuda' });
+        }
+        useDialogStore.getState().alert(t('settings.cuda_addon_install_success'), {
+          title: t(
+            updating ? 'settings.cuda_addon_update_title' : 'settings.cuda_addon_download_title'
+          ),
+          variant: 'success',
+        });
+        return true;
+      } finally {
+        setCudaDownloading(false);
+      }
+    },
+    [cudaMirror, refreshCudaStatus, t, updateConfig]
+  );
 
   const handleGpuAccelerationChange = useCallback(
     async (value: string) => {
       if (value === 'cuda') {
-        const currentStatus = cudaStatus ?? (await cudaAddonService.getStatus().catch(() => null));
-        if (currentStatus && !currentStatus.isInstalled) {
-          const confirmed = await useDialogStore
-            .getState()
-            .confirm(t('settings.cuda_addon_download_confirm'), {
-              title: t('settings.cuda_addon_download_title'),
-              confirmLabel: t('common.download', { defaultValue: 'Download' }),
-            });
-          if (!confirmed) {
-            return;
-          }
-          setCudaDownloading(true);
-          setCudaProgress(0);
+        let currentStatus = cudaStatus;
+        if (!currentStatus || currentStatus.updateCheckError) {
           try {
-            const newStatus = await cudaAddonService.downloadAndInstall({
-              onProgress: (p) => setCudaProgress(p.progressPercent),
-            });
-            setCudaStatus(newStatus);
-            updateConfig({ gpuAcceleration: 'cuda' });
-            useDialogStore.getState().alert(t('settings.cuda_addon_install_success'), {
-              title: t('settings.cuda_addon_download_title'),
-              variant: 'success',
-            });
-          } catch (err) {
-            useDialogStore.getState().alert(String(err), {
+            currentStatus = await refreshCudaStatus();
+          } catch (error) {
+            const message = String(error);
+            setCudaStatusError(message);
+            useDialogStore.getState().alert(message, {
               title: t('settings.cuda_addon_download_title'),
               variant: 'error',
             });
-          } finally {
-            setCudaDownloading(false);
+            return;
+          }
+        }
+        // The update feed is advisory: an installed, compatible addon stays usable
+        // when the release lookup is unreachable.
+        const needsInstall =
+          !currentStatus.isInstalled ||
+          !currentStatus.isCompatible ||
+          currentStatus.updateAvailable;
+        if (needsInstall) {
+          if (currentStatus.updateCheckError || !currentStatus.downloadUrl) {
+            const message =
+              currentStatus.updateCheckError || t('settings.cuda_addon_update_unavailable');
+            setCudaStatusError(message);
+            useDialogStore.getState().alert(message, {
+              title: t('settings.cuda_addon_download_title'),
+              variant: 'error',
+            });
+            return;
+          }
+          try {
+            await installCudaAddon(currentStatus, true);
+          } catch (error) {
+            useDialogStore.getState().alert(String(error), {
+              title: t('settings.cuda_addon_download_title'),
+              variant: 'error',
+            });
           }
           return;
         }
@@ -192,7 +278,7 @@ export function SettingsModelsTab({
         gpuAcceleration: value as 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda',
       });
     },
-    [cudaStatus, t, updateConfig]
+    [cudaStatus, installCudaAddon, refreshCudaStatus, t, updateConfig]
   );
 
   const navContext = useOptionalSettingsNavigation();
@@ -1282,14 +1368,73 @@ export function SettingsModelsTab({
                         ? t('settings.gpu_acceleration_not_supported_on_macos', {
                             defaultValue: 'Not supported on macOS',
                           })
-                        : cudaStatus?.isInstalled
-                          ? `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_installed', { defaultValue: 'Ready' })})`
-                          : `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_not_installed', { defaultValue: 'Not Installed (Click to Download)' })})`,
+                        : !cudaStatus?.isInstalled
+                          ? `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_not_installed', { defaultValue: 'Not Installed (Click to Download)' })})`
+                          : cudaStatus.isCompatible
+                            ? `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_installed', { defaultValue: 'Ready' })})`
+                            : `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_outdated', { defaultValue: 'Update available' })})`,
                       disabled: isMac,
                     },
                   ]}
                   style={{ flex: 1 }}
                 />
+                <div
+                  style={{
+                    marginTop: '6px',
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  {cudaStatusLoading
+                    ? t('settings.cuda_addon_checking', { defaultValue: 'Checking CUDA addon...' })
+                    : t('settings.cuda_addon_version_status', {
+                        installedVersion:
+                          cudaStatus?.version ?? t('settings.cuda_addon_status_not_installed'),
+                        requiredVersion: cudaStatus?.requiredVersion ?? '—',
+                        defaultValue:
+                          'Installed: ' +
+                          (cudaStatus?.version ?? 'Not installed') +
+                          ' · Required: ' +
+                          (cudaStatus?.requiredVersion ?? '—'),
+                      })}
+                  {cudaStatusError && (
+                    <span
+                      title={cudaStatusError}
+                      style={{ display: 'block', color: 'var(--color-warning)' }}
+                    >
+                      {t('settings.cuda_addon_update_unavailable', {
+                        defaultValue: 'Unable to check compatible addon version.',
+                      })}
+                    </span>
+                  )}
+                </div>
+                {cudaStatus?.updateAvailable && cudaStatus.downloadUrl && !isMac && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '6px' }}
+                    disabled={cudaDownloading}
+                    onClick={async () => {
+                      try {
+                        await installCudaAddon(cudaStatus, gpuAcceleration === 'cuda');
+                      } catch (error) {
+                        useDialogStore.getState().alert(String(error), {
+                          title: t('settings.cuda_addon_update_title'),
+                          variant: 'error',
+                        });
+                      }
+                    }}
+                  >
+                    {t(
+                      cudaStatus.isInstalled
+                        ? 'settings.cuda_addon_update_action'
+                        : 'common.download',
+                      {
+                        defaultValue: cudaStatus.isInstalled ? 'Update' : 'Download',
+                      }
+                    )}
+                  </button>
+                )}
                 {cudaDownloading && (
                   <div
                     style={{

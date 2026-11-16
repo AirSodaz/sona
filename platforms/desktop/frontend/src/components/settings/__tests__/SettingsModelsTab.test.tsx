@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CudaAddonInspection } from '../../../bindings';
 import { ModelManagerContext } from '../../../hooks/useModelManager';
+import { cudaAddonService } from '../../../services/cudaAddonService';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
@@ -55,26 +57,62 @@ vi.mock('../../../services/cudaAddonService', () => ({
     getStatus: vi.fn(async () => ({
       isInstalled: false,
       isActive: false,
+      isCompatible: false,
       path: '/runtimes/cuda',
       missingFiles: ['cudart64_12.dll'],
+      validationError: null,
       version: null,
       cudaVersion: null,
+      llamaCppRef: null,
+      sherpaOnnxVersion: null,
+      requiredLlamaCppRef: 'b11429',
+      requiredSherpaOnnxVersion: '2.0.1',
+      requiredVersion: '0.3.0',
+      requiredCudaVersion: '12.4',
+      downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+      expectedSha256: 'a'.repeat(64),
+      updateAvailable: true,
+      updateCheckError: null,
     })),
     activate: vi.fn(async () => ({
       isInstalled: true,
       isActive: true,
+      isCompatible: true,
       path: '/runtimes/cuda',
       missingFiles: [],
-      version: '0.1.0',
+      validationError: null,
+      version: '0.3.0',
       cudaVersion: '12.4',
+      llamaCppRef: 'b11429',
+      sherpaOnnxVersion: '2.0.1',
+      requiredLlamaCppRef: 'b11429',
+      requiredSherpaOnnxVersion: '2.0.1',
+      requiredVersion: '0.3.0',
+      requiredCudaVersion: '12.4',
+      downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+      expectedSha256: 'a'.repeat(64),
+      updateAvailable: false,
+      updateCheckError: null,
     })),
     downloadAndInstall: vi.fn(async () => ({
       isInstalled: true,
       isActive: true,
+      isCompatible: true,
       path: '/runtimes/cuda',
       missingFiles: [],
-      version: '0.1.0',
+      validationError: null,
+      version: '0.3.0',
       cudaVersion: '12.4',
+      llamaCppRef: 'b11429',
+      sherpaOnnxVersion: '2.0.1',
+      requiredLlamaCppRef: 'b11429',
+      requiredSherpaOnnxVersion: '2.0.1',
+      requiredVersion: '0.3.0',
+      requiredCudaVersion: '12.4',
+      downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+      expectedSha256: 'a'.repeat(64),
+      updateAvailable: false,
+      updateCheckError: null,
     })),
     cancelDownload: vi.fn(async () => {}),
   },
@@ -298,6 +336,30 @@ async function activateBatchScenarioAndExpandAdvanced() {
   if (!expanded) {
     fireEvent.click(advancedHeader);
   }
+}
+
+function cudaAddonInspection(overrides: Partial<CudaAddonInspection> = {}): CudaAddonInspection {
+  return {
+    isInstalled: false,
+    isActive: false,
+    isCompatible: false,
+    path: '/runtimes/cuda',
+    missingFiles: [],
+    validationError: null,
+    version: null,
+    cudaVersion: null,
+    llamaCppRef: null,
+    sherpaOnnxVersion: null,
+    requiredLlamaCppRef: 'b11429',
+    requiredSherpaOnnxVersion: '2.0.1',
+    requiredVersion: '0.3.0',
+    requiredCudaVersion: '12.4',
+    downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+    expectedSha256: 'a'.repeat(64),
+    updateAvailable: true,
+    updateCheckError: null,
+    ...overrides,
+  };
 }
 
 describe('SettingsModelsTab speaker model selections', () => {
@@ -960,6 +1022,47 @@ describe('SettingsModelsTab speaker model selections', () => {
   it('prompts user to download and install CUDA addon when selecting uninstalled CUDA', async () => {
     const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
     const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+    vi.mocked(cudaAddonService.getStatus)
+      .mockResolvedValueOnce({
+        isInstalled: false,
+        isActive: false,
+        isCompatible: false,
+        path: '/runtimes/cuda',
+        missingFiles: ['cudart64_12.dll'],
+        validationError: null,
+        version: null,
+        cudaVersion: null,
+        llamaCppRef: null,
+        sherpaOnnxVersion: null,
+        requiredLlamaCppRef: 'b11429',
+        requiredSherpaOnnxVersion: '2.0.1',
+        requiredVersion: '0.3.0',
+        requiredCudaVersion: '12.4',
+        downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+        expectedSha256: 'a'.repeat(64),
+        updateAvailable: true,
+        updateCheckError: null,
+      })
+      .mockResolvedValueOnce({
+        isInstalled: true,
+        isActive: true,
+        isCompatible: true,
+        path: '/runtimes/cuda',
+        missingFiles: [],
+        validationError: null,
+        version: '0.3.0',
+        cudaVersion: '12.4',
+        llamaCppRef: 'b11429',
+        sherpaOnnxVersion: '2.0.1',
+        requiredLlamaCppRef: 'b11429',
+        requiredSherpaOnnxVersion: '2.0.1',
+        requiredVersion: '0.3.0',
+        requiredCudaVersion: '12.4',
+        downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+        expectedSha256: 'a'.repeat(64),
+        updateAvailable: false,
+        updateCheckError: null,
+      });
 
     setTestConfig({
       gpuAcceleration: 'auto',
@@ -979,6 +1082,174 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
       expect(useConfigStore.getState().config.gpuAcceleration).toBe('cuda');
       expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(cudaAddonService.downloadAndInstall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customUrl: 'https://example.com/cuda-addon.tar.gz',
+          expectedSha256: 'a'.repeat(64),
+          version: '0.3.0',
+        })
+      );
+    });
+  });
+
+  it('does not enable CUDA when addon status cannot be checked', async () => {
+    vi.mocked(cudaAddonService.getStatus)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+    setTestConfig({ gpuAcceleration: 'auto' });
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    fireEvent.click(screen.getByRole('option', { name: /^CUDA/ }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('auto');
+      expect(alertSpy).toHaveBeenCalledWith('Error: offline', expect.anything());
+    });
+    expect(cudaAddonService.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('does not download an outdated addon when the user declines the update', async () => {
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(false);
+    vi.mocked(cudaAddonService.getStatus).mockResolvedValueOnce(
+      cudaAddonInspection({
+        isInstalled: true,
+        isCompatible: false,
+        version: '0.1.0',
+        cudaVersion: '12.4',
+        llamaCppRef: 'old-ref',
+        sherpaOnnxVersion: '2.0.1',
+      })
+    );
+    setTestConfig({ gpuAcceleration: 'auto' });
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+    expect(cudaOption.textContent).toContain('Update available');
+    fireEvent.click(cudaOption);
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
+    expect(useConfigStore.getState().config.gpuAcceleration).toBe('auto');
+    expect(cudaAddonService.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('enables CUDA for a compatible addon when the update check fails', async () => {
+    const offlineStatus = cudaAddonInspection({
+      isInstalled: true,
+      isActive: true,
+      isCompatible: true,
+      version: '0.3.0',
+      cudaVersion: '12.4',
+      llamaCppRef: 'b11429',
+      sherpaOnnxVersion: '2.0.1',
+      requiredVersion: null,
+      requiredCudaVersion: null,
+      downloadUrl: null,
+      expectedSha256: null,
+      updateAvailable: false,
+      updateCheckError: 'Failed to query CUDA addon releases: offline',
+    });
+    vi.mocked(cudaAddonService.getStatus)
+      .mockResolvedValueOnce(offlineStatus)
+      .mockResolvedValueOnce(offlineStatus);
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm');
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValue(undefined);
+    setTestConfig({ gpuAcceleration: 'auto' });
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+    expect(cudaOption.textContent).toContain('Ready');
+    fireEvent.click(cudaOption);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('cuda');
+    });
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(cudaAddonService.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('shows an update action for an installed addon with incompatible dependencies', async () => {
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+    vi.mocked(cudaAddonService.getStatus)
+      .mockResolvedValueOnce({
+        isInstalled: true,
+        isActive: false,
+        isCompatible: false,
+        path: '/runtimes/cuda',
+        missingFiles: [],
+        validationError: null,
+        version: '0.1.0',
+        cudaVersion: '12.4',
+        llamaCppRef: 'old-ref',
+        sherpaOnnxVersion: '2.0.1',
+        requiredLlamaCppRef: 'b11429',
+        requiredSherpaOnnxVersion: '2.0.1',
+        requiredVersion: '0.3.0',
+        requiredCudaVersion: '12.4',
+        downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+        expectedSha256: 'a'.repeat(64),
+        updateAvailable: true,
+        updateCheckError: null,
+      })
+      .mockResolvedValueOnce({
+        isInstalled: true,
+        isActive: true,
+        isCompatible: true,
+        path: '/runtimes/cuda',
+        missingFiles: [],
+        validationError: null,
+        version: '0.3.0',
+        cudaVersion: '12.4',
+        llamaCppRef: 'b11429',
+        sherpaOnnxVersion: '2.0.1',
+        requiredLlamaCppRef: 'b11429',
+        requiredSherpaOnnxVersion: '2.0.1',
+        requiredVersion: '0.3.0',
+        requiredCudaVersion: '12.4',
+        downloadUrl: 'https://example.com/cuda-addon.tar.gz',
+        expectedSha256: 'a'.repeat(64),
+        updateAvailable: false,
+        updateCheckError: null,
+      });
+    setTestConfig({ gpuAcceleration: 'auto' });
+    renderTab(new Set());
+
+    const updateButton = await screen.findByRole('button', { name: 'Update' });
+    fireEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(cudaAddonService.downloadAndInstall).toHaveBeenCalledWith(
+        expect.objectContaining({ version: '0.3.0', expectedSha256: 'a'.repeat(64) })
+      );
+      // Updating an addon must not silently switch the user's acceleration setting.
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('auto');
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('keeps CUDA disabled when addon download fails', async () => {
+    vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+    vi.mocked(cudaAddonService.downloadAndInstall).mockRejectedValueOnce(
+      new Error('download failed')
+    );
+    setTestConfig({ gpuAcceleration: 'auto' });
+    renderTab(new Set());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('auto');
+      expect(alertSpy).toHaveBeenCalledWith('Error: download failed', expect.anything());
     });
   });
 

@@ -867,10 +867,22 @@ export type ContentTrendPoint = {
 export type CudaAddonInspection = {
 	isInstalled: boolean,
 	isActive: boolean,
+	isCompatible: boolean,
 	path: string,
 	missingFiles: string[],
+	validationError: string | null,
 	version: string | null,
 	cudaVersion: string | null,
+	llamaCppRef: string | null,
+	sherpaOnnxVersion: string | null,
+	requiredLlamaCppRef: string,
+	requiredSherpaOnnxVersion: string,
+	requiredVersion: string | null,
+	requiredCudaVersion: string | null,
+	downloadUrl: string | null,
+	expectedSha256: string | null,
+	updateAvailable: boolean,
+	updateCheckError: string | null,
 };
 
 export type DashboardSnapshotDomainModel = DashboardSnapshotDomainModel_Serialize | DashboardSnapshotDomainModel_Deserialize;

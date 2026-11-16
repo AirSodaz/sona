@@ -51,11 +51,11 @@ function sherpaRuntimeLibraryNames(target) {
 }
 
 function llamaCppRuntimeLibraryNames(target) {
-  if (target.includes('windows')) return ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama-common.dll', 'llama.dll'];
+  if (target.includes('windows')) return ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama-common.dll', 'llama.dll', 'mtmd.dll'];
   if (target.includes('apple')) {
-    return ['libggml.dylib', 'libggml-base.dylib', 'libggml-cpu.dylib', 'libllama-common.dylib', 'libllama.dylib'];
+    return ['libggml.dylib', 'libggml-base.dylib', 'libggml-cpu.dylib', 'libllama-common.dylib', 'libllama.dylib', 'libmtmd.dylib'];
   }
-  return ['libggml.so', 'libggml-base.so', 'libggml-cpu.so', 'libllama-common.so', 'libllama.so'];
+  return ['libggml.so', 'libggml-base.so', 'libggml-cpu.so', 'libllama-common.so', 'libllama.so', 'libmtmd.so'];
 }
 
 function runtimeLibraryNames(target) {

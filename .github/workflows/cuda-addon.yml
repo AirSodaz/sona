@@ -44,6 +44,8 @@ jobs:
   prepare-version:
     name: Prepare CUDA Addon Version
     runs-on: ubuntu-latest
+    env:
+      CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
     outputs:
       addon_version: ${{ steps.resolve.outputs.addon_version }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
@@ -59,6 +61,11 @@ jobs:
       - name: Resolve Addon Version
         id: resolve
         run: |
+          if [[ ! "$CUDA_VERSION" =~ ^12\.4(\.[0-9]+)?$ ]]; then
+            echo "Unsupported CUDA version: $CUDA_VERSION. This workflow currently supports CUDA 12.4.x only." >&2
+            exit 1
+          fi
+
           if [[ "${GITHUB_REF}" == refs/tags/cuda-addon-v* ]]; then
             TAG="${GITHUB_REF_NAME}"
             VERSION=$(node scripts/cuda-addon-manifest.js validate-tag --tag "$TAG" | awk '{print $NF}')
@@ -163,12 +170,26 @@ jobs:
             }
           }
 
+          # Clients derive required file names from the manifest's CUDA major, so the
+          # staged runtime must actually match the version being declared.
+          $cudaMajor = "${{ env.CUDA_VERSION }}".Split('.')[0]
+          $cudartName = if ($cudaMajor -eq "11") { "cudart64_110.dll" } else { "cudart64_${cudaMajor}.dll" }
+          foreach ($required in @($cudartName, "cublas64_${cudaMajor}.dll", "cublasLt64_${cudaMajor}.dll", "ggml-cuda.dll", "onnxruntime_providers_cuda.dll")) {
+            if (!(Test-Path (Join-Path "$stageDir" $required))) {
+              Write-Error "Staged addon is missing ${required} for CUDA ${cudaMajor}; the client would reject it."
+              Get-ChildItem "$stageDir" | Select-Object -ExpandProperty Name
+              exit 1
+            }
+          }
+
           # Write version metadata
           Set-Content -Path "$stageDir\version.txt" -Value "$version"
           $manifestJson = @{
-            schemaVersion = "1.0"
+            schemaVersion = 1
             addonVersion = "$version"
-            cudaVersion = "12.4"
+            cudaVersion = "${{ env.CUDA_VERSION }}"
+            llamaCppRef = "${{ env.LLAMA_REF }}"
+            sherpaOnnxVersion = "${{ env.SHERPA_ONNX_VERSION }}"
             targetOs = "windows"
             targetArch = "x86_64"
             publishedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
@@ -275,9 +296,12 @@ jobs:
           find llama-cpp-src/build -name "libllama*.so*" -exec cp -a {} "$STAGE_DIR/" \; 2>/dev/null || true
 
           # 3. Copy CUDA Runtime and cuBLAS shared objects
-          CUDA_LIB="/usr/local/cuda-12.4/targets/x86_64-linux/lib"
+          CUDA_SERIES="${{ env.CUDA_VERSION }}"
+          CUDA_SERIES="${CUDA_SERIES%.*}"
+          CUDA_MAJOR="${CUDA_SERIES%%.*}"
+          CUDA_LIB="/usr/local/cuda-${CUDA_SERIES}/targets/x86_64-linux/lib"
           if [ ! -d "$CUDA_LIB" ]; then
-            CUDA_LIB="/usr/local/cuda-12.4/lib64"
+            CUDA_LIB="/usr/local/cuda-${CUDA_SERIES}/lib64"
           fi
           if [ ! -d "$CUDA_LIB" ]; then
             CUDA_LIB="/usr/local/cuda/lib64"
@@ -290,13 +314,30 @@ jobs:
           cp -a /usr/lib/x86_64-linux-gnu/libcublasLt.so* "$STAGE_DIR/" 2>/dev/null || true
           cp -a /usr/lib/x86_64-linux-gnu/libcudart.so* "$STAGE_DIR/" 2>/dev/null || true
 
+          # Clients derive required file names from the manifest's CUDA major, so the
+          # staged runtime must actually match the version being declared.
+          for required in \
+            "libcudart.so.${CUDA_MAJOR}" \
+            "libcublas.so.${CUDA_MAJOR}" \
+            "libcublasLt.so.${CUDA_MAJOR}" \
+            "libggml-cuda.so" \
+            "libonnxruntime_providers_cuda.so"; do
+            if ! compgen -G "$STAGE_DIR/${required}*" > /dev/null; then
+              echo "::error::Staged addon is missing ${required}* for CUDA ${CUDA_MAJOR}"
+              ls -1 "$STAGE_DIR"
+              exit 1
+            fi
+          done
+
           # Write version metadata
           echo "$VERSION" > "$STAGE_DIR/version.txt"
           cat <<EOF > "$STAGE_DIR/cuda-addon-manifest.json"
           {
-            "schemaVersion": "1.0",
+            "schemaVersion": 1,
             "addonVersion": "$VERSION",
-            "cudaVersion": "12.4",
+            "cudaVersion": "${{ env.CUDA_VERSION }}",
+            "llamaCppRef": "${{ env.LLAMA_REF }}",
+            "sherpaOnnxVersion": "${{ env.SHERPA_ONNX_VERSION }}",
             "targetOs": "linux",
             "targetArch": "x86_64"
           }
@@ -341,7 +382,9 @@ jobs:
           VERSION="${{ needs.prepare-version.outputs.addon_version }}"
           node scripts/cuda-addon-manifest.js generate \
             --version "$VERSION" \
-            --cuda-version "${{ inputs.cuda_version || '12.4' }}" \
+            --cuda-version "${{ inputs.cuda_version || '12.4.1' }}" \
+            --llama-ref "${{ inputs.llama_cpp_ref || 'b11429' }}" \
+            --sherpa-version "${{ inputs.sherpa_onnx_version || '2.0.1' }}" \
             --repo "${{ github.repository }}" \
             --artifacts-dir all-artifacts \
             --output cuda-addon-manifest.json
