@@ -23,7 +23,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js and dependencies
         uses: ./.github/actions/setup-node-pnpm
@@ -51,7 +51,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Tauri system dependencies
         run: |
@@ -146,7 +146,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -157,7 +157,7 @@ jobs:
       - name: Setup Node.js and dependencies
         uses: ./.github/actions/setup-node-pnpm
       - name: Java setup
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17

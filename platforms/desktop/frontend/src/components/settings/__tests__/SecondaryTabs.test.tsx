@@ -299,7 +299,7 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
       const slider = container.querySelector('.settings-subtab-slider') as HTMLElement;
       expect(slider).toBeDefined();
       expect(slider?.getAttribute('aria-hidden')).toBe('true');
-      expect(slider.style.transform).toBe('translate3d(10px, 2px, 0)');
+      expect(slider.style.transform).toMatch(/^translate3d\(10px, 2px, 0(?:px)?\)$/);
       expect(slider.style.width).toBe('80px');
       expect(slider.style.height).toBe('36px');
       expect(slider.style.opacity).toBe('1');
