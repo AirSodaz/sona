@@ -102,7 +102,7 @@ test('tauri bundle verification omits llama.cpp libraries for static Linux build
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
   fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
-  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama)/u.test(value))) {
+  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama|mtmd)/u.test(value))) {
     fs.rmSync(path.join(runtimeLibDir, name));
   }
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
@@ -119,7 +119,7 @@ test('tauri bundle verification omits llama.cpp libraries for static Linux build
     'lib',
     'sona',
   );
-  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama)/u.test(value))) {
+  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama|mtmd)/u.test(value))) {
     fs.rmSync(path.join(canonicalRuntimeDir, name));
   }
 

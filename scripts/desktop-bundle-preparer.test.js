@@ -268,6 +268,7 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
     'libggml-cpu.dylib',
     'libllama-common.dylib',
     'libllama.dylib',
+    'libmtmd.dylib',
   ];
   assert.deepEqual(
     commandCalls.filter((call) => call.executable === 'install_name_tool')
@@ -573,7 +574,7 @@ test('desktop bundle preparer collects llama.cpp libraries from Cargo build outp
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll'],
+    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll', 'mtmd.dll'],
   );
 });
 
@@ -612,7 +613,7 @@ test('desktop bundle preparer skips broken release symlinks in favor of CMake ou
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so'],
+    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so', 'libmtmd.so'],
   );
 });
 
@@ -639,7 +640,7 @@ test('desktop bundle preparer collects llama.cpp libraries from nested Cargo bui
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll'],
+    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll', 'mtmd.dll'],
   );
 });
 
@@ -650,6 +651,8 @@ test('desktop bundle preparer stages llama.cpp libraries from LLAMA_CPP_LIB_DIR'
   const prebuiltDir = path.join(root, 'prebuilt-llama');
   const runtimeLibDir = path.join(root, 'runtime-libs');
   writeLlamaCppRuntimeLibraries(prebuiltDir, target);
+  fs.rmSync(path.join(prebuiltDir, 'libmtmd.so'));
+  fs.writeFileSync(path.join(prebuiltDir, 'libmtmd.so.0'), 'libmtmd.so.0');
   fs.mkdirSync(path.join(root, 'target', target, 'release'), { recursive: true });
   fs.mkdirSync(runtimeLibDir, { recursive: true });
 
@@ -657,7 +660,7 @@ test('desktop bundle preparer stages llama.cpp libraries from LLAMA_CPP_LIB_DIR'
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so'],
+    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so', 'libmtmd.so.0'],
   );
 });
 
