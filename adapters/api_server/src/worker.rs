@@ -3,15 +3,28 @@ use std::sync::Arc;
 
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
-use sona_core::ports::asr::BatchTranscriberPort;
+use sona_core::ports::asr::{BatchTranscriberPort, BatchTranscriptionObserver};
 use sona_core::ports::runtime::{BatchTranscribePlanPort, RuntimeCapabilityError};
 use sona_core::transcription::runtime::BatchTranscribeOptions;
+use sona_core::transcription::transcript::TranscriptUpdate;
 use tokio::sync::mpsc;
 
 use crate::jobs::{JobManager, JobStatus, TranscriptionJob};
 use crate::platform::{ApiServerPlatform, ApiServerTranscriptionDefaults, OnlineBatchRequest};
 
 type HmacSha256 = Hmac<Sha256>;
+
+struct ApiJobObserver(String);
+
+impl BatchTranscriptionObserver for ApiJobObserver {
+    fn diagnostic_id(&self) -> Option<&str> {
+        Some(&self.0)
+    }
+
+    fn on_progress(&self, _progress: f32) {}
+
+    fn on_transcript_update(&self, _update: &TranscriptUpdate) {}
+}
 
 async fn remove_job_file_if_local(path: &StdPath) {
     if !sona_core::history::is_network_url(&path.to_string_lossy()) {
@@ -86,19 +99,19 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
         Ok(response) => {
             if !response.status().is_success() {
                 log::warn!(
-                    "[Server] webhook delivery failed: job_id={} url={} status={}",
+                    "[Server] webhook delivery failed: job_id={} endpoint={} status={}",
                     job.job_id,
-                    webhook_url,
+                    sona_core::runtime::logging::sanitize_log_text(webhook_url),
                     response.status()
                 );
             }
         }
         Err(error) => {
             log::warn!(
-                "[Server] webhook delivery error: job_id={} url={} error={}",
+                "[Server] webhook delivery error: job_id={} endpoint={} error={}",
                 job.job_id,
-                webhook_url,
-                error
+                sona_core::runtime::logging::sanitize_log_text(webhook_url),
+                sona_core::runtime::logging::sanitize_log_text(&error.to_string())
             );
         }
     }
@@ -188,6 +201,14 @@ pub(crate) async fn start_worker_loop(
             job_manager
                 .update_job(&job.job_id, JobStatus::Processing)
                 .await;
+            let started = std::time::Instant::now();
+            log::info!(
+                "[ServerJob] task_start job_id={} engine={} model_id={} language={}",
+                job.job_id,
+                job.engine,
+                job.model_id,
+                job.language
+            );
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
                     let request = OnlineBatchRequest {
@@ -212,7 +233,13 @@ pub(crate) async fn start_worker_loop(
             } else {
                 let options = build_local_transcribe_options(&job, &models_dir, &defaults);
                 match batch_plan_resolver.resolve_batch_transcribe_plan(options) {
-                    Ok(plan) => match batch_transcriber.transcribe(plan).await {
+                    Ok(plan) => match batch_transcriber
+                        .transcribe_with_observer(
+                            plan,
+                            Arc::new(ApiJobObserver(job.job_id.clone())),
+                        )
+                        .await
+                    {
                         Ok(segments) => JobStatus::Completed(segments),
                         Err(e) => JobStatus::Failed(e.to_string()),
                     },
@@ -228,6 +255,21 @@ pub(crate) async fn start_worker_loop(
             job_manager
                 .update_job(&job.job_id, final_status.clone())
                 .await;
+            match &final_status {
+                JobStatus::Completed(segments) => log::info!(
+                    "[ServerJob] task_complete job_id={} status=completed segments={} elapsed_ms={}",
+                    job.job_id,
+                    segments.len(),
+                    started.elapsed().as_millis()
+                ),
+                JobStatus::Failed(error) => log::error!(
+                    "[ServerJob] task_failed job_id={} elapsed_ms={} error={}",
+                    job.job_id,
+                    started.elapsed().as_millis(),
+                    sona_core::runtime::logging::sanitize_log_text(error)
+                ),
+                _ => {}
+            }
 
             if job.webhook_url.is_some() {
                 let job_clone = job.clone();

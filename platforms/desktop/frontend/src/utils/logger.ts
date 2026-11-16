@@ -1,37 +1,56 @@
-/**
- * A helper to safely serialize arguments, particularly JavaScript Error objects
- * which become {} when simply passed to JSON.stringify.
- */
-
 import { getPluginLogModule } from '../services/tauri/platform/log';
 import type { AppLogLevel } from '../types/config';
 import { normalizeLogLevel, shouldWriteLogLevel } from './logLevel';
 
 const browserConsole = globalThis.console;
+const sensitiveKey =
+  /^(api[-_]?key|(?:access|refresh)[-_]?token|token|authorization|password|secret|webhook[-_]?secret|config|headers|text|transcript|audio|payload)$/i;
+let currentLogLevel: AppLogLevel = 'info';
 
-function serializeArgs(args: unknown[]): string {
-  if (!args || args.length === 0) return '';
-
-  const serialized = args.map((arg) => {
-    if (arg instanceof Error) {
-      return {
-        name: arg.name,
-        message: arg.message,
-        stack: arg.stack,
-      };
-    }
-    return arg;
-  });
-
-  try {
-    return ` ${JSON.stringify(serialized)}`;
-  } catch {
-    return ' [Unserializable Object(s) - possibly circular references]';
-  }
+function sanitizeText(value: string): string {
+  return value
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/gi, '[redacted-url]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(
+      /(api[_-]?key|access[_-]?token|token|authorization|password|secret)(\s*[=:]\s*)([^&\s,;"'<>]+)/gi,
+      '$1$2[redacted]'
+    )
+    .slice(0, 4096);
 }
 
-type LogLevel = AppLogLevel;
-let currentLogLevel: AppLogLevel = 'info';
+/** Bound diagnostics and retain nested Error details without invoking toJSON. */
+function normalizeValue(value: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
+  if (typeof value === 'string') return sanitizeText(value);
+  if (typeof value === 'bigint') return value.toString();
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value !== 'object') return String(value);
+  if (depth >= 6) return '[max-depth]';
+  if (seen.has(value)) return '[circular]';
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.slice(0, 50).map((entry) => normalizeValue(entry, seen, depth + 1));
+    }
+    const keys =
+      value instanceof Error
+        ? [...new Set(['name', 'message', 'stack', 'cause', ...Object.getOwnPropertyNames(value)])]
+        : Object.keys(value);
+    return Object.fromEntries(
+      keys
+        .slice(0, 50)
+        .map((key) => [
+          key,
+          sensitiveKey.test(key)
+            ? '[redacted]'
+            : normalizeValue((value as Record<string, unknown>)[key], seen, depth + 1),
+        ])
+    );
+  } catch {
+    return '[unserializable]';
+  } finally {
+    seen.delete(value);
+  }
+}
 
 export function setLoggerLevel(level: unknown): AppLogLevel {
   currentLogLevel = normalizeLogLevel(level);
@@ -42,67 +61,40 @@ export function getLoggerLevel(): AppLogLevel {
   return currentLogLevel;
 }
 
-async function writeLog(level: LogLevel, message: unknown, ...args: unknown[]) {
-  if (!shouldWriteLogLevel(level, currentLogLevel)) {
-    return;
-  }
-
-  let formatted: string;
-  if (message instanceof Error) {
-    formatted = `${message.name}: ${message.message}\nStack: ${message.stack ?? ''}`;
-  } else if (typeof message === 'string') {
-    formatted = message;
-  } else {
+async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]): Promise<void> {
+  if (!shouldWriteLogLevel(level, currentLogLevel)) return;
+  // Logging must never reject, including serializer, console and plugin failures.
+  try {
+    const text = typeof message === 'string' ? sanitizeText(message) : 'diagnostic';
+    const match = /^\[([^\]]+)\]\s*(.*)$/.exec(text);
+    const detail = match?.[2] ?? text;
+    const context = typeof message === 'string' ? args : [message, ...args];
+    const entry = {
+      schema_version: 1,
+      timestamp_ms: Date.now(),
+      source: 'frontend',
+      component: match?.[1] ?? 'Client',
+      event: /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(detail) ? detail : 'message',
+      message: text,
+      context: normalizeValue(context.length === 1 ? context[0] : { args: context }),
+    };
+    const formatted = JSON.stringify(entry);
     try {
-      formatted = JSON.stringify(message);
+      browserConsole[level === 'trace' ? 'debug' : level](formatted);
     } catch {
-      formatted = String(message);
+      // A broken devtools sink must not prevent the file sink.
     }
+    const plugin = await getPluginLogModule();
+    if (plugin) await plugin[level](formatted);
+  } catch {
+    // Do not recursively log a failed log write.
   }
-
-  if (args.length > 0) {
-    formatted += serializeArgs(args);
-  }
-
-  const plugin = await getPluginLogModule();
-
-  if (!plugin) {
-    return;
-  }
-
-  const logMethod = plugin[level];
-  await logMethod(formatted).catch(() => {});
 }
 
-/**
- * A dedicated logging utility that uses tauri-plugin-log.
- * This logs directly to the standard system application data directory
- * in a structured format as configured by the Rust backend.
- */
 export const logger = {
-  trace: async (message: unknown, ...args: unknown[]) => {
-    if (!shouldWriteLogLevel('trace', currentLogLevel)) return;
-    browserConsole.debug(message, ...args);
-    await writeLog('trace', message, ...args);
-  },
-  debug: async (message: unknown, ...args: unknown[]) => {
-    if (!shouldWriteLogLevel('debug', currentLogLevel)) return;
-    browserConsole.debug(message, ...args);
-    await writeLog('debug', message, ...args);
-  },
-  info: async (message: unknown, ...args: unknown[]) => {
-    if (!shouldWriteLogLevel('info', currentLogLevel)) return;
-    browserConsole.info(message, ...args);
-    await writeLog('info', message, ...args);
-  },
-  warn: async (message: unknown, ...args: unknown[]) => {
-    if (!shouldWriteLogLevel('warn', currentLogLevel)) return;
-    browserConsole.warn(message, ...args);
-    await writeLog('warn', message, ...args);
-  },
-  error: async (message: unknown, ...args: unknown[]) => {
-    if (!shouldWriteLogLevel('error', currentLogLevel)) return;
-    browserConsole.error(message, ...args);
-    await writeLog('error', message, ...args);
-  },
+  trace: (message: unknown, ...args: unknown[]) => writeLog('trace', message, ...args),
+  debug: (message: unknown, ...args: unknown[]) => writeLog('debug', message, ...args),
+  info: (message: unknown, ...args: unknown[]) => writeLog('info', message, ...args),
+  warn: (message: unknown, ...args: unknown[]) => writeLog('warn', message, ...args),
+  error: (message: unknown, ...args: unknown[]) => writeLog('error', message, ...args),
 };

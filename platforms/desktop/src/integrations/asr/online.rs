@@ -39,11 +39,15 @@ impl AsrProviderAdapter for DesktopOnlineAsrAdapter {
             )
             .with_code("UNSUPPORTED_ONLINE_PROVIDER"));
         }
-        Ok(Some(Arc::new(OnlineBatchProcessor)))
+        Ok(Some(Arc::new(OnlineBatchProcessor {
+            provider_id: self.provider_id,
+        })))
     }
 }
 
-struct OnlineBatchProcessor;
+struct OnlineBatchProcessor {
+    provider_id: &'static str,
+}
 
 #[async_trait]
 impl AsrBatchProcessor for OnlineBatchProcessor {
@@ -64,6 +68,11 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
             None
         };
         let started = Instant::now();
+        let diagnostic_id = instance_id.as_deref().unwrap_or("unassigned");
+        log::info!(
+            "[OnlineASR] task_start instance_id={diagnostic_id} provider={}",
+            self.provider_id
+        );
         let transcribe_fut =
             sona_online_asr::OnlineAsrAdapter.transcribe_batch(OnlineBatchTranscriptionRequest {
                 file_path: file_path.clone(),
@@ -88,14 +97,38 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
             };
             drop(guard);
-            result?
+            match result {
+                Ok(output) => output,
+                Err(error) => {
+                    log::error!(
+                        "[OnlineASR] task_failed instance_id={diagnostic_id} provider={} error={}",
+                        self.provider_id,
+                        sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                    );
+                    return Err(error);
+                }
+            }
         } else {
-            transcribe_fut.await?
+            match transcribe_fut.await {
+                Ok(output) => output,
+                Err(error) => {
+                    log::error!(
+                        "[OnlineASR] task_failed instance_id={diagnostic_id} provider={} error={}",
+                        self.provider_id,
+                        sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                    );
+                    return Err(error);
+                }
+            }
         };
+        let raw_segment_count = output.segments.len();
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);
         segments = TranscriptPostprocessor::compile(request.postprocess_options.clone())
-            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?
+            .map_err(|error| {
+                log::error!("[OnlineASR] task_failed instance_id={diagnostic_id} stage=postprocess error={}", sona_core::runtime::logging::sanitize_log_text(&error.to_string()));
+                AsrPortError::invalid_request(error.to_string())
+            })?
             .process_segments(segments);
 
         let effective_speaker_processing =
@@ -114,11 +147,14 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                         segments,
                         Some(sp_config),
                     )
-                    .await?;
+                    .await
+                    .map_err(|error| {
+                        log::error!("[OnlineASR] task_failed instance_id={diagnostic_id} stage=speaker_match error={}", sona_core::runtime::logging::sanitize_log_text(&error.to_string()));
+                        error
+                    })?;
             } else {
                 log::warn!(
-                    "Skipping local speaker profile matching: audio source is a network URL stream ({})",
-                    file_path.display()
+                    "[OnlineASR] speaker_profile_match_skipped instance_id={diagnostic_id} reason=network_audio_source"
                 );
             }
         }
@@ -127,7 +163,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         let metric = AsrInferenceMetric {
             occurred_at_ms: current_time_millis(),
             source: "batch".to_string(),
-            instance_id: None,
+            instance_id: instance_id.clone(),
             stage: output.stage,
             is_final: true,
             audio_duration_ms: output.audio_duration_ms,
@@ -142,6 +178,12 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         };
         set_batch_inference_metric(&state.metrics, metric.clone());
         log_inference_metric(&metric);
+        log::info!(
+            "[OnlineASR] task_complete instance_id={diagnostic_id} provider={} raw_segments={} final_segments={} elapsed_ms={elapsed_ms}",
+            self.provider_id,
+            raw_segment_count,
+            segments.len()
+        );
 
         let _ = emitter.emit(
             super::BATCH_PROGRESS_EVENT,

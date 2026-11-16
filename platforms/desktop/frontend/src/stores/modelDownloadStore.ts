@@ -3,6 +3,7 @@ import { parseDownloadProgressPayload } from '../services/modelDownloadService';
 import { cancelDownload as tauriCancelDownload } from '../services/tauri/app';
 import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
+import { logger } from '../utils/logger';
 
 export type ModelDownloadType = 'asr' | 'llm' | 'companion' | 'other';
 export type ModelDownloadStatus = 'downloading' | 'completed' | 'failed' | 'cancelled';
@@ -122,7 +123,10 @@ export async function ensureModelDownloadListener(): Promise<void> {
         unlistenProgress = unlisten;
       }
     } catch (err) {
-      console.error('Failed to initialize model download progress listener:', err);
+      logger.error(
+        '[ModelDownloadStore] Failed to initialize model download progress listener:',
+        err
+      );
     } finally {
       if (currentGen === listenerGeneration) {
         listenerPromise = null;
@@ -304,12 +308,15 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
       try {
         onCancelCallback?.();
       } catch (err) {
-        console.warn(`Error during onCancel for ${modelId}:`, err);
+        logger.warn(`[ModelDownloadStore] Error during onCancel for ${modelId}:`, err);
       }
       try {
         await tauriCancelDownload(targetDownloadId);
       } catch (err) {
-        console.warn(`Backend cancelDownload returned error for ${modelId}:`, err);
+        logger.warn(
+          `[ModelDownloadStore] Backend cancelDownload returned error for ${modelId}:`,
+          err
+        );
       }
       return true;
     }

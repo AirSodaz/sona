@@ -387,6 +387,12 @@ impl BatchTranscriptionJob {
             return Err(AsrPortError::runtime("Task cancelled."));
         }
         let samples = Arc::new(samples);
+        log::info!(
+            "[BatchASR] audio_decoded instance_id={} samples={} sample_rate=16000 duration_s={:.3}",
+            observer.diagnostic_id().unwrap_or("unassigned"),
+            samples.len(),
+            samples.len() as f64 / 16000.0,
+        );
         let samples_clone = Arc::clone(&samples);
         let recognizer_clone = recognizer.clone();
         let punctuation_clone = punctuation.clone();
@@ -479,21 +485,45 @@ fn transcribe_samples(
         &vad_options,
     );
     let effective_punctuation = if is_funasr_nano { None } else { punctuation };
+    let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+    log::info!(
+        "[BatchASR] segmentation instance_id={} mode={:?} vad_available={} slices={} duration_s={:.3}",
+        diagnostic_id,
+        batch_segmentation_mode,
+        vad_engine.is_some(),
+        audio_segments.len(),
+        samples.len() as f64 / 16000.0,
+    );
 
     let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
     for segment in audio_segments {
+        log::debug!(
+            "[BatchASR] slice_start instance_id={diagnostic_id} start_s={:.3} duration_s={:.3}",
+            segment.start_time,
+            segment.duration
+        );
         if observer.is_cancelled() {
             return Err(AsrPortError::runtime("Task cancelled."));
         }
         if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
+                log::warn!(
+                    "[BatchASR] slice_skipped instance_id={diagnostic_id} start_s={:.3} duration_s={:.3} reason=empty_recognition",
+                    segment.start_time,
+                    segment.duration
+                );
                 continue;
             }
 
             let text = finalize_transcript_text(&cleaned_text, effective_punctuation);
             if text.is_empty() {
+                log::warn!(
+                    "[BatchASR] slice_skipped instance_id={diagnostic_id} start_s={:.3} duration_s={:.3} reason=empty_after_punctuation",
+                    segment.start_time,
+                    segment.duration
+                );
                 continue;
             }
 
@@ -534,6 +564,12 @@ fn transcribe_samples(
                 upsert_segments: vec![transcript_segment.clone()],
             });
             results.push(transcript_segment);
+        } else {
+            log::warn!(
+                "[BatchASR] slice_skipped instance_id={diagnostic_id} start_s={:.3} duration_s={:.3} reason=no_result",
+                segment.start_time,
+                segment.duration
+            );
         }
         let processed = if total_duration > 0.0 {
             (segment.end_time() / total_duration).clamp(0.0, 1.0)

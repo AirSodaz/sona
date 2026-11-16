@@ -15,6 +15,14 @@ pub struct AudioStreamSourceConfig<'a> {
 
 const MAX_IN_MEMORY_STREAM_BYTES: usize = 100 * 1024 * 1024;
 
+/// FFmpeg and HTTP errors may echo authenticated input URLs. Redact before truncating.
+pub(crate) fn sanitize_stream_diagnostic(message: &str) -> String {
+    sona_core::runtime::logging::sanitize_log_text(message)
+        .chars()
+        .take(1024)
+        .collect()
+}
+
 pub enum AudioStreamReader {
     Ffmpeg {
         child: Box<tokio::process::Child>,
@@ -109,6 +117,56 @@ fn create_wav_writer(
 }
 
 impl AudioStreamReader {
+    /// Reports EOF/process diagnostics before `finish` discards stderr.
+    pub async fn log_end_state(&mut self, diagnostic_id: &str) {
+        match self {
+            Self::Ffmpeg {
+                child, stderr_task, ..
+            } => {
+                let status = match child.try_wait() {
+                    Ok(Some(status)) => status.to_string(),
+                    Ok(None) => "still_running".to_string(),
+                    Err(_) => "wait_failed".to_string(),
+                };
+                log::info!(
+                    "[BatchStream] decoder_end instance_id={diagnostic_id} decoder=ffmpeg status={status} audio_mapping=default"
+                );
+                if let Some(mut task) = stderr_task.take() {
+                    match tokio::time::timeout(std::time::Duration::from_millis(500), &mut task)
+                        .await
+                    {
+                        Ok(Ok(stderr)) if !stderr.trim().is_empty() => {
+                            log::warn!(
+                                "[BatchStream] decoder_stderr instance_id={diagnostic_id} detail={}",
+                                sanitize_stream_diagnostic(&stderr)
+                            );
+                        }
+                        Err(_) => {
+                            task.abort();
+                            log::warn!(
+                                "[BatchStream] decoder_stderr instance_id={diagnostic_id} status=collection_timeout"
+                            );
+                        }
+                        Ok(Err(_)) => {
+                            log::warn!(
+                                "[BatchStream] decoder_stderr instance_id={diagnostic_id} status=collection_failed"
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Self::InMemory {
+                samples, position, ..
+            } => {
+                log::info!(
+                    "[BatchStream] decoder_end instance_id={diagnostic_id} decoder=builtin samples={} consumed_samples={position}",
+                    samples.len()
+                );
+            }
+        }
+    }
+
     pub async fn open(config: AudioStreamSourceConfig<'_>) -> Result<Self, AsrPortError> {
         let sample_rate = config.target_sample_rate;
         let wav_writer = if let Some(save_path) = &config.save_to_path {
@@ -374,7 +432,16 @@ impl AudioStreamReader {
                             ));
                         }
                     } else if wait_result.is_err() {
+                        log::warn!(
+                            "[BatchStream] ffmpeg_wait_timeout process_id={:?}",
+                            child.id()
+                        );
                         let _ = child.start_kill();
+                    } else {
+                        log::warn!(
+                            "[BatchStream] ffmpeg_wait_failed process_id={:?}",
+                            child.id()
+                        );
                     }
                     return Ok(None);
                 }
@@ -473,6 +540,22 @@ impl AudioStreamReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stream_diagnostics_redact_authenticated_urls_before_truncation() {
+        let message = "HTTP error for 'https://user:password@host/stream.mkv?api_key=secret': Invalid data api_key=other token=private";
+        let sanitized = sanitize_stream_diagnostic(message);
+        assert!(sanitized.contains("Invalid data"));
+        for secret in ["password", "secret", "other", "private", "host"] {
+            assert!(!sanitized.contains(secret));
+        }
+        assert_eq!(
+            sanitize_stream_diagnostic(&"文".repeat(2000))
+                .chars()
+                .count(),
+            1024
+        );
+    }
 
     #[test]
     fn test_is_video_or_playlist_url() {

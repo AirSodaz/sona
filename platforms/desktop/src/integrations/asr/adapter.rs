@@ -40,6 +40,10 @@ struct TauriBatchTranscriptionObserver {
 }
 
 impl BatchTranscriptionObserver for TauriBatchTranscriptionObserver {
+    fn diagnostic_id(&self) -> Option<&str> {
+        self.instance_id.as_deref()
+    }
+
     fn on_progress(&self, progress: f32) {
         let _ = self.emitter.emit(
             super::BATCH_PROGRESS_EVENT,
@@ -105,6 +109,21 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             cancel_rx: cancel_registration.as_ref().map(|(_, rx, _)| rx.clone()),
         });
         observer.on_progress(0.0);
+        log::info!(
+            "[BatchASR] start instance_id={} engine={:?} model_type={} language={} segmentation={:?} ffmpeg={} vad_configured={} input_kind={}",
+            observer.diagnostic_id().unwrap_or("unassigned"),
+            request.engine,
+            request.model_type,
+            request.language,
+            request.batch_segmentation_mode,
+            request.ffmpeg_enabled,
+            request.vad_model.is_some(),
+            if sona_core::history::is_network_url(&observer.progress_path) {
+                "network"
+            } else {
+                "file"
+            },
+        );
 
         let normalization_options = request.normalization_options;
         let postprocessor = request.postprocessor.clone();
@@ -137,7 +156,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
 
         let transcribe_fut = transcriber.transcribe_with_observer(plan, observer.clone());
 
-        let segments = if let Some((_id, mut rx, guard)) = cancel_registration {
+        let result = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
                 result = transcribe_fut => result,
                 _ = async {
@@ -157,14 +176,37 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
                 } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
             };
             drop(guard);
-            result?
+            result
         } else {
-            transcribe_fut.await?
+            transcribe_fut.await
+        };
+        let segments = match result {
+            Ok(segments) => segments,
+            Err(error) => {
+                log::error!(
+                    "[BatchASR] failed instance_id={} code={} detail={}",
+                    observer.diagnostic_id().unwrap_or("unassigned"),
+                    error.code(),
+                    sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                );
+                return Err(error);
+            }
         };
 
+        let raw_count = segments.len();
         let normalized =
             super::transcript::apply_timeline_normalization(segments, normalization_options);
         let output = postprocessor.process_segments(normalized);
+        log::info!(
+            "[BatchASR] complete instance_id={} raw_segments={} output_segments={} last_end_s={:.3}",
+            observer.diagnostic_id().unwrap_or("unassigned"),
+            raw_count,
+            output.len(),
+            output
+                .iter()
+                .map(|segment| segment.end)
+                .fold(0.0_f64, f64::max),
+        );
         observer.on_transcript_update(&TranscriptUpdate {
             remove_ids: Vec::new(),
             upsert_segments: output.clone(),

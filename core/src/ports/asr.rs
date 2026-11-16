@@ -236,6 +236,10 @@ pub trait BatchTranscriberPort: Send + Sync {
 }
 
 pub trait BatchTranscriptionObserver: Send + Sync {
+    /// Correlates diagnostic events without exposing input URLs or transcript text.
+    fn diagnostic_id(&self) -> Option<&str> {
+        None
+    }
     fn on_progress(&self, progress: f32);
     fn on_transcript_update(&self, update: &TranscriptUpdate);
     fn is_cancelled(&self) -> bool {

@@ -10,7 +10,12 @@ impl Log for CliLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            eprintln!("[{} {}] {}", record.level(), record.target(), record.args());
+            eprintln!(
+                "[{} {}] {}",
+                record.level(),
+                record.target(),
+                sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
+            );
         }
     }
 

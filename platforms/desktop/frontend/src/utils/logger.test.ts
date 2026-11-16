@@ -35,25 +35,25 @@ describe('logger utility', () => {
         level: 'trace',
         run: () => logger.trace('Test trace'),
         plugin: tauriTrace,
-        expected: 'Test trace',
+        expected: expect.stringContaining('Test trace'),
       },
       {
         level: 'debug',
         run: () => logger.debug('Test debug', { data: 123 }),
         plugin: tauriDebug,
-        expected: 'Test debug [{"data":123}]',
+        expected: expect.stringContaining('"component":"Client"'),
       },
       {
         level: 'info',
         run: () => logger.info('Test info'),
         plugin: tauriInfo,
-        expected: 'Test info',
+        expected: expect.stringContaining('Test info'),
       },
       {
         level: 'warn',
         run: () => logger.warn('Test warn', 'warning', 42),
         plugin: tauriWarn,
-        expected: 'Test warn ["warning",42]',
+        expected: expect.stringContaining('"message":"Test warn"'),
       },
       {
         level: 'error',
@@ -75,7 +75,7 @@ describe('logger utility', () => {
 
     await logger.debug('Test message', { data: 123 });
 
-    expect(tauriDebug).toHaveBeenCalledWith('Test message [{"data":123}]');
+    expect(tauriDebug).toHaveBeenCalledWith(expect.stringContaining('"data":123'));
   });
 
   it('allows trace messages only when configured for trace', async () => {
@@ -85,7 +85,7 @@ describe('logger utility', () => {
     setLoggerLevel('trace');
     await logger.trace('Trace written');
 
-    expect(tauriTrace).toHaveBeenCalledWith('Trace written');
+    expect(tauriTrace).toHaveBeenCalledWith(expect.stringContaining('Trace written'));
   });
 
   it('filters lower-priority messages when configured for warn', async () => {
@@ -98,7 +98,77 @@ describe('logger utility', () => {
 
     expect(tauriDebug).not.toHaveBeenCalled();
     expect(tauriInfo).not.toHaveBeenCalled();
-    expect(tauriWarn).toHaveBeenCalledWith('Warn written');
-    expect(tauriError).toHaveBeenCalledWith('Error written');
+    expect(tauriWarn).toHaveBeenCalledWith(expect.stringContaining('Warn written'));
+    expect(tauriError).toHaveBeenCalledWith(expect.stringContaining('Error written'));
+  });
+
+  it('serializes structured context safely and redacts sensitive data', async () => {
+    setLoggerLevel('debug');
+    const circular: Record<string, unknown> = {
+      nested: new Error('request https://host/?api_key=private'),
+    };
+    circular.self = circular;
+    await logger.debug('[BatchQueue] task_start', circular);
+    const entry = JSON.parse(String(vi.mocked(tauriDebug).mock.calls[0][0]));
+    expect(entry).toMatchObject({
+      schema_version: 1,
+      source: 'frontend',
+      component: 'BatchQueue',
+      event: 'task_start',
+    });
+    expect(entry.context.nested.message).toBe('request [redacted-url]');
+    expect(entry.context.self).toBe('[circular]');
+  });
+
+  it('does not reject when the log plugin fails', async () => {
+    vi.mocked(tauriError).mockRejectedValueOnce(new Error('plugin unavailable'));
+    await expect(logger.error('failed')).resolves.toBeUndefined();
+  });
+
+  it('redacts context before both sinks and preserves error causes and bigint', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await logger.error('[EmbySync] task_failed', {
+        taskId: 'task-1',
+        count: 3n,
+        error: new Error('decode failed', { cause: new Error('timeout') }),
+        credentials: {
+          apiKey: 'private-key',
+          authorization: 'Bearer private-token',
+          webhookSecret: 'private-secret',
+        },
+        config: { private: 'private-config' },
+        transcript: 'private-transcript',
+      });
+      const written = String(vi.mocked(tauriError).mock.calls[0][0]);
+      const entry = JSON.parse(written);
+      expect(entry.context).toMatchObject({
+        taskId: 'task-1',
+        count: '3',
+        error: { message: 'decode failed', cause: { message: 'timeout' } },
+      });
+      expect(written).not.toContain('private-');
+      expect(consoleSpy).toHaveBeenCalledWith(written);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it('keeps writing after a hostile getter or console failure', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+      throw new Error('console unavailable');
+    });
+    try {
+      const value = Object.defineProperty({}, 'field', {
+        enumerable: true,
+        get() {
+          throw new Error('unreadable');
+        },
+      });
+      await expect(logger.warn('context failed', value)).resolves.toBeUndefined();
+      expect(tauriWarn).toHaveBeenCalledWith(expect.stringContaining('[unserializable]'));
+    } finally {
+      consoleSpy.mockRestore();
+    }
   });
 });
