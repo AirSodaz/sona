@@ -456,6 +456,8 @@ function stageCudaAddonFiles({
   platform = process.platform,
   version = '0.3.0',
   cudaVersion = '12.4',
+  llamaCppRef = 'b11429',
+  sherpaOnnxVersion = '2.0.1',
 }) {
   fs.mkdirSync(stagedDir, { recursive: true });
 
@@ -515,9 +517,11 @@ function stageCudaAddonFiles({
 
   const manifestFile = path.join(stagedDir, 'cuda-addon-manifest.json');
   const manifestData = {
-    schemaVersion: '1.0',
+    schemaVersion: 1,
     addonVersion: version,
     cudaVersion: cudaVersion || '12.4',
+    llamaCppRef,
+    sherpaOnnxVersion,
     targetOs: platform === 'win32' ? 'windows' : 'linux',
     targetArch: 'x86_64',
     publishedAt: new Date().toISOString(),
@@ -629,6 +633,8 @@ function runCli() {
     ortLibDir,
     llamaLibDir,
     cudaLibPaths: cudaLibs,
+    llamaCppRef: llamaRef,
+    sherpaOnnxVersion: sherpaVersion,
   });
   console.log(`  Staged ${copied.length} libraries.`);
 
@@ -636,6 +642,10 @@ function runCli() {
   const manifest = createCudaAddonManifest({
     addonVersion,
     cudaVersion,
+    llamaCppRef: llamaRef,
+    sherpaOnnxVersion: sherpaVersion,
+    targetOs: process.platform === 'win32' ? 'windows' : 'linux',
+    targetArch: process.arch === 'x64' ? 'x86_64' : process.arch,
     artifactsDir: outputDir,
   });
   fs.writeFileSync(

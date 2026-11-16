@@ -36,6 +36,10 @@ function computeSha256(filePath) {
 function createCudaAddonManifest({
   addonVersion,
   cudaVersion = '12.4',
+  llamaCppRef = 'b11429',
+  sherpaOnnxVersion = '2.0.1',
+  targetOs = null,
+  targetArch = null,
   repo = 'AirSodaz/sona',
   artifactsDir = null,
   platformArtifacts = {},
@@ -78,6 +82,10 @@ function createCudaAddonManifest({
     schemaVersion: 1,
     addonVersion: version,
     cudaVersion: String(cudaVersion).trim(),
+    llamaCppRef: String(llamaCppRef).trim(),
+    sherpaOnnxVersion: String(sherpaOnnxVersion).trim(),
+    ...(targetOs ? { targetOs } : {}),
+    ...(targetArch ? { targetArch } : {}),
     publishedAt,
     platforms,
   };
@@ -110,6 +118,10 @@ function runCli() {
     const manifest = createCudaAddonManifest({
       addonVersion: options.version || options['addon-version'],
       cudaVersion: options['cuda-version'] || '12.4',
+      llamaCppRef: options['llama-ref'] || 'b11429',
+      sherpaOnnxVersion: options['sherpa-version'] || '2.0.1',
+      targetOs: process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : null,
+      targetArch: process.arch === 'x64' ? 'x86_64' : process.arch,
       repo: options.repo || 'AirSodaz/sona',
       artifactsDir: options['artifacts-dir'] ? path.resolve(options['artifacts-dir']) : null,
     });

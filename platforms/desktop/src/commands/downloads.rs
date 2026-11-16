@@ -92,7 +92,11 @@ pub async fn clean_interrupted_download(
 pub async fn get_cuda_addon_status(
     services: State<'_, DesktopServices>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
-    crate::platform::model_downloads::get_cuda_addon_status(&services.active_data_dir())
+    crate::platform::model_downloads::get_cuda_addon_status(
+        &services.active_data_dir(),
+        services.downloads.client(),
+    )
+    .await
 }
 
 #[tauri::command]

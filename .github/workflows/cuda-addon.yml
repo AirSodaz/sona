@@ -166,9 +166,11 @@ jobs:
           # Write version metadata
           Set-Content -Path "$stageDir\version.txt" -Value "$version"
           $manifestJson = @{
-            schemaVersion = "1.0"
+            schemaVersion = 1
             addonVersion = "$version"
-            cudaVersion = "12.4"
+            cudaVersion = "${{ env.CUDA_VERSION }}"
+            llamaCppRef = "${{ env.LLAMA_REF }}"
+            sherpaOnnxVersion = "${{ env.SHERPA_ONNX_VERSION }}"
             targetOs = "windows"
             targetArch = "x86_64"
             publishedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
@@ -294,9 +296,11 @@ jobs:
           echo "$VERSION" > "$STAGE_DIR/version.txt"
           cat <<EOF > "$STAGE_DIR/cuda-addon-manifest.json"
           {
-            "schemaVersion": "1.0",
+            "schemaVersion": 1,
             "addonVersion": "$VERSION",
-            "cudaVersion": "12.4",
+            "cudaVersion": "${{ env.CUDA_VERSION }}",
+            "llamaCppRef": "${{ env.LLAMA_REF }}",
+            "sherpaOnnxVersion": "${{ env.SHERPA_ONNX_VERSION }}",
             "targetOs": "linux",
             "targetArch": "x86_64"
           }
@@ -341,7 +345,9 @@ jobs:
           VERSION="${{ needs.prepare-version.outputs.addon_version }}"
           node scripts/cuda-addon-manifest.js generate \
             --version "$VERSION" \
-            --cuda-version "${{ inputs.cuda_version || '12.4' }}" \
+            --cuda-version "${{ inputs.cuda_version || '12.4.1' }}" \
+            --llama-ref "${{ inputs.llama_cpp_ref || 'b11429' }}" \
+            --sherpa-version "${{ inputs.sherpa_onnx_version || '2.0.1' }}" \
             --repo "${{ github.repository }}" \
             --artifacts-dir all-artifacts \
             --output cuda-addon-manifest.json

@@ -104,12 +104,14 @@ test('CUDA addon dependency versions stay aligned across workflow and scripts', 
   const cudaAddonCi = read('.github', 'workflows', 'cuda-addon.yml');
   const setupSherpaAction = read('.github', 'actions', 'setup-sherpa-onnx', 'action.yml');
   const buildCudaAddonScript = read('scripts', 'build-cuda-addon.js');
+  const coreBuildScript = read('core', 'build.rs');
 
   const cargoSherpaVersion = cargoToml.match(/sherpa-onnx\s*=\s*\{\s*version\s*=\s*"=([\d.]+)"/u)?.[1];
   assert.ok(cargoSherpaVersion, 'Cargo.toml must declare sherpa-onnx version');
 
   const desktopSherpaVersion = desktopCi.match(/SHERPA_ONNX_VERSION:\s*([\d.]+)/u)?.[1];
   assert.equal(desktopSherpaVersion, cargoSherpaVersion, 'desktop CI sherpa-onnx version must match Cargo.toml');
+  assert.ok(coreBuildScript.includes(`"${cargoSherpaVersion}"`), 'core fallback sherpa version must match Cargo.toml');
 
   const cudaAddonSherpaVersion = cudaAddonCi.match(/sherpa_onnx_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
   assert.equal(cudaAddonSherpaVersion, cargoSherpaVersion, 'cuda-addon CI sherpa-onnx version must match Cargo.toml');
@@ -122,9 +124,16 @@ test('CUDA addon dependency versions stay aligned across workflow and scripts', 
 
   const desktopLlamaRef = desktopCi.match(/LLAMA_CPP_REF:\s*([a-zA-Z0-9_-]+)/u)?.[1];
   assert.ok(desktopLlamaRef, 'desktop CI must declare LLAMA_CPP_REF');
+  assert.ok(coreBuildScript.includes(`"${desktopLlamaRef}"`), 'core fallback llama ref must match desktop CI');
 
   const cudaAddonLlamaRef = cudaAddonCi.match(/llama_cpp_ref:[\s\S]*?default:\s*"([a-zA-Z0-9_-]+)"/u)?.[1];
   assert.equal(cudaAddonLlamaRef, desktopLlamaRef, 'cuda-addon CI llama_cpp_ref must match desktop CI');
+
+  const cudaAddonInputVersion = cudaAddonCi.match(/cuda_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
+  const cudaAddonBuildCudaVersion = cudaAddonCi.match(/CUDA_VERSION:\s*\$\{\{ inputs\.cuda_version \|\| '([\d.]+)' \}\}/u)?.[1];
+  const cudaAddonManifestCudaVersion = cudaAddonCi.match(/--cuda-version "\$\{\{ inputs\.cuda_version \|\| '([\d.]+)' \}\}"/u)?.[1];
+  assert.equal(cudaAddonBuildCudaVersion, cudaAddonInputVersion, 'CUDA addon build fallback must match its workflow input default');
+  assert.equal(cudaAddonManifestCudaVersion, cudaAddonInputVersion, 'CUDA addon manifest fallback must match its workflow input default');
 
   const scriptLlamaRef = buildCudaAddonScript.match(/llamaRef\s*=\s*options\['llama-ref'\]\s*\|\|\s*'([a-zA-Z0-9_-]+)'/u)?.[1];
   assert.equal(scriptLlamaRef, desktopLlamaRef, 'build-cuda-addon.js default llamaRef must match desktop CI');

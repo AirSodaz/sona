@@ -233,20 +233,43 @@ pub async fn delete_preset_model_for_app<R: tauri::Runtime>(
     delete_preset_model(&models_dir, model_id).await
 }
 
-pub fn get_cuda_addon_status(
+pub async fn get_cuda_addon_status(
     active_data_dir: &std::path::Path,
+    client: &DownloadClient,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, inspect_cuda_addon_directory};
 
     let cuda_dir = active_data_dir.join(CUDA_ADDON_SUBPATH);
-    Ok(inspect_cuda_addon_directory(&cuda_dir))
+    let mut inspection = inspect_cuda_addon_directory(&cuda_dir);
+    if !matches!(std::env::consts::OS, "windows" | "linux") {
+        return Ok(inspection);
+    }
+    match sona_model_downloads::find_compatible_cuda_addon_release(
+        client,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )
+    .await
+    {
+        Ok(release) => {
+            inspection.required_version = Some(release.version.clone());
+            inspection.required_cuda_version = Some(release.cuda_version);
+            inspection.download_url = Some(release.download_url);
+            inspection.expected_sha256 = Some(release.sha256);
+            inspection.update_available = inspection.version.as_deref() != Some(&release.version)
+                || !inspection.is_compatible;
+        }
+        Err(error) => inspection.update_check_error = Some(error),
+    }
+    Ok(inspection)
 }
 
-pub fn get_cuda_addon_status_for_app<R: tauri::Runtime>(
+pub async fn get_cuda_addon_status_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
+    client: &DownloadClient,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     let active_data_dir = crate::platform::storage_location::resolve_active_data_dir_for_app(app)?;
-    get_cuda_addon_status(&active_data_dir)
+    get_cuda_addon_status(&active_data_dir, client).await
 }
 
 pub fn try_auto_activate_cuda_addon(active_data_dir: &std::path::Path) {
@@ -256,7 +279,7 @@ pub fn try_auto_activate_cuda_addon(active_data_dir: &std::path::Path) {
 
     let cuda_dir = active_data_dir.join(CUDA_ADDON_SUBPATH);
     let inspection = inspect_cuda_addon_directory(&cuda_dir);
-    if inspection.is_installed {
+    if inspection.is_compatible {
         let _ = activate_cuda_addon_directory(&cuda_dir);
     }
 }
