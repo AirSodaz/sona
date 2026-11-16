@@ -851,6 +851,8 @@ fn run_llama_generation(
     };
 
     let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let mut piece_bytes = Vec::new();
+    let mut piece = String::new();
     let mut generated_text = String::new();
     let mut generated_tokens = 0usize;
 
@@ -864,13 +866,15 @@ fn run_llama_generation(
             break;
         }
         sampler.accept(token);
-        let piece_bytes = model.vocab().token_to_piece(token, false, None);
-        let mut piece = String::new();
-        let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
+        piece_bytes.clear();
+        model
+            .vocab()
+            .token_to_piece_into(token, &mut piece_bytes, false, None);
+        crate::decode_piece_into(&mut decoder, &piece_bytes, &mut piece);
 
         generated_text.push_str(&piece);
         if let Some(tx) = &delta_sender
-            && tx.send(piece).is_err()
+            && tx.send(std::mem::take(&mut piece)).is_err()
         {
             // Stream receiver has disconnected or cancelled
             stopped_by_eog = true;

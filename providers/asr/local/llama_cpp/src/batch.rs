@@ -431,6 +431,8 @@ fn transcribe_segment(
 
     let mut sampler = LlamaSampler::greedy();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let mut piece_bytes = Vec::new();
+    let mut piece = String::new();
     let mut generated = String::new();
     let segment_id = uuid::Uuid::new_v4().to_string();
     let mut generated_tokens = 0usize;
@@ -446,9 +448,11 @@ fn transcribe_segment(
             break;
         }
         sampler.accept(token);
-        let piece_bytes = model.vocab().token_to_piece(token, false, None);
-        let mut piece = String::new();
-        let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
+        piece_bytes.clear();
+        model
+            .vocab()
+            .token_to_piece_into(token, &mut piece_bytes, false, None);
+        crate::decode_piece_into(&mut decoder, &piece_bytes, &mut piece);
         generated.push_str(&piece);
         generated_tokens = generated_tokens.saturating_add(1);
         if generated_tokens.is_multiple_of(8) {

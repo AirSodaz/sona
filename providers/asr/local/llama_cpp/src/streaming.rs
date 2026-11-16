@@ -273,6 +273,8 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
 
         let mut sampler = LlamaSampler::greedy();
         let mut decoder = encoding_rs::UTF_8.new_decoder();
+        let mut piece_bytes = Vec::new();
+        let mut piece = String::new();
         let mut generated = String::new();
         let available = context.n_ctx().saturating_sub(n_past.max(0) as u32) as usize;
         let max_tokens = match stage {
@@ -289,9 +291,11 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
                 break;
             }
             sampler.accept(token);
-            let piece_bytes = self.model.vocab().token_to_piece(token, false, None);
-            let mut piece = String::new();
-            let _ = decoder.decode_to_string(&piece_bytes, &mut piece, false);
+            piece_bytes.clear();
+            self.model
+                .vocab()
+                .token_to_piece_into(token, &mut piece_bytes, false, None);
+            crate::decode_piece_into(&mut decoder, &piece_bytes, &mut piece);
             generated.push_str(&piece);
 
             let mut batch = LlamaBatch::new(1, 1);
