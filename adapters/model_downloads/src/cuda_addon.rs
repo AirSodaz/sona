@@ -19,8 +19,10 @@ const DEFAULT_CUDA_REPO: &str = "AirSodaz/sona";
 const CUDA_ADDON_RELEASES_API: &str =
     "https://api.github.com/repos/AirSodaz/sona/releases?per_page=100";
 const CUDA_ADDON_MANIFEST_ASSET_NAME: &str = "cuda-addon-manifest.json";
-const RELEASE_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-const RELEASE_SCAN_TIMEOUT: Duration = Duration::from_secs(30);
+// GitHub asset requests routinely take ~10s on high-latency links, so the
+// per-request budget must stay above that or every lookup reports a timeout.
+const RELEASE_REQUEST_TIMEOUT: Duration = Duration::from_secs(25);
+const RELEASE_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 const RELEASE_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
 const RELEASE_FAILURE_CACHE_TTL: Duration = Duration::from_secs(30);
 
@@ -221,8 +223,6 @@ async fn scan_compatible_cuda_addon_release(
     let releases: Vec<serde_json::Value> = serde_json::from_str(&releases_body)
         .map_err(|error| CudaAddonReleaseError::InvalidResponse(error.to_string()))?;
 
-    let mut lookup_failures = 0usize;
-    let mut last_lookup_error = None;
     let platform_key = format!("{target_os}-{target_arch}");
 
     for release in releases {
@@ -240,14 +240,17 @@ async fn scan_compatible_cuda_addon_release(
                 RELEASE_SCAN_TIMEOUT.as_secs(),
             ));
         }
-        let manifest_body = match fetch_release_text(client, asset_url, mirror, None).await {
-            Ok(body) => body,
-            Err(error) => {
-                lookup_failures += 1;
-                last_lookup_error = Some(error);
-                continue;
-            }
-        };
+        // A release-metadata fetch that fails means ordering information is no
+        // longer trustworthy: report it instead of walking older releases, which
+        // would burn the scan budget and could surface a stale release as an update.
+        let manifest_body = fetch_release_text(client, asset_url, mirror, None)
+            .await
+            .map_err(
+                |last_error| CudaAddonReleaseError::ManifestInspectionFailed {
+                    count: 1,
+                    last_error,
+                },
+            )?;
         let manifest: CudaAddonManifest = match serde_json::from_str(&manifest_body) {
             Ok(manifest) => manifest,
             // An asset that is not a manifest is not a lookup failure.
@@ -276,13 +279,6 @@ async fn scan_compatible_cuda_addon_release(
             cuda_version: manifest.cuda_version,
             download_url: platform.url.clone(),
             sha256: platform.sha256.clone(),
-        });
-    }
-
-    if lookup_failures > 0 {
-        return Err(CudaAddonReleaseError::ManifestInspectionFailed {
-            count: lookup_failures,
-            last_error: last_lookup_error.unwrap_or_else(|| "unknown error".to_string()),
         });
     }
 
@@ -447,7 +443,7 @@ mod tests {
         assert!(
             matches!(
                 error,
-                CudaAddonReleaseError::ManifestInspectionFailed { count: 2, .. }
+                CudaAddonReleaseError::ManifestInspectionFailed { count: 1, .. }
             ),
             "{error:?}"
         );
