@@ -396,6 +396,8 @@ function buildLlamaCppGgmlCuda({
     '-DGGML_CUDA=ON',
     '-DBUILD_SHARED_LIBS=ON',
     '-DGGML_BACKEND_DL=ON',
+    // llama.cpp rejects GGML_NATIVE with GGML_BACKEND_DL (ggml-cpu CMake guard).
+    '-DGGML_NATIVE=OFF',
     '-DGGML_CUDA_FORCE_CUBLAS=ON',
     '-DGGML_CUDA_FA_ALL_QUANTS=OFF',
     '-DLLAMA_BUILD_EXAMPLES=OFF',
