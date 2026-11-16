@@ -130,9 +130,13 @@ test('CUDA addon dependency versions stay aligned across workflow and scripts', 
   assert.equal(cudaAddonLlamaRef, desktopLlamaRef, 'cuda-addon CI llama_cpp_ref must match desktop CI');
 
   const cudaAddonInputVersion = cudaAddonCi.match(/cuda_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
-  const cudaAddonBuildCudaVersion = cudaAddonCi.match(/CUDA_VERSION:\s*\$\{\{ inputs\.cuda_version \|\| '([\d.]+)' \}\}/u)?.[1];
+  const cudaAddonBuildCudaVersions = [...cudaAddonCi.matchAll(/CUDA_VERSION:\s*\$\{\{ inputs\.cuda_version \|\| '([\d.]+)' \}\}/gu)]
+    .map((match) => match[1]);
   const cudaAddonManifestCudaVersion = cudaAddonCi.match(/--cuda-version "\$\{\{ inputs\.cuda_version \|\| '([\d.]+)' \}\}"/u)?.[1];
-  assert.equal(cudaAddonBuildCudaVersion, cudaAddonInputVersion, 'CUDA addon build fallback must match its workflow input default');
+  assert.equal(cudaAddonBuildCudaVersions.length, 2, 'cuda-addon workflow must declare a CUDA_VERSION fallback for both platforms');
+  for (const cudaAddonBuildCudaVersion of cudaAddonBuildCudaVersions) {
+    assert.equal(cudaAddonBuildCudaVersion, cudaAddonInputVersion, 'CUDA addon build fallback must match its workflow input default');
+  }
   assert.equal(cudaAddonManifestCudaVersion, cudaAddonInputVersion, 'CUDA addon manifest fallback must match its workflow input default');
 
   const scriptLlamaRef = buildCudaAddonScript.match(/llamaRef\s*=\s*options\['llama-ref'\]\s*\|\|\s*'([a-zA-Z0-9_-]+)'/u)?.[1];

@@ -120,8 +120,10 @@ function runCli() {
       cudaVersion: options['cuda-version'] || '12.4',
       llamaCppRef: options['llama-ref'] || 'b11429',
       sherpaOnnxVersion: options['sherpa-version'] || '2.0.1',
-      targetOs: process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : null,
-      targetArch: process.arch === 'x64' ? 'x86_64' : process.arch,
+      // The aggregated release manifest covers every platform, so a target is only
+      // recorded when the caller states one explicitly.
+      targetOs: options['target-os'] || null,
+      targetArch: options['target-arch'] || null,
       repo: options.repo || 'AirSodaz/sona',
       artifactsDir: options['artifacts-dir'] ? path.resolve(options['artifacts-dir']) : null,
     });

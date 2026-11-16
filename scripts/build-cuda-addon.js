@@ -10,29 +10,21 @@ import { createCudaAddonManifest } from './cuda-addon-manifest.js';
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
 
-const REQUIRED_FILES = {
-  'windows-x86_64': [
-    'onnxruntime_providers_cuda.dll',
-    'onnxruntime_providers_shared.dll',
-    'ggml-cuda.dll',
-    'cudart64_12.dll',
-    'cublas64_12.dll',
-    'cublasLt64_12.dll',
-  ],
-  'linux-x86_64': [
-    'libonnxruntime_providers_cuda.so',
-    'libonnxruntime_providers_shared.so',
-    'libggml-cuda.so',
-    'libcudart.so.12',
-    'libcublas.so.12',
-    'libcublasLt.so.12',
-  ],
-};
-
 function normalizePlatform(platform = process.platform) {
   if (platform === 'win32') return 'windows-x86_64';
   if (platform === 'linux') return 'linux-x86_64';
   return platform;
+}
+
+// Manifest targets use Rust's `std::env::consts` names, which differ from Node's.
+function rustTargetOs(platform = process.platform) {
+  if (platform === 'win32') return 'windows';
+  if (platform === 'linux') return 'linux';
+  return null;
+}
+
+function rustTargetArch(arch = process.arch) {
+  return { x64: 'x86_64', ia32: 'x86', arm64: 'aarch64', arm: 'arm' }[arch] || arch;
 }
 
 function resolveLocalCudaRuntimeDir(platform = process.platform, env = process.env) {
@@ -516,14 +508,15 @@ function stageCudaAddonFiles({
   copiedFiles.push('version.txt');
 
   const manifestFile = path.join(stagedDir, 'cuda-addon-manifest.json');
+  const targetOs = rustTargetOs(platform);
   const manifestData = {
     schemaVersion: 1,
     addonVersion: version,
     cudaVersion: cudaVersion || '12.4',
     llamaCppRef,
     sherpaOnnxVersion,
-    targetOs: platform === 'win32' ? 'windows' : 'linux',
-    targetArch: 'x86_64',
+    ...(targetOs ? { targetOs } : {}),
+    targetArch: rustTargetArch(),
     publishedAt: new Date().toISOString(),
   };
   fs.writeFileSync(manifestFile, JSON.stringify(manifestData, null, 2), 'utf8');
@@ -595,6 +588,15 @@ function runCli() {
     process.exit(1);
   }
 
+  // Every downloaded/staged runtime below is x86_64-only; stamping another
+  // architecture into the manifest would produce an addon no client accepts.
+  if (process.arch !== 'x64') {
+    console.error(
+      `CUDA Addon is not supported on architecture: ${process.arch} (x64 required)`,
+    );
+    process.exit(1);
+  }
+
   const addonVersion = options['addon-version'] || '0.3.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
   const sherpaVersion = options['sherpa-version'] || '2.0.1';
@@ -644,8 +646,8 @@ function runCli() {
     cudaVersion,
     llamaCppRef: llamaRef,
     sherpaOnnxVersion: sherpaVersion,
-    targetOs: process.platform === 'win32' ? 'windows' : 'linux',
-    targetArch: process.arch === 'x64' ? 'x86_64' : process.arch,
+    targetOs: rustTargetOs(),
+    targetArch: rustTargetArch(),
     artifactsDir: outputDir,
   });
   fs.writeFileSync(
@@ -679,8 +681,9 @@ function runCli() {
 }
 
 export {
-  REQUIRED_FILES,
   normalizePlatform,
+  rustTargetOs,
+  rustTargetArch,
   resolveLocalCudaRuntimeDir,
   detectCudaEnvironment,
   collectCudaToolkitLibraries,

@@ -4,7 +4,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { repoRoot } from './test-support/repo-root.js';
 import {
-  REQUIRED_FILES,
   normalizePlatform,
   resolveLocalCudaRuntimeDir,
   detectCudaEnvironment,

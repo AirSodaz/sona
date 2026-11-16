@@ -9,8 +9,8 @@ pub use app_update::{
     fetch_updater_manifest, install_update_package, verify_update_signature,
 };
 pub use cuda_addon::{
-    CompatibleCudaAddonRelease, default_cuda_addon_download_url, download_and_install_cuda_addon,
-    find_compatible_cuda_addon_release,
+    CompatibleCudaAddonRelease, CudaAddonReleaseError, default_cuda_addon_download_url,
+    download_and_install_cuda_addon, find_compatible_cuda_addon_release,
 };
 pub use downloads::{
     DownloadClient, DownloadError, DownloadFileOperation, DownloadFileSystemError,

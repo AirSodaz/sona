@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Notify;
 
 use crate::downloads::{
@@ -18,6 +18,11 @@ const DEFAULT_CUDA_ADDON_VERSION: &str = "0.3.0";
 const DEFAULT_CUDA_REPO: &str = "AirSodaz/sona";
 const CUDA_ADDON_RELEASES_API: &str =
     "https://api.github.com/repos/AirSodaz/sona/releases?per_page=100";
+const CUDA_ADDON_MANIFEST_ASSET_NAME: &str = "cuda-addon-manifest.json";
+const RELEASE_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const RELEASE_SCAN_TIMEOUT: Duration = Duration::from_secs(30);
+const RELEASE_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+const RELEASE_FAILURE_CACHE_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompatibleCudaAddonRelease {
@@ -27,16 +32,122 @@ pub struct CompatibleCudaAddonRelease {
     pub sha256: String,
 }
 
+/// Distinguishes "no release matches this client" from "the lookup itself failed",
+/// so the UI can keep an installed addon usable when only the probe is broken.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CudaAddonReleaseError {
+    #[error("failed to query CUDA addon releases: {0}")]
+    QueryFailed(String),
+    #[error("invalid CUDA addon release response: {0}")]
+    InvalidResponse(String),
+    #[error("failed to inspect {count} CUDA addon release manifest(s): {last_error}")]
+    ManifestInspectionFailed { count: usize, last_error: String },
+    #[error("timed out inspecting CUDA addon release metadata after {0} seconds")]
+    TimedOut(u64),
+    #[error(
+        "no compatible CUDA addon release found for {platform} (llama.cpp {llama_cpp_ref}, sherpa-onnx {sherpa_onnx_version})"
+    )]
+    NoCompatibleRelease {
+        platform: String,
+        llama_cpp_ref: String,
+        sherpa_onnx_version: String,
+    },
+}
+
+struct CachedReleaseLookup {
+    key: String,
+    expires_at: Instant,
+    result: Result<CompatibleCudaAddonRelease, CudaAddonReleaseError>,
+}
+
+/// The release scan is unauthenticated against `api.github.com`, which allows 60
+/// requests per hour per IP. Results are memoized so repeated settings reads and
+/// concurrent callers cost at most one scan.
+static RELEASE_CACHE: LazyLock<Mutex<Option<CachedReleaseLookup>>> =
+    LazyLock::new(|| Mutex::new(None));
+static RELEASE_LOOKUP_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+fn mirror_cache_key(mirror: DownloadMirror) -> &'static str {
+    match mirror {
+        DownloadMirror::Auto => "auto",
+        DownloadMirror::Direct => "direct",
+        DownloadMirror::GhProxy => "ghproxy",
+        DownloadMirror::GhNet => "ghnet",
+        DownloadMirror::HfMirror => "hf-mirror",
+    }
+}
+
+fn cached_release_lookup(
+    key: &str,
+) -> Option<Result<CompatibleCudaAddonRelease, CudaAddonReleaseError>> {
+    let guard = RELEASE_CACHE.lock().ok()?;
+    let cached = guard.as_ref()?;
+    if cached.key != key || cached.expires_at <= Instant::now() {
+        return None;
+    }
+    Some(cached.result.clone())
+}
+
+fn store_release_lookup(
+    key: &str,
+    result: &Result<CompatibleCudaAddonRelease, CudaAddonReleaseError>,
+) {
+    let ttl = if result.is_ok() {
+        RELEASE_CACHE_TTL
+    } else {
+        RELEASE_FAILURE_CACHE_TTL
+    };
+    if let Ok(mut guard) = RELEASE_CACHE.lock() {
+        *guard = Some(CachedReleaseLookup {
+            key: key.to_string(),
+            expires_at: Instant::now() + ttl,
+            result: result.clone(),
+        });
+    }
+}
+
+async fn fetch_release_text(
+    client: &DownloadClient,
+    url: &str,
+    mirror: DownloadMirror,
+    accept: Option<&str>,
+) -> Result<String, String> {
+    let mut last_error = None;
+    for candidate in download_candidates(url, mirror, None) {
+        let mut request = client
+            .http_client()
+            .get(&candidate)
+            .timeout(RELEASE_REQUEST_TIMEOUT);
+        if let Some(accept) = accept {
+            request = request.header(reqwest::header::ACCEPT, accept);
+        }
+        match request.send().await {
+            Ok(response) => match response.error_for_status() {
+                Ok(response) => match response.text().await {
+                    Ok(body) => return Ok(body),
+                    Err(error) => last_error = Some(format!("Failed to read {candidate}: {error}")),
+                },
+                Err(error) => last_error = Some(format!("Request to {candidate} failed: {error}")),
+            },
+            Err(error) => last_error = Some(format!("Request to {candidate} failed: {error}")),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| format!("Request to {url} failed")))
+}
+
 pub async fn find_compatible_cuda_addon_release(
     client: &DownloadClient,
     target_os: &str,
     target_arch: &str,
-) -> Result<CompatibleCudaAddonRelease, String> {
+    mirror: DownloadMirror,
+) -> Result<CompatibleCudaAddonRelease, CudaAddonReleaseError> {
     find_compatible_cuda_addon_release_from_api(
         client,
         CUDA_ADDON_RELEASES_API,
         target_os,
         target_arch,
+        mirror,
     )
     .await
 }
@@ -46,82 +157,111 @@ async fn find_compatible_cuda_addon_release_from_api(
     api_url: &str,
     target_os: &str,
     target_arch: &str,
-) -> Result<CompatibleCudaAddonRelease, String> {
-    let releases_body = client
-        .http_client()
-        .get(api_url)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .map_err(|error| format!("Failed to query CUDA addon releases: {error}"))?
-        .error_for_status()
-        .map_err(|error| format!("CUDA addon release query failed: {error}"))?
-        .text()
-        .await
-        .map_err(|error| format!("Failed to read CUDA addon release response: {error}"))?;
+    mirror: DownloadMirror,
+) -> Result<CompatibleCudaAddonRelease, CudaAddonReleaseError> {
+    let cache_key = format!(
+        "{api_url}|{target_os}-{target_arch}|{}",
+        mirror_cache_key(mirror)
+    );
+    if let Some(result) = cached_release_lookup(&cache_key) {
+        return result;
+    }
+
+    // Single flight: concurrent status reads share one scan instead of racing.
+    let _scan = RELEASE_LOOKUP_LOCK.lock().await;
+    if let Some(result) = cached_release_lookup(&cache_key) {
+        return result;
+    }
+
+    let result =
+        scan_compatible_cuda_addon_release(client, api_url, target_os, target_arch, mirror).await;
+    store_release_lookup(&cache_key, &result);
+    result
+}
+
+fn is_published_cuda_addon_release(release: &serde_json::Value) -> bool {
+    release.get("draft").and_then(serde_json::Value::as_bool) != Some(true)
+        && release
+            .get("prerelease")
+            .and_then(serde_json::Value::as_bool)
+            != Some(true)
+        && release
+            .get("tag_name")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|tag| tag.starts_with("cuda-addon-v"))
+}
+
+fn release_manifest_asset_url(release: &serde_json::Value) -> Option<&str> {
+    release
+        .get("assets")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|assets| {
+            assets.iter().find_map(|asset| {
+                if asset.get("name")?.as_str()? == CUDA_ADDON_MANIFEST_ASSET_NAME {
+                    asset.get("browser_download_url")?.as_str()
+                } else {
+                    None
+                }
+            })
+        })
+}
+
+async fn scan_compatible_cuda_addon_release(
+    client: &DownloadClient,
+    api_url: &str,
+    target_os: &str,
+    target_arch: &str,
+    mirror: DownloadMirror,
+) -> Result<CompatibleCudaAddonRelease, CudaAddonReleaseError> {
+    let deadline = Instant::now() + RELEASE_SCAN_TIMEOUT;
+    let releases_body =
+        fetch_release_text(client, api_url, mirror, Some("application/vnd.github+json"))
+            .await
+            .map_err(CudaAddonReleaseError::QueryFailed)?;
     let releases: Vec<serde_json::Value> = serde_json::from_str(&releases_body)
-        .map_err(|error| format!("Invalid CUDA addon release response: {error}"))?;
+        .map_err(|error| CudaAddonReleaseError::InvalidResponse(error.to_string()))?;
+
+    let mut lookup_failures = 0usize;
+    let mut last_lookup_error = None;
+    let platform_key = format!("{target_os}-{target_arch}");
 
     for release in releases {
-        if release.get("draft").and_then(serde_json::Value::as_bool) == Some(true)
-            || release
-                .get("prerelease")
-                .and_then(serde_json::Value::as_bool)
-                == Some(true)
-            || !release
-                .get("tag_name")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|tag| tag.starts_with("cuda-addon-v"))
-        {
+        if !is_published_cuda_addon_release(&release) {
             continue;
         }
-        let Some(asset_url) = release
-            .get("assets")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|assets| {
-                assets.iter().find_map(|asset| {
-                    if asset.get("name")?.as_str()? == "cuda-addon-manifest.json" {
-                        asset.get("browser_download_url")?.as_str()
-                    } else {
-                        None
-                    }
-                })
-            })
-        else {
+        let Some(tag_name) = release.get("tag_name").and_then(serde_json::Value::as_str) else {
             continue;
         };
-        let response = match client
-            .http_client()
-            .get(asset_url)
-            .timeout(std::time::Duration::from_secs(15))
-            .send()
-            .await
-        {
-            Ok(response) => match response.error_for_status() {
-                Ok(response) => response,
-                Err(_) => continue,
-            },
-            Err(_) => continue,
+        let Some(asset_url) = release_manifest_asset_url(&release) else {
+            continue;
         };
-        let manifest_body = match response.text().await {
+        if Instant::now() >= deadline {
+            return Err(CudaAddonReleaseError::TimedOut(
+                RELEASE_SCAN_TIMEOUT.as_secs(),
+            ));
+        }
+        let manifest_body = match fetch_release_text(client, asset_url, mirror, None).await {
             Ok(body) => body,
-            Err(_) => continue,
+            Err(error) => {
+                lookup_failures += 1;
+                last_lookup_error = Some(error);
+                continue;
+            }
         };
         let manifest: CudaAddonManifest = match serde_json::from_str(&manifest_body) {
             Ok(manifest) => manifest,
+            // An asset that is not a manifest is not a lookup failure.
             Err(_) => continue,
         };
+        let expected_tag = format!("cuda-addon-v{}", manifest.addon_version);
         if manifest.schema_version != 1
-            || release.get("tag_name").and_then(serde_json::Value::as_str)
-                != Some(format!("cuda-addon-v{}", manifest.addon_version).as_str())
+            || tag_name != expected_tag.as_str()
             || manifest.llama_cpp_ref.as_deref() != Some(EXPECTED_CUDA_ADDON_LLAMA_CPP_REF)
             || manifest.sherpa_onnx_version.as_deref()
                 != Some(EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION)
         {
             continue;
         }
-        let platform_key = format!("{target_os}-{target_arch}");
         let Some(platform) = manifest.platforms.get(&platform_key) else {
             continue;
         };
@@ -138,33 +278,62 @@ async fn find_compatible_cuda_addon_release_from_api(
             sha256: platform.sha256.clone(),
         });
     }
-    Err(format!(
-        "No compatible CUDA addon release found for {target_os}-{target_arch} (llama.cpp {}, sherpa-onnx {})",
-        EXPECTED_CUDA_ADDON_LLAMA_CPP_REF, EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION
-    ))
+
+    if lookup_failures > 0 {
+        return Err(CudaAddonReleaseError::ManifestInspectionFailed {
+            count: lookup_failures,
+            last_error: last_lookup_error.unwrap_or_else(|| "unknown error".to_string()),
+        });
+    }
+
+    Err(CudaAddonReleaseError::NoCompatibleRelease {
+        platform: platform_key,
+        llama_cpp_ref: EXPECTED_CUDA_ADDON_LLAMA_CPP_REF.to_string(),
+        sherpa_onnx_version: EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION.to_string(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::extract::{Path as AxumPath, State};
-    use axum::routing::get;
+    use axum::http::StatusCode;
+    use axum::routing::{MethodRouter, get};
     use axum::{Json, Router};
     use serde_json::{Value, json};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    async fn releases(State(manifest_url): State<String>) -> Json<Value> {
+    #[derive(Clone)]
+    struct ServerState {
+        manifest_url: String,
+        releases_hits: Arc<AtomicUsize>,
+    }
+
+    struct TestServer {
+        address: std::net::SocketAddr,
+        releases_hits: Arc<AtomicUsize>,
+    }
+
+    impl TestServer {
+        fn releases_url(&self) -> String {
+            format!("http://{}/releases", self.address)
+        }
+    }
+
+    async fn releases(State(state): State<ServerState>) -> Json<Value> {
+        state.releases_hits.fetch_add(1, Ordering::SeqCst);
         Json(json!([
             {
                 "tag_name": "cuda-addon-v0.4.0",
                 "draft": false,
                 "prerelease": false,
-                "assets": [{ "name": "cuda-addon-manifest.json", "browser_download_url": format!("{manifest_url}/mismatch") }]
+                "assets": [{ "name": "cuda-addon-manifest.json", "browser_download_url": format!("{}/mismatch", state.manifest_url) }]
             },
             {
                 "tag_name": "cuda-addon-v0.3.0",
                 "draft": false,
                 "prerelease": false,
-                "assets": [{ "name": "cuda-addon-manifest.json", "browser_download_url": format!("{manifest_url}/compatible") }]
+                "assets": [{ "name": "cuda-addon-manifest.json", "browser_download_url": format!("{}/compatible", state.manifest_url) }]
             }
         ]))
     }
@@ -192,24 +361,40 @@ mod tests {
         }))
     }
 
-    #[tokio::test]
-    async fn selects_latest_release_matching_client_dependencies_and_platform() {
+    async fn unavailable_manifest() -> (StatusCode, &'static str) {
+        (StatusCode::INTERNAL_SERVER_ERROR, "")
+    }
+
+    async fn start_server(manifest_route: MethodRouter<ServerState>) -> TestServer {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let manifest_url = format!("http://{address}/manifest");
+        let releases_hits = Arc::new(AtomicUsize::new(0));
         let app = Router::new()
             .route("/releases", get(releases))
-            .route("/manifest/{kind}", get(manifest))
-            .with_state(manifest_url);
+            .route("/manifest/{kind}", manifest_route)
+            .with_state(ServerState {
+                manifest_url: format!("http://{address}/manifest"),
+                releases_hits: releases_hits.clone(),
+            });
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            let _ = axum::serve(listener, app).await;
         });
+        TestServer {
+            address,
+            releases_hits,
+        }
+    }
+
+    #[tokio::test]
+    async fn selects_latest_release_matching_client_dependencies_and_platform() {
+        let server = start_server(get(manifest)).await;
 
         let release = find_compatible_cuda_addon_release_from_api(
             &DownloadClient::new(),
-            &format!("http://{address}/releases"),
+            &server.releases_url(),
             "windows",
             "x86_64",
+            DownloadMirror::Direct,
         )
         .await
         .unwrap();
@@ -221,6 +406,50 @@ mod tests {
             "https://example.org/sona-cuda-addon.tar.gz"
         );
         assert_eq!(release.sha256, "a".repeat(64));
+        assert_eq!(server.releases_hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn release_lookup_is_memoized() {
+        let server = start_server(get(manifest)).await;
+        let client = DownloadClient::new();
+
+        for _ in 0..3 {
+            find_compatible_cuda_addon_release_from_api(
+                &client,
+                &server.releases_url(),
+                "windows",
+                "x86_64",
+                DownloadMirror::Direct,
+            )
+            .await
+            .unwrap();
+        }
+
+        assert_eq!(server.releases_hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn manifest_fetch_failure_is_reported_as_lookup_failure() {
+        let server = start_server(get(unavailable_manifest)).await;
+
+        let error = find_compatible_cuda_addon_release_from_api(
+            &DownloadClient::new(),
+            &server.releases_url(),
+            "windows",
+            "x86_64",
+            DownloadMirror::Direct,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            matches!(
+                error,
+                CudaAddonReleaseError::ManifestInspectionFailed { count: 2, .. }
+            ),
+            "{error:?}"
+        );
     }
 }
 

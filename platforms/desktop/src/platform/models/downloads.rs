@@ -236,8 +236,10 @@ pub async fn delete_preset_model_for_app<R: tauri::Runtime>(
 pub async fn get_cuda_addon_status(
     active_data_dir: &std::path::Path,
     client: &DownloadClient,
+    mirror: Option<String>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, inspect_cuda_addon_directory};
+    use sona_model_downloads::parse_download_mirror;
 
     let cuda_dir = active_data_dir.join(CUDA_ADDON_SUBPATH);
     let mut inspection = inspect_cuda_addon_directory(&cuda_dir);
@@ -248,6 +250,7 @@ pub async fn get_cuda_addon_status(
         client,
         std::env::consts::OS,
         std::env::consts::ARCH,
+        parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
     )
     .await
     {
@@ -259,7 +262,7 @@ pub async fn get_cuda_addon_status(
             inspection.update_available = inspection.version.as_deref() != Some(&release.version)
                 || !inspection.is_compatible;
         }
-        Err(error) => inspection.update_check_error = Some(error),
+        Err(error) => inspection.update_check_error = Some(error.to_string()),
     }
     Ok(inspection)
 }
@@ -267,9 +270,10 @@ pub async fn get_cuda_addon_status(
 pub async fn get_cuda_addon_status_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     client: &DownloadClient,
+    mirror: Option<String>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     let active_data_dir = crate::platform::storage_location::resolve_active_data_dir_for_app(app)?;
-    get_cuda_addon_status(&active_data_dir, client).await
+    get_cuda_addon_status(&active_data_dir, client, mirror).await
 }
 
 pub fn try_auto_activate_cuda_addon(active_data_dir: &std::path::Path) {

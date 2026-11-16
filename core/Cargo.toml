@@ -5,7 +5,6 @@ description = "Pure Rust core domain types and logic for Sona"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
-build = "build.rs"
 
 [package.metadata.sona]
 role = "core"

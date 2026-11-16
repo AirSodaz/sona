@@ -10,8 +10,8 @@ export interface CudaAddonDownloadProgress {
 }
 
 export const cudaAddonService = {
-  async getStatus(): Promise<CudaAddonInspection> {
-    return invokeTauri(TauriCommand.cudaAddon.getStatus);
+  async getStatus(mirror?: string): Promise<CudaAddonInspection> {
+    return invokeTauri(TauriCommand.cudaAddon.getStatus, { mirror });
   },
 
   async activate(): Promise<CudaAddonInspection> {

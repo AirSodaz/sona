@@ -798,7 +798,7 @@ type ManualTauriCommandContractMap = {
     result: ApiServerDashboardSnapshot;
   };
   [TauriCommand.cudaAddon.getStatus]: {
-    args: undefined;
+    args: { mirror?: string };
     result: CudaAddonInspection;
   };
   [TauriCommand.cudaAddon.activate]: {

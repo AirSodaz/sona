@@ -104,59 +104,121 @@ pub enum CudaAddonActivationError {
 
 static ACTIVE_CUDA_ADDON_DIR: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
-pub fn required_cuda_addon_files(target_os: &str) -> &'static [&'static str] {
-    match target_os {
-        "windows" => &[
-            "onnxruntime_providers_cuda.dll",
-            "ggml-cuda.dll",
-            "cudart64_12.dll",
-            "cublas64_12.dll",
-            "cublasLt64_12.dll",
-        ],
-        "linux" => &[
-            "libonnxruntime_providers_cuda.so",
-            "libggml-cuda.so",
-            "libcudart.so.12",
-            "libcublas.so.12",
-            "libcublasLt.so.12",
-        ],
-        _ => &[],
-    }
+pub const DEFAULT_CUDA_MAJOR_VERSION: &str = "12";
+
+fn cuda_major_version(cuda_version: &str) -> &str {
+    cuda_version
+        .split('.')
+        .next()
+        .filter(|major| !major.is_empty())
+        .unwrap_or(DEFAULT_CUDA_MAJOR_VERSION)
 }
 
-fn required_cuda_addon_file_patterns(target_os: &str, cuda_major: &str) -> Vec<String> {
+pub fn required_cuda_addon_files(target_os: &str, cuda_version: &str) -> Vec<String> {
+    let major = cuda_major_version(cuda_version);
     match target_os {
-        "windows" => vec![
-            "onnxruntime_providers_cuda.dll".into(),
-            "ggml-cuda.dll".into(),
-            format!("cudart64_{cuda_major}.dll"),
-            format!("cublas64_{cuda_major}.dll"),
-            format!("cublasLt64_{cuda_major}.dll"),
-        ],
-        "linux" => vec![
-            "libonnxruntime_providers_cuda.so".into(),
-            "libggml-cuda.so".into(),
-            format!("libcudart.so.{cuda_major}"),
-            format!("libcublas.so.{cuda_major}"),
-            format!("libcublasLt.so.{cuda_major}"),
-        ],
+        "windows" => {
+            // CUDA 11 keeps the minor digits in the runtime name (`cudart64_110.dll`),
+            // CUDA 12+ drops them (`cudart64_12.dll`).
+            let cudart = if major == "11" {
+                "cudart64_110.dll".to_string()
+            } else {
+                format!("cudart64_{major}.dll")
+            };
+            vec![
+                "onnxruntime_providers_cuda.dll".to_string(),
+                "ggml-cuda.dll".to_string(),
+                cudart,
+                format!("cublas64_{major}.dll"),
+                format!("cublasLt64_{major}.dll"),
+            ]
+        }
+        "linux" => {
+            let cudart = if major == "11" {
+                "libcudart.so.11.0".to_string()
+            } else {
+                format!("libcudart.so.{major}")
+            };
+            vec![
+                "libonnxruntime_providers_cuda.so".to_string(),
+                "libggml-cuda.so".to_string(),
+                cudart,
+                format!("libcublas.so.{major}"),
+                format!("libcublasLt.so.{major}"),
+            ]
+        }
         _ => Vec::new(),
     }
 }
 
+fn validate_cuda_addon_manifest(manifest: &CudaAddonManifest) -> Result<(), String> {
+    if manifest.schema_version != 1 {
+        return Err(format!(
+            "unsupported manifest schema version {}",
+            manifest.schema_version
+        ));
+    }
+    if manifest.addon_version.trim().is_empty() {
+        return Err("manifest is missing the addon version".to_string());
+    }
+    if manifest.cuda_version.trim().is_empty() {
+        return Err("manifest is missing the CUDA version".to_string());
+    }
+    if manifest
+        .llama_cpp_ref
+        .as_deref()
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err("manifest is missing the llama.cpp revision".to_string());
+    }
+    if manifest
+        .sherpa_onnx_version
+        .as_deref()
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        return Err("manifest is missing the sherpa-onnx version".to_string());
+    }
+    match manifest.target_os.as_deref() {
+        Some(os) if os == std::env::consts::OS => {}
+        Some(os) => {
+            return Err(format!(
+                "manifest targets {os}, but this client runs {}",
+                std::env::consts::OS
+            ));
+        }
+        None => return Err("manifest is missing the target operating system".to_string()),
+    }
+    match manifest.target_arch.as_deref() {
+        Some(arch) if arch == std::env::consts::ARCH => {}
+        Some(arch) => {
+            return Err(format!(
+                "manifest targets {arch}, but this client runs {}",
+                std::env::consts::ARCH
+            ));
+        }
+        None => return Err("manifest is missing the target architecture".to_string()),
+    }
+    Ok(())
+}
+
+fn read_cuda_addon_version_file(dir: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(dir.join("version.txt")).ok()?;
+    let trimmed = content.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 pub fn inspect_cuda_addon_directory(dir: &Path) -> CudaAddonInspection {
     let path_str = dir.to_string_lossy().to_string();
-    let required = required_cuda_addon_files(std::env::consts::OS);
-    let mut validation_error = None;
-    let mut parsed_manifest = None;
 
     if !dir.is_dir() {
+        let missing_files =
+            required_cuda_addon_files(std::env::consts::OS, DEFAULT_CUDA_MAJOR_VERSION);
         return CudaAddonInspection {
             is_installed: false,
             is_active: false,
             is_compatible: false,
             path: path_str,
-            missing_files: required.iter().map(|s| (*s).to_string()).collect(),
+            missing_files,
             validation_error: None,
             version: None,
             cuda_version: None,
@@ -174,66 +236,52 @@ pub fn inspect_cuda_addon_directory(dir: &Path) -> CudaAddonInspection {
     }
 
     let manifest_path = dir.join(CUDA_ADDON_MANIFEST_FILENAME);
-    if !manifest_path.is_file() {
-        validation_error = Some("CUDA addon manifest is missing".to_string());
+    let (parsed_manifest, validation_error) = if !manifest_path.is_file() {
+        (None, Some("CUDA addon manifest is missing".to_string()))
     } else {
         match std::fs::read_to_string(&manifest_path)
-            .map_err(|error| error.to_string())
+            .map_err(|error| format!("CUDA addon manifest is unreadable: {error}"))
             .and_then(|content| {
                 serde_json::from_str::<CudaAddonManifest>(&content)
-                    .map_err(|error| error.to_string())
+                    .map_err(|error| format!("CUDA addon manifest is invalid: {error}"))
             }) {
-            Ok(manifest)
-                if manifest.schema_version == 1
-                    && !manifest.addon_version.trim().is_empty()
-                    && !manifest.cuda_version.trim().is_empty()
-                    && manifest
-                        .llama_cpp_ref
-                        .as_ref()
-                        .is_some_and(|value| !value.trim().is_empty())
-                    && manifest
-                        .sherpa_onnx_version
-                        .as_ref()
-                        .is_some_and(|value| !value.trim().is_empty())
-                    && manifest.target_os.as_deref() == Some(std::env::consts::OS)
-                    && manifest.target_arch.as_deref() == Some(std::env::consts::ARCH) =>
-            {
-                parsed_manifest = Some(manifest)
+            Ok(manifest) => {
+                let validation_error = validate_cuda_addon_manifest(&manifest).err();
+                (Some(manifest), validation_error)
             }
-            Ok(_) => {
-                validation_error =
-                    Some("CUDA addon manifest has unsupported or missing fields".to_string())
-            }
-            Err(error) => {
-                validation_error = Some(format!("CUDA addon manifest is invalid: {error}"))
-            }
+            Err(error) => (None, Some(error)),
         }
-    }
+    };
 
+    // Metadata is reported even when the manifest fails validation, so the UI can show
+    // which version is installed and why it is unusable.
     let manifest = parsed_manifest.as_ref();
-    let target_os = std::env::consts::OS;
-    let cuda_major = manifest
-        .and_then(|value| value.cuda_version.split('.').next())
-        .unwrap_or("12");
-    let required_files = required_cuda_addon_file_patterns(target_os, cuda_major);
+    let version = manifest
+        .map(|value| value.addon_version.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| read_cuda_addon_version_file(dir));
+    let cuda_version = manifest
+        .map(|value| value.cuda_version.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let llama_cpp_ref = manifest.and_then(|value| value.llama_cpp_ref.clone());
+    let sherpa_onnx_version = manifest.and_then(|value| value.sherpa_onnx_version.clone());
+
+    let required_files = required_cuda_addon_files(
+        std::env::consts::OS,
+        cuda_version
+            .as_deref()
+            .unwrap_or(DEFAULT_CUDA_MAJOR_VERSION),
+    );
     let missing_files: Vec<String> = required_files
         .iter()
         .filter(|file_name| !dir.join(file_name).is_file())
         .cloned()
         .collect();
-    let is_installed = !required_files.is_empty() && missing_files.is_empty() && manifest.is_some();
-    let llama_cpp_ref = manifest.and_then(|value| value.llama_cpp_ref.clone());
-    let sherpa_onnx_version = manifest.and_then(|value| value.sherpa_onnx_version.clone());
+    let is_installed =
+        validation_error.is_none() && !required_files.is_empty() && missing_files.is_empty();
     let is_compatible = is_installed
         && llama_cpp_ref.as_deref() == Some(EXPECTED_CUDA_ADDON_LLAMA_CPP_REF)
-        && sherpa_onnx_version.as_deref() == Some(EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION)
-        && manifest.is_some_and(|value| {
-            value.target_os.as_deref().is_none_or(|os| os == target_os)
-                && value
-                    .target_arch
-                    .as_deref()
-                    .is_none_or(|arch| arch == std::env::consts::ARCH)
-        });
+        && sherpa_onnx_version.as_deref() == Some(EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION);
 
     let active_dir = active_cuda_addon_dir();
     let is_active = active_dir.as_ref().is_some_and(|active| {
@@ -255,8 +303,8 @@ pub fn inspect_cuda_addon_directory(dir: &Path) -> CudaAddonInspection {
         path: path_str,
         missing_files,
         validation_error,
-        version: manifest.map(|value| value.addon_version.clone()),
-        cuda_version: manifest.map(|value| value.cuda_version.clone()),
+        version,
+        cuda_version,
         llama_cpp_ref,
         sherpa_onnx_version,
         required_llama_cpp_ref: EXPECTED_CUDA_ADDON_LLAMA_CPP_REF.to_string(),
@@ -364,11 +412,62 @@ mod tests {
         tempfile::tempdir_in(&target_temp).unwrap_or_else(|_| tempfile::tempdir().unwrap())
     }
 
+    fn write_required_files(dir: &Path, cuda_version: &str) -> Vec<String> {
+        let required = required_cuda_addon_files(std::env::consts::OS, cuda_version);
+        for file in &required {
+            std::fs::write(dir.join(file), b"test").unwrap();
+        }
+        required
+    }
+
+    fn valid_manifest(cuda_version: &str) -> serde_json::Value {
+        serde_json::json!({
+            "schemaVersion": 1,
+            "addonVersion": "0.1.0",
+            "cudaVersion": cuda_version,
+            "llamaCppRef": EXPECTED_CUDA_ADDON_LLAMA_CPP_REF,
+            "sherpaOnnxVersion": EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION,
+            "targetOs": std::env::consts::OS,
+            "targetArch": std::env::consts::ARCH,
+        })
+    }
+
+    fn write_manifest(dir: &Path, manifest: &serde_json::Value) {
+        std::fs::write(dir.join(CUDA_ADDON_MANIFEST_FILENAME), manifest.to_string()).unwrap();
+    }
+
     #[test]
     fn required_files_vary_by_platform() {
-        assert_eq!(required_cuda_addon_files("windows").len(), 5);
-        assert_eq!(required_cuda_addon_files("linux").len(), 5);
-        assert_eq!(required_cuda_addon_files("macos").len(), 0);
+        assert_eq!(required_cuda_addon_files("windows", "12.4").len(), 5);
+        assert_eq!(required_cuda_addon_files("linux", "12.4").len(), 5);
+        assert_eq!(required_cuda_addon_files("macos", "12.4").len(), 0);
+    }
+
+    #[test]
+    fn required_files_follow_cuda_major_version() {
+        let windows_13 = required_cuda_addon_files("windows", "13.0");
+        assert!(windows_13.contains(&"cudart64_13.dll".to_string()));
+        assert!(windows_13.contains(&"cublasLt64_13.dll".to_string()));
+
+        let linux_12 = required_cuda_addon_files("linux", "12.4.1");
+        assert!(linux_12.contains(&"libcudart.so.12".to_string()));
+        assert!(linux_12.contains(&"libcublasLt.so.12".to_string()));
+
+        assert_eq!(
+            required_cuda_addon_files("windows", "12.4"),
+            required_cuda_addon_files("windows", "")
+        );
+    }
+
+    #[test]
+    fn required_files_use_cuda_11_runtime_names() {
+        let windows_11 = required_cuda_addon_files("windows", "11.7");
+        assert!(windows_11.contains(&"cudart64_110.dll".to_string()));
+        assert!(windows_11.contains(&"cublas64_11.dll".to_string()));
+
+        let linux_11 = required_cuda_addon_files("linux", "11.7");
+        assert!(linux_11.contains(&"libcudart.so.11.0".to_string()));
+        assert!(linux_11.contains(&"libcublasLt.so.11".to_string()));
     }
 
     #[test]
@@ -376,84 +475,73 @@ mod tests {
         let temp = test_temp_dir();
         let inspection = inspect_cuda_addon_directory(temp.path());
 
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
-        {
-            assert!(!inspection.is_installed);
-            assert_eq!(inspection.missing_files.len(), 5);
-        }
-        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-        {
-            assert!(!inspection.is_installed);
-        }
+        assert!(!inspection.is_installed);
+        assert!(!inspection.is_compatible);
+        assert_eq!(
+            inspection.missing_files.len(),
+            required_cuda_addon_files(std::env::consts::OS, DEFAULT_CUDA_MAJOR_VERSION).len()
+        );
     }
 
     #[test]
     fn inspect_complete_directory_detects_version_and_installation() {
         let temp = test_temp_dir();
-        let required = required_cuda_addon_files(std::env::consts::OS);
-        for file in required {
-            std::fs::write(temp.path().join(file), b"test").unwrap();
-        }
-
-        let manifest = serde_json::json!({
-            "schemaVersion": 1,
-            "addonVersion": "0.1.0",
-            "cudaVersion": "12.4",
-            "llamaCppRef": EXPECTED_CUDA_ADDON_LLAMA_CPP_REF,
-            "sherpaOnnxVersion": EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION,
-            "targetOs": std::env::consts::OS,
-            "targetArch": std::env::consts::ARCH,
-            "platforms": {}
-        });
-        std::fs::write(
-            temp.path().join(CUDA_ADDON_MANIFEST_FILENAME),
-            manifest.to_string(),
-        )
-        .unwrap();
+        let required = write_required_files(temp.path(), "12.4");
+        write_manifest(temp.path(), &valid_manifest("12.4"));
 
         let inspection = inspect_cuda_addon_directory(temp.path());
+        assert!(inspection.validation_error.is_none());
+        assert_eq!(inspection.version.as_deref(), Some("0.1.0"));
+        assert_eq!(inspection.cuda_version.as_deref(), Some("12.4"));
+        assert!(inspection.missing_files.is_empty());
         if !required.is_empty() {
             assert!(inspection.is_installed);
-            assert_eq!(inspection.version.as_deref(), Some("0.1.0"));
-            assert_eq!(inspection.cuda_version.as_deref(), Some("12.4"));
             assert!(inspection.is_compatible);
-            assert!(inspection.missing_files.is_empty());
         }
+    }
+
+    #[test]
+    fn cuda_11_addon_set_is_installed_and_compatible() {
+        if required_cuda_addon_files(std::env::consts::OS, "11.7").is_empty() {
+            return;
+        }
+        let temp = test_temp_dir();
+        write_required_files(temp.path(), "11.7");
+        write_manifest(temp.path(), &valid_manifest("11.7"));
+
+        let inspection = inspect_cuda_addon_directory(temp.path());
+        assert!(inspection.missing_files.is_empty(), "{inspection:?}");
+        assert!(inspection.is_installed);
+        assert!(inspection.is_compatible);
     }
 
     #[test]
     fn invalid_manifest_is_not_compatible() {
         let temp = test_temp_dir();
-        for file in required_cuda_addon_files(std::env::consts::OS) {
-            std::fs::write(temp.path().join(file), b"test").unwrap();
-        }
+        write_required_files(temp.path(), "12.4");
         std::fs::write(temp.path().join(CUDA_ADDON_MANIFEST_FILENAME), b"{").unwrap();
         let inspection = inspect_cuda_addon_directory(temp.path());
         assert!(!inspection.is_installed);
         assert!(!inspection.is_compatible);
-        assert!(inspection.validation_error.is_some());
+        assert!(
+            inspection
+                .validation_error
+                .is_some_and(|error| error.contains("invalid"))
+        );
     }
 
     #[test]
     fn dependency_mismatch_is_installed_but_not_compatible() {
-        let temp = test_temp_dir();
-        for file in required_cuda_addon_files(std::env::consts::OS) {
-            std::fs::write(temp.path().join(file), b"test").unwrap();
+        if required_cuda_addon_files(std::env::consts::OS, "12.4").is_empty() {
+            return;
         }
-        let manifest = serde_json::json!({
-            "schemaVersion": "1.0",
-            "addonVersion": "0.2.0",
-            "cudaVersion": "12.4",
-            "llamaCppRef": "old-ref",
-            "sherpaOnnxVersion": EXPECTED_CUDA_ADDON_SHERPA_ONNX_VERSION,
-            "targetOs": std::env::consts::OS,
-            "targetArch": std::env::consts::ARCH,
-        });
-        std::fs::write(
-            temp.path().join(CUDA_ADDON_MANIFEST_FILENAME),
-            manifest.to_string(),
-        )
-        .unwrap();
+        let temp = test_temp_dir();
+        write_required_files(temp.path(), "12.4");
+        let mut manifest = valid_manifest("12.4");
+        manifest["schemaVersion"] = serde_json::json!("1.0");
+        manifest["addonVersion"] = serde_json::json!("0.2.0");
+        manifest["llamaCppRef"] = serde_json::json!("old-ref");
+        write_manifest(temp.path(), &manifest);
 
         let inspection = inspect_cuda_addon_directory(temp.path());
         assert!(inspection.is_installed);
@@ -462,14 +550,38 @@ mod tests {
     }
 
     #[test]
-    fn required_files_follow_cuda_major_version() {
+    fn legacy_manifest_keeps_version_but_is_not_installed() {
+        let temp = test_temp_dir();
+        write_required_files(temp.path(), "12.4");
+        let mut manifest = valid_manifest("12.4");
+        manifest["addonVersion"] = serde_json::json!("0.2.0");
+        manifest.as_object_mut().unwrap().remove("llamaCppRef");
+        write_manifest(temp.path(), &manifest);
+
+        let inspection = inspect_cuda_addon_directory(temp.path());
+        assert!(!inspection.is_installed);
+        assert!(!inspection.is_compatible);
+        assert_eq!(inspection.version.as_deref(), Some("0.2.0"));
+        assert_eq!(inspection.cuda_version.as_deref(), Some("12.4"));
         assert!(
-            required_cuda_addon_file_patterns("windows", "13")
-                .contains(&"cudart64_13.dll".to_string())
+            inspection
+                .validation_error
+                .is_some_and(|error| error.contains("llama.cpp"))
         );
+    }
+
+    #[test]
+    fn version_file_is_reported_when_manifest_is_missing() {
+        let temp = test_temp_dir();
+        std::fs::write(temp.path().join("version.txt"), b"0.3.0\n").unwrap();
+
+        let inspection = inspect_cuda_addon_directory(temp.path());
+        assert!(!inspection.is_installed);
+        assert_eq!(inspection.version.as_deref(), Some("0.3.0"));
         assert!(
-            required_cuda_addon_file_patterns("linux", "11")
-                .contains(&"libcublasLt.so.11".to_string())
+            inspection
+                .validation_error
+                .is_some_and(|error| error.contains("missing"))
         );
     }
 }
