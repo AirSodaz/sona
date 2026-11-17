@@ -10,8 +10,9 @@ impl Log for CliLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
             eprintln!(
-                "[{} {}] {}",
+                "[{now}] [{} {}] {}",
                 record.level(),
                 record.target(),
                 sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
@@ -38,7 +39,8 @@ pub fn setup_cli_panic_hook() {
             .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
             .unwrap_or_default();
         let sanitized = sona_core::runtime::logging::sanitize_log_text(message);
-        eprintln!("[sona-cli][ERROR] Panic: {sanitized}{location}");
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        eprintln!("[{now}] [sona-cli][ERROR] Panic: {sanitized}{location}");
     }));
 }
 

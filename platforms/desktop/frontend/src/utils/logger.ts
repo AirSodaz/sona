@@ -114,6 +114,8 @@ export function getLoggerLevel(): AppLogLevel {
   return currentLogLevel;
 }
 
+const MAX_PENDING_WRITES = 500;
+let pendingCount = 0;
 let writePromise: Promise<void> = Promise.resolve();
 
 async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]): Promise<void> {
@@ -139,12 +141,22 @@ async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]
     } catch {
       // A broken devtools sink must not prevent the file sink.
     }
+    if (pendingCount >= MAX_PENDING_WRITES && (level === 'trace' || level === 'debug')) {
+      return writePromise;
+    }
+    pendingCount++;
     writePromise = writePromise
       .then(async () => {
         const plugin = await getPluginLogModule();
         if (plugin) await plugin[level](formatted);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        pendingCount = Math.max(0, pendingCount - 1);
+        if (pendingCount === 0) {
+          writePromise = Promise.resolve();
+        }
+      });
     return writePromise;
   } catch {
     // Do not recursively log a failed log write.

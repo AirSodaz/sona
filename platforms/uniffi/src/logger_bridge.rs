@@ -31,8 +31,9 @@ impl Log for DelegatingMobileLogger {
                 message,
             );
         } else {
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
             eprintln!(
-                "[sona-mobile][{} {}] {}",
+                "[{now}] [sona-mobile][{} {}] {}",
                 record.level(),
                 record.target(),
                 message

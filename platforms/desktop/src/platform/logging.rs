@@ -15,7 +15,7 @@ pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
         "source": "backend",
     });
     let trimmed = message.trim_start();
-    let client_payload = if trimmed.starts_with('{') && trimmed.contains("\"source\"") {
+    let client_payload = if is_potential_client_diagnostic(trimmed) {
         serde_json::from_str::<Value>(trimmed).ok()
     } else {
         None
@@ -40,6 +40,12 @@ pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
         }
     }
     entry
+}
+
+fn is_potential_client_diagnostic(message: &str) -> bool {
+    message.starts_with('{')
+        && (message.contains("\"source\":\"frontend\"")
+            || message.contains("\"source\": \"frontend\""))
 }
 
 fn is_client_diagnostic(client: &Value) -> bool {
@@ -102,5 +108,15 @@ mod tests {
             entry["message"],
             "[SyncS3] Request failed at https://s3.us-east-1.amazonaws.com: HTTP 403"
         );
+    }
+
+    #[test]
+    fn does_not_parse_arbitrary_backend_json_as_client_diagnostic() {
+        let record = log::Record::builder().build();
+        let json_text = r#"{"source":"sqlite_migration","version":42}"#;
+        let entry = format_record(json_text, &record);
+        assert_eq!(entry["source"], "backend");
+        assert_eq!(entry["message"], json_text);
+        assert!(entry.get("client").is_none());
     }
 }

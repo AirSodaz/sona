@@ -293,8 +293,9 @@ impl log::Log for McpStderrLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
             eprintln!(
-                "[sona-mcp][{} {}] {}",
+                "[{now}] [sona-mcp][{} {}] {}",
                 record.level(),
                 record.target(),
                 sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
@@ -324,7 +325,8 @@ fn setup_mcp_panic_hook() {
             .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
             .unwrap_or_default();
         let sanitized = sona_core::runtime::logging::sanitize_log_text(message);
-        eprintln!("[sona-mcp][ERROR] Panic: {sanitized}{location}");
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        eprintln!("[{now}] [sona-mcp][ERROR] Panic: {sanitized}{location}");
     }));
 }
 

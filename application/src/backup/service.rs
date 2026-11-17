@@ -1,4 +1,4 @@
-﻿use serde_json::Value;
+use serde_json::Value;
 
 use crate::config::service::app_config_stored_state_from_value;
 use sona_core::config::migrate_app_config;
@@ -37,12 +37,26 @@ impl<'a> BackupService<'a> {
         require_non_empty(&request.archive_path, "archive_path")?;
         require_non_empty(&request.app_version, "app_version")?;
 
-        let mut dataset = self.state.snapshot()?;
+        let mut dataset = self.state.snapshot().map_err(|err| {
+            log::error!("[BackupService] export_archive failed to snapshot state: {err:?}");
+            err
+        })?;
         sona_core::config::strip_config_credentials(&mut dataset.config);
-        validate_dataset(&dataset)?;
+        validate_dataset(&dataset).map_err(|err| {
+            log::error!("[BackupService] export_archive dataset validation failed: {err:?}");
+            err
+        })?;
         let manifest = manifest_for_dataset(self.now_ms()?, request.app_version, &dataset)?;
         self.archive
-            .write_archive(&request.archive_path, &manifest, &dataset)?;
+            .write_archive(&request.archive_path, &manifest, &dataset)
+            .map_err(|err| {
+                log::error!("[BackupService] export_archive failed to write archive: {err:?}");
+                err
+            })?;
+        log::info!(
+            "[BackupService] export_archive completed: {}",
+            request.archive_path
+        );
         Ok(manifest)
     }
 
@@ -51,7 +65,16 @@ impl<'a> BackupService<'a> {
         request: BackupPrepareImportRequest,
     ) -> Result<PreparedBackupImport, BackupError> {
         require_non_empty(&request.archive_path, "archive_path")?;
-        let preview = self.archive.prepare_import(&request.archive_path)?;
+        let preview = self
+            .archive
+            .prepare_import(&request.archive_path)
+            .map_err(|err| {
+                log::error!(
+                    "[BackupService] prepare_import failed for {}: {err:?}",
+                    request.archive_path
+                );
+                err
+            })?;
         let import_id = preview.import_id.clone();
         match validate_preview(&preview) {
             Ok(()) => Ok(preview),
@@ -68,6 +91,17 @@ impl<'a> BackupService<'a> {
         require_non_empty(&request.default_rule_set_name, "default_rule_set_name")?;
         let import_id = request.import_id.clone();
         let primary_result = self.apply_prepared(&request);
+        if let Err(ref err) = primary_result {
+            log::error!(
+                "[BackupService] apply_prepared_import failed for import_id {}: {err:?}",
+                request.import_id
+            );
+        } else {
+            log::info!(
+                "[BackupService] apply_prepared_import succeeded for import_id {}",
+                request.import_id
+            );
+        }
         self.finish_prepared(&import_id, primary_result)
     }
 

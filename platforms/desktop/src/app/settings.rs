@@ -157,8 +157,9 @@ pub(crate) fn is_noisy_external_target(target: &str) -> bool {
     ];
     NOISY_PREFIXES.iter().any(|prefix| {
         target == *prefix
-            || target.starts_with(&format!("{prefix}::"))
-            || target.starts_with(&format!("{prefix}_"))
+            || target
+                .strip_prefix(prefix)
+                .is_some_and(|rest| rest.starts_with("::") || rest.starts_with('_'))
     })
 }
 
@@ -272,11 +273,15 @@ mod tests {
 
     #[test]
     fn suppresses_noisy_external_targets_when_debug_enabled() {
+        assert!(is_noisy_external_target("hyper"));
         assert!(is_noisy_external_target("hyper::proto::h1::io"));
         assert!(is_noisy_external_target("tokio::runtime"));
         assert!(is_noisy_external_target("symphonia_bundle_mp3"));
+        assert!(is_noisy_external_target("reqwest::connect"));
         assert!(!is_noisy_external_target("sona::app"));
         assert!(!is_noisy_external_target("webview"));
+        assert!(!is_noisy_external_target("my_tokio"));
+        assert!(!is_noisy_external_target("tokiox"));
 
         // Application targets allow debug when configured level is Debug
         assert!(should_log_target_level(

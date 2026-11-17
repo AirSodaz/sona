@@ -231,4 +231,11 @@ describe('logger utility', () => {
       consoleSpy.mockRestore();
     }
   });
+
+  it('handles multiple concurrent writes and cleans up promise chain', async () => {
+    setLoggerLevel('debug');
+    const promises = Array.from({ length: 20 }, (_, i) => logger.debug(`concurrent message ${i}`));
+    await expect(Promise.all(promises)).resolves.toBeDefined();
+    expect(tauriDebug).toHaveBeenCalledTimes(20);
+  });
 });

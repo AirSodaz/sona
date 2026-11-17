@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 
 use sona_core::ports::time::ClockPort;
 use sona_core::recovery::RecoveryError;
@@ -34,7 +34,10 @@ impl<'a> RecoveryService<'a> {
     }
 
     pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, RecoveryError> {
-        let input = self.store.load_snapshot_input()?;
+        let input = self.store.load_snapshot_input().map_err(|err| {
+            log::warn!("[RecoveryService] load_snapshot_input failed: {err:?}");
+            err
+        })?;
         let source_paths = SourcePathStatusProviderRef(self.source_paths);
         Ok(snapshot_from_input_with_source_paths_at(
             input,
@@ -58,7 +61,14 @@ impl<'a> RecoveryService<'a> {
             .filter(|item| item.resolution == RecoveryResolution::Pending)
             .collect::<Vec<_>>();
         let snapshot = snapshot_from_items_with_timestamp(items, now_ms);
-        self.store.save_snapshot(&snapshot)?;
+        self.store.save_snapshot(&snapshot).map_err(|err| {
+            log::error!("[RecoveryService] save_snapshot failed: {err:?}");
+            err
+        })?;
+        log::debug!(
+            "[RecoveryService] saved snapshot with {} items",
+            snapshot.items.len()
+        );
         Ok(snapshot)
     }
 
@@ -101,7 +111,14 @@ impl<'a> RecoveryService<'a> {
         );
 
         let snapshot = snapshot_from_items_with_timestamp(items, now_ms);
-        self.store.save_snapshot(&snapshot)?;
+        self.store.save_snapshot(&snapshot).map_err(|err| {
+            log::error!("[RecoveryService] persist_queue_snapshot failed: {err:?}");
+            err
+        })?;
+        log::debug!(
+            "[RecoveryService] persisted queue snapshot with {} items",
+            snapshot.items.len()
+        );
         Ok(snapshot)
     }
 

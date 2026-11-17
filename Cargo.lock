@@ -6561,6 +6561,7 @@ version = "0.10.4"
 dependencies = [
  "async-trait",
  "axum",
+ "chrono",
  "clap",
  "clap_complete",
  "crossterm",
@@ -6651,6 +6652,7 @@ dependencies = [
 name = "sona-mcp"
 version = "0.10.4"
 dependencies = [
+ "chrono",
  "clap",
  "log",
  "serde",
@@ -6914,6 +6916,7 @@ name = "sona-uniffi-bind"
 version = "0.10.4"
 dependencies = [
  "async-trait",
+ "chrono",
  "hex",
  "jni 0.22.4",
  "log",
