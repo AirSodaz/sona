@@ -5,6 +5,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use sona_core::ports::asr::{BatchTranscriberPort, BatchTranscriptionObserver};
 use sona_core::ports::runtime::{BatchTranscribePlanPort, RuntimeCapabilityError};
+use sona_core::runtime::logging::{redacted_endpoint, sanitize_log_text};
 use sona_core::transcription::runtime::BatchTranscribeOptions;
 use sona_core::transcription::transcript::TranscriptUpdate;
 use tokio::sync::mpsc;
@@ -101,7 +102,7 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
                 log::warn!(
                     "[Server] webhook delivery failed: job_id={} endpoint={} status={}",
                     job.job_id,
-                    sona_core::runtime::logging::redacted_endpoint(webhook_url),
+                    redacted_endpoint(webhook_url),
                     response.status()
                 );
             }
@@ -110,8 +111,8 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
             log::warn!(
                 "[Server] webhook delivery error: job_id={} endpoint={} error={}",
                 job.job_id,
-                sona_core::runtime::logging::redacted_endpoint(webhook_url),
-                sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                redacted_endpoint(webhook_url),
+                sanitize_log_text(&error.to_string())
             );
         }
     }
@@ -206,8 +207,8 @@ pub(crate) async fn start_worker_loop(
                 "[ServerJob] task_start job_id={} engine={} model_id={} language={}",
                 job.job_id,
                 job.engine,
-                job.model_id,
-                job.language
+                sanitize_log_text(&job.model_id),
+                sanitize_log_text(&job.language)
             );
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
@@ -266,7 +267,7 @@ pub(crate) async fn start_worker_loop(
                     "[ServerJob] task_failed job_id={} elapsed_ms={} error={}",
                     job.job_id,
                     started.elapsed().as_millis(),
-                    sona_core::runtime::logging::sanitize_log_text(error)
+                    sanitize_log_text(error)
                 ),
                 _ => {}
             }

@@ -265,7 +265,8 @@ pub async fn fetch_google_translate_free_translation(
 
     let mut last_error = None;
 
-    for candidate_url in &candidates {
+    for (index, candidate_url) in candidates.iter().enumerate() {
+        let candidate = format!("{}/{}", index + 1, candidates.len());
         let response = match client
             .get(candidate_url.reqwest_url())
             .header(USER_AGENT, GOOGLE_TRANSLATE_USER_AGENT)
@@ -277,7 +278,7 @@ pub async fn fetch_google_translate_free_translation(
             Ok(resp) => resp,
             Err(err) => {
                 log::debug!(
-                    "[LLM] google_translate_free request failed endpoint={}: {}",
+                    "[LLM] google_translate_free request failed candidate={candidate} endpoint={}: {}",
                     sona_core::runtime::logging::redacted_endpoint(candidate_url.as_str()),
                     sona_core::runtime::logging::sanitize_log_text(&err.to_string())
                 );
@@ -292,7 +293,7 @@ pub async fn fetch_google_translate_free_translation(
             let status = response.status();
             let retry_after = parse_google_translate_free_retry_after(response.headers());
             log::info!(
-                "[LLM] google_translate_free candidate endpoint={} returned status {}, trying next candidate if available",
+                "[LLM] google_translate_free candidate={candidate} endpoint={} returned status {}, trying next candidate if available",
                 sona_core::runtime::logging::redacted_endpoint(candidate_url.as_str()),
                 status
             );

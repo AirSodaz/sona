@@ -180,15 +180,15 @@ export class BatchItemProcessor {
         });
         return;
       } catch (uploadError) {
-        logger.error(
-          '[BatchQueue] Fast-path retry failed to upload subtitle to media server:',
-          uploadError
-        );
         item.errorStage = 'upload';
-        logger.warn('[BatchQueue] task_failed', {
+        const cancelled = callbacks.isCancelRequested();
+        const logTaskFailed = cancelled ? logger.warn : logger.error;
+        logTaskFailed('[BatchQueue] task_failed', {
           ...diagnosticContext,
           stage: 'upload',
+          cancelled,
           error: uploadError,
+          ...this.transcriptDiagnostics(item.segments),
           elapsedMs: Date.now() - startedAt,
         });
         throw uploadError;
@@ -556,7 +556,7 @@ export class BatchItemProcessor {
             elapsedMs: Date.now() - syncStartedAt,
           });
         } catch (uploadError) {
-          logger.error('[BatchQueue] Failed to upload subtitle to media server:', uploadError);
+          // The terminal `task_failed` below is the single record for this failure.
           item.errorStage = 'upload';
           item.segments = currentSegments;
           callbacks.updateSegments(currentSegments);
@@ -569,14 +569,7 @@ export class BatchItemProcessor {
         elapsedMs: Date.now() - startedAt,
       });
     } catch (error) {
-      logger.warn('[BatchQueue] task_failed', {
-        ...diagnosticContext,
-        stage: item.errorStage ?? 'transcribe',
-        cancelled: callbacks.isCancelRequested(),
-        error,
-        ...this.transcriptDiagnostics(currentSegments),
-        elapsedMs: Date.now() - startedAt,
-      });
+      // Cancel and flush first so the diagnostic snapshot covers every buffered segment.
       scheduler?.cancel();
       flushSegmentBuffer();
       const isStream =
@@ -586,6 +579,15 @@ export class BatchItemProcessor {
       const isExplicitCancel = callbacks.isCancelRequested();
       const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
       const isCancelled = isExplicitCancel || isTaskCancelError;
+      const logTaskFailed = isCancelled ? logger.warn : logger.error;
+      logTaskFailed('[BatchQueue] task_failed', {
+        ...diagnosticContext,
+        stage: item.errorStage ?? 'transcribe',
+        cancelled: isCancelled,
+        error,
+        ...this.transcriptDiagnostics(currentSegments),
+        elapsedMs: Date.now() - startedAt,
+      });
       try {
         if ((!isCancelled || isStream) && currentSegments.length > 0) {
           await ensureHistorySaved();

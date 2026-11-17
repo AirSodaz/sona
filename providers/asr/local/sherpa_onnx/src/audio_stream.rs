@@ -293,7 +293,8 @@ impl AudioStreamReader {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!(
-                        "RTSP and RTMP streams require FFmpeg. Please enable FFmpeg in settings: {trimmed_url}"
+                        "RTSP and RTMP streams require FFmpeg. Please enable FFmpeg in settings: {}",
+                        sona_core::runtime::logging::redacted_endpoint(trimmed_url)
                     ),
                 ));
             }
@@ -313,7 +314,11 @@ impl AudioStreamReader {
             let mut response = client.get(trimmed_url).send().await.map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
-                    format!("Failed to fetch stream URL: {e}"),
+                    format!(
+                        "Failed to fetch stream URL {}: {}",
+                        sona_core::runtime::logging::redacted_endpoint(trimmed_url),
+                        sanitize_stream_diagnostic(&e.to_string())
+                    ),
                 )
             })?;
             if !response.status().is_success() {
@@ -322,7 +327,7 @@ impl AudioStreamReader {
                     format!(
                         "Stream URL returned non-success status {}: {}",
                         response.status(),
-                        config.url
+                        sona_core::runtime::logging::redacted_endpoint(config.url)
                     ),
                 ));
             }

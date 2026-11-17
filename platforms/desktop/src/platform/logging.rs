@@ -13,21 +13,32 @@ pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
         "file": record.file(),
         "line": record.line(),
         "source": "backend",
-        "message": sanitize_log_text(message),
     });
-    if let Ok(client) = serde_json::from_str::<Value>(message)
-        && client["schema_version"] == 1
-        && client["source"] == "frontend"
-        && client["message"].is_string()
-        && client["component"].is_string()
-        && client["event"].is_string()
-    {
+    match serde_json::from_str::<Value>(message).ok() {
         // Only these fields are client-owned; never trust level/time/target from payloads.
-        for key in ["source", "component", "event", "message", "context"] {
-            entry[key] = sanitize_log_value(&client[key]);
+        Some(client) if is_client_diagnostic(&client) => {
+            for key in ["source", "component", "event", "message", "context"] {
+                entry[key] = sanitize_log_value(&client[key]);
+            }
+        }
+        // Client-shaped but malformed: key-based masking still applies, never raw text.
+        Some(client) if client["source"] == "frontend" => {
+            entry["message"] = json!("[client payload]");
+            entry["client"] = sanitize_log_value(&client);
+        }
+        _ => {
+            entry["message"] = json!(sanitize_log_text(message));
         }
     }
     entry
+}
+
+fn is_client_diagnostic(client: &Value) -> bool {
+    client["source"] == "frontend"
+        && client["schema_version"] == 1
+        && client["message"].is_string()
+        && client["component"].is_string()
+        && client["event"].is_string()
 }
 
 #[cfg(test)]
@@ -58,5 +69,15 @@ mod tests {
         assert_eq!(entry["message"], "failed [redacted-url]");
         let entry = format_record(r#"{"source":"frontend"}"#, &record);
         assert_eq!(entry["source"], "backend");
+        // Client-shaped but malformed payloads keep key-based masking.
+        let entry = format_record(
+            r#"{"source":"frontend","context":{"text":"private-transcript","endpoint":"wss://host/?token=secret"}}"#,
+            &record,
+        );
+        assert_eq!(entry["source"], "backend");
+        assert_eq!(entry["message"], "[client payload]");
+        assert_eq!(entry["client"]["context"]["text"], "[redacted]");
+        assert_eq!(entry["client"]["context"]["endpoint"], "[redacted-url]");
+        assert!(!entry.to_string().contains("private-transcript"));
     }
 }

@@ -6,6 +6,7 @@ use sona_core::ports::asr::{
 };
 use sona_core::ports::punctuation::{PunctuationEngineSet, PunctuationModel};
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
@@ -56,7 +57,7 @@ async fn process_speech_slice(
     punctuation: Option<Arc<dyn PunctuationModel>>,
     observer: Arc<dyn BatchTranscriptionObserver>,
 ) -> Option<TranscriptSegment> {
-    let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned").to_string();
+    let diagnostic_id = diagnostic_label(observer.diagnostic_id());
     log::debug!(
         "[BatchStream] slice_start instance_id={} start_s={:.3} duration_s={:.3} samples={}",
         diagnostic_id,
@@ -73,12 +74,12 @@ async fn process_speech_slice(
         };
         let cleaned = normalize_recognizer_text(&dec.text);
         if cleaned.is_empty() {
-            log::warn!("[BatchStream] slice_skipped instance_id={worker_id} start_s={start_time:.3} duration_s={duration:.3} reason=empty_recognition");
+            log::debug!("[BatchStream] slice_skipped instance_id={worker_id} start_s={start_time:.3} duration_s={duration:.3} reason=empty_recognition");
             return None;
         }
         let text = finalize_transcript_text(&cleaned, punctuation.as_deref());
         if text.is_empty() {
-            log::warn!("[BatchStream] slice_skipped instance_id={worker_id} start_s={start_time:.3} duration_s={duration:.3} reason=empty_after_punctuation");
+            log::debug!("[BatchStream] slice_skipped instance_id={worker_id} start_s={start_time:.3} duration_s={duration:.3} reason=empty_after_punctuation");
             return None;
         }
         Some((dec, text))
@@ -241,7 +242,7 @@ impl StreamTranscriptionJob {
             save_to_path: self.save_to_path.clone(),
         };
         let mut reader = AudioStreamReader::open(stream_config).await?;
-        let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+        let diagnostic_id = diagnostic_label(observer.diagnostic_id());
         let started_at = std::time::Instant::now();
         log::info!(
             "[BatchStream] opened instance_id={} model_type={} segmentation={:?} ffmpeg={} sample_rate=16000 vad_configured={}",
@@ -420,7 +421,7 @@ impl StreamTranscriptionJob {
             started_at.elapsed().as_millis(),
         );
         if (total_samples_streamed > 0 || stream_error.is_some()) && !observer.is_cancelled() {
-            reader.log_end_state(diagnostic_id).await;
+            reader.log_end_state(&diagnostic_id).await;
         }
 
         if observer.is_cancelled() {

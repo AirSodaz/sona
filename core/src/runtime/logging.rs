@@ -74,7 +74,26 @@ pub fn sanitize_log_text(input: &str) -> String {
         .replace_all(&without_bearers, "$1$2[redacted]")
         .chars()
         .take(MAX_LOG_TEXT_CHARS)
+        // A raw control character lets one field forge extra log lines.
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
         .collect()
+}
+
+/// Bounded, redacted correlation label for an observer-supplied diagnostic id.
+///
+/// `BatchTranscriptionObserver::diagnostic_id` may come from caller input, so it
+/// is treated like any other log payload instead of being interpolated raw.
+pub fn diagnostic_label(id: Option<&str>) -> String {
+    match id.map(str::trim) {
+        Some(id) if !id.is_empty() => sanitize_log_text(id),
+        _ => "unassigned".to_string(),
+    }
 }
 
 /// Reports a URL's scheme and authority only, dropping userinfo, path and query.
@@ -229,6 +248,25 @@ mod tests {
         }));
         assert!(!safe.to_string().contains("private-"), "{safe}");
         assert_eq!(safe["kept"], "visible");
+    }
+
+    #[test]
+    fn strips_control_characters_that_would_forge_log_lines() {
+        let forged = "auto\n2026-11-17T00:00:00Z ERROR [ServerJob] task_failed job_id=1\tafter";
+        let safe = sanitize_log_text(forged);
+        assert!(!safe.contains('\n') && !safe.contains('\t'), "{safe}");
+        assert!(safe.starts_with("auto 2026-11-17T00:00:00Z"), "{safe}");
+    }
+
+    #[test]
+    fn labels_diagnostic_ids_without_leaking_caller_input() {
+        assert_eq!(diagnostic_label(None), "unassigned");
+        assert_eq!(diagnostic_label(Some("  ")), "unassigned");
+        assert_eq!(diagnostic_label(Some("batch-1")), "batch-1");
+        assert_eq!(
+            diagnostic_label(Some("https://host/?api_key=private")),
+            "[redacted-url]"
+        );
     }
 
     #[test]

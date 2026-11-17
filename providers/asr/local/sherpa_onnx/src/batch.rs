@@ -16,6 +16,7 @@ use sona_core::ports::punctuation::{
     PunctuationEngineSet, PunctuationModel, apply_optional_punctuation, load_configured_punctuation,
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::segmentation::{BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio};
 use sona_core::transcription::transcript::{
@@ -389,7 +390,7 @@ impl BatchTranscriptionJob {
         let samples = Arc::new(samples);
         log::info!(
             "[BatchASR] audio_decoded instance_id={} samples={} sample_rate=16000 duration_s={:.3}",
-            observer.diagnostic_id().unwrap_or("unassigned"),
+            diagnostic_label(observer.diagnostic_id()),
             samples.len(),
             samples.len() as f64 / 16000.0,
         );
@@ -485,7 +486,7 @@ fn transcribe_samples(
         &vad_options,
     );
     let effective_punctuation = if is_funasr_nano { None } else { punctuation };
-    let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+    let diagnostic_id = diagnostic_label(observer.diagnostic_id());
     log::info!(
         "[BatchASR] segmentation instance_id={} mode={:?} vad_available={} slices={} duration_s={:.3}",
         diagnostic_id,
@@ -509,7 +510,7 @@ fn transcribe_samples(
         if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
-                log::warn!(
+                log::debug!(
                     "[BatchASR] slice_skipped instance_id={diagnostic_id} start_s={:.3} duration_s={:.3} reason=empty_recognition",
                     segment.start_time,
                     segment.duration
@@ -519,7 +520,7 @@ fn transcribe_samples(
 
             let text = finalize_transcript_text(&cleaned_text, effective_punctuation);
             if text.is_empty() {
-                log::warn!(
+                log::debug!(
                     "[BatchASR] slice_skipped instance_id={diagnostic_id} start_s={:.3} duration_s={:.3} reason=empty_after_punctuation",
                     segment.start_time,
                     segment.duration

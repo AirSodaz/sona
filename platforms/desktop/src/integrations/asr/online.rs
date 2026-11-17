@@ -7,6 +7,7 @@ use super::types::{AsrTranscriptionRequest, TranscriptSegment};
 use super::{AsrBatchProcessor, AsrPortError, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
 use sona_core::ports::asr::{AsrPortErrorKind, OnlineBatchTranscriptionRequest};
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::Arc;
 use std::time::Instant;
@@ -68,7 +69,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
             None
         };
         let started = Instant::now();
-        let diagnostic_id = instance_id.as_deref().unwrap_or("unassigned");
+        let diagnostic_id = diagnostic_label(instance_id.as_deref());
         log::info!(
             "[OnlineASR] task_start instance_id={diagnostic_id} provider={}",
             self.provider_id

@@ -35,38 +35,41 @@ describe('logger utility', () => {
         level: 'trace',
         run: () => logger.trace('Test trace'),
         plugin: tauriTrace,
-        expected: expect.stringContaining('Test trace'),
+        expected: ['Test trace'],
       },
       {
         level: 'debug',
         run: () => logger.debug('Test debug', { data: 123 }),
         plugin: tauriDebug,
-        expected: expect.stringContaining('"component":"Client"'),
+        expected: ['"component":"Client"', '"data":123'],
       },
       {
         level: 'info',
         run: () => logger.info('Test info'),
         plugin: tauriInfo,
-        expected: expect.stringContaining('Test info'),
+        expected: ['Test info'],
       },
       {
         level: 'warn',
         run: () => logger.warn('Test warn', 'warning', 42),
         plugin: tauriWarn,
-        expected: expect.stringContaining('"args":["warning",42]'),
+        expected: ['"args":["warning",42]'],
       },
       {
         level: 'error',
         run: () => logger.error('Test error', new Error('test')),
         plugin: tauriError,
-        expected: expect.stringContaining('Test error'),
+        expected: ['Test error'],
       },
     ] as const;
 
     for (const { level, run, plugin, expected } of cases) {
       setLoggerLevel(level);
       await run();
-      expect(plugin).toHaveBeenCalledWith(expected);
+      expect(plugin).toHaveBeenCalledTimes(1);
+      for (const fragment of expected) {
+        expect(plugin).toHaveBeenCalledWith(expect.stringContaining(fragment));
+      }
     }
   });
 

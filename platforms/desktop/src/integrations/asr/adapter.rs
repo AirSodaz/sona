@@ -9,6 +9,7 @@ use sona_core::ports::asr::{
     BatchTranscriberPort, BatchTranscriptionObserver, LOCAL_SHERPA_ONNX_PROVIDER_ID,
     validate_local_asr_mode,
 };
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::sync::Arc;
 
@@ -111,7 +112,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         observer.on_progress(0.0);
         log::info!(
             "[BatchASR] start instance_id={} engine={:?} model_type={} language={} segmentation={:?} ffmpeg={} vad_configured={} input_kind={}",
-            observer.diagnostic_id().unwrap_or("unassigned"),
+            diagnostic_label(observer.diagnostic_id()),
             request.engine,
             request.model_type,
             request.language,
@@ -183,7 +184,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         let segments = match result {
             Ok(segments) => segments,
             Err(error) => {
-                let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+                let diagnostic_id = diagnostic_label(observer.diagnostic_id());
                 if error.code() == "TASK_CANCELLED" || observer.is_cancelled() {
                     log::info!(
                         "[BatchASR] cancelled instance_id={diagnostic_id} code={}",
@@ -207,7 +208,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         let output = postprocessor.process_segments(normalized);
         log::info!(
             "[BatchASR] complete instance_id={} raw_segments={} output_segments={} last_end_s={:.3}",
-            observer.diagnostic_id().unwrap_or("unassigned"),
+            diagnostic_label(observer.diagnostic_id()),
             raw_count,
             output.len(),
             output

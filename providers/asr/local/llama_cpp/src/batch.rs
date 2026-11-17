@@ -24,6 +24,7 @@ use sona_core::ports::punctuation::{
     PunctuationEngineSet, apply_optional_punctuation, load_configured_punctuation,
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::segmentation::{
     AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio,
@@ -237,7 +238,7 @@ impl LlamaBatchTranscriptionJob {
             self.ffmpeg_path.as_deref(),
         )?;
         observer.on_progress(10.0);
-        let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+        let diagnostic_id = diagnostic_label(observer.diagnostic_id());
         log::info!(
             "[BatchASR] audio_decoded instance_id={diagnostic_id} engine=llama-cpp samples={} sample_rate={sample_rate} duration_s={:.3}",
             samples.len(),
@@ -387,7 +388,7 @@ fn transcribe_segment(
     segment_total: usize,
     observer: &dyn BatchTranscriptionObserver,
 ) -> Result<Option<TranscriptSegment>, AsrPortError> {
-    let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+    let diagnostic_id = diagnostic_label(observer.diagnostic_id());
     log::debug!(
         "[BatchASR] slice_start instance_id={diagnostic_id} engine=llama-cpp index={segment_index} start_s={:.3} duration_s={:.3}",
         segment.start_time,
@@ -506,7 +507,7 @@ fn transcribe_segment(
     }
     let text = parse_qwen3_asr_output(&generated);
     if text.is_empty() {
-        log::warn!(
+        log::debug!(
             "[BatchASR] slice_skipped instance_id={diagnostic_id} engine=llama-cpp start_s={:.3} duration_s={:.3} reason=empty_recognition",
             segment.start_time,
             segment.duration
