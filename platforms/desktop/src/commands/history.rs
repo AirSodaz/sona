@@ -133,6 +133,10 @@ pub async fn history_save_recording(
         .history
         .mutation_file(move |service| service.save_recording(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] save_recording failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -160,6 +164,10 @@ pub async fn history_save_recording_to_project(
         .history
         .mutation_file(move |service| service.save_recording(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] save_recording failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -187,6 +195,10 @@ pub async fn history_save_imported_file(
         .history
         .mutation_file(move |service| service.save_imported_file(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] save_imported_file failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -206,6 +218,10 @@ pub async fn history_delete_items(
         .history
         .mutation_file(move |service| service.trash_items(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] delete_items failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -220,6 +236,10 @@ pub async fn history_trash_items(
         .history
         .mutation_file(move |service| service.trash_items(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] trash_items failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -274,6 +294,10 @@ pub async fn history_update_transcript(
         .history
         .mutation_db(move |service| service.update_transcript(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] update_transcript failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -301,6 +325,10 @@ pub async fn history_save_imported_file_to_project(
         .history
         .mutation_file(move |service| service.save_imported_file(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] save_imported_file_to_project failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -323,6 +351,10 @@ pub async fn history_commit_transcript_edit(
         .history
         .mutation_db(move |service| service.commit_transcript_edit(request))
         .await
+        .map_err(|err| {
+            log::error!("[HistoryCommand] commit_transcript_edit failed: {err}");
+            err
+        })
 }
 
 #[tauri::command]

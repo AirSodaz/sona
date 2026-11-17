@@ -293,7 +293,10 @@ async fn start_streaming_recognizer_impl(
             error: error.to_string(),
         })?;
 
-    info!("[Deepgram ASR] websocket connected to {base_endpoint}");
+    info!(
+        "[Deepgram ASR] websocket connected endpoint={}",
+        sona_core::runtime::logging::redacted_endpoint(base_endpoint)
+    );
 
     let (writer, mut reader) = ws.split();
     {

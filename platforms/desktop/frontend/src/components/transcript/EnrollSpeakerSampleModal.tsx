@@ -12,6 +12,7 @@ import type { SpeakerProfile } from '../../types/speaker';
 import { normalizeSpeakerProfiles } from '../../types/speakerNormalization';
 import type { TranscriptSegment } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
+import { logger } from '../../utils/logger';
 import { FormField } from '../FormField';
 import { Modal } from '../Modal';
 import './EnrollSpeakerSampleModal.css';
@@ -155,7 +156,10 @@ export function EnrollSpeakerSampleModal({
       try {
         await useEffectiveConfigStore.getState().syncConfig();
       } catch (err) {
-        console.warn('Failed to sync effective config after enrolling speaker sample:', err);
+        logger.warn(
+          '[EnrollSpeakerSample] Failed to sync effective config after enrolling speaker sample:',
+          err
+        );
       }
 
       if (segment.speakerAttribution?.groupId) {
@@ -165,7 +169,10 @@ export function EnrollSpeakerSampleModal({
             targetProfileId
           );
         } catch (err) {
-          console.warn('Failed to auto-assign enrolled speaker profile to group:', err);
+          logger.warn(
+            '[EnrollSpeakerSample] Failed to auto-assign enrolled speaker profile to group:',
+            err
+          );
         }
       }
 

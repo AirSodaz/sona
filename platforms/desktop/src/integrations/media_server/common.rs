@@ -501,6 +501,14 @@ pub async fn download_audio_stream_common(
     let clean_id = validate_item_id(item_id)?;
     let clean_base = base_url.trim_end_matches('/');
     let url = format!("{clean_base}/Audio/{clean_id}/stream.mp3");
+    let started_at = std::time::Instant::now();
+    let download_file = destination_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    log::info!(
+        "[MediaAudio] download_start item_id={clean_id} stream_index={stream_index:?} download_file={download_file}"
+    );
 
     if let Some(parent) = destination_path
         .parent()
@@ -513,6 +521,10 @@ pub async fn download_audio_stream_common(
 
     let mut last_err = None;
     for attempt in 0..3 {
+        log::info!(
+            "[MediaAudio] download_attempt item_id={clean_id} download_file={download_file} attempt={}",
+            attempt + 1
+        );
         let part_path = destination_path.with_extension(format!("part_{}", uuid::Uuid::new_v4()));
         let mut part_guard = PartFileGuard::new(&part_path);
         let mut req = client
@@ -529,6 +541,11 @@ pub async fn download_audio_stream_common(
 
         match req.send().await {
             Ok(resp) => {
+                let expected_bytes = resp.content_length();
+                log::info!(
+                    "[MediaAudio] download_response item_id={clean_id} download_file={download_file} status={} expected_bytes={expected_bytes:?}",
+                    resp.status()
+                );
                 if resp.status() == reqwest::StatusCode::UNAUTHORIZED
                     || resp.status() == reqwest::StatusCode::FORBIDDEN
                 {
@@ -575,6 +592,10 @@ pub async fn download_audio_stream_common(
                             bytes_written += chunk.len() as u64;
                         }
                         Err(e) => {
+                            log::warn!(
+                                "[MediaAudio] download_interrupted item_id={clean_id} download_file={download_file} attempt={} bytes_received={bytes_written}",
+                                attempt + 1
+                            );
                             drop(file_opt.take());
                             last_err = Some(MediaServerError::Network(format!(
                                 "Stream interrupted on attempt {attempt}: {e}"
@@ -599,11 +620,21 @@ pub async fn download_audio_stream_common(
                         return Err(MediaServerError::Io(e.to_string()));
                     } else {
                         part_guard.disarm();
+                        log::info!(
+                            "[MediaAudio] download_complete item_id={clean_id} download_file={download_file} bytes_received={bytes_written} expected_bytes={expected_bytes:?} elapsed_ms={}",
+                            started_at.elapsed().as_millis()
+                        );
                         return Ok(bytes_written);
                     }
                 }
             }
             Err(e) => {
+                log::warn!(
+                    "[MediaAudio] download_request_failed item_id={clean_id} download_file={download_file} attempt={} timeout={} connect={}",
+                    attempt + 1,
+                    e.is_timeout(),
+                    e.is_connect()
+                );
                 last_err = Some(MediaServerError::Network(format!(
                     "Download request failed on attempt {attempt}: {e}"
                 )));

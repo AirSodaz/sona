@@ -240,15 +240,32 @@ impl BackupArchivePort for FsBackupArchiveRepository {
         dataset: &BackupDataset,
     ) -> Result<(), BackupError> {
         let output = Path::new(archive_path);
+        log::info!(
+            "[Backup] Writing backup archive (history_items={}, tag_count={})",
+            dataset.history.items.len(),
+            dataset.tags.len()
+        );
         let entries = build_archive_entries(manifest, dataset)?;
-        write_archive_atomically(output, &entries)
+        let result = write_archive_atomically(output, &entries);
+        if let Err(ref e) = result {
+            log::warn!("[Backup] Failed to write backup archive: {e}");
+        } else {
+            log::info!("[Backup] Backup archive created successfully");
+        }
+        result
     }
 
     fn prepare_import(&self, archive_path: &str) -> Result<PreparedBackupImport, BackupError> {
-        self.prepare_import_with_limits(archive_path, JsonLimits::default())
+        log::info!("[Backup] Preparing backup import");
+        let result = self.prepare_import_with_limits(archive_path, JsonLimits::default());
+        if let Err(ref e) = result {
+            log::warn!("[Backup] Failed to prepare backup import: {e}");
+        }
+        result
     }
 
     fn load_prepared(&self, import_id: &str) -> Result<PreparedBackupSession, BackupError> {
+        log::info!("[Backup] Loading prepared backup session import_id={import_id}");
         let prepared = self.take_prepared(import_id)?.ok_or_else(|| {
             BackupError::InvalidRequest(format!(
                 "Prepared backup import does not exist: {import_id}"

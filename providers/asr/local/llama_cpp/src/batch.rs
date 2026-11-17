@@ -24,6 +24,7 @@ use sona_core::ports::punctuation::{
     PunctuationEngineSet, apply_optional_punctuation, load_configured_punctuation,
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
+use sona_core::runtime::logging::diagnostic_label;
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::segmentation::{
     AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio,
@@ -237,6 +238,12 @@ impl LlamaBatchTranscriptionJob {
             self.ffmpeg_path.as_deref(),
         )?;
         observer.on_progress(10.0);
+        let diagnostic_id = diagnostic_label(observer.diagnostic_id());
+        log::info!(
+            "[BatchASR] audio_decoded instance_id={diagnostic_id} engine=llama-cpp samples={} sample_rate={sample_rate} duration_s={:.3}",
+            samples.len(),
+            samples.len() as f64 / sample_rate as f64
+        );
 
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
         let punctuation =
@@ -245,6 +252,10 @@ impl LlamaBatchTranscriptionJob {
         let add_special = true;
         let language_forced = self.language_prefill.is_some();
         let segment_total = audio_segments.len();
+        log::info!(
+            "[BatchASR] segmentation instance_id={diagnostic_id} engine=llama-cpp mode={:?} slices={segment_total}",
+            self.batch_segmentation_mode
+        );
 
         let mut results = Vec::new();
         for (segment_index, segment) in audio_segments.into_iter().enumerate() {
@@ -377,6 +388,12 @@ fn transcribe_segment(
     segment_total: usize,
     observer: &dyn BatchTranscriptionObserver,
 ) -> Result<Option<TranscriptSegment>, AsrPortError> {
+    let diagnostic_id = diagnostic_label(observer.diagnostic_id());
+    log::debug!(
+        "[BatchASR] slice_start instance_id={diagnostic_id} engine=llama-cpp index={segment_index} start_s={:.3} duration_s={:.3}",
+        segment.start_time,
+        segment.duration
+    );
     let audio = MtmdBitmap::from_audio_data(samples).map_err(|error| {
         AsrPortError::new(
             AsrPortErrorKind::InvalidRequest,
@@ -481,8 +498,20 @@ fn transcribe_segment(
         })?;
     }
 
+    if generated_tokens >= generation_limit {
+        log::warn!(
+            "[BatchASR] generation_limit instance_id={diagnostic_id} index={segment_index} start_s={:.3} duration_s={:.3} generated_tokens={generated_tokens} limit={generation_limit}",
+            segment.start_time,
+            segment.duration
+        );
+    }
     let text = parse_qwen3_asr_output(&generated);
     if text.is_empty() {
+        log::debug!(
+            "[BatchASR] slice_skipped instance_id={diagnostic_id} engine=llama-cpp start_s={:.3} duration_s={:.3} reason=empty_recognition",
+            segment.start_time,
+            segment.duration
+        );
         return Ok(None);
     }
     let mut segment_result = TranscriptSegment {

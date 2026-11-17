@@ -27,6 +27,7 @@ import { useDialogStore } from '../../../stores/dialogStore';
 import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import { normalizeError } from '../../../utils/errorUtils';
+import { logger } from '../../../utils/logger';
 import { SegmentedSubTabs } from '../SecondaryTabs';
 import { SettingsAccordion } from '../SettingsLayout';
 import {
@@ -87,7 +88,7 @@ export function LocalProviderAccordionItem({
         setLlmData(response);
       }
     } catch (err) {
-      console.error('Failed to list local LLM cards:', err);
+      logger.error('[LocalModels] Failed to list local LLM cards:', err);
     }
   }, []);
 
@@ -98,7 +99,7 @@ export function LocalProviderAccordionItem({
         setNmtData(response);
       }
     } catch (err) {
-      console.error('Failed to list local NMT cards:', err);
+      logger.error('[LocalModels] Failed to list local NMT cards:', err);
     }
   }, []);
 
@@ -168,7 +169,7 @@ export function LocalProviderAccordionItem({
       try {
         await useModelDownloadStore.getState().cancelDownload(cardId);
       } catch (err) {
-        console.error(`Failed to cancel download for ${cardId}:`, err);
+        logger.error(`[LocalModels] Failed to cancel download for ${cardId}:`, err);
       } finally {
         setDownloads((prev) => {
           const next = { ...prev };
@@ -227,14 +228,14 @@ export function LocalProviderAccordionItem({
         try {
           await fetchCards();
         } catch (cardErr) {
-          console.warn('Failed to refresh cards after download:', cardErr);
+          logger.warn('[LocalModels] Failed to refresh cards after download:', cardErr);
         }
       } catch (err) {
         const errorMsg = normalizeError(err).message;
         if (errorMsg === 'Download cancelled') {
           void useModelDownloadStore.getState().cancelDownload(card.id, downloadId);
         } else {
-          console.error(`Failed to download model ${card.id}:`, err);
+          logger.error(`[LocalModels] Failed to download model ${card.id}:`, err);
           useModelDownloadStore.getState().failDownload(card.id, errorMsg, downloadId);
         }
         await fetchCards();
@@ -270,7 +271,7 @@ export function LocalProviderAccordionItem({
           return next;
         });
       } catch (err) {
-        console.error(`Failed to delete model ${card.id}:`, err);
+        logger.error(`[LocalModels] Failed to delete model ${card.id}:`, err);
       }
     },
     [confirm, fetchCards, t]
@@ -331,7 +332,7 @@ export function LocalProviderAccordionItem({
           useModelDownloadStore.getState().dismissDownload(card.id);
           await fetchCards();
         } catch (cleanErr) {
-          console.warn('Failed to clean interrupted download:', cleanErr);
+          logger.warn('[LocalModels] Failed to clean interrupted download:', cleanErr);
           await showError({
             code: 'model.clean_failed',
             messageKey: 'errors.model.clean_failed',
@@ -361,7 +362,7 @@ export function LocalProviderAccordionItem({
         await fetchCards();
       }
     } catch (err) {
-      console.error('Failed to import file:', err);
+      logger.error('[LocalModels] Failed to import file:', err);
     }
   }, [fetchCards]);
 

@@ -70,6 +70,7 @@ impl JobManager {
         let file_path = job.file_path.clone();
         match self.sender.try_send(job) {
             Ok(()) => {
+                log::info!("[ServerJob] task_queued job_id={job_id}");
                 self.jobs.write().await.insert(
                     job_id,
                     JobEntry {
@@ -82,8 +83,12 @@ impl JobManager {
                 );
                 Ok(())
             }
-            Err(mpsc::error::TrySendError::Full(_)) => Err(ApiServerJobError::QueueFull { job_id }),
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                log::warn!("[ServerJob] task_rejected job_id={job_id} reason=queue_full");
+                Err(ApiServerJobError::QueueFull { job_id })
+            }
             Err(mpsc::error::TrySendError::Closed(_)) => {
+                log::warn!("[ServerJob] task_rejected job_id={job_id} reason=queue_closed");
                 Err(ApiServerJobError::QueueClosed { job_id })
             }
         }
@@ -129,6 +134,10 @@ impl JobManager {
 
     pub async fn remove_job(&self, job_id: &str) -> Option<Option<PathBuf>> {
         let removed = self.jobs.write().await.remove(job_id);
+        if let Some(entry) = &removed {
+            let active = matches!(entry.status, JobStatus::Pending | JobStatus::Processing);
+            log::info!("[ServerJob] task_removed job_id={job_id} active={active}");
+        }
         if let Some(entry) = &removed
             && let Some(abort) = &entry.abort_handle
         {
@@ -177,8 +186,9 @@ impl JobManager {
     pub async fn abort_all_active(&self) -> usize {
         let mut count = 0;
         let mut jobs = self.jobs.write().await;
-        for entry in jobs.values_mut() {
+        for (job_id, entry) in jobs.iter_mut() {
             if matches!(entry.status, JobStatus::Processing | JobStatus::Pending) {
+                log::warn!("[ServerJob] task_aborted job_id={job_id} reason=server_shutdown");
                 if let Some(abort) = entry.abort_handle.take() {
                     abort.abort();
                     count += 1;

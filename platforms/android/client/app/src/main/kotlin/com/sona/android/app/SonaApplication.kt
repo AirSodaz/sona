@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.sona.android.adapters.uniffi.logging.UniffiMobileLoggerAdapter
 
 class SonaApplication : Application(), Configuration.Provider {
     companion object {
@@ -31,6 +32,7 @@ class SonaApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        UniffiMobileLoggerAdapter.initialize(BuildConfig.DEBUG)
         try {
             isNativeTlsInitialized = initRustlsPlatformVerifier(this)
             check(isNativeTlsInitialized) {

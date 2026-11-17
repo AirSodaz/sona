@@ -30,6 +30,7 @@ import type {
 } from '../../../../types/emby';
 import type { MediaServerProfile } from '../../../../types/mediaServer';
 import { extractErrorMessage } from '../../../../utils/errorUtils';
+import { logger } from '../../../../utils/logger';
 import {
   findBestAudioStream,
   hasTargetSubtitle,
@@ -381,7 +382,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           }
         }
       } catch (err) {
-        console.error('Failed to load Emby config:', err);
+        logger.error('[EmbySync] Failed to load Emby config:', err);
       }
     }
     void loadConfig();
@@ -395,7 +396,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           setOverwriteExistingExternal(overrides.overwriteExistingExternal);
         }
       } catch (err) {
-        console.error('Failed to load Emby processing settings:', err);
+        logger.error('[EmbySync] Failed to load Emby processing settings:', err);
       }
     }
     loadOverrides();
@@ -446,7 +447,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         });
       } catch (err) {
         if (!cancelled && seq === fetchSeqRef.current) {
-          console.error('Failed to fetch items:', err);
+          logger.error('[EmbySync] Failed to fetch items:', err);
           setItems([]);
           setConnectionError(extractErrorMessage(err) || String(err));
         }
@@ -505,7 +506,7 @@ export function useEmbySync(): UseEmbySyncReturn {
       });
     } catch (err) {
       if (seq === fetchSeqRef.current) {
-        console.error('Failed to fetch items:', err);
+        logger.error('[EmbySync] Failed to fetch items:', err);
         setItems([]);
         setConnectionError(extractErrorMessage(err) || String(err));
       }
@@ -682,6 +683,8 @@ export function useEmbySync(): UseEmbySyncReturn {
         apiKey: activeProfile?.apiKey || config.apiKey,
         mediaSourceId: item.mediaSourceId,
         container: item.container,
+        expectedDurationSeconds:
+          item.runtimeTicks && item.runtimeTicks > 0 ? item.runtimeTicks / 10_000_000 : undefined,
       });
     }
 
@@ -745,7 +748,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           await handleConnect(embyCfg);
         }
       } catch (err) {
-        console.error('Failed to select media server profile:', err);
+        logger.error('[EmbySync] Failed to select media server profile:', err);
       }
     },
     [profiles, handleConnect]
@@ -765,7 +768,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setServerInfo(null);
       }
     } catch (err) {
-      console.error('Failed to reload profiles:', err);
+      logger.error('[EmbySync] Failed to reload profiles:', err);
     }
   }, [activeProfileId]);
 

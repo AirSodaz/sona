@@ -25,6 +25,8 @@ export interface MediaServerTaskContext {
   existingExternalSubtitleIndex?: number;
   mediaSourceId?: string;
   container?: string;
+  /** Server-reported media duration, used to diagnose incomplete stream reads. */
+  expectedDurationSeconds?: number;
 }
 
 export type EmbyTaskContext = MediaServerTaskContext;

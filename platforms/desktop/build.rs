@@ -30,6 +30,7 @@ fn main() {
         println!("cargo:rustc-link-arg=/DELAYLOAD:ggml.dll");
         println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-base.dll");
         println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-cpu.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:mtmd.dll");
         println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
     }
     tauri_build::build()

@@ -6,7 +6,12 @@ use tauri::State;
 pub async fn recovery_load_snapshot(
     services: State<'_, DesktopServices>,
 ) -> Result<RecoverySnapshot, String> {
-    crate::platform::recovery_repository::load_snapshot_for_dir(services.active_data_dir()).await
+    crate::platform::recovery_repository::load_snapshot_for_dir(services.active_data_dir())
+        .await
+        .map_err(|err| {
+            log::error!("[RecoveryCommand] Failed to load recovery snapshot: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -16,6 +21,10 @@ pub async fn recovery_save_snapshot(
 ) -> Result<RecoverySnapshot, String> {
     crate::platform::recovery_repository::save_snapshot_for_dir(services.active_data_dir(), items)
         .await
+        .map_err(|err| {
+            log::error!("[RecoveryCommand] Failed to save recovery snapshot: {err}");
+            err
+        })
 }
 
 #[tauri::command]
@@ -30,4 +39,8 @@ pub async fn recovery_persist_queue_snapshot(
         resolved_ids,
     )
     .await
+    .map_err(|err| {
+        log::error!("[RecoveryCommand] Failed to persist queue snapshot: {err}");
+        err
+    })
 }

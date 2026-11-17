@@ -71,7 +71,17 @@ pub fn segment_batch_audio(
         BatchSegmentationMode::Whole => whole_audio_segment(samples, sample_rate),
         BatchSegmentationMode::Vad => {
             match vad_engine
-                .and_then(|engine| engine.detect(samples, sample_rate, vad_options).ok())
+                .and_then(|engine| match engine.detect(samples, sample_rate, vad_options) {
+                    Ok(spans) => Some(spans),
+                    Err(error) => {
+                        log::warn!(
+                            "[BatchASR] vad_detection_failed fallback=fixed_chunks sample_rate={sample_rate} samples={} detail={}",
+                            samples.len(),
+                            crate::runtime::logging::sanitize_log_text(&error.to_string())
+                        );
+                        None
+                    }
+                })
             {
                 Some(spans) => {
                     let max_raw_seconds = (vad_options.max_speech_duration

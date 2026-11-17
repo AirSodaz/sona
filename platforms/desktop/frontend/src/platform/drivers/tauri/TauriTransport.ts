@@ -1,6 +1,7 @@
 import type { KnownTauriCommandName, TauriCommandArgs } from '../../../services/tauri/contracts';
 import { invokeTauri } from '../../../services/tauri/invoke';
 import { emit as tauriEmit, listen as tauriListen } from '../../../services/tauri/platform/events';
+import { logger } from '../../../utils/logger';
 import type { ITransport, UnlistenFn } from '../../types/transport';
 
 export class TauriTransport implements ITransport {
@@ -37,7 +38,7 @@ export class TauriTransport implements ITransport {
         }
       })
       .catch((error: unknown) => {
-        console.error(`[TauriTransport] Failed to subscribe to event "${event}":`, error);
+        logger.error(`[TauriTransport] Failed to subscribe to event "${event}":`, error);
       });
 
     return () => {

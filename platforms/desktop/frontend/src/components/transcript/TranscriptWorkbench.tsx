@@ -25,6 +25,7 @@ import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { isHistoryItemDraft } from '../../types/history';
+import { logger } from '../../utils/logger';
 import { AudioPlayer } from '../AudioPlayer';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ExportButton } from '../ExportButton';
@@ -169,7 +170,7 @@ export function TranscriptWorkbench({
         useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
-      console.error('Failed to resync to Emby:', err);
+      logger.error('[TranscriptWorkbench] Failed to resync to Emby:', err);
       void useDialogStore.getState().showError({
         code: 'emby.resync_failed',
         messageKey: 'errors.common.operation_failed',

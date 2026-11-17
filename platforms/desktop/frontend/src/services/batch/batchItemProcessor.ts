@@ -133,11 +133,31 @@ export class BatchItemProcessor {
         config
       );
     const mediaContext = item.mediaServerContext ?? item.embyContext;
+    const diagnosticContext = {
+      taskId: item.id,
+      serverId: mediaContext?.serverId,
+      serverType: mediaContext?.serverType,
+      itemId: mediaContext?.itemId,
+      audioStreamIndex: mediaContext?.audioStreamIndex,
+      expectedDurationSeconds: mediaContext?.expectedDurationSeconds,
+    };
+    const startedAt = Date.now();
+    logger.info('[BatchQueue] task_start', {
+      ...diagnosticContext,
+      inputKind: item.streamUrl ? 'network' : item.filePath ? 'file' : 'media_download',
+      uploadRetry: item.errorStage === 'upload',
+    });
     if (mediaContext && item.errorStage === 'upload' && item.segments && item.segments.length > 0) {
       this.throwIfCancelRequested(callbacks);
       callbacks.updateStatus('processing', 95);
       callbacks.updateSegments(item.segments);
+      const syncStartedAt = Date.now();
       try {
+        logger.info('[BatchQueue] subtitle_sync_start', {
+          ...diagnosticContext,
+          ...this.transcriptDiagnostics(item.segments),
+          retry: true,
+        });
         const targetLanguage =
           mediaContext.targetLanguage ||
           pipeline.targetLanguage ||
@@ -149,13 +169,28 @@ export class BatchItemProcessor {
           { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
         );
         item.errorStage = undefined;
+        logger.info('[BatchQueue] subtitle_sync_complete', {
+          ...diagnosticContext,
+          elapsedMs: Date.now() - syncStartedAt,
+        });
+        logger.info('[BatchQueue] task_complete', {
+          ...diagnosticContext,
+          ...this.transcriptDiagnostics(item.segments),
+          elapsedMs: Date.now() - startedAt,
+        });
         return;
       } catch (uploadError) {
-        logger.error(
-          '[BatchQueue] Fast-path retry failed to upload subtitle to media server:',
-          uploadError
-        );
         item.errorStage = 'upload';
+        const cancelled = callbacks.isCancelRequested();
+        const logTaskFailed = cancelled ? logger.warn : logger.error;
+        logTaskFailed('[BatchQueue] task_failed', {
+          ...diagnosticContext,
+          stage: 'upload',
+          cancelled,
+          error: uploadError,
+          ...this.transcriptDiagnostics(item.segments),
+          elapsedMs: Date.now() - startedAt,
+        });
         throw uploadError;
       }
     }
@@ -173,6 +208,11 @@ export class BatchItemProcessor {
     const isLlamaCpp = isLlamaCppBatchRequest(batchAsr);
 
     if (!this.ports.asrConfigService.isAsrRequestConfigured(batchAsr)) {
+      logger.warn('[BatchQueue] task_failed', {
+        ...diagnosticContext,
+        stage: 'configuration',
+        reason: 'asr_not_configured',
+      });
       throw new Error('Batch ASR is not configured.');
     }
 
@@ -332,12 +372,17 @@ export class BatchItemProcessor {
 
       if (mediaContext && !item.streamUrl && !item.filePath) {
         callbacks.updateStatus('processing', 0);
+        logger.info('[BatchQueue] audio_download_start', diagnosticContext);
         const downloadedPath = await downloadMediaServerAudio(
           mediaContext.itemId,
           mediaContext.audioStreamIndex,
           mediaContext.serverId
         );
         downloadedEmbyPath = downloadedPath;
+        logger.info('[BatchQueue] audio_download_complete', {
+          ...diagnosticContext,
+          downloadFile: downloadedPath.split(/[/\\]/).pop(),
+        });
         item.filePath = downloadedPath;
         callbacks.updateFilePath?.(downloadedPath);
       }
@@ -384,6 +429,12 @@ export class BatchItemProcessor {
           tempWavPath,
           config,
           (instanceId) => {
+            if (instanceId) {
+              logger.info('[BatchQueue] asr_instance_assigned', {
+                ...diagnosticContext,
+                instanceId,
+              });
+            }
             callbacks.onInstanceIdAssigned(instanceId);
           },
           item.projectId
@@ -408,6 +459,11 @@ export class BatchItemProcessor {
 
       flushSegmentBuffer();
       this.throwIfCancelRequested(callbacks);
+      logger.info('[BatchQueue] asr_complete', {
+        ...diagnosticContext,
+        ...this.transcriptDiagnostics(segments),
+        elapsedMs: Date.now() - startedAt,
+      });
 
       const cleanedSegments =
         effectiveReplacementSets.length > 0
@@ -478,7 +534,13 @@ export class BatchItemProcessor {
       }
       this.throwIfCancelRequested(callbacks);
       if (mediaContext && currentSegments.length > 0) {
+        const syncStartedAt = Date.now();
         try {
+          logger.info('[BatchQueue] subtitle_sync_start', {
+            ...diagnosticContext,
+            ...this.transcriptDiagnostics(currentSegments),
+            subtitleMode: mediaContext.subtitleMode,
+          });
           const targetLanguage =
             mediaContext.targetLanguage ||
             pipeline.targetLanguage ||
@@ -489,15 +551,25 @@ export class BatchItemProcessor {
             { ...mediaContext, targetLanguage },
             { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
           );
+          logger.info('[BatchQueue] subtitle_sync_complete', {
+            ...diagnosticContext,
+            elapsedMs: Date.now() - syncStartedAt,
+          });
         } catch (uploadError) {
-          logger.error('[BatchQueue] Failed to upload subtitle to media server:', uploadError);
+          // The terminal `task_failed` below is the single record for this failure.
           item.errorStage = 'upload';
           item.segments = currentSegments;
           callbacks.updateSegments(currentSegments);
           throw uploadError;
         }
       }
+      logger.info('[BatchQueue] task_complete', {
+        ...diagnosticContext,
+        ...this.transcriptDiagnostics(currentSegments),
+        elapsedMs: Date.now() - startedAt,
+      });
     } catch (error) {
+      // Cancel and flush first so the diagnostic snapshot covers every buffered segment.
       scheduler?.cancel();
       flushSegmentBuffer();
       const isStream =
@@ -507,6 +579,15 @@ export class BatchItemProcessor {
       const isExplicitCancel = callbacks.isCancelRequested();
       const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
       const isCancelled = isExplicitCancel || isTaskCancelError;
+      const logTaskFailed = isCancelled ? logger.warn : logger.error;
+      logTaskFailed('[BatchQueue] task_failed', {
+        ...diagnosticContext,
+        stage: item.errorStage ?? 'transcribe',
+        cancelled: isCancelled,
+        error,
+        ...this.transcriptDiagnostics(currentSegments),
+        elapsedMs: Date.now() - startedAt,
+      });
       try {
         if ((!isCancelled || isStream) && currentSegments.length > 0) {
           await ensureHistorySaved();
@@ -538,6 +619,28 @@ export class BatchItemProcessor {
 
   private calculateDuration(segments: TranscriptSegment[]): number {
     return segments.length > 0 ? segments[segments.length - 1].end : 0;
+  }
+
+  private transcriptDiagnostics(segments: TranscriptSegment[]) {
+    const finals = segments
+      .filter((segment) => segment.isFinal !== false)
+      .sort((left, right) => left.start - right.start);
+    let coveredEnd = 0;
+    let largestGap = { start: 0, end: 0, duration: 0 };
+    for (const segment of finals) {
+      const gap = segment.start - coveredEnd;
+      if (gap > largestGap.duration) {
+        largestGap = { start: coveredEnd, end: segment.start, duration: gap };
+      }
+      coveredEnd = Math.max(coveredEnd, segment.end);
+    }
+    return {
+      segments: segments.length,
+      finalSegments: finals.length,
+      emptyFinalSegments: finals.filter((segment) => !segment.text.trim()).length,
+      lastEndSeconds: coveredEnd,
+      largestTimelineGap: largestGap,
+    };
   }
 
   private buildAutomationExportBaseName(item: BatchQueueItem): string {

@@ -10,13 +10,27 @@ impl Log for CliLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            eprintln!("[{} {}] {}", record.level(), record.target(), record.args());
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            eprintln!(
+                "[{now}] [{} {}] {}",
+                record.level(),
+                record.target(),
+                sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
+            );
         }
     }
 
     fn flush(&self) {
         let _ = std::io::stderr().flush();
     }
+}
+
+pub fn setup_cli_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let (sanitized, location) = sona_core::runtime::logging::format_panic_message(info);
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        eprintln!("[{now}] [sona-cli][ERROR] Panic: {sanitized}{location}");
+    }));
 }
 
 pub fn init_logger(default_level: LevelFilter) {

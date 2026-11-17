@@ -61,6 +61,7 @@ export interface AddEmbyItemEntry {
   apiKey?: string;
   mediaSourceId?: string;
   container?: string;
+  expectedDurationSeconds?: number;
 }
 
 export type AddMediaServerItemEntry = AddEmbyItemEntry;
@@ -591,6 +592,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
         mediaSourceId: opt.mediaSourceId,
         container: opt.container,
+        expectedDurationSeconds: opt.expectedDurationSeconds,
       };
       return {
         id: uuidv4(),

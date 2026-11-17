@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '../../utils/logger';
 import { useErrorDialogStore } from '../errorDialogStore';
+
+vi.mock('../../utils/logger', () => ({
+  logger: {
+    error: vi.fn(),
+  },
+}));
 
 describe('errorDialogStore', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useErrorDialogStore.setState({
       isOpen: false,
       options: null,
@@ -19,6 +27,11 @@ describe('errorDialogStore', () => {
       primaryLabel: 'OK',
       hasPrimaryAction: false,
     });
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('[ErrorDialog] Error: Something failed.'),
+      expect.objectContaining({ hasPrimaryAction: false })
+    );
 
     expect(useErrorDialogStore.getState().isOpen).toBe(true);
     expect(useErrorDialogStore.getState().options?.message).toBe('Something failed.');

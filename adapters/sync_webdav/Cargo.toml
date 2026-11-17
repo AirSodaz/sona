@@ -11,6 +11,7 @@ role = "outbound-adapter"
 
 [dependencies]
 async-trait = { workspace = true }
+log = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["rustls"] }
 roxmltree = { workspace = true }

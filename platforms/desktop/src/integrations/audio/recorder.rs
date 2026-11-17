@@ -20,6 +20,7 @@ pub struct CaptureWriterState {
     pub writer: LiveWavRecorder,
     pub path: String,
     pub paused: bool,
+    pub log_throttler: sona_core::runtime::logging::LogThrottler,
 }
 
 pub fn resolve_recording_output_path<F>(

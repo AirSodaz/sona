@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ErrorDialogViewModel } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 
 export type ErrorDialogResult = 'dismiss' | 'primary';
 
@@ -20,6 +21,12 @@ export const useErrorDialogStore = create<ErrorDialogState>((set, get) => ({
   resolveRef: null,
 
   showError: (options) => {
+    void logger.error(`[ErrorDialog] ${options.title || 'Error'}: ${options.message}`, {
+      details: options.details,
+      code: options.code,
+      hasPrimaryAction: options.hasPrimaryAction,
+    });
+
     return new Promise<ErrorDialogResult>((resolve) => {
       set({
         isOpen: true,

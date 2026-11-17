@@ -6528,6 +6528,7 @@ name = "sona-archive"
 version = "0.10.4"
 dependencies = [
  "bzip2 0.6.1",
+ "log",
  "serde",
  "serde_json",
  "sona-application",
@@ -6560,6 +6561,7 @@ version = "0.10.4"
 dependencies = [
  "async-trait",
  "axum",
+ "chrono",
  "clap",
  "clap_complete",
  "crossterm",
@@ -6627,6 +6629,7 @@ dependencies = [
 name = "sona-export"
 version = "0.10.4"
 dependencies = [
+ "log",
  "sona-application",
  "sona-core",
  "tempfile",
@@ -6649,7 +6652,9 @@ dependencies = [
 name = "sona-mcp"
 version = "0.10.4"
 dependencies = [
+ "chrono",
  "clap",
+ "log",
  "serde",
  "serde_json",
  "sona-core",
@@ -6678,6 +6683,7 @@ dependencies = [
  "fs3",
  "futures-util",
  "hex",
+ "log",
  "minisign-verify",
  "reqwest 0.13.5",
  "serde_json",
@@ -6816,6 +6822,7 @@ dependencies = [
  "flate2",
  "hex",
  "hkdf",
+ "log",
  "rand 0.10.4",
  "serde",
  "serde_json",
@@ -6838,6 +6845,7 @@ dependencies = [
  "chrono",
  "hex",
  "hmac 0.13.0",
+ "log",
  "reqwest 0.13.5",
  "roxmltree",
  "serde",
@@ -6858,6 +6866,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-server",
+ "log",
  "parking_lot 0.13.0",
  "rcgen",
  "reqwest 0.13.5",
@@ -6907,6 +6916,7 @@ name = "sona-uniffi-bind"
 version = "0.10.4"
 dependencies = [
  "async-trait",
+ "chrono",
  "hex",
  "jni 0.22.4",
  "log",

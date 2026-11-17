@@ -423,6 +423,7 @@ impl SyncApplication {
             Some(id) if !id.trim().is_empty() => id.trim().to_string(),
             _ => self.environment.next_id(),
         };
+        log::info!("[Sync] Creating new remote vault {vault_id} with preset {preset:?}");
         let device_id = self.environment.next_id();
         let created = create_remote_vault(
             provider.store.as_ref(),
@@ -503,6 +504,7 @@ impl SyncApplication {
     ) -> Result<SyncRunResult, SyncApplicationError> {
         let _lifecycle = self.lifecycle.lock().await;
         self.ensure_unconfigured()?;
+        log::info!("[Sync] Joining remote vault {vault_id}");
         let provider = self.providers.prepare(provider_input).await?;
         let opened = open_remote_vault_with_password_or_recovery_key(
             provider.store.as_ref(),
@@ -541,6 +543,7 @@ impl SyncApplication {
     ) -> Result<SyncStatusSnapshot, SyncApplicationError> {
         let _lifecycle = self.lifecycle.lock().await;
         let config = self.config_store.load()?.ok_or_else(not_configured)?;
+        log::info!("[Sync] Unlocking vault {} with password", config.vault_id);
         let provider = self
             .providers
             .restore(
@@ -607,6 +610,7 @@ impl SyncApplication {
 
     pub async fn disconnect(&self) -> Result<SyncStatusSnapshot, SyncApplicationError> {
         let _lifecycle = self.lifecycle.lock().await;
+        log::info!("[Sync] Disconnecting from sync vault");
         if let Some(config) = self.config_store.load()? {
             self.delete_session_secrets(&config).await?;
         }
@@ -637,6 +641,10 @@ impl SyncApplication {
         let mut config = self.config_store.load()?.ok_or_else(not_configured)?;
         let repository = self.repository()?.ok_or_else(local_state_missing)?;
         if repository.is_paused()? {
+            log::info!(
+                "[Sync] Sync is paused for vault {}, skipping run",
+                config.vault_id
+            );
             return Err(SyncApplicationError::InvalidState(
                 "Sync is paused.".to_string(),
             ));
@@ -706,6 +714,7 @@ impl SyncApplication {
         confirm_shrink: bool,
     ) -> Result<SyncStatusSnapshot, SyncApplicationError> {
         let _lifecycle = self.lifecycle.lock().await;
+        log::info!("[Sync] Changing sync preset to {preset:?}");
         let repository = self.repository()?.ok_or_else(not_configured)?;
         {
             let mut session = self.session.lock().await;
@@ -1134,9 +1143,25 @@ pub async fn run_sync_cycle(
     now_ms: u64,
     jitter: u32,
 ) -> Result<SyncRunResult, SyncError> {
+    log::info!("[Sync] Starting sync cycle (now_ms={now_ms})");
     let result = SyncRuntime::new(local, remote, vault_key)
         .run_at(now_ms)
         .await;
+    match &result {
+        Ok(res) => {
+            log::info!(
+                "[Sync] Sync cycle completed: pulled_segments={} pushed_segments={} applied_ops={} checkpoint_published={} conflicts={}",
+                res.pulled_segment_count,
+                res.pushed_segment_count,
+                res.applied_operation_count,
+                res.checkpoint_published,
+                res.conflict_count
+            );
+        }
+        Err(err) => {
+            log::warn!("[Sync] Sync cycle failed: {err}");
+        }
+    }
     apply_sync_run_result(retry, now_ms, jitter, &result);
     result
 }

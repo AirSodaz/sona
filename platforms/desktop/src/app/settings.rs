@@ -28,6 +28,16 @@ impl AppLogLevel {
             _ => Self::Info,
         }
     }
+
+    pub(crate) fn to_level_filter(self) -> log::LevelFilter {
+        match self {
+            Self::Trace => log::LevelFilter::Trace,
+            Self::Debug => log::LevelFilter::Debug,
+            Self::Info => log::LevelFilter::Info,
+            Self::Warn => log::LevelFilter::Warn,
+            Self::Error => log::LevelFilter::Error,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -51,7 +61,11 @@ impl RuntimeLogLevel {
     }
 
     pub(crate) fn should_log(&self, metadata: &log::Metadata<'_>) -> bool {
-        should_log_level(self.current_log_level(), metadata.level())
+        should_log_target_level(
+            self.current_log_level(),
+            metadata.level(),
+            metadata.target(),
+        )
     }
 }
 
@@ -85,7 +99,6 @@ impl AppSettings {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn current_log_level(&self) -> AppLogLevel {
         self.log_level.current_log_level()
     }
@@ -113,6 +126,7 @@ pub(crate) fn set_log_level(
     let parsed =
         parse_log_level(&level).ok_or_else(|| format!("Unsupported log level: {level}"))?;
     state.set_log_level(parsed);
+    log::set_max_level(parsed.to_level_filter());
     Ok(())
 }
 
@@ -125,6 +139,42 @@ pub(crate) fn parse_log_level(level: &str) -> Option<AppLogLevel> {
         "error" => Some(AppLogLevel::Error),
         _ => None,
     }
+}
+
+pub(crate) fn is_noisy_external_target(target: &str) -> bool {
+    const NOISY_PREFIXES: &[&str] = &[
+        "hyper",
+        "tokio",
+        "mio",
+        "h2",
+        "symphonia",
+        "reqwest",
+        "rusqlite",
+        "tungstenite",
+        "tracing",
+        "tao",
+        "wry",
+    ];
+    NOISY_PREFIXES.iter().any(|prefix| {
+        target == *prefix
+            || target
+                .strip_prefix(prefix)
+                .is_some_and(|rest| rest.starts_with("::") || rest.starts_with('_'))
+    })
+}
+
+pub(crate) fn should_log_target_level(
+    configured_level: AppLogLevel,
+    record_level: log::Level,
+    target: &str,
+) -> bool {
+    if !should_log_level(configured_level, record_level) {
+        return false;
+    }
+    if is_noisy_external_target(target) {
+        return record_level_rank(record_level) >= AppLogLevel::Warn.rank();
+    }
+    true
 }
 
 pub(crate) fn should_log_level(configured_level: AppLogLevel, record_level: log::Level) -> bool {
@@ -159,8 +209,8 @@ pub(crate) fn resolve_main_window_close_action(
 #[cfg(test)]
 mod tests {
     use super::{
-        AppLogLevel, AppSettings, MainWindowCloseAction, parse_log_level,
-        resolve_main_window_close_action, should_log_level,
+        AppLogLevel, AppSettings, MainWindowCloseAction, is_noisy_external_target, parse_log_level,
+        resolve_main_window_close_action, should_log_level, should_log_target_level,
     };
 
     #[test]
@@ -219,5 +269,52 @@ mod tests {
         assert!(should_log_level(AppLogLevel::Info, log::Level::Error));
         assert!(!should_log_level(AppLogLevel::Info, log::Level::Debug));
         assert!(!should_log_level(AppLogLevel::Info, log::Level::Trace));
+    }
+
+    #[test]
+    fn suppresses_noisy_external_targets_when_debug_enabled() {
+        assert!(is_noisy_external_target("hyper"));
+        assert!(is_noisy_external_target("hyper::proto::h1::io"));
+        assert!(is_noisy_external_target("tokio::runtime"));
+        assert!(is_noisy_external_target("symphonia_bundle_mp3"));
+        assert!(is_noisy_external_target("reqwest::connect"));
+        assert!(!is_noisy_external_target("sona::app"));
+        assert!(!is_noisy_external_target("webview"));
+        assert!(!is_noisy_external_target("my_tokio"));
+        assert!(!is_noisy_external_target("tokiox"));
+
+        // Application targets allow debug when configured level is Debug
+        assert!(should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Debug,
+            "sona::app"
+        ));
+        assert!(should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Debug,
+            "webview"
+        ));
+
+        // Noisy external targets suppress debug and info, only allowing warn and error
+        assert!(!should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Debug,
+            "hyper::proto"
+        ));
+        assert!(!should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Info,
+            "hyper::proto"
+        ));
+        assert!(should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Warn,
+            "hyper::proto"
+        ));
+        assert!(should_log_target_level(
+            AppLogLevel::Debug,
+            log::Level::Error,
+            "hyper::proto"
+        ));
     }
 }

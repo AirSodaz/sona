@@ -7,6 +7,7 @@ pub mod error;
 pub mod file_utils;
 pub mod gpu;
 pub mod ipc;
+pub mod logging;
 pub mod media_detector;
 pub mod network;
 pub mod paths;

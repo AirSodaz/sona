@@ -7,6 +7,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { useProjectStore } from '../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import type { ProjectRecord } from '../types/project';
+import { logger } from '../utils/logger';
 import {
   CancelledIcon,
   CompleteIcon,
@@ -315,7 +316,7 @@ export const QueueItem = memo(function QueueItem({
               try {
                 await cancelBatchTask(item.activeInstanceId);
               } catch (err) {
-                console.error('Failed to finish stream task:', err);
+                logger.error('[QueueItem] Failed to finish stream task:', err);
                 setIsFinishing(false);
               }
             }}

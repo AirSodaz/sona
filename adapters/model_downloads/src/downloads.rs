@@ -207,8 +207,19 @@ pub async fn complete_download_file(
     .await;
 
     match result {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            log::info!(
+                "[ModelDownload] Download completed and published: {}",
+                final_path.display()
+            );
+            Ok(())
+        }
         Err(error) => {
+            log::error!(
+                "[ModelDownload] Complete download failed for {}: {}",
+                final_path.display(),
+                error
+            );
             remove_download_file(temp_path).await;
             Err(error)
         }
@@ -222,6 +233,12 @@ pub async fn verify_download_file(
     if let Some(expected_hash) = expected_sha256 {
         let actual_hash = sha256_file(temp_path).await?;
         if !actual_hash.eq_ignore_ascii_case(expected_hash) {
+            log::error!(
+                "[ModelDownload] Hash mismatch for {}: expected {}, got {}",
+                temp_path.display(),
+                expected_hash,
+                actual_hash
+            );
             return Err(DownloadError::HashMismatch {
                 path: temp_path.to_path_buf(),
                 expected: expected_hash.to_string(),
@@ -304,6 +321,12 @@ pub async fn download_file(
         res = open_and_lock_download_file(temp_path) => res?,
     };
 
+    log::info!(
+        "[ModelDownload] Starting download from {} to {}",
+        sona_core::runtime::logging::redacted_endpoint(url),
+        temp_path.display()
+    );
+
     let max_retries = 3;
     let mut attempt = 0;
 
@@ -329,6 +352,12 @@ pub async fn download_file(
             Err(e) => {
                 if attempt < max_retries {
                     attempt += 1;
+                    log::warn!(
+                        "[ModelDownload] Download network error (attempt {}/{}): {}",
+                        attempt,
+                        max_retries,
+                        e
+                    );
                     tokio::select! {
                         biased;
                         _ = notify.notified() => {

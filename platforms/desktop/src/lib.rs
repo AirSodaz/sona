@@ -93,14 +93,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 .format(|out, message, record| {
                     out.finish(format_args!(
                         "{}",
-                        serde_json::json!({
-                            "time": crate::platform::time::unix_timestamp_secs(),
-                            "level": record.level().to_string(),
-                            "target": record.target(),
-                            "file": record.file(),
-                            "line": record.line(),
-                            "message": message.to_string(),
-                        })
+                        crate::platform::logging::format_record(&message.to_string(), record)
                     ));
                 })
                 .build(),

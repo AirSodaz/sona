@@ -284,12 +284,58 @@ pub async fn handle_request(
     Some(response)
 }
 
+struct McpStderrLogger;
+
+impl log::Log for McpStderrLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::max_level()
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            eprintln!(
+                "[{now}] [sona-mcp][{} {}] {}",
+                record.level(),
+                record.target(),
+                sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
+            );
+        }
+    }
+
+    fn flush(&self) {
+        use std::io::Write;
+        let _ = std::io::stderr().flush();
+    }
+}
+
+static MCP_LOGGER: McpStderrLogger = McpStderrLogger;
+
+fn setup_mcp_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let (sanitized, location) = sona_core::runtime::logging::format_panic_message(info);
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        eprintln!("[{now}] [sona-mcp][ERROR] Panic: {sanitized}{location}");
+    }));
+}
+
+fn init_mcp_logger() {
+    let _ = log::set_logger(&MCP_LOGGER);
+    let level = std::env::var("RUST_LOG")
+        .ok()
+        .and_then(|val| val.parse::<log::LevelFilter>().ok())
+        .unwrap_or(log::LevelFilter::Info);
+    log::set_max_level(level);
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_mcp_panic_hook();
+    init_mcp_logger();
     let args = Args::parse();
 
-    eprintln!(
-        "[sona-mcp] Starting Sona MCP Server v{} (spec 2026-07-28) over stdio...",
+    log::info!(
+        "Starting Sona MCP Server v{} (spec 2026-07-28) over stdio...",
         env!("CARGO_PKG_VERSION")
     );
 
@@ -338,9 +384,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .await
                                 .is_some()
                         {
-                            eprintln!(
-                                "[sona-mcp] Aborted in-flight task for request id: {target_id}"
-                            );
+                            log::info!("Aborted in-flight task for request id: {target_id}");
                             let cancel_resp = JsonRpcResponse::error(
                                 target_id,
                                 protocol::REQUEST_CANCELLED,
@@ -399,7 +443,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     drop(resp_tx);
     let _ = writer_handle.await;
-    eprintln!("[sona-mcp] Stdio loop finished.");
+    log::info!("Stdio loop finished.");
     Ok(())
 }
 

@@ -12,6 +12,33 @@ pub const DEFAULT_CHUNK_SIZE_OUT: usize = 1024;
 /// 1. Automatic 16kHz passthrough: if input is 16,000 Hz, FFT is completely bypassed (0 CPU / 0 latency).
 /// 2. Pre-allocated scratch buffers: zero dynamic heap allocations during streaming.
 /// 3. Direct ring buffer integration: pumps between SPSC lock-free queues without intermediate copies.
+fn log_throttled_error(
+    last_error_log_at: &mut Option<std::time::Instant>,
+    suppressed_error_count: &mut usize,
+    stage: &str,
+    err: &impl std::fmt::Display,
+) {
+    let now = std::time::Instant::now();
+    let should_log = match last_error_log_at {
+        Some(last) => now.duration_since(*last) >= std::time::Duration::from_secs(1),
+        None => true,
+    };
+    if should_log {
+        if *suppressed_error_count > 0 {
+            log::error!(
+                "[AudioResampler] {stage}: {err} (suppressed {} similar errors in last 1s)",
+                *suppressed_error_count
+            );
+        } else {
+            log::error!("[AudioResampler] {stage}: {err}");
+        }
+        *last_error_log_at = Some(now);
+        *suppressed_error_count = 0;
+    } else {
+        *suppressed_error_count = suppressed_error_count.saturating_add(1);
+    }
+}
+
 pub struct AudioResampler {
     input_sample_rate: u32,
     inner: Option<Fft<f32>>,
@@ -20,6 +47,8 @@ pub struct AudioResampler {
     pending: Vec<f32>,
     chunk_size_out: usize,
     flushed: bool,
+    last_error_log_at: Option<std::time::Instant>,
+    suppressed_error_count: usize,
 }
 
 impl AudioResampler {
@@ -46,6 +75,8 @@ impl AudioResampler {
                 pending: Vec::new(),
                 chunk_size_out,
                 flushed: false,
+                last_error_log_at: None,
+                suppressed_error_count: 0,
             });
         }
 
@@ -69,6 +100,8 @@ impl AudioResampler {
             pending: Vec::new(),
             chunk_size_out,
             flushed: false,
+            last_error_log_at: None,
+            suppressed_error_count: 0,
         })
     }
 
@@ -123,7 +156,12 @@ impl AudioResampler {
             let input_adapter = match InterleavedSlice::new(&self.input_buffer, 1, needed) {
                 Ok(adapter) => adapter,
                 Err(error) => {
-                    log::error!("[AudioResampler] input adapter error: {error}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "input adapter error",
+                        &error,
+                    );
                     continue;
                 }
             };
@@ -133,7 +171,12 @@ impl AudioResampler {
                 match InterleavedSlice::new_mut(&mut self.output_buffer, 1, out_capacity) {
                     Ok(adapter) => adapter,
                     Err(error) => {
-                        log::error!("[AudioResampler] output adapter error: {error}");
+                        log_throttled_error(
+                            &mut self.last_error_log_at,
+                            &mut self.suppressed_error_count,
+                            "output adapter error",
+                            &error,
+                        );
                         continue;
                     }
                 };
@@ -147,7 +190,12 @@ impl AudioResampler {
                     }
                 }
                 Err(e) => {
-                    log::error!("[AudioResampler] resample error: {e}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "resample error",
+                        &e,
+                    );
                 }
             }
         }
@@ -177,7 +225,12 @@ impl AudioResampler {
             let input_adapter = match InterleavedSlice::new(&self.input_buffer, 1, needed) {
                 Ok(adapter) => adapter,
                 Err(error) => {
-                    log::error!("[AudioResampler] input adapter error: {error}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "input adapter error",
+                        &error,
+                    );
                     continue;
                 }
             };
@@ -187,7 +240,12 @@ impl AudioResampler {
                 match InterleavedSlice::new_mut(&mut self.output_buffer, 1, out_capacity) {
                     Ok(adapter) => adapter,
                     Err(error) => {
-                        log::error!("[AudioResampler] output adapter error: {error}");
+                        log_throttled_error(
+                            &mut self.last_error_log_at,
+                            &mut self.suppressed_error_count,
+                            "output adapter error",
+                            &error,
+                        );
                         continue;
                     }
                 };
@@ -199,7 +257,12 @@ impl AudioResampler {
                     }
                 }
                 Err(e) => {
-                    log::error!("[AudioResampler] resample error: {e}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "resample error",
+                        &e,
+                    );
                 }
             }
         }
@@ -250,7 +313,12 @@ impl AudioResampler {
             {
                 Ok(a) => a,
                 Err(e) => {
-                    log::error!("[AudioResampler] input adapter error during drain_finish: {e}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "input adapter error during drain_finish",
+                        &e,
+                    );
                     self.pending.clear();
                     break;
                 }
@@ -260,8 +328,11 @@ impl AudioResampler {
                 match InterleavedSlice::new_mut(&mut self.output_buffer, 1, out_capacity) {
                     Ok(a) => a,
                     Err(e) => {
-                        log::error!(
-                            "[AudioResampler] output adapter error during drain_finish: {e}"
+                        log_throttled_error(
+                            &mut self.last_error_log_at,
+                            &mut self.suppressed_error_count,
+                            "output adapter error during drain_finish",
+                            &e,
                         );
                         self.pending.clear();
                         break;
@@ -280,7 +351,12 @@ impl AudioResampler {
                     self.pending.drain(..frames);
                 }
                 Err(e) => {
-                    log::error!("[AudioResampler] flush error during drain_finish: {e}");
+                    log_throttled_error(
+                        &mut self.last_error_log_at,
+                        &mut self.suppressed_error_count,
+                        "flush error during drain_finish",
+                        &e,
+                    );
                     self.pending.clear();
                     break;
                 }

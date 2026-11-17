@@ -19,6 +19,7 @@ mod json_bridge;
 mod llm_bridge;
 mod llm_runtime_bridge;
 mod llm_task_bridge;
+mod logger_bridge;
 mod mapper;
 mod model_bridge;
 mod project_bridge;
@@ -35,6 +36,7 @@ pub use asr_batch_bridge::{
 };
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use llm_task_bridge::FfiLlmTaskObserver;
+pub use logger_bridge::FfiLogCallback;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
     FfiAsrRuntimeMetricsSnapshotV1, FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent,
@@ -166,6 +168,14 @@ impl From<sona_core::ports::asr::AsrPortError> for SonaCoreBindingError {
             reason: error.message.clone(),
         }
     }
+}
+
+#[uniffi::export]
+pub fn init_mobile_logger(
+    callback: Option<Box<dyn FfiLogCallback>>,
+    max_level: Option<String>,
+) -> bool {
+    logger_bridge::init_mobile_logger_impl(callback, max_level)
 }
 
 #[uniffi::export]
