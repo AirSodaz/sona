@@ -201,6 +201,19 @@ describe('logger utility', () => {
     expect(entry.context.safeKey).toBe('visible');
   });
 
+  it('preserves safe bare endpoints while redacting sensitive URLs', async () => {
+    setLoggerLevel('info');
+    await logger.info('Connecting to https://api.deepgram.com and http://127.0.0.1:8080');
+    expect(tauriInfo).toHaveBeenCalledWith(
+      expect.stringContaining('Connecting to https://api.deepgram.com and http://127.0.0.1:8080')
+    );
+
+    await logger.info('Sensitive request to https://api.openai.com/v1/chat?token=secret');
+    expect(tauriInfo).toHaveBeenCalledWith(
+      expect.stringContaining('Sensitive request to [redacted-url]')
+    );
+  });
+
   it('keeps writing after a hostile getter or console failure', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
       throw new Error('console unavailable');

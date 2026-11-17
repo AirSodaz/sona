@@ -42,7 +42,18 @@ function isSensitiveKey(key: string): boolean {
 function sanitizeText(value: string): string {
   return value
     .slice(0, 65_536)
-    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, '[redacted-url]')
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (matched) => {
+      const trimmed = matched.replace(/[:.,;)>\]]+$/, '');
+      const trailing = matched.slice(trimmed.length);
+      if (/^(https?|wss?):\/\/[a-z0-9.-]+(?::\d+)?$/i.test(trimmed)) {
+        const host = trimmed.split('://')[1]?.split(':')[0]?.toLowerCase() ?? '';
+        const normalized = host.replace(/[-_]/g, '');
+        if (!sensitiveKeyFragments.some((frag) => normalized.includes(frag))) {
+          return matched;
+        }
+      }
+      return `[redacted-url]${trailing}`;
+    })
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
     .replace(
       /(api[_-]?key|access[_-]?token|token|authorization|password|secret|cookie|passphrase)(["']?\s*[=:]\s*)((?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?(?:basic|bearer|digest)\s+[^&\s,;"'<>]+|(?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?["']?[^&\s,;"'<>]+["']?)/gi,

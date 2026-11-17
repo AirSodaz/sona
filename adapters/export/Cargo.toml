@@ -10,6 +10,7 @@ license.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
+log = { workspace = true }
 sona-core = { workspace = true }
 sona-application = { workspace = true }
 

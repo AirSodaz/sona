@@ -6528,6 +6528,7 @@ name = "sona-archive"
 version = "0.10.4"
 dependencies = [
  "bzip2 0.6.1",
+ "log",
  "serde",
  "serde_json",
  "sona-application",
@@ -6627,6 +6628,7 @@ dependencies = [
 name = "sona-export"
 version = "0.10.4"
 dependencies = [
+ "log",
  "sona-application",
  "sona-core",
  "tempfile",
@@ -6818,6 +6820,7 @@ dependencies = [
  "flate2",
  "hex",
  "hkdf",
+ "log",
  "rand 0.10.4",
  "serde",
  "serde_json",

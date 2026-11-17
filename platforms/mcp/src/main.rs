@@ -293,14 +293,12 @@ impl log::Log for McpStderrLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            use std::io::Write;
             eprintln!(
                 "[sona-mcp][{} {}] {}",
                 record.level(),
                 record.target(),
                 sona_core::runtime::logging::sanitize_log_text(&record.args().to_string())
             );
-            let _ = std::io::stderr().flush();
         }
     }
 
@@ -311,6 +309,24 @@ impl log::Log for McpStderrLogger {
 }
 
 static MCP_LOGGER: McpStderrLogger = McpStderrLogger;
+
+fn setup_mcp_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "An unexpected panic occurred."
+        };
+        let location = info
+            .location()
+            .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
+            .unwrap_or_default();
+        let sanitized = sona_core::runtime::logging::sanitize_log_text(message);
+        eprintln!("[sona-mcp][ERROR] Panic: {sanitized}{location}");
+    }));
+}
 
 fn init_mcp_logger() {
     let _ = log::set_logger(&MCP_LOGGER);
@@ -323,6 +339,7 @@ fn init_mcp_logger() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_mcp_panic_hook();
     init_mcp_logger();
     let args = Args::parse();
 

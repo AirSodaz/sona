@@ -89,4 +89,18 @@ mod tests {
         assert_eq!(entry["client"]["context"]["endpoint"], "[redacted-url]");
         assert!(!entry.to_string().contains("private-transcript"));
     }
+
+    #[test]
+    fn preserves_safe_bare_endpoints_in_backend_records() {
+        let record = log::Record::builder().build();
+        let entry = format_record(
+            "[SyncS3] Request failed at https://s3.us-east-1.amazonaws.com: HTTP 403",
+            &record,
+        );
+        assert_eq!(entry["source"], "backend");
+        assert_eq!(
+            entry["message"],
+            "[SyncS3] Request failed at https://s3.us-east-1.amazonaws.com: HTTP 403"
+        );
+    }
 }

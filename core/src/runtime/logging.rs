@@ -74,20 +74,84 @@ fn bounded(input: &str) -> &str {
     &input[..end]
 }
 
-pub fn sanitize_log_text(input: &str) -> String {
-    if input.len() <= MAX_LOG_TEXT_CHARS
-        && !input.contains("://")
-        && !input.contains('=')
-        && !input.contains(':')
-        && !input
-            .as_bytes()
-            .windows(6)
-            .any(|w| w.eq_ignore_ascii_case(b"bearer"))
-        && !input.chars().any(char::is_control)
+fn is_safe_bare_endpoint(url: &str) -> bool {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return false;
+    };
+    let scheme_lower = scheme.to_ascii_lowercase();
+    if !matches!(scheme_lower.as_str(), "http" | "https" | "ws" | "wss") {
+        return false;
+    }
+    if rest.contains('@') || rest.contains('?') || rest.contains('#') {
+        return false;
+    }
+    let (authority, path) = match rest.split_once('/') {
+        Some((auth, p)) => (auth, p),
+        None => (rest, ""),
+    };
+    if !path.is_empty() || authority.is_empty() || authority.len() > 120 {
+        return false;
+    }
+    let host = match authority.split_once(':') {
+        Some((h, p)) => {
+            if !p.chars().all(|c| c.is_ascii_digit()) || p.is_empty() {
+                return false;
+            }
+            h
+        }
+        None => authority,
+    };
+    if host.is_empty() {
+        return false;
+    }
+    if !host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
     {
+        return false;
+    }
+    let host_norm = host.to_ascii_lowercase().replace(['-', '_'], "");
+    !SENSITIVE_KEY_FRAGMENTS
+        .iter()
+        .any(|frag| host_norm.contains(frag))
+}
+
+fn has_sensitive_indicator(input: &str) -> bool {
+    if input.contains("://") {
+        return true;
+    }
+    let bytes = input.as_bytes();
+    if bytes.iter().any(|&b| b < 0x20 || b == 0x7f) {
+        return true;
+    }
+    const SENSITIVE_WORDS: [&[u8]; 7] = [
+        b"key", b"token", b"pass", b"secret", b"cookie", b"auth", b"bearer",
+    ];
+    for &word in &SENSITIVE_WORDS {
+        if bytes
+            .windows(word.len())
+            .any(|w| w.eq_ignore_ascii_case(word))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn sanitize_log_text(input: &str) -> String {
+    if input.len() <= MAX_LOG_TEXT_CHARS && !has_sensitive_indicator(input) {
         return input.to_string();
     }
-    let without_urls = URL_RE.replace_all(bounded(input), "[redacted-url]");
+    let without_urls = URL_RE.replace_all(bounded(input), |caps: &regex::Captures<'_>| {
+        let full_match = caps.get(0).map_or("", |m| m.as_str());
+        let trimmed_match = full_match.trim_end_matches([':', ',', '.', ';', ')', ']', '>']);
+        let trailing = &full_match[trimmed_match.len()..];
+        if is_safe_bare_endpoint(trimmed_match) {
+            full_match.to_string()
+        } else {
+            format!("[redacted-url]{trailing}")
+        }
+    });
     let without_bearers = BEARER_RE.replace_all(&without_urls, "Bearer [redacted]");
     SECRET_RE
         .replace_all(&without_bearers, "$1$2[redacted]")
@@ -339,5 +403,37 @@ mod tests {
     fn fast_path_preserves_clean_log_messages() {
         let clean = "Worker pool initialized with 4 threads for speech recognition";
         assert_eq!(sanitize_log_text(clean), clean);
+        let clean_with_symbols =
+            "[ServerJob] task_queued job_id=123 status=ready host=127.0.0.1:8080";
+        assert_eq!(sanitize_log_text(clean_with_symbols), clean_with_symbols);
+    }
+
+    #[test]
+    fn preserves_safe_bare_endpoints_while_redacting_sensitive_urls() {
+        let endpoint = redacted_endpoint(
+            "https://user:pass@s3.us-east-1.amazonaws.com/bucket/file?sig=secret",
+        );
+        assert_eq!(endpoint, "https://s3.us-east-1.amazonaws.com");
+
+        let log_msg = format!("[SyncS3] Request failed at {endpoint}: HTTP 403");
+        let sanitized = sanitize_log_text(&log_msg);
+        assert_eq!(
+            sanitized,
+            "[SyncS3] Request failed at https://s3.us-east-1.amazonaws.com: HTTP 403"
+        );
+
+        let ws_endpoint = redacted_endpoint("wss://api.deepgram.com/v1/listen?token=secret");
+        let ws_msg = format!("Connecting to {ws_endpoint} for streaming ASR");
+        assert_eq!(
+            sanitize_log_text(&ws_msg),
+            "Connecting to wss://api.deepgram.com for streaming ASR"
+        );
+
+        // Raw URLs with paths or tokens are still redacted
+        let raw_leak = "Failed request to https://api.openai.com/v1/chat?api_key=sk-123456";
+        assert_eq!(
+            sanitize_log_text(raw_leak),
+            "Failed request to [redacted-url]"
+        );
     }
 }
