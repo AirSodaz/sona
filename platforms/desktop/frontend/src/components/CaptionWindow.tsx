@@ -2,6 +2,7 @@ import { Copy, Lock } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
+import { useAuxWindowLogLevel } from '../hooks/useAuxWindowLogLevel';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import {
   CAPTION_EVENT_STATE,
@@ -68,6 +69,7 @@ export function CaptionWindow() {
   });
 
   useAuxWindowLanguage();
+  useAuxWindowLogLevel();
   const { t } = useTranslation();
   const [clearedRevision, setClearedRevision] = useState<number | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);

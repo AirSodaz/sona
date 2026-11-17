@@ -248,6 +248,65 @@ pub fn sanitize_log_value(value: &Value) -> Value {
     }
 }
 
+/// Time-window based rate limiter for error logging in hot loops.
+#[derive(Debug, Clone)]
+pub struct LogThrottler {
+    interval: std::time::Duration,
+    last_log_at: Option<std::time::Instant>,
+    suppressed_count: usize,
+}
+
+impl LogThrottler {
+    pub const fn new(interval: std::time::Duration) -> Self {
+        Self {
+            interval,
+            last_log_at: None,
+            suppressed_count: 0,
+        }
+    }
+
+    /// Checks if a log should be emitted at the given `now` instant.
+    /// Returns `Some(suppressed_count)` if allowed to log, where `suppressed_count`
+    /// is how many occurrences were suppressed since the last emitted log.
+    /// Returns `None` if suppressed.
+    pub fn should_log(&mut self, now: std::time::Instant) -> Option<usize> {
+        let should = match self.last_log_at {
+            Some(last) => now.duration_since(last) >= self.interval,
+            None => true,
+        };
+        if should {
+            let suppressed = self.suppressed_count;
+            self.last_log_at = Some(now);
+            self.suppressed_count = 0;
+            Some(suppressed)
+        } else {
+            self.suppressed_count = self.suppressed_count.saturating_add(1);
+            None
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.last_log_at = None;
+        self.suppressed_count = 0;
+    }
+}
+
+/// Formats and sanitizes a panic message and location for safe logging.
+pub fn format_panic_message(info: &std::panic::PanicHookInfo<'_>) -> (String, String) {
+    let raw = if let Some(s) = info.payload().downcast_ref::<&str>() {
+        *s
+    } else if let Some(s) = info.payload().downcast_ref::<String>() {
+        s.as_str()
+    } else {
+        "An unexpected panic occurred."
+    };
+    let location = info
+        .location()
+        .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
+        .unwrap_or_default();
+    (sanitize_log_text(raw), location)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,6 +493,50 @@ mod tests {
         assert_eq!(
             sanitize_log_text(raw_leak),
             "Failed request to [redacted-url]"
+        );
+    }
+
+    #[test]
+    fn log_throttler_limits_rate_and_counts_suppressed() {
+        use std::time::{Duration, Instant};
+
+        let mut throttler = LogThrottler::new(Duration::from_millis(500));
+        let start = Instant::now();
+
+        // 1st call should log immediately with 0 suppressed
+        assert_eq!(throttler.should_log(start), Some(0));
+
+        // Calls before interval should be suppressed
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(100)),
+            None
+        );
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(200)),
+            None
+        );
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(499)),
+            None
+        );
+
+        // Call at or after interval should log with 3 suppressed
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(500)),
+            Some(3)
+        );
+
+        // Immediate subsequent call should be suppressed again
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(550)),
+            None
+        );
+
+        // Reset clears state
+        throttler.reset();
+        assert_eq!(
+            throttler.should_log(start + Duration::from_millis(550)),
+            Some(0)
         );
     }
 }

@@ -18,6 +18,7 @@ export interface ErrorDialogViewModel {
   title: string;
   message: string;
   details?: string;
+  code?: string;
   primaryLabel: string;
   cancelLabel?: string;
   hasPrimaryAction: boolean;
@@ -104,6 +105,7 @@ export function buildErrorDialogViewModel(
     title,
     message,
     details,
+    code: input.code,
     primaryLabel,
     cancelLabel,
     hasPrimaryAction,

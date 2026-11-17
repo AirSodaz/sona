@@ -371,6 +371,8 @@ async fn handle_streaming_socket(
 
     let mut stopping = false;
     let mut frame_cursor = StreamingAudioFrameCursor::default();
+    let mut feed_throttler =
+        sona_core::runtime::logging::LogThrottler::new(std::time::Duration::from_secs(1));
     loop {
         tokio::select! {
             msg = socket.recv() => {
@@ -379,7 +381,17 @@ async fn handle_streaming_socket(
                         let samples = pcm_s16le_bytes_to_f32(&pcm);
                         let frame = frame_cursor.next_samples(samples);
                         if let Err(e) = session.feed_audio_frame(frame).await {
-                            log::error!("[Streaming] Error feeding audio samples: {e}");
+                            if let Some(suppressed) =
+                                feed_throttler.should_log(std::time::Instant::now())
+                            {
+                                if suppressed > 0 {
+                                    log::error!(
+                                        "[Streaming] Error feeding audio samples: {e} (suppressed {suppressed} errors in last 1s)"
+                                    );
+                                } else {
+                                    log::error!("[Streaming] Error feeding audio samples: {e}");
+                                }
+                            }
                         }
                     }
                     Some(Ok(Message::Text(text))) if !stopping => {

@@ -141,7 +141,13 @@ async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]
     } catch {
       // A broken devtools sink must not prevent the file sink.
     }
-    if (pendingCount >= MAX_PENDING_WRITES && (level === 'trace' || level === 'debug')) {
+    const isHighVolumeLevel = level === 'trace' || level === 'debug';
+    const isMediumVolumeLevel = level === 'info' || level === 'warn';
+    if (
+      (isHighVolumeLevel && pendingCount >= MAX_PENDING_WRITES) ||
+      (isMediumVolumeLevel && pendingCount >= MAX_PENDING_WRITES * 2) ||
+      pendingCount >= MAX_PENDING_WRITES * 4
+    ) {
       return writePromise;
     }
     pendingCount++;

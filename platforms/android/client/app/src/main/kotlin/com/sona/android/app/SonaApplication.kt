@@ -10,6 +10,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import uniffi.sona_uniffi_bind.FfiLogCallback
+import uniffi.sona_uniffi_bind.initMobileLogger
+
+private class AndroidFfiLogCallback : FfiLogCallback {
+    override fun log(level: String, target: String, message: String) {
+        val tag = "SonaNative:${target.substringAfterLast("::")}".take(23)
+        when (level.uppercase()) {
+            "ERROR" -> Log.e(tag, message)
+            "WARN" -> Log.w(tag, message)
+            "INFO" -> Log.i(tag, message)
+            "DEBUG" -> Log.d(tag, message)
+            "TRACE" -> Log.v(tag, message)
+            else -> Log.i(tag, message)
+        }
+    }
+}
 
 class SonaApplication : Application(), Configuration.Provider {
     companion object {
@@ -31,6 +47,13 @@ class SonaApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        try {
+            val level = if (BuildConfig.DEBUG) "debug" else "info"
+            initMobileLogger(AndroidFfiLogCallback(), level)
+            Log.i(TAG, "Rust native logger bridge initialized with level $level")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to initialize Rust native logger bridge: ${e.message}")
+        }
         try {
             isNativeTlsInitialized = initRustlsPlatformVerifier(this)
             check(isNativeTlsInitialized) {
