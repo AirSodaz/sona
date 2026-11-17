@@ -698,12 +698,12 @@ async fn feed_audio_samples_inner(
                             let ring_buffer_samples = instance.offline_state.ring_sample_count();
                             let current_seg =
                                 instance.current_segment_id.as_deref().unwrap_or("none");
-                            info!(
+                            debug!(
                                 "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
                                 current_seg, instance.total_samples, ring_buffer_samples
                             );
                         } else {
-                            info!("[Sherpa] Instance {} detected speech start.", instance_id);
+                            debug!("[Sherpa] Instance {} detected speech start.", instance_id);
                         }
 
                         let samples_to_keep = PRE_ROLL_SAMPLES;
@@ -734,7 +734,7 @@ async fn feed_audio_samples_inner(
                     }
 
                     if let Some(label) = diagnostics_instance_label(instance_id) {
-                        info!(
+                        debug!(
                             "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
                             seg_id,
                             instance.total_samples,
@@ -742,7 +742,7 @@ async fn feed_audio_samples_inner(
                             instance.offline_state.buffered_speech_sample_count()
                         );
                     } else {
-                        info!("[Sherpa] Instance {} detected speech end.", instance_id);
+                        debug!("[Sherpa] Instance {} detected speech end.", instance_id);
                     }
                     instance.offline_state.finish_speech();
 
@@ -911,7 +911,7 @@ async fn feed_audio_samples_inner(
                             let triggered_at = Instant::now();
 
                             if let Some(label) = diagnostics_instance_label(instance_id) {
-                                info!(
+                                debug!(
                                     "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
                                     seg_id,
                                     offline_copy.len(),

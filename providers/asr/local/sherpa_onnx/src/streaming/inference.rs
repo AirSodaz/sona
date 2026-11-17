@@ -111,25 +111,6 @@ fn log_segment_emit_diagnostics(
     );
 }
 
-fn preview_text_for_log(text: &str) -> String {
-    const MAX_PREVIEW_CHARS: usize = 24;
-    let mut preview: String = text
-        .chars()
-        .take(MAX_PREVIEW_CHARS)
-        .map(|character| {
-            if character.is_control() {
-                ' '
-            } else {
-                character
-            }
-        })
-        .collect();
-    if text.chars().count() > MAX_PREVIEW_CHARS {
-        preview.push('…');
-    }
-    preview
-}
-
 fn log_text_transform_diagnostics(
     instance_id: &str,
     stage: &str,
@@ -144,16 +125,13 @@ fn log_text_transform_diagnostics(
     };
 
     trace!(
-        "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={} raw_preview={:?} cleaned_preview={:?} final_preview={:?}",
+        "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={}",
         stage,
         segment_id,
         is_final,
         raw_text.chars().count(),
         cleaned_text.chars().count(),
         final_text.chars().count(),
-        preview_text_for_log(raw_text),
-        preview_text_for_log(cleaned_text),
-        preview_text_for_log(final_text)
     );
 }
 
@@ -247,11 +225,11 @@ pub(super) fn run_offline_inference(
             if cleaned_text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     trace!(
-                        "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
+                        "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_len={}",
                         stage,
                         segment_id,
                         is_final,
-                        preview_text_for_log(raw_text)
+                        raw_text.chars().count()
                     );
                 }
                 record_metric(Some(duration_to_ms(triggered_at.elapsed())));
@@ -267,12 +245,12 @@ pub(super) fn run_offline_inference(
             if text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     trace!(
-                        "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
+                        "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_len={} cleaned_len={}",
                         stage,
                         segment_id,
                         is_final,
-                        preview_text_for_log(raw_text),
-                        preview_text_for_log(&cleaned_text)
+                        raw_text.chars().count(),
+                        cleaned_text.chars().count()
                     );
                 }
                 record_metric(Some(duration_to_ms(triggered_at.elapsed())));

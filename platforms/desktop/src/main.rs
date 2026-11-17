@@ -17,9 +17,11 @@ fn setup_panic_hook() {
             .location()
             .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
             .unwrap_or_default();
+        let backtrace = std::backtrace::Backtrace::capture();
         let error_msg = format!("{}{}\n\nPlease report this issue.", message, location);
 
-        eprintln!("Application panicked: {error_msg}");
+        eprintln!("Application panicked: {error_msg}\n{backtrace}");
+        log::error!("Application panicked: {message}{location}\n{backtrace}");
 
         show_error_dialog(&error_msg);
     }));

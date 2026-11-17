@@ -249,15 +249,29 @@ fn run_capture_worker<F>(
     let capture_failure = CaptureFailure::default();
     let callback_failure = capture_failure.clone();
     let error_notifier = notifier.clone();
+
+    #[derive(Default)]
+    struct StreamWarningFlags {
+        xrun: AtomicBool,
+        route_changed: AtomicBool,
+        realtime_denied: AtomicBool,
+    }
+
+    let stream_warnings = Arc::new(StreamWarningFlags::default());
+    let callback_warnings = Arc::clone(&stream_warnings);
     let stream_error = move |error: cpal::Error| match error.kind() {
         cpal::ErrorKind::Xrun => {
-            log::warn!("Audio capture buffer underrun/overrun (xrun): {error}");
+            callback_warnings.xrun.store(true, Ordering::Release);
         }
         cpal::ErrorKind::DeviceChanged => {
-            log::info!("Audio capture route changed; stream automatically rerouted: {error}");
+            callback_warnings
+                .route_changed
+                .store(true, Ordering::Release);
         }
         cpal::ErrorKind::RealtimeDenied => {
-            log::warn!("Audio capture real-time scheduling denied: {error}");
+            callback_warnings
+                .realtime_denied
+                .store(true, Ordering::Release);
         }
         _ => {
             callback_failure.record(format!("Audio stream failed: {error}"));
@@ -318,6 +332,18 @@ fn run_capture_worker<F>(
         if overflow.swap(false, Ordering::AcqRel) {
             log::warn!("Audio capture ring buffer overflow: samples dropped due to consumer lag");
         }
+        if stream_warnings.xrun.swap(false, Ordering::AcqRel) {
+            log::warn!("Audio capture buffer underrun/overrun (xrun)");
+        }
+        if stream_warnings.route_changed.swap(false, Ordering::AcqRel) {
+            log::info!("Audio capture route changed; stream automatically rerouted");
+        }
+        if stream_warnings
+            .realtime_denied
+            .swap(false, Ordering::AcqRel)
+        {
+            log::warn!("Audio capture real-time scheduling denied");
+        }
 
         pull_buffer.clear();
         resampler.drain_from_consumer(&mut consumer, &mut pull_buffer);
@@ -346,6 +372,18 @@ fn run_capture_worker<F>(
 
     if overflow.swap(false, Ordering::AcqRel) {
         log::warn!("Audio capture ring buffer overflow: samples dropped due to consumer lag");
+    }
+    if stream_warnings.xrun.swap(false, Ordering::AcqRel) {
+        log::warn!("Audio capture buffer underrun/overrun (xrun)");
+    }
+    if stream_warnings.route_changed.swap(false, Ordering::AcqRel) {
+        log::info!("Audio capture route changed; stream automatically rerouted");
+    }
+    if stream_warnings
+        .realtime_denied
+        .swap(false, Ordering::AcqRel)
+    {
+        log::warn!("Audio capture real-time scheduling denied");
     }
 
     pull_buffer.clear();

@@ -75,6 +75,18 @@ fn bounded(input: &str) -> &str {
 }
 
 pub fn sanitize_log_text(input: &str) -> String {
+    if input.len() <= MAX_LOG_TEXT_CHARS
+        && !input.contains("://")
+        && !input.contains('=')
+        && !input.contains(':')
+        && !input
+            .as_bytes()
+            .windows(6)
+            .any(|w| w.eq_ignore_ascii_case(b"bearer"))
+        && !input.chars().any(char::is_control)
+    {
+        return input.to_string();
+    }
     let without_urls = URL_RE.replace_all(bounded(input), "[redacted-url]");
     let without_bearers = BEARER_RE.replace_all(&without_urls, "Bearer [redacted]");
     SECRET_RE
@@ -321,5 +333,11 @@ mod tests {
         assert!(!sanitized_no_key.contains("tok_secret"));
         assert!(sanitized_no_key.contains("Api_Key=[REDACTED]"));
         assert!(sanitized_no_key.contains("token=[REDACTED]"));
+    }
+
+    #[test]
+    fn fast_path_preserves_clean_log_messages() {
+        let clean = "Worker pool initialized with 4 threads for speech recognition";
+        assert_eq!(sanitize_log_text(clean), clean);
     }
 }

@@ -794,7 +794,7 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
-    logger.info('[VoiceTypingSessionMachine] Segment update received', {
+    logger.debug('[VoiceTypingSessionMachine] Segment update received', {
       sessionId,
       requestId,
       segmentId: segment.id,
