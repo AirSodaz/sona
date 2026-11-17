@@ -159,15 +159,14 @@ pub(crate) async fn drain_capture_worker_chunk(
     for writer in writers.values_mut() {
         if !writer.paused
             && let Err(error) = writer.writer.write_samples(chunk)
+            && let Some(suppressed) = writer.log_throttler.should_log(std::time::Instant::now())
         {
-            if let Some(suppressed) = writer.log_throttler.should_log(std::time::Instant::now()) {
-                if suppressed > 0 {
-                    log::error!(
-                        "[Audio] Failed to write WAV samples: {error} (suppressed {suppressed} errors in last 1s)"
-                    );
-                } else {
-                    log::error!("[Audio] Failed to write WAV samples: {error}");
-                }
+            if suppressed > 0 {
+                log::error!(
+                    "[Audio] Failed to write WAV samples: {error} (suppressed {suppressed} errors in last 1s)"
+                );
+            } else {
+                log::error!("[Audio] Failed to write WAV samples: {error}");
             }
         }
     }

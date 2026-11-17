@@ -26,14 +26,13 @@ fn try_write_emergency_crash_log(message: &str, backtrace: &std::backtrace::Back
             }
         }
     }
-    if !written {
-        if let Ok(mut file) = std::fs::OpenOptions::new()
+    if !written
+        && let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open("crash.log")
-        {
-            let _ = writeln!(file, "{log_entry}");
-        }
+    {
+        let _ = writeln!(file, "{log_entry}");
     }
 }
 
