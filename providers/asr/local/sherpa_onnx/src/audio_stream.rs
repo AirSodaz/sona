@@ -421,7 +421,7 @@ impl AudioStreamReader {
                             } else {
                                 String::new()
                             };
-                            let stderr_trimmed = stderr_output.trim();
+                            let stderr_trimmed = sanitize_stream_diagnostic(stderr_output.trim());
                             return Err(AsrPortError::new(
                                 AsrPortErrorKind::Runtime,
                                 if stderr_trimmed.is_empty() {

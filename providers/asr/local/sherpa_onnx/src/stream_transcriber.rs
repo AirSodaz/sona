@@ -268,10 +268,11 @@ impl StreamTranscriptionJob {
             if let Some(vad_path) = self.vad_model.as_deref() {
                 let vad_batch = VadDetectionOptions::batch_defaults(vad_path);
                 log::info!(
-                    "[BatchStream] vad_options instance_id={diagnostic_id} threshold={} min_silence_s={} min_speech_s={} max_speech_s={} buffer_s={}",
+                    "[BatchStream] vad_options instance_id={diagnostic_id} threshold={} min_silence_s={} min_speech_s={} max_speech_s={} escalation_s={} buffer_s={}",
                     vad_batch.threshold,
                     vad_batch.min_silence_duration,
                     vad_batch.min_speech_duration,
+                    vad_batch.max_speech_duration,
                     vad_batch.threshold_escalation_duration,
                     self.vad_buffer
                 );
@@ -435,7 +436,9 @@ impl StreamTranscriptionJob {
         if total_samples_streamed == 0 {
             let err_msg = reader.take_stderr_output().await;
             reader.finish();
-            let msg = err_msg.unwrap_or_else(|| "No audio data received from stream".to_string());
+            let msg = err_msg
+                .map(|msg| sanitize_stream_diagnostic(&msg))
+                .unwrap_or_else(|| "No audio data received from stream".to_string());
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!("Stream failed: {msg}"),

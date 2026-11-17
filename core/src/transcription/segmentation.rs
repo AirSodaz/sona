@@ -74,7 +74,11 @@ pub fn segment_batch_audio(
                 .and_then(|engine| match engine.detect(samples, sample_rate, vad_options) {
                     Ok(spans) => Some(spans),
                     Err(error) => {
-                        log::warn!("[BatchASR] vad_detection_failed fallback=fixed_chunks sample_rate={sample_rate} samples={} detail={}", samples.len(), crate::runtime::logging::sanitize_log_text(&error.to_string()));
+                        log::warn!(
+                            "[BatchASR] vad_detection_failed fallback=fixed_chunks sample_rate={sample_rate} samples={} detail={}",
+                            samples.len(),
+                            crate::runtime::logging::sanitize_log_text(&error.to_string())
+                        );
                         None
                     }
                 })

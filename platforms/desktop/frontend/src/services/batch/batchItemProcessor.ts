@@ -151,6 +151,7 @@ export class BatchItemProcessor {
       this.throwIfCancelRequested(callbacks);
       callbacks.updateStatus('processing', 95);
       callbacks.updateSegments(item.segments);
+      const syncStartedAt = Date.now();
       try {
         logger.info('[BatchQueue] subtitle_sync_start', {
           ...diagnosticContext,
@@ -170,7 +171,7 @@ export class BatchItemProcessor {
         item.errorStage = undefined;
         logger.info('[BatchQueue] subtitle_sync_complete', {
           ...diagnosticContext,
-          elapsedMs: Date.now() - startedAt,
+          elapsedMs: Date.now() - syncStartedAt,
         });
         logger.info('[BatchQueue] task_complete', {
           ...diagnosticContext,
@@ -533,6 +534,7 @@ export class BatchItemProcessor {
       }
       this.throwIfCancelRequested(callbacks);
       if (mediaContext && currentSegments.length > 0) {
+        const syncStartedAt = Date.now();
         try {
           logger.info('[BatchQueue] subtitle_sync_start', {
             ...diagnosticContext,
@@ -551,7 +553,7 @@ export class BatchItemProcessor {
           );
           logger.info('[BatchQueue] subtitle_sync_complete', {
             ...diagnosticContext,
-            elapsedMs: Date.now() - startedAt,
+            elapsedMs: Date.now() - syncStartedAt,
           });
         } catch (uploadError) {
           logger.error('[BatchQueue] Failed to upload subtitle to media server:', uploadError);

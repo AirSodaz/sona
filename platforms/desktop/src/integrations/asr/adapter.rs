@@ -183,12 +183,20 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         let segments = match result {
             Ok(segments) => segments,
             Err(error) => {
-                log::error!(
-                    "[BatchASR] failed instance_id={} code={} detail={}",
-                    observer.diagnostic_id().unwrap_or("unassigned"),
-                    error.code(),
-                    sona_core::runtime::logging::sanitize_log_text(&error.to_string())
-                );
+                let diagnostic_id = observer.diagnostic_id().unwrap_or("unassigned");
+                if error.code() == "TASK_CANCELLED" || observer.is_cancelled() {
+                    log::info!(
+                        "[BatchASR] cancelled instance_id={diagnostic_id} code={}",
+                        error.code()
+                    );
+                } else {
+                    log::error!(
+                        "[BatchASR] failed instance_id={} code={} detail={}",
+                        diagnostic_id,
+                        error.code(),
+                        sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                    );
+                }
                 return Err(error);
             }
         };

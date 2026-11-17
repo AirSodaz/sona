@@ -3,10 +3,7 @@ use sona_core::runtime::logging::{sanitize_log_text, sanitize_log_value};
 
 /// Keep legacy host fields while promoting validated client diagnostics to JSON fields.
 pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
-    let timestamp_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let timestamp_ms = crate::platform::time::unix_timestamp_millis();
     let mut entry = json!({
         "schema_version": 1,
         "time": timestamp_ms / 1000,

@@ -53,7 +53,7 @@ describe('logger utility', () => {
         level: 'warn',
         run: () => logger.warn('Test warn', 'warning', 42),
         plugin: tauriWarn,
-        expected: expect.stringContaining('"message":"Test warn"'),
+        expected: expect.stringContaining('"args":["warning",42]'),
       },
       {
         level: 'error',
@@ -139,6 +139,7 @@ describe('logger utility', () => {
         },
         config: { private: 'private-config' },
         transcript: 'private-transcript',
+        requestHeaders: { 'x-api-key': 'private-header', userToken: 'private-user-token' },
       });
       const written = String(vi.mocked(tauriError).mock.calls[0][0]);
       const entry = JSON.parse(written);
@@ -152,6 +153,28 @@ describe('logger utility', () => {
     } finally {
       consoleSpy.mockRestore();
     }
+  });
+
+  it('nulls absent context values and omits absent Error causes', async () => {
+    await logger.info('[BatchQueue] task_start', {
+      itemId: undefined,
+      error: new Error('boom'),
+    });
+
+    const entry = JSON.parse(String(vi.mocked(tauriInfo).mock.calls[0][0]));
+    expect(entry.context.itemId).toBeNull();
+    expect(entry.context.error).toMatchObject({ name: 'Error', message: 'boom' });
+    expect('cause' in entry.context.error).toBe(false);
+  });
+
+  it('redacts quoted assignments and non-http stream URLs', async () => {
+    await logger.info(
+      'probe api_key="private-json" rtsp://admin:private-stream@camera.local:554/live'
+    );
+
+    const written = String(vi.mocked(tauriInfo).mock.calls[0][0]);
+    expect(written).not.toContain('private');
+    expect(written).toContain('[redacted-url]');
   });
 
   it('keeps writing after a hostile getter or console failure', async () => {

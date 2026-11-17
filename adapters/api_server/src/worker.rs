@@ -101,7 +101,7 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
                 log::warn!(
                     "[Server] webhook delivery failed: job_id={} endpoint={} status={}",
                     job.job_id,
-                    sona_core::runtime::logging::sanitize_log_text(webhook_url),
+                    sona_core::runtime::logging::redacted_endpoint(webhook_url),
                     response.status()
                 );
             }
@@ -110,7 +110,7 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
             log::warn!(
                 "[Server] webhook delivery error: job_id={} endpoint={} error={}",
                 job.job_id,
-                sona_core::runtime::logging::sanitize_log_text(webhook_url),
+                sona_core::runtime::logging::redacted_endpoint(webhook_url),
                 sona_core::runtime::logging::sanitize_log_text(&error.to_string())
             );
         }

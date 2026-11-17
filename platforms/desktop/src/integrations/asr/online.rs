@@ -79,7 +79,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 request: request.clone(),
             });
 
-        let output = if let Some((_id, mut rx, guard)) = cancel_registration {
+        let result = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
                 result = transcribe_fut => result,
                 _ = async {
@@ -97,28 +97,26 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
             };
             drop(guard);
-            match result {
-                Ok(output) => output,
-                Err(error) => {
-                    log::error!(
-                        "[OnlineASR] task_failed instance_id={diagnostic_id} provider={} error={}",
-                        self.provider_id,
-                        sona_core::runtime::logging::sanitize_log_text(&error.to_string())
-                    );
-                    return Err(error);
-                }
-            }
+            result
         } else {
-            match transcribe_fut.await {
-                Ok(output) => output,
-                Err(error) => {
+            transcribe_fut.await
+        };
+        let output = match result {
+            Ok(output) => output,
+            Err(error) => {
+                if error.code() == "TASK_CANCELLED" {
+                    log::info!(
+                        "[OnlineASR] cancelled instance_id={diagnostic_id} provider={}",
+                        self.provider_id
+                    );
+                } else {
                     log::error!(
                         "[OnlineASR] task_failed instance_id={diagnostic_id} provider={} error={}",
                         self.provider_id,
                         sona_core::runtime::logging::sanitize_log_text(&error.to_string())
                     );
-                    return Err(error);
                 }
+                return Err(error);
             }
         };
         let raw_segment_count = output.segments.len();
@@ -126,7 +124,10 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
             apply_timeline_normalization(output.segments, request.normalization_options);
         segments = TranscriptPostprocessor::compile(request.postprocess_options.clone())
             .map_err(|error| {
-                log::error!("[OnlineASR] task_failed instance_id={diagnostic_id} stage=postprocess error={}", sona_core::runtime::logging::sanitize_log_text(&error.to_string()));
+                log::error!(
+                    "[OnlineASR] task_failed instance_id={diagnostic_id} stage=postprocess error={}",
+                    sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                );
                 AsrPortError::invalid_request(error.to_string())
             })?
             .process_segments(segments);
@@ -148,9 +149,11 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                         Some(sp_config),
                     )
                     .await
-                    .map_err(|error| {
-                        log::error!("[OnlineASR] task_failed instance_id={diagnostic_id} stage=speaker_match error={}", sona_core::runtime::logging::sanitize_log_text(&error.to_string()));
-                        error
+                    .inspect_err(|error| {
+                        log::error!(
+                            "[OnlineASR] task_failed instance_id={diagnostic_id} stage=speaker_match error={}",
+                            sona_core::runtime::logging::sanitize_log_text(&error.to_string())
+                        );
                     })?;
             } else {
                 log::warn!(

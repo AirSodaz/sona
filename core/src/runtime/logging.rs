@@ -2,25 +2,110 @@ use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
 
+/// Bytes scanned by the redaction regexes. Output is capped well below this, so
+/// scanning a larger payload cannot surface more detail but can stall a logger.
+const MAX_SCANNED_BYTES: usize = 64 * 1024;
+const MAX_LOG_TEXT_CHARS: usize = 4096;
+
+/// Only the schemes this application consumes are guaranteed, but any
+/// `scheme://` form is redacted: RTSP/RTMP camera inputs and file URLs carry
+/// userinfo, credentials or user profile paths just like HTTP ones.
 static URL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)\b(?:https?|wss?)://[^\s\"'<>]+"#).expect("valid URL regex")
+    Regex::new(r#"(?i)\b[a-z][a-z0-9+.-]*://[^\s"'<>]+"#).expect("valid URL regex")
 });
 static SECRET_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)(api[_-]?key|access[_-]?token|token|authorization|password|secret)(\s*[=:]\s*)([^&\s,;\"'<>]+)"#)
-        .expect("valid secret regex")
+    Regex::new(
+        r#"(?i)(api[_-]?key|access[_-]?token|token|authorization|password|secret|cookie|passphrase)(["']?\s*[=:]\s*)((?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?(?:basic|bearer|digest)\s+[^&\s,;"'<>]+|(?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?["']?[^&\s,;"'<>]+["']?)"#,
+    )
+    .expect("valid secret regex")
 });
 static BEARER_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+").expect("valid bearer regex")
 });
 
+/// Object keys whose whole value is opaque: never useful in a diagnostic and
+/// routinely secret or transcript-bearing.
+const OPAQUE_KEYS: [&str; 7] = [
+    "config",
+    "headers",
+    "text",
+    "transcript",
+    "audio",
+    "payload",
+    "body",
+];
+/// Key fragments matched as substrings so qualified names (`x-api-key`,
+/// `userToken`, `clientSecret`, `db_password`) cannot slip through.
+const SENSITIVE_KEY_FRAGMENTS: [&str; 9] = [
+    "apikey",
+    "token",
+    "authorization",
+    "password",
+    "passphrase",
+    "secret",
+    "credential",
+    "cookie",
+    "signature",
+];
+
+fn is_sensitive_key(key: &str) -> bool {
+    let normalized = key.to_ascii_lowercase().replace(['-', '_'], "");
+    OPAQUE_KEYS.contains(&normalized.as_str())
+        || SENSITIVE_KEY_FRAGMENTS
+            .iter()
+            .any(|fragment| normalized.contains(fragment))
+}
+
+fn bounded(input: &str) -> &str {
+    if input.len() <= MAX_SCANNED_BYTES {
+        return input;
+    }
+    let mut end = MAX_SCANNED_BYTES;
+    while !input.is_char_boundary(end) {
+        end -= 1;
+    }
+    &input[..end]
+}
+
 pub fn sanitize_log_text(input: &str) -> String {
-    let without_urls = URL_RE.replace_all(input, "[redacted-url]");
+    let without_urls = URL_RE.replace_all(bounded(input), "[redacted-url]");
     let without_bearers = BEARER_RE.replace_all(&without_urls, "Bearer [redacted]");
     SECRET_RE
         .replace_all(&without_bearers, "$1$2[redacted]")
         .chars()
-        .take(4096)
+        .take(MAX_LOG_TEXT_CHARS)
         .collect()
+}
+
+/// Reports a URL's scheme and authority only, dropping userinfo, path and query.
+///
+/// Credentials and signed tokens live in the userinfo, path and query, while the
+/// host is what makes a failure diagnosable, so endpoints stay legible in logs.
+pub fn redacted_endpoint(url: &str) -> String {
+    let trimmed = url.trim();
+    let Some((scheme, rest)) = trimmed.split_once("://") else {
+        return "[redacted-url]".to_string();
+    };
+    if scheme.is_empty()
+        || !scheme.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+        })
+    {
+        return "[redacted-url]".to_string();
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host: String = authority
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .take(120)
+        .collect();
+    if host.is_empty() {
+        return "[redacted-url]".to_string();
+    }
+    format!("{}://{host}", scheme.to_ascii_lowercase())
 }
 
 pub fn sanitize_log_value(value: &Value) -> Value {
@@ -29,26 +114,9 @@ pub fn sanitize_log_value(value: &Value) -> Value {
             object
                 .iter()
                 .map(|(key, value)| {
-                    let sensitive = matches!(
-                        key.to_ascii_lowercase().replace(['-', '_'], "").as_str(),
-                        "apikey"
-                            | "token"
-                            | "accesstoken"
-                            | "refreshtoken"
-                            | "authorization"
-                            | "password"
-                            | "secret"
-                            | "webhooksecret"
-                            | "config"
-                            | "headers"
-                            | "text"
-                            | "transcript"
-                            | "audio"
-                            | "payload"
-                    );
                     (
                         key.clone(),
-                        if sensitive {
+                        if is_sensitive_key(key) {
                             Value::String("[redacted]".to_string())
                         } else {
                             sanitize_log_value(value)
@@ -97,5 +165,77 @@ mod tests {
             "config": {"private": "private-config"}
         }));
         assert!(!safe.to_string().contains("private-"));
+    }
+
+    #[test]
+    fn redacts_quoted_and_scheme_qualified_credentials() {
+        for secret in [
+            r#"{"api_key":"private-json"}"#,
+            r#"password: "private-quoted""#,
+            r#"password: Some("private-debug")"#,
+            "Authorization: Basic cHJpdmF0ZS1iYXNpYw==",
+            "Cookie: session=private-cookie",
+            r#"'token': 'private-single'"#,
+        ] {
+            assert!(
+                !sanitize_log_text(secret).contains("private-"),
+                "leaked: {secret}"
+            );
+        }
+    }
+
+    #[test]
+    fn redacts_camera_and_file_stream_urls() {
+        for url in [
+            "rtsp://admin:private-pw@192.168.1.10:554/Streaming/Channels/101",
+            "rtmp://private-pw@relay.example/live",
+            "file:///C:/Users/private-user/audio.wav",
+            "srt://private-host:9000",
+        ] {
+            assert_eq!(sanitize_log_text(url), "[redacted-url]");
+        }
+    }
+
+    #[test]
+    fn keeps_endpoint_host_while_dropping_userinfo_and_query() {
+        assert_eq!(
+            redacted_endpoint("rtsp://admin:private@camera.local:554/live?api_key=private"),
+            "rtsp://camera.local:554"
+        );
+        assert_eq!(
+            redacted_endpoint("wss://api.deepgram.com/v1/listen?token=private"),
+            "wss://api.deepgram.com"
+        );
+        assert_eq!(
+            redacted_endpoint("https://user:p@ss@host.example/x"),
+            "https://host.example"
+        );
+        assert_eq!(redacted_endpoint("not a url"), "[redacted-url]");
+        assert_eq!(redacted_endpoint("https://"), "[redacted-url]");
+    }
+
+    #[test]
+    fn redacts_qualified_sensitive_keys() {
+        let safe = sanitize_log_value(&serde_json::json!({
+            "requestHeaders": {
+                "x-api-key": "private-1",
+                "userToken": "private-2",
+                "clientSecret": "private-3",
+                "db_password": "private-4",
+                "cookie": "private-5",
+                "signature": "private-6"
+            },
+            "kept": "visible"
+        }));
+        assert!(!safe.to_string().contains("private-"), "{safe}");
+        assert_eq!(safe["kept"], "visible");
+    }
+
+    #[test]
+    fn bounds_oversized_input_before_regex_scanning() {
+        let oversized = format!("{} https://host/?api_key=private", "x".repeat(200_000));
+        let safe = sanitize_log_text(&oversized);
+        assert_eq!(safe.chars().count(), 4096);
+        assert!(!safe.contains("private"));
     }
 }

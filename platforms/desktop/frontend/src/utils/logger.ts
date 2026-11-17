@@ -3,16 +3,43 @@ import type { AppLogLevel } from '../types/config';
 import { normalizeLogLevel, shouldWriteLogLevel } from './logLevel';
 
 const browserConsole = globalThis.console;
-const sensitiveKey =
-  /^(api[-_]?key|(?:access|refresh)[-_]?token|token|authorization|password|secret|webhook[-_]?secret|config|headers|text|transcript|audio|payload)$/i;
+const opaqueKeys: Record<string, true> = {
+  config: true,
+  headers: true,
+  text: true,
+  transcript: true,
+  audio: true,
+  payload: true,
+  body: true,
+};
+const sensitiveKeyFragments = [
+  'apikey',
+  'token',
+  'authorization',
+  'password',
+  'passphrase',
+  'secret',
+  'credential',
+  'cookie',
+  'signature',
+];
 let currentLogLevel: AppLogLevel = 'info';
+
+function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[-_]/g, '');
+  return (
+    opaqueKeys[normalized] === true ||
+    sensitiveKeyFragments.some((fragment) => normalized.includes(fragment))
+  );
+}
 
 function sanitizeText(value: string): string {
   return value
-    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/gi, '[redacted-url]')
+    .slice(0, 65_536)
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, '[redacted-url]')
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
     .replace(
-      /(api[_-]?key|access[_-]?token|token|authorization|password|secret)(\s*[=:]\s*)([^&\s,;"'<>]+)/gi,
+      /(api[_-]?key|access[_-]?token|token|authorization|password|secret|cookie|passphrase)(["']?\s*[=:]\s*)((?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?(?:basic|bearer|digest)\s+[^&\s,;"'<>]+|(?:[A-Za-z_][A-Za-z0-9_]*\(\s*)?["']?[^&\s,;"'<>]+["']?)/gi,
       '$1$2[redacted]'
     )
     .slice(0, 4096);
@@ -21,6 +48,7 @@ function sanitizeText(value: string): string {
 /** Bound diagnostics and retain nested Error details without invoking toJSON. */
 function normalizeValue(value: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
   if (typeof value === 'string') return sanitizeText(value);
+  if (typeof value === 'undefined') return null;
   if (typeof value === 'bigint') return value.toString();
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
   if (typeof value !== 'object') return String(value);
@@ -33,14 +61,22 @@ function normalizeValue(value: unknown, seen = new WeakSet<object>(), depth = 0)
     }
     const keys =
       value instanceof Error
-        ? [...new Set(['name', 'message', 'stack', 'cause', ...Object.getOwnPropertyNames(value)])]
+        ? [
+            ...new Set([
+              'name',
+              'message',
+              'stack',
+              ...(value.cause === undefined ? [] : ['cause']),
+              ...Object.getOwnPropertyNames(value),
+            ]),
+          ]
         : Object.keys(value);
     return Object.fromEntries(
       keys
         .slice(0, 50)
         .map((key) => [
           key,
-          sensitiveKey.test(key)
+          isSensitiveKey(key)
             ? '[redacted]'
             : normalizeValue((value as Record<string, unknown>)[key], seen, depth + 1),
         ])
