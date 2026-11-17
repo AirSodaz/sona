@@ -6650,6 +6650,7 @@ name = "sona-mcp"
 version = "0.10.4"
 dependencies = [
  "clap",
+ "log",
  "serde",
  "serde_json",
  "sona-core",
@@ -6678,6 +6679,7 @@ dependencies = [
  "fs3",
  "futures-util",
  "hex",
+ "log",
  "minisign-verify",
  "reqwest 0.13.5",
  "serde_json",
@@ -6838,6 +6840,7 @@ dependencies = [
  "chrono",
  "hex",
  "hmac 0.13.0",
+ "log",
  "reqwest 0.13.5",
  "roxmltree",
  "serde",
@@ -6858,6 +6861,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-server",
+ "log",
  "parking_lot 0.13.0",
  "rcgen",
  "reqwest 0.13.5",

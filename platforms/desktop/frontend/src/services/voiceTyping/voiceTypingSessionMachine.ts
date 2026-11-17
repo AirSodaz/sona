@@ -236,7 +236,14 @@ export class VoiceTypingSessionMachine {
           mode: rule ? rule.id : preset !== 'auto' && preset !== 'general' ? preset : 'general',
           rule,
         };
-        logger.info('[VoiceTypingSessionMachine] Sensed application context', this.currentContext);
+        logger.info('[VoiceTypingSessionMachine] Sensed application context', {
+          appName: infoResult.appName,
+          hasWindowTitle: Boolean(infoResult.windowTitle),
+          windowTitleLength: infoResult.windowTitle?.length ?? 0,
+          preset,
+          mode: this.currentContext.mode,
+          ruleId: rule?.id,
+        });
       }
       if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
         await Promise.resolve(service.stop()).catch(() => {});

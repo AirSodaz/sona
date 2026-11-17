@@ -339,16 +339,37 @@ impl S3ObjectStore {
             builder = builder.body(bytes);
         }
 
-        builder
-            .send()
-            .await
-            .map_err(|e| store_error(format!("S3 HTTP request failed: {e}")))
+        let resp = builder.send().await.map_err(|e| {
+            log::warn!(
+                "[SyncS3] Request failed at {}: {}",
+                sona_core::runtime::logging::redacted_endpoint(url.as_str()),
+                e
+            );
+            store_error(format!("S3 HTTP request failed: {e}"))
+        })?;
+
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
+            || resp.status() == reqwest::StatusCode::FORBIDDEN
+        {
+            log::warn!(
+                "[SyncS3] Authentication/permission denied at {}: HTTP {}",
+                sona_core::runtime::logging::redacted_endpoint(url.as_str()),
+                resp.status()
+            );
+        }
+
+        Ok(resp)
     }
 }
 
 #[async_trait]
 impl SyncObjectStore for S3ObjectStore {
     async fn probe(&self) -> Result<SyncObjectStoreCapabilities, SyncError> {
+        log::info!(
+            "[SyncS3] Probing S3 bucket '{}' at {}",
+            self.config.bucket,
+            sona_core::runtime::logging::redacted_endpoint(self.endpoint_url.as_str())
+        );
         let probe_key_str = format!("{PROBE_PREFIX}/{}", uuid::Uuid::new_v4());
         let probe_key = SyncObjectKey::parse(probe_key_str)?;
 

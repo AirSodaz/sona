@@ -187,6 +187,20 @@ describe('logger utility', () => {
     expect(written).toContain('[redacted-url]');
   });
 
+  it('redacts windowTitle and prompt in context objects', async () => {
+    await logger.info('[Context] sensed', {
+      windowTitle: 'Bank Account - Sensitive',
+      prompt: 'System prompt instructions',
+      safeKey: 'visible',
+    });
+
+    const written = String(vi.mocked(tauriInfo).mock.calls[0][0]);
+    const entry = JSON.parse(written);
+    expect(entry.context.windowTitle).toBe('[redacted]');
+    expect(entry.context.prompt).toBe('[redacted]');
+    expect(entry.context.safeKey).toBe('visible');
+  });
+
   it('keeps writing after a hostile getter or console failure', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
       throw new Error('console unavailable');

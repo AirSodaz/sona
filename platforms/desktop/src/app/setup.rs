@@ -3,6 +3,9 @@ use tauri::{Listener, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let settings = app.state::<crate::app::settings::AppSettings>();
+    log::set_max_level(settings.current_log_level().to_level_filter());
+
     log::info!(
         "Sona Desktop starting | version={} | channel={} | commit={} | dirty={} | build_time={}",
         env!("SONA_DISPLAY_VERSION"),
@@ -58,6 +61,16 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }) {
         let settings = app.state::<crate::app::settings::AppSettings>();
         settings.set_minimize_to_tray_enabled(minimize);
+    }
+
+    if let Some(log_level_str) = initial_config.as_ref().and_then(|config_val| {
+        config_val
+            .get("logLevel")
+            .or_else(|| config_val.get("log_level"))
+            .and_then(|v| v.as_str())
+    }) {
+        let settings = app.state::<crate::app::settings::AppSettings>();
+        let _ = crate::app::settings::set_log_level(settings, log_level_str.to_string());
     }
 
     let start_silently = crate::app::window::should_start_silently_from_args_and_config(

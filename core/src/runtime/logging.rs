@@ -25,7 +25,7 @@ static BEARER_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Object keys whose whole value is opaque: never useful in a diagnostic and
 /// routinely secret or transcript-bearing.
-const OPAQUE_KEYS: [&str; 7] = [
+const OPAQUE_KEYS: [&str; 9] = [
     "config",
     "headers",
     "text",
@@ -33,6 +33,8 @@ const OPAQUE_KEYS: [&str; 7] = [
     "audio",
     "payload",
     "body",
+    "windowtitle",
+    "prompt",
 ];
 /// Key fragments matched as substrings so qualified names (`x-api-key`,
 /// `userToken`, `clientSecret`, `db_password`, `accessKeyId`, `privateKey`)
@@ -184,13 +186,17 @@ mod tests {
             "context": {
                 "webhookSecret": "secret",
                 "endpoint": "wss://host/path?token=secret",
-                "count": 2
+                "count": 2,
+                "windowTitle": "Private Banking - Account 123",
+                "prompt": "Sensitive system prompt"
             }
         });
         let safe = sanitize_log_value(&value);
         assert_eq!(safe["context"]["webhookSecret"], "[redacted]");
         assert_eq!(safe["context"]["endpoint"], "[redacted-url]");
         assert_eq!(safe["context"]["count"], 2);
+        assert_eq!(safe["context"]["windowTitle"], "[redacted]");
+        assert_eq!(safe["context"]["prompt"], "[redacted]");
     }
 
     #[test]

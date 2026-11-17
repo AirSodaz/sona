@@ -245,17 +245,27 @@ impl WebDavObjectStore {
     }
 
     async fn probe_collection(&self, url: Url) -> Result<bool, SyncError> {
+        let endpoint_str = sona_core::runtime::logging::redacted_endpoint(url.as_str());
         let response = self.propfind(url, "0").await?;
         match response.status() {
             StatusCode::OK | StatusCode::MULTI_STATUS => Ok(true),
             StatusCode::NOT_FOUND => Ok(false),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Err(store_error(format!(
-                "WebDAV authentication failed with status {}.",
-                response.status()
-            ))),
-            status => Err(store_error(format!(
-                "WebDAV collection probe failed with status {status}."
-            ))),
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                log::warn!(
+                    "[SyncWebDAV] Authentication failed at {endpoint_str}: HTTP {}",
+                    response.status()
+                );
+                Err(store_error(format!(
+                    "WebDAV authentication failed with status {}.",
+                    response.status()
+                )))
+            }
+            status => {
+                log::warn!("[SyncWebDAV] Collection probe failed at {endpoint_str}: HTTP {status}");
+                Err(store_error(format!(
+                    "WebDAV collection probe failed with status {status}."
+                )))
+            }
         }
     }
 
@@ -449,6 +459,10 @@ impl WebDavObjectStore {
 #[async_trait]
 impl SyncObjectStore for WebDavObjectStore {
     async fn probe(&self) -> Result<SyncObjectStoreCapabilities, SyncError> {
+        log::info!(
+            "[SyncWebDAV] Probing server capabilities at {}",
+            sona_core::runtime::logging::redacted_endpoint(self.root_url.as_str())
+        );
         self.ensure_collection(&self.root_url).await?;
         let key = SyncObjectKey::parse(format!(".sona-sync-probe/{}", uuid::Uuid::new_v4()))?;
         let created = self.put_if_absent(&key, b"probe-a".to_vec()).await?;

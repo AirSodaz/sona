@@ -28,6 +28,16 @@ impl AppLogLevel {
             _ => Self::Info,
         }
     }
+
+    pub(crate) fn to_level_filter(self) -> log::LevelFilter {
+        match self {
+            Self::Trace => log::LevelFilter::Trace,
+            Self::Debug => log::LevelFilter::Debug,
+            Self::Info => log::LevelFilter::Info,
+            Self::Warn => log::LevelFilter::Warn,
+            Self::Error => log::LevelFilter::Error,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -85,7 +95,6 @@ impl AppSettings {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn current_log_level(&self) -> AppLogLevel {
         self.log_level.current_log_level()
     }
@@ -113,6 +122,7 @@ pub(crate) fn set_log_level(
     let parsed =
         parse_log_level(&level).ok_or_else(|| format!("Unsupported log level: {level}"))?;
     state.set_log_level(parsed);
+    log::set_max_level(parsed.to_level_filter());
     Ok(())
 }
 

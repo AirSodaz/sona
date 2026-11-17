@@ -23,6 +23,9 @@ pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
     match client_payload {
         // Only these fields are client-owned; never trust level/time/target from payloads.
         Some(client) if is_client_diagnostic(&client) => {
+            if let Some(client_ts) = client["timestamp_ms"].as_i64() {
+                entry["client_timestamp_ms"] = json!(client_ts);
+            }
             for key in ["source", "component", "event", "message", "context"] {
                 entry[key] = sanitize_log_value(&client[key]);
             }

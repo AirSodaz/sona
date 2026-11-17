@@ -11,6 +11,8 @@ const opaqueKeys: Record<string, true> = {
   audio: true,
   payload: true,
   body: true,
+  windowtitle: true,
+  prompt: true,
 };
 const sensitiveKeyFragments = [
   'apikey',
@@ -101,6 +103,8 @@ export function getLoggerLevel(): AppLogLevel {
   return currentLogLevel;
 }
 
+let writePromise: Promise<void> = Promise.resolve();
+
 async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]): Promise<void> {
   if (!shouldWriteLogLevel(level, currentLogLevel)) return;
   // Logging must never reject, including serializer, console and plugin failures.
@@ -124,8 +128,13 @@ async function writeLog(level: AppLogLevel, message: unknown, ...args: unknown[]
     } catch {
       // A broken devtools sink must not prevent the file sink.
     }
-    const plugin = await getPluginLogModule();
-    if (plugin) await plugin[level](formatted);
+    writePromise = writePromise
+      .then(async () => {
+        const plugin = await getPluginLogModule();
+        if (plugin) await plugin[level](formatted);
+      })
+      .catch(() => {});
+    return writePromise;
   } catch {
     // Do not recursively log a failed log write.
   }
