@@ -581,7 +581,38 @@ where
     dispatch(command, verbose, io).await
 }
 
-pub async fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
+pub fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let mut io = StdCliIo::default();
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
+        ParsedCli::EarlyExit(output) => {
+            if !output.stdout.is_empty() {
+                write!(io.stdout(), "{}", output.stdout)
+                    .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
+            }
+            return Ok(());
+        }
+    };
+    runtime::block_on(async move {
+        if let Some(output) = dispatch(command, verbose, &mut io).await? {
+            if !output.stdout.is_empty() {
+                writeln!(io.stdout(), "{}", output.stdout)
+                    .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
+            }
+            if !output.stderr.is_empty() {
+                writeln!(io.stderr(), "{}", output.stderr)
+                    .map_err(|error| CliError::Io(format!("Failed to write stderr: {error}")))?;
+            }
+        }
+        Ok(())
+    })?
+}
+
+pub async fn execute_cli_from_args_async<I, T>(args: I) -> CliResult<()>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -825,5 +856,23 @@ mod tests {
                 .request_tx
                 .same_channel(&worker_tx)
         );
+    }
+
+    #[test]
+    fn test_execute_cli_from_args_early_exit_version() {
+        let result = execute_cli_from_args(["sona-cli", "-V"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_cli_from_args_early_exit_help() {
+        let result = execute_cli_from_args(["sona-cli", "--help"]);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_execute_cli_from_args_async_early_exit_version() {
+        let result = execute_cli_from_args_async(["sona-cli", "-V"]).await;
+        assert!(result.is_ok());
     }
 }
