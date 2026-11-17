@@ -485,6 +485,26 @@ where
     }
 }
 
+fn run_command_with_memory_io(
+    command: Commands,
+    verbose: u8,
+    mut io: MemoryCliIo,
+) -> CliResult<CliOutput> {
+    init_command_logger(&command, verbose);
+    match try_dispatch_sync(command, &mut io) {
+        DispatchTarget::Handled(res) => match res? {
+            Some(output) => Ok(output),
+            None => Ok(io.into_output()),
+        },
+        DispatchTarget::RequiresAsync(cmd) => runtime::block_on(async move {
+            match dispatch_async(*cmd, &mut io).await? {
+                Some(output) => Ok(output),
+                None => Ok(io.into_output()),
+            }
+        })?,
+    }
+}
+
 pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
 where
     I: IntoIterator<Item = T>,
@@ -494,13 +514,7 @@ where
         ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
-    runtime::block_on(async move {
-        let mut io = MemoryCliIo::default();
-        match dispatch(command, verbose, &mut io).await? {
-            Some(output) => Ok(output),
-            None => Ok(io.into_output()),
-        }
-    })?
+    run_command_with_memory_io(command, verbose, MemoryCliIo::default())
 }
 
 pub fn run_cli_from_args_with_stdin<I, T>(args: I, stdin_bytes: Vec<u8>) -> CliResult<CliOutput>
@@ -512,16 +526,14 @@ where
         ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
-    runtime::block_on(async move {
-        let mut io = MemoryCliIo {
+    run_command_with_memory_io(
+        command,
+        verbose,
+        MemoryCliIo {
             stdin_bytes,
             ..Default::default()
-        };
-        match dispatch(command, verbose, &mut io).await? {
-            Some(output) => Ok(output),
-            None => Ok(io.into_output()),
-        }
-    })?
+        },
+    )
 }
 
 pub fn run_cli_from_args_with_terminal_stdin<I, T>(args: I) -> CliResult<CliOutput>
@@ -533,16 +545,14 @@ where
         ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
-    runtime::block_on(async move {
-        let mut io = MemoryCliIo {
+    run_command_with_memory_io(
+        command,
+        verbose,
+        MemoryCliIo {
             stdin_is_terminal: true,
             ..Default::default()
-        };
-        match dispatch(command, verbose, &mut io).await? {
-            Some(output) => Ok(output),
-            None => Ok(io.into_output()),
-        }
-    })?
+        },
+    )
 }
 
 pub fn run_cli_from_args_with_terminal_stdout<I, T>(args: I) -> CliResult<CliOutput>
@@ -554,16 +564,14 @@ where
         ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
-    runtime::block_on(async move {
-        let mut io = MemoryCliIo {
+    run_command_with_memory_io(
+        command,
+        verbose,
+        MemoryCliIo {
             stdout_is_terminal: true,
             ..Default::default()
-        };
-        match dispatch(command, verbose, &mut io).await? {
-            Some(output) => Ok(output),
-            None => Ok(io.into_output()),
-        }
-    })?
+        },
+    )
 }
 
 pub async fn run_cli_with_io_async<I, T>(
@@ -579,6 +587,20 @@ where
         ParsedCli::EarlyExit(output) => return Ok(Some(output)),
     };
     dispatch(command, verbose, io).await
+}
+
+fn write_cli_output(io: &mut (dyn CliIo + Send), output: Option<CliOutput>) -> CliResult<()> {
+    if let Some(output) = output {
+        if !output.stdout.is_empty() {
+            writeln!(io.stdout(), "{}", output.stdout)
+                .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
+        }
+        if !output.stderr.is_empty() {
+            writeln!(io.stderr(), "{}", output.stderr)
+                .map_err(|error| CliError::Io(format!("Failed to write stderr: {error}")))?;
+        }
+    }
+    Ok(())
 }
 
 pub fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
@@ -597,19 +619,14 @@ where
             return Ok(());
         }
     };
-    runtime::block_on(async move {
-        if let Some(output) = dispatch(command, verbose, &mut io).await? {
-            if !output.stdout.is_empty() {
-                writeln!(io.stdout(), "{}", output.stdout)
-                    .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
-            }
-            if !output.stderr.is_empty() {
-                writeln!(io.stderr(), "{}", output.stderr)
-                    .map_err(|error| CliError::Io(format!("Failed to write stderr: {error}")))?;
-            }
-        }
-        Ok(())
-    })?
+    init_command_logger(&command, verbose);
+    match try_dispatch_sync(command, &mut io) {
+        DispatchTarget::Handled(res) => write_cli_output(&mut io, res?),
+        DispatchTarget::RequiresAsync(cmd) => runtime::block_on(async move {
+            let res = dispatch_async(*cmd, &mut io).await?;
+            write_cli_output(&mut io, res)
+        })?,
+    }
 }
 
 pub async fn execute_cli_from_args_async<I, T>(args: I) -> CliResult<()>
@@ -628,26 +645,22 @@ where
             return Ok(());
         }
     };
-    if let Some(output) = dispatch(command, verbose, &mut io).await? {
-        if !output.stdout.is_empty() {
-            writeln!(io.stdout(), "{}", output.stdout)
-                .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
-        }
-        if !output.stderr.is_empty() {
-            writeln!(io.stderr(), "{}", output.stderr)
-                .map_err(|error| CliError::Io(format!("Failed to write stderr: {error}")))?;
-        }
-    }
-    Ok(())
+    init_command_logger(&command, verbose);
+    let maybe_output = match try_dispatch_sync(command, &mut io) {
+        DispatchTarget::Handled(res) => res?,
+        DispatchTarget::RequiresAsync(cmd) => dispatch_async(*cmd, &mut io).await?,
+    };
+    write_cli_output(&mut io, maybe_output)
 }
 
-async fn dispatch(
-    command: Commands,
-    verbose: u8,
-    io: &mut (dyn CliIo + Send),
-) -> CliResult<Option<CliOutput>> {
+enum DispatchTarget {
+    Handled(CliResult<Option<CliOutput>>),
+    RequiresAsync(Box<Commands>),
+}
+
+fn init_command_logger(command: &Commands, verbose: u8) {
     let default_level = match verbose {
-        0 => match &command {
+        0 => match command {
             Commands::Serve(_) => log::LevelFilter::Info,
             _ => log::LevelFilter::Warn,
         },
@@ -655,33 +668,70 @@ async fn dispatch(
         _ => log::LevelFilter::Debug,
     };
     logger::init_logger(default_level);
+}
 
-    let output = match command {
-        Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
-        Commands::Export(args) => export::run_export(args, io),
-        Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
-        Commands::Config(args) => config_cmd::run_config(args),
-        Commands::Models(args) => models::run_models(args, io).await,
-        Commands::Serve(args) => serve::run_serve(args, io).await,
-        Commands::Transcribe(args) => transcribe::run_transcribe(args, io).await,
-        Commands::Live(args) => {
-            transcribe_live::run_transcribe_live(args, io).await?;
-            return Ok(None);
+fn try_dispatch_sync(command: Commands, io: &mut (dyn CliIo + Send)) -> DispatchTarget {
+    match command {
+        Commands::Diagnostics(args) => {
+            DispatchTarget::Handled(diagnostics::run_diagnostics(args).map(Some))
         }
+        Commands::Export(args) => DispatchTarget::Handled(export::run_export(args, io).map(Some)),
+        Commands::PathStatus { path } => DispatchTarget::Handled(
+            render_path_status_json(&path)
+                .map(CliOutput::stdout)
+                .map(Some),
+        ),
+        Commands::Config(args) => DispatchTarget::Handled(config_cmd::run_config(args).map(Some)),
         Commands::Completion(args) => {
             let mut cmd = <Cli as clap::CommandFactory>::command();
             let mut buf = Vec::new();
             clap_complete::generate(args.shell, &mut cmd, "sona-cli", &mut buf);
-            let script =
-                String::from_utf8(buf).map_err(|error| CliError::Serialize(error.to_string()))?;
-            Ok(CliOutput::stdout(script))
+            let res = String::from_utf8(buf)
+                .map_err(|error| CliError::Serialize(error.to_string()))
+                .map(|script| Some(CliOutput::stdout(script)));
+            DispatchTarget::Handled(res)
         }
-        Commands::Doctor(args) => doctor::run_doctor(args, io).await,
-        Commands::Devices(args) => run_devices(args),
-        Commands::Providers(args) => run_providers(args),
-        Commands::Update(args) => update::run_update(args, io).await,
-    }?;
+        Commands::Devices(args) => DispatchTarget::Handled(run_devices(args).map(Some)),
+        Commands::Providers(args) => DispatchTarget::Handled(run_providers(args).map(Some)),
+        Commands::Models(args) if models::is_sync_models_command(&args) => {
+            DispatchTarget::Handled(models::run_sync_models(args, io).map(Some))
+        }
+        async_cmd => DispatchTarget::RequiresAsync(Box::new(async_cmd)),
+    }
+}
+
+async fn dispatch_async(
+    command: Commands,
+    io: &mut (dyn CliIo + Send),
+) -> CliResult<Option<CliOutput>> {
+    let output = match command {
+        Commands::Models(args) => models::run_models(args, io).await?,
+        Commands::Serve(args) => serve::run_serve(args, io).await?,
+        Commands::Transcribe(args) => transcribe::run_transcribe(args, io).await?,
+        Commands::Live(args) => {
+            transcribe_live::run_transcribe_live(args, io).await?;
+            return Ok(None);
+        }
+        Commands::Doctor(args) => doctor::run_doctor(args, io).await?,
+        Commands::Update(args) => update::run_update(args, io).await?,
+        other => match try_dispatch_sync(other, io) {
+            DispatchTarget::Handled(res) => return res,
+            DispatchTarget::RequiresAsync(_) => unreachable!(),
+        },
+    };
     Ok(Some(output))
+}
+
+async fn dispatch(
+    command: Commands,
+    verbose: u8,
+    io: &mut (dyn CliIo + Send),
+) -> CliResult<Option<CliOutput>> {
+    init_command_logger(&command, verbose);
+    match try_dispatch_sync(command, io) {
+        DispatchTarget::Handled(res) => res,
+        DispatchTarget::RequiresAsync(cmd) => dispatch_async(*cmd, io).await,
+    }
 }
 
 fn run_devices(args: DevicesArgs) -> CliResult<CliOutput> {
@@ -867,6 +917,18 @@ mod tests {
     #[test]
     fn test_execute_cli_from_args_early_exit_help() {
         let result = execute_cli_from_args(["sona-cli", "--help"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_cli_from_args_sync_commands() {
+        let result = execute_cli_from_args(["sona-cli", "completion", "bash"]);
+        assert!(result.is_ok());
+
+        let result = execute_cli_from_args(["sona-cli", "providers"]);
+        assert!(result.is_ok());
+
+        let result = execute_cli_from_args(["sona-cli", "devices"]);
         assert!(result.is_ok());
     }
 

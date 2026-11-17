@@ -34,6 +34,21 @@ pub struct LiveSessionMetadata {
     pub model_id: String,
 }
 
+async fn wait_for_live_terminate() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        if let Ok(mut sigterm) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {},
+                _ = sigterm.recv() => {},
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
 pub fn spawn_stop_signal(
     duration: Option<Duration>,
 ) -> tokio::sync::oneshot::Receiver<LiveStopReason> {
@@ -43,11 +58,11 @@ pub fn spawn_stop_signal(
             Some(duration) => {
                 tokio::select! {
                     _ = tokio::time::sleep(duration) => LiveStopReason::Duration,
-                    _ = tokio::signal::ctrl_c() => LiveStopReason::CtrlC,
+                    _ = wait_for_live_terminate() => LiveStopReason::CtrlC,
                 }
             }
             None => {
-                let _ = tokio::signal::ctrl_c().await;
+                wait_for_live_terminate().await;
                 LiveStopReason::CtrlC
             }
         };
