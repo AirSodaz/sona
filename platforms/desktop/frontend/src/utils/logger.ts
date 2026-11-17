@@ -22,6 +22,10 @@ const sensitiveKeyFragments = [
   'credential',
   'cookie',
   'signature',
+  'accesskey',
+  'privatekey',
+  'auth',
+  'sessionkey',
 ];
 let currentLogLevel: AppLogLevel = 'info';
 

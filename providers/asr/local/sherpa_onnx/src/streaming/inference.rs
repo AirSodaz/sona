@@ -1,7 +1,7 @@
 use super::telemetry::{build_live_metric, record_live_metric};
 use crate::punctuation::Punctuation;
 use crate::recognizer::{SafeOfflineRecognizer, decode_offline_samples};
-use log::{debug, info};
+use log::{debug, info, trace};
 use sona_core::ports::asr::{
     AsrRuntimeObserver, AsrTranscriptUpdateEvent, TranscriptNormalizationOptions,
 };
@@ -113,12 +113,18 @@ fn log_segment_emit_diagnostics(
 
 fn preview_text_for_log(text: &str) -> String {
     const MAX_PREVIEW_CHARS: usize = 24;
-    let flattened = text.replace(['\r', '\n'], " ");
-    let mut preview = flattened
+    let mut preview: String = text
         .chars()
         .take(MAX_PREVIEW_CHARS)
-        .collect::<String>();
-    if flattened.chars().count() > MAX_PREVIEW_CHARS {
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    if text.chars().count() > MAX_PREVIEW_CHARS {
         preview.push('…');
     }
     preview
@@ -137,7 +143,7 @@ fn log_text_transform_diagnostics(
         return;
     };
 
-    debug!(
+    trace!(
         "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={} raw_preview={:?} cleaned_preview={:?} final_preview={:?}",
         stage,
         segment_id,
@@ -240,7 +246,7 @@ pub(super) fn run_offline_inference(
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    debug!(
+                    trace!(
                         "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
                         stage,
                         segment_id,
@@ -260,7 +266,7 @@ pub(super) fn run_offline_inference(
 
             if text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    debug!(
+                    trace!(
                         "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
                         stage,
                         segment_id,

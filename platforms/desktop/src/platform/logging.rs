@@ -14,7 +14,13 @@ pub fn format_record(message: &str, record: &log::Record<'_>) -> Value {
         "line": record.line(),
         "source": "backend",
     });
-    match serde_json::from_str::<Value>(message).ok() {
+    let trimmed = message.trim_start();
+    let client_payload = if trimmed.starts_with('{') && trimmed.contains("\"source\"") {
+        serde_json::from_str::<Value>(trimmed).ok()
+    } else {
+        None
+    };
+    match client_payload {
         // Only these fields are client-owned; never trust level/time/target from payloads.
         Some(client) if is_client_diagnostic(&client) => {
             for key in ["source", "component", "event", "message", "context"] {

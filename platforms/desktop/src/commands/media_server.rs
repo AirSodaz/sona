@@ -10,31 +10,7 @@ use crate::integrations::media_server::{
 use crate::services::DesktopServices;
 
 pub fn sanitize_media_server_error(err: impl std::fmt::Display, api_key: Option<&str>) -> String {
-    let mut msg = err.to_string();
-    if let Some(key) = api_key {
-        let trimmed_key = key.trim();
-        if !trimmed_key.is_empty() {
-            msg = msg.replace(trimmed_key, "[REDACTED]");
-        }
-    }
-
-    let mut result = String::with_capacity(msg.len());
-    let mut remaining = &msg[..];
-    while let Some(pos) = remaining
-        .as_bytes()
-        .windows(8)
-        .position(|w| w.eq_ignore_ascii_case(b"api_key="))
-    {
-        result.push_str(&remaining[..pos + 8]);
-        let after_key = &remaining[pos + 8..];
-        let end_pos = after_key
-            .find(['&', ' ', '"', '\'', '\n', '\r'])
-            .unwrap_or(after_key.len());
-        result.push_str("[REDACTED]");
-        remaining = &after_key[end_pos..];
-    }
-    result.push_str(remaining);
-    result
+    sona_core::runtime::logging::sanitize_credentials_text(&err.to_string(), api_key)
 }
 
 #[tauri::command(rename_all = "camelCase")]

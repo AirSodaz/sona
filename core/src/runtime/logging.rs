@@ -35,8 +35,9 @@ const OPAQUE_KEYS: [&str; 7] = [
     "body",
 ];
 /// Key fragments matched as substrings so qualified names (`x-api-key`,
-/// `userToken`, `clientSecret`, `db_password`) cannot slip through.
-const SENSITIVE_KEY_FRAGMENTS: [&str; 9] = [
+/// `userToken`, `clientSecret`, `db_password`, `accessKeyId`, `privateKey`)
+/// cannot slip through.
+const SENSITIVE_KEY_FRAGMENTS: [&str; 13] = [
     "apikey",
     "token",
     "authorization",
@@ -46,6 +47,10 @@ const SENSITIVE_KEY_FRAGMENTS: [&str; 9] = [
     "credential",
     "cookie",
     "signature",
+    "accesskey",
+    "privatekey",
+    "auth",
+    "sessionkey",
 ];
 
 fn is_sensitive_key(key: &str) -> bool {
@@ -83,6 +88,21 @@ pub fn sanitize_log_text(input: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Redacts credentials (keys, tokens, passwords, bearer tokens) and an optional
+/// explicit secret without obliterating the entire URL, suitable for error messages.
+pub fn sanitize_credentials_text(input: &str, explicit_secret: Option<&str>) -> String {
+    let mut text = input.to_string();
+    if let Some(secret) = explicit_secret {
+        let trimmed = secret.trim();
+        if !trimmed.is_empty() {
+            text = text.replace(trimmed, "[REDACTED]");
+        }
+    }
+    let without_bearers = BEARER_RE.replace_all(&text, "Bearer [REDACTED]");
+    let sanitized = SECRET_RE.replace_all(&without_bearers, "$1$2[REDACTED]");
+    sanitized.chars().take(MAX_LOG_TEXT_CHARS).collect()
 }
 
 /// Bounded, redacted correlation label for an observer-supplied diagnostic id.
@@ -242,7 +262,11 @@ mod tests {
                 "clientSecret": "private-3",
                 "db_password": "private-4",
                 "cookie": "private-5",
-                "signature": "private-6"
+                "signature": "private-6",
+                "accessKeyId": "private-7",
+                "privateKey": "private-8",
+                "auth": "private-9",
+                "sessionKey": "private-10"
             },
             "kept": "visible"
         }));
@@ -275,5 +299,21 @@ mod tests {
         let safe = sanitize_log_text(&oversized);
         assert_eq!(safe.chars().count(), 4096);
         assert!(!safe.contains("private"));
+    }
+
+    #[test]
+    fn credentials_text_redacts_keys_and_tokens_while_preserving_url_structure() {
+        let err = "Failed to connect to http://127.0.0.1:8096/emby/System/Info?api_key=secret_12345&foo=bar";
+        let sanitized = sanitize_credentials_text(err, Some("secret_12345"));
+        assert!(!sanitized.contains("secret_12345"));
+        assert!(sanitized.contains("api_key=[REDACTED]"));
+        assert!(sanitized.contains("&foo=bar"));
+
+        let err_no_key_provided = "Error at http://emby.local?Api_Key=supersecret&token=tok_secret";
+        let sanitized_no_key = sanitize_credentials_text(err_no_key_provided, None);
+        assert!(!sanitized_no_key.contains("supersecret"));
+        assert!(!sanitized_no_key.contains("tok_secret"));
+        assert!(sanitized_no_key.contains("Api_Key=[REDACTED]"));
+        assert!(sanitized_no_key.contains("token=[REDACTED]"));
     }
 }

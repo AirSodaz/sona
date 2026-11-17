@@ -142,7 +142,14 @@ describe('logger utility', () => {
         },
         config: { private: 'private-config' },
         transcript: 'private-transcript',
-        requestHeaders: { 'x-api-key': 'private-header', userToken: 'private-user-token' },
+        requestHeaders: {
+          'x-api-key': 'private-header',
+          userToken: 'private-user-token',
+          accessKeyId: 'private-access-key',
+          privateKey: 'private-rsa-key',
+          auth: 'private-auth',
+          sessionKey: 'private-session-key',
+        },
       });
       const written = String(vi.mocked(tauriError).mock.calls[0][0]);
       const entry = JSON.parse(written);
