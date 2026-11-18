@@ -301,6 +301,31 @@ pub struct ModelDeleteArgs {
     all: bool,
 }
 
+pub fn is_sync_models_command(args: &ModelsArgs) -> bool {
+    matches!(
+        args.command,
+        ModelCommands::List(_)
+            | ModelCommands::Search(_)
+            | ModelCommands::Path(_)
+            | ModelCommands::Delete(_)
+    )
+}
+
+pub fn run_sync_models(
+    args: ModelsArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
+    match args.command {
+        ModelCommands::List(args) => run_model_list(args),
+        ModelCommands::Search(args) => run_model_list(args.into()),
+        ModelCommands::Path(args) => run_model_path(args),
+        ModelCommands::Delete(args) => run_model_delete(args, io),
+        _ => Err(CliError::Other(
+            "Command requires async runtime".to_string(),
+        )),
+    }
+}
+
 pub async fn run_models(
     args: ModelsArgs,
     io: &mut (dyn crate::CliIo + Send),
@@ -334,20 +359,41 @@ async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
                 models_dir.display()
             )));
         }
-        let mut results = Vec::new();
-        let mut failed = 0;
-        for model in &installed {
-            let resolved = resolve_model_download(&model.id, &models_dir)
+
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
+        let mut join_set = tokio::task::JoinSet::new();
+
+        for (index, model) in installed.iter().enumerate() {
+            let model_id = model.id.clone();
+            let resolved = resolve_model_download(&model_id, &models_dir)
                 .map_err(|error| CliError::Validation(error.to_string()))?;
-            let is_valid = installed_model_is_valid(&resolved)
-                .await
-                .map_err(map_download_error)?;
+            let permit_sem = semaphore.clone();
+
+            join_set.spawn(async move {
+                let _permit = permit_sem.acquire_owned().await;
+                let res = installed_model_is_valid(&resolved).await;
+                (index, model_id, res)
+            });
+        }
+
+        let mut verify_results = Vec::with_capacity(installed.len());
+        while let Some(res) = join_set.join_next().await {
+            let (index, model_id, outcome) = res.map_err(|error| {
+                CliError::Other(format!("Model verification task panicked: {error}"))
+            })?;
+            let is_valid = outcome.map_err(map_download_error)?;
+            verify_results.push((index, model_id, is_valid));
+        }
+        verify_results.sort_by_key(|&(index, _, _)| index);
+
+        let mut results = Vec::with_capacity(verify_results.len());
+        let mut failed = 0;
+        for (_, model_id, is_valid) in verify_results {
             if is_valid {
-                results.push(format!("  [OK]   {}", model.id));
+                results.push(format!("  [OK]   {model_id}"));
             } else {
                 results.push(format!(
-                    "  [FAIL] {} (corrupted or incomplete files)",
-                    model.id
+                    "  [FAIL] {model_id} (corrupted or incomplete files)"
                 ));
                 failed += 1;
             }

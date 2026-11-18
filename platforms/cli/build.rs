@@ -18,7 +18,14 @@ fn main() {
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
     } else if target_os == "windows" && target_env == "msvc" {
         println!("cargo:rustc-link-arg=delayimp.lib");
+        println!("cargo:rustc-link-arg=/IGNORE:4199");
         println!("cargo:rustc-link-arg=/DELAYLOAD:sherpa-onnx-c-api.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:llama.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:llama-common.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-base.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-cpu.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:mtmd.dll");
     }
 }
 

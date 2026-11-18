@@ -49,6 +49,7 @@ impl TranscriptAccumulator {
         &self.segments
     }
 
+    #[allow(dead_code)]
     pub(crate) fn plain_text(&self) -> String {
         self.segments
             .iter()
@@ -270,9 +271,19 @@ impl LiveOutputRenderer {
         finish: bool,
     ) -> Result<(), String> {
         let mut writer = SizedWriter(writer);
+        let terminal_size = terminal::size().ok();
+        let terminal_columns = terminal_size
+            .map(|(columns, _)| usize::from(columns))
+            .unwrap_or(80);
+        let terminal_rows = terminal_size
+            .map(|(_, rows)| usize::from(rows))
+            .unwrap_or(24);
+
         if self.rendered_lines > 0 {
             if self.rendered_lines > 1 {
-                queue!(writer, cursor::MoveUp((self.rendered_lines - 1) as u16))
+                let max_move_up = terminal_rows.saturating_sub(1).max(1);
+                let lines_to_move = (self.rendered_lines - 1).min(max_move_up);
+                queue!(writer, cursor::MoveUp(lines_to_move as u16))
                     .map_err(|error| format!("Failed to move terminal cursor: {error}"))?;
             }
             queue!(
@@ -281,22 +292,50 @@ impl LiveOutputRenderer {
                 terminal::Clear(terminal::ClearType::FromCursorDown)
             )
             .map_err(|error| format!("Failed to clear live transcript: {error}"))?;
-        }
-        let text = self.accumulator.plain_text();
-        writer
-            .write_all(text.as_bytes())
-            .map_err(|error| format!("Failed to write live transcript: {error}"))?;
-        if finish {
-            writer
-                .write_all(b"\n")
-                .map_err(|error| format!("Failed to finish live transcript: {error}"))?;
             self.rendered_lines = 0;
-        } else {
-            let terminal_columns = terminal::size()
-                .map(|(columns, _)| usize::from(columns))
-                .unwrap_or(80);
-            self.rendered_lines = rendered_terminal_rows(&text, terminal_columns);
         }
+
+        for segment in self.accumulator.segments() {
+            if segment.is_final && !self.emitted_segment_ids.contains(&segment.id) {
+                let text = segment.text.trim();
+                if !text.is_empty() {
+                    writer
+                        .write_all(format!("{text}\n").as_bytes())
+                        .map_err(|error| format!("Failed to write live transcript: {error}"))?;
+                    self.emitted_segment_ids.insert(segment.id.clone());
+                }
+            }
+        }
+
+        let active_segments: Vec<&str> = self
+            .accumulator
+            .segments()
+            .iter()
+            .filter(|s| !s.is_final && !self.emitted_segment_ids.contains(&s.id))
+            .map(|s| s.text.trim())
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        if !active_segments.is_empty() {
+            let active_text = active_segments.join("\n");
+            writer
+                .write_all(active_text.as_bytes())
+                .map_err(|error| format!("Failed to write live transcript: {error}"))?;
+            if finish {
+                writer
+                    .write_all(b"\n")
+                    .map_err(|error| format!("Failed to finish live transcript: {error}"))?;
+                for s in self.accumulator.segments() {
+                    self.emitted_segment_ids.insert(s.id.clone());
+                }
+                self.rendered_lines = 0;
+            } else {
+                self.rendered_lines = rendered_terminal_rows(&active_text, terminal_columns);
+            }
+        } else if finish {
+            self.rendered_lines = 0;
+        }
+
         writer
             .flush()
             .map_err(|error| format!("Failed to flush live transcript: {error}"))
@@ -577,5 +616,36 @@ mod tests {
             String::from_utf8(output).unwrap(),
             "hello world\nsecond sentence\n"
         );
+    }
+
+    #[test]
+    fn terminal_long_transcription_does_not_accumulate_rendered_lines() {
+        let mut renderer = LiveOutputRenderer::new(LiveOutputFormat::Text, true, "session-long");
+        let mut output = Vec::new();
+
+        for i in 0..50 {
+            let id = format!("seg-{i}");
+            renderer
+                .write_update(
+                    &mut output,
+                    "final",
+                    TranscriptUpdate {
+                        remove_ids: Vec::new(),
+                        upsert_segments: vec![segment(
+                            &id,
+                            &format!("sentence {i}"),
+                            i as f64,
+                            (i + 1) as f64,
+                            true,
+                        )],
+                    },
+                )
+                .unwrap();
+            // Since every segment is finalized, rendered_lines should remain 0
+            assert_eq!(
+                renderer.rendered_lines, 0,
+                "Rendered lines must not accumulate for finalized segments"
+            );
+        }
     }
 }

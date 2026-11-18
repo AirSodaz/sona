@@ -253,7 +253,14 @@ pub fn path_exists(path: &Path) -> Result<bool, FileSystemError> {
 }
 
 pub fn write_transcript_output_file(path: &Path, output: &str) -> Result<(), FileSystemError> {
-    RealFileSystem.write_file(path, output.as_bytes())
+    write_binary_atomic(&RealFileSystem, path, output.as_bytes()).map_err(|error| match error {
+        RuntimeFsError::FileSystem(fs_err) => fs_err,
+        other => file_system_error(
+            FileSystemOperation::WriteFile,
+            path,
+            std::io::Error::other(other.to_string()),
+        ),
+    })
 }
 
 pub fn write_cli_config_template_file(

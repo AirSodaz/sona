@@ -160,11 +160,11 @@ pub async fn run_serve(
 
     loop {
         tokio::select! {
-            ctrl_c = tokio::signal::ctrl_c() => {
-                ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+            sig = wait_for_shutdown_signal() => {
+                let signal_name = sig.map_err(|error| CliError::Io(format!("Failed to wait for shutdown signal: {error}")))?;
                 let (processing, pending) = dashboard.active_job_count().await;
                 let total_active = processing + pending;
-                if total_active > 0 && io.stdin_is_terminal() {
+                if total_active > 0 && io.stdin_is_terminal() && signal_name != "SIGTERM" {
                     write!(
                         io.stderr(),
                         "\nWarning: There are {} active/pending transcription task(s) (processing: {}, pending: {}).\nAre you sure you want to exit? [y/N]: ",
@@ -181,8 +181,8 @@ pub async fn run_serve(
                             read_res = &mut prompt_fut => {
                                 PromptOutcome::Read(read_res)
                             }
-                            ctrl_c_again = tokio::signal::ctrl_c() => {
-                                ctrl_c_again.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+                            ctrl_c_again = wait_for_shutdown_signal() => {
+                                ctrl_c_again.map_err(|error| CliError::Io(format!("Failed to wait for shutdown signal: {error}")))?;
                                 PromptOutcome::Forced
                             }
                         }
@@ -195,7 +195,7 @@ pub async fn run_serve(
                 } else if total_active > 0 {
                     writeln!(
                         io.stderr(),
-                        "\nShutting down Sona API server with {} active/pending task(s)...",
+                        "\nShutting down Sona API server ({signal_name}) with {} active/pending task(s)...",
                         total_active
                     )
                     .map_err(|error| CliError::Io(format!("Failed to write shutdown notice: {error}")))?;
@@ -216,6 +216,22 @@ pub async fn run_serve(
                 return Ok(CliOutput::stderr("API server stopped".to_string()));
             }
         }
+    }
+}
+
+async fn wait_for_shutdown_signal() -> std::io::Result<&'static str> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut sigterm = signal(SignalKind::terminate())?;
+        tokio::select! {
+            res = tokio::signal::ctrl_c() => res.map(|()| "SIGINT (Ctrl+C)"),
+            _ = sigterm.recv() => Ok("SIGTERM"),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await.map(|()| "Ctrl+C")
     }
 }
 
