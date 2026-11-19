@@ -54,6 +54,7 @@ export interface AddEmbyItemEntry {
   subtitleMode: EmbySubtitleMode;
   targetLanguage: string;
   sourceLanguage?: string;
+  audioTrackLanguage?: string;
   existingExternalSubtitleIndex?: number;
   serverId: string;
   serverUrl: string;
@@ -576,8 +577,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         audioStreamIndex: opt.audioStreamIndex,
       });
       const itemConfig =
-        opt.sourceLanguage && opt.sourceLanguage !== resolvedConfigSnapshot.language
-          ? { ...resolvedConfigSnapshot, language: opt.sourceLanguage }
+        opt.sourceLanguage &&
+        (opt.sourceLanguage !== resolvedConfigSnapshot.language ||
+          opt.sourceLanguage !== resolvedConfigSnapshot.batchLanguage)
+          ? {
+              ...resolvedConfigSnapshot,
+              language: opt.sourceLanguage,
+              batchLanguage: opt.sourceLanguage,
+            }
           : resolvedConfigSnapshot;
       const mediaContext: MediaServerTaskContext = {
         serverId: opt.serverId,
@@ -589,6 +596,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         subtitleMode: opt.subtitleMode,
         targetLanguage: opt.targetLanguage,
         sourceLanguage: opt.sourceLanguage,
+        audioTrackLanguage: opt.audioTrackLanguage,
         existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
         mediaSourceId: opt.mediaSourceId,
         container: opt.container,

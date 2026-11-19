@@ -462,13 +462,12 @@ impl StreamTranscriptionJob {
             return Err(AsrPortError::runtime("Task cancelled."));
         }
 
-        if let Some(err) = stream_error {
-            worker_handle.abort();
-            reader.finish();
-            return Err(err);
-        }
-
         if total_samples_streamed == 0 {
+            if let Some(err) = stream_error {
+                worker_handle.abort();
+                reader.finish();
+                return Err(err);
+            }
             worker_handle.abort();
             let err_msg = reader.take_stderr_output().await;
             reader.finish();
@@ -479,6 +478,13 @@ impl StreamTranscriptionJob {
                 AsrPortErrorKind::InvalidRequest,
                 format!("Stream failed: {msg}"),
             ));
+        }
+
+        if let Some(err) = stream_error.as_ref() {
+            log::warn!(
+                "[StreamTranscriber] Stream interrupted after receiving audio, flushing remaining buffer: {}",
+                sanitize_stream_diagnostic(&err.to_string())
+            );
         }
 
         // Flush remaining audio in detector or chunk buffer
@@ -537,6 +543,13 @@ impl StreamTranscriptionJob {
                 "Transcription worker encountered an unexpected error: {e}"
             ))
         })?;
+
+        if results.is_empty()
+            && let Some(err) = stream_error
+        {
+            reader.finish();
+            return Err(err);
+        }
 
         log::info!(
             "[BatchStream] complete instance_id={} received_s={:.3} slices={} output_segments={} skipped_slices={} last_end_s={:.3} elapsed_ms={}",

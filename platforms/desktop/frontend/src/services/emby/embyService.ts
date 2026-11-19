@@ -143,10 +143,15 @@ export async function syncEmbySubtitles(
       }
       const origContent = generateOriginalSrt(segments);
       if (origContent.trim()) {
+        const originalLanguage =
+          embyContext.audioTrackLanguage ||
+          (embyContext.sourceLanguage && embyContext.sourceLanguage !== 'auto'
+            ? embyContext.sourceLanguage
+            : 'und');
         await uploadEmbySubtitle(
           {
             itemId: embyContext.itemId,
-            language: embyContext.sourceLanguage || 'und',
+            language: originalLanguage,
             format: 'srt',
             isForced: false,
             content: origContent,

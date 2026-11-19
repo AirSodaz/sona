@@ -96,6 +96,9 @@ impl ClockPort for SystemClock {
 
 impl SourcePathStatusProvider for FsSourcePathStatusProvider {
     fn status_for_path(&self, path: &str) -> SourcePathStatus {
+        if sona_core::history::is_network_url(path) {
+            return SourcePathStatus::File;
+        }
         match fs::metadata(path) {
             Ok(metadata) if metadata.is_file() => SourcePathStatus::File,
             Ok(metadata) if metadata.is_dir() => SourcePathStatus::Directory,

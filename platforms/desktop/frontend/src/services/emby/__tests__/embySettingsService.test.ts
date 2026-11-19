@@ -181,10 +181,12 @@ describe('embySettingsService', () => {
       const overridesJa: EmbyToolOverrides = { asrLanguage: 'ja' };
       const configJa = buildEmbyEffectiveConfig(mockBaseConfig, overridesJa);
       expect(configJa.language).toBe('ja');
+      expect(configJa.batchLanguage).toBe('ja');
 
       const overridesAuto: EmbyToolOverrides = { asrLanguage: 'auto' };
       const configAuto = buildEmbyEffectiveConfig(mockBaseConfig, overridesAuto);
       expect(configAuto.language).toBe('auto');
+      expect(configAuto.batchLanguage).toBe('auto');
     });
 
     it('strictly honors enableTimeline override', () => {

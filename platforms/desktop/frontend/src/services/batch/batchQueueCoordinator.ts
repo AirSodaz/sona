@@ -184,7 +184,7 @@ export class BatchQueueCoordinator {
     }
 
     const isUploadRetry =
-      Boolean(item.embyContext) &&
+      Boolean(item.mediaServerContext ?? item.embyContext) &&
       item.errorStage === 'upload' &&
       Boolean(item.segments && item.segments.length > 0);
 

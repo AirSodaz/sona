@@ -317,7 +317,16 @@ describe('BatchItemProcessor', () => {
     ).resolves.toBeUndefined();
     expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalled();
     expect(callbacks.onHistorySaved).toHaveBeenCalled();
-    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalled();
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            id: 'seg-1',
+            timing: expect.objectContaining({ level: 'segment' }),
+          }),
+        ],
+      })
+    );
   });
 
   it('rethrows Task cancelled when stream is cancelled with zero segments', async () => {

@@ -83,10 +83,15 @@ fn extract_base_lang(code: &str) -> &str {
 }
 
 pub fn is_chinese_code(clean: &str) -> bool {
+    let base = extract_base_lang(clean);
     matches!(
         clean,
         "zh" | "chi"
             | "zho"
+            | "chs"
+            | "cht"
+            | "zhs"
+            | "zht"
             | "chinese"
             | "mandarin"
             | "cmn"
@@ -97,7 +102,7 @@ pub fn is_chinese_code(clean: &str) -> bool {
             | "hak"
             | "min"
             | "nan"
-    )
+    ) || matches!(base, "zh" | "chi" | "zho" | "chs" | "cht" | "zhs" | "zht")
 }
 
 fn language_family(clean: &str) -> &str {
@@ -673,6 +678,11 @@ mod tests {
         assert!(is_chinese_language(Some("zh"), None));
         assert!(is_chinese_language(Some("chi"), None));
         assert!(is_chinese_language(Some("zho"), None));
+        assert!(is_chinese_language(Some("chs"), None));
+        assert!(is_chinese_language(Some("cht"), None));
+        assert!(is_chinese_language(Some("zhs"), None));
+        assert!(is_chinese_language(Some("zht"), None));
+        assert!(is_chinese_language(Some("chs-CN"), None));
         assert!(is_chinese_language(Some("zh-CN"), None));
         assert!(is_chinese_language(None, Some("Movie.chs.srt")));
         assert!(is_chinese_language(None, Some("中文字幕")));

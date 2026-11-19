@@ -22,6 +22,7 @@ export interface MediaServerTaskContext {
   subtitleMode: MediaServerSubtitleMode;
   targetLanguage: string;
   sourceLanguage?: string;
+  audioTrackLanguage?: string;
   existingExternalSubtitleIndex?: number;
   mediaSourceId?: string;
   container?: string;

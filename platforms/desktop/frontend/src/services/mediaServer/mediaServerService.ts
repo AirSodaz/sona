@@ -239,10 +239,15 @@ export async function syncMediaServerSubtitles(
       }
       const origContent = generateOriginalSrt(segments);
       if (origContent.trim()) {
+        const originalLanguage =
+          context.audioTrackLanguage ||
+          (context.sourceLanguage && context.sourceLanguage !== 'auto'
+            ? context.sourceLanguage
+            : 'und');
         await uploadMediaServerSubtitle(
           {
             itemId: context.itemId,
-            language: context.sourceLanguage || 'und',
+            language: originalLanguage,
             format: 'srt',
             isForced: false,
             content: origContent,

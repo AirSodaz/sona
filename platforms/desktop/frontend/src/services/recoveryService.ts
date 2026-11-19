@@ -267,11 +267,13 @@ function queueSnapshotWrite(
 }
 
 export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
+  const isStreamUrl = /^(https?|rtmp|rtsp):\/\//i.test(item.filePath);
   return {
     id: item.id,
     recoveryId: item.id,
     filename: item.filename,
     filePath: item.filePath,
+    ...(isStreamUrl ? { sourceType: 'url_stream' as const, streamUrl: item.filePath } : {}),
     status: 'pending',
     progress: 0,
     segments: Array.isArray(item.segments) ? item.segments : [],

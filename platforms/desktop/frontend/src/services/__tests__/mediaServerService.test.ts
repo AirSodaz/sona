@@ -172,5 +172,39 @@ describe('mediaServerService', () => {
         },
       });
     });
+
+    it('uses audioTrackLanguage or und instead of auto for original track in separate_tracks mode', async () => {
+      vi.mocked(invokeTauri).mockResolvedValue(undefined);
+
+      await syncMediaServerSubtitles(segments, {
+        ...context,
+        subtitleMode: 'separate_tracks',
+        sourceLanguage: 'auto',
+        audioTrackLanguage: 'ja',
+      });
+
+      expect(invokeTauri).toHaveBeenNthCalledWith(
+        2,
+        TauriCommand.mediaServer.uploadSubtitle,
+        expect.objectContaining({
+          payload: expect.objectContaining({ language: 'ja' }),
+        })
+      );
+
+      vi.mocked(invokeTauri).mockClear();
+      await syncMediaServerSubtitles(segments, {
+        ...context,
+        subtitleMode: 'separate_tracks',
+        sourceLanguage: 'auto',
+      });
+
+      expect(invokeTauri).toHaveBeenNthCalledWith(
+        2,
+        TauriCommand.mediaServer.uploadSubtitle,
+        expect.objectContaining({
+          payload: expect.objectContaining({ language: 'und' }),
+        })
+      );
+    });
   });
 });

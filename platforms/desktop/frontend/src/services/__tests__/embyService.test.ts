@@ -203,6 +203,46 @@ describe('syncEmbySubtitles workflow', () => {
       },
     });
 
+    // 3. separate_tracks with sourceLanguage 'auto' uses audioTrackLanguage or 'und'
+    invokeSpy.mockClear();
+    await syncEmbySubtitles(segments, {
+      serverId: 's1',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-3',
+      itemName: 'Test 3',
+      audioStreamIndex: 1,
+      subtitleMode: 'separate_tracks',
+      sourceLanguage: 'auto',
+      audioTrackLanguage: 'ja',
+      targetLanguage: 'zh-CN',
+    });
+    expect(invokeSpy).toHaveBeenNthCalledWith(
+      2,
+      TauriCommand.emby.uploadSubtitle,
+      expect.objectContaining({
+        payload: expect.objectContaining({ language: 'ja' }),
+      })
+    );
+
+    invokeSpy.mockClear();
+    await syncEmbySubtitles(segments, {
+      serverId: 's1',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-4',
+      itemName: 'Test 4',
+      audioStreamIndex: 1,
+      subtitleMode: 'separate_tracks',
+      sourceLanguage: 'auto',
+      targetLanguage: 'zh-CN',
+    });
+    expect(invokeSpy).toHaveBeenNthCalledWith(
+      2,
+      TauriCommand.emby.uploadSubtitle,
+      expect.objectContaining({
+        payload: expect.objectContaining({ language: 'und' }),
+      })
+    );
+
     invokeSpy.mockRestore();
   });
 

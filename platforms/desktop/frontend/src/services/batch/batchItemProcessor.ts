@@ -12,6 +12,7 @@ import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { getScenarioLanguage } from '../../utils/scenarioModels';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
+import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { exportService } from '../exportService';
@@ -464,7 +465,9 @@ export class BatchItemProcessor {
         const isExplicitCancel = callbacks.isCancelRequested();
         const isTaskCancelError = extractErrorMessage(transcribeError).includes('Task cancelled');
         if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
-          segments = currentSegments;
+          const normalized = normalizeTranscriptSegments(currentSegments);
+          setCurrentSegments(normalized);
+          segments = normalized;
         } else {
           scheduler?.cancel();
           throw transcribeError;

@@ -145,7 +145,8 @@ impl LlamaBatchTranscriptionJob {
                 ),
             ));
         }
-        if !plan.input_path.is_file() {
+        let is_stream = sona_core::history::is_network_url(&plan.input_path.to_string_lossy());
+        if !is_stream && !plan.input_path.is_file() {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
@@ -620,6 +621,14 @@ fn decode_audio_input(
     ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
+    let path_str = path.to_string_lossy();
+    let is_url = sona_core::history::is_network_url(&path_str);
+    if is_url && !ffmpeg_enabled {
+        return Err(AsrPortError::invalid_request(format!(
+            "Failed to decode network stream {}: Network stream transcription with llama.cpp requires FFmpeg to be enabled in settings.",
+            path.display()
+        )));
+    }
     if ffmpeg_enabled {
         let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
             Ok(p) if p.is_file() => p,
@@ -661,9 +670,35 @@ fn decode_audio_input(
             command.creation_flags(0x0800_0000);
         }
 
+        command.arg("-loglevel").arg("error");
+        if is_url {
+            let lower = path_str.trim().to_ascii_lowercase();
+            command.arg("-nostdin");
+            if lower.starts_with("http://") || lower.starts_with("https://") {
+                command
+                    .arg("-reconnect")
+                    .arg("1")
+                    .arg("-reconnect_streamed")
+                    .arg("1")
+                    .arg("-reconnect_on_network_error")
+                    .arg("1")
+                    .arg("-reconnect_delay_max")
+                    .arg("5")
+                    .arg("-rw_timeout")
+                    .arg("15000000");
+            } else if lower.starts_with("rtsp://") {
+                command
+                    .arg("-rtsp_transport")
+                    .arg("tcp")
+                    .arg("-stimeout")
+                    .arg("15000000");
+            } else if lower.starts_with("rtmp://") {
+                command.arg("-rw_timeout").arg("15000000");
+            }
+            command.arg("-vn");
+        }
+
         let output = command
-            .arg("-loglevel")
-            .arg("error")
             .arg("-i")
             .arg(path)
             .arg("-f")
@@ -1690,5 +1725,32 @@ mod tests {
         assert_eq!(samples.len(), 1600);
 
         let _ = std::fs::remove_file(wav_path);
+    }
+
+    #[test]
+    fn test_decode_audio_input_network_stream_requires_ffmpeg() {
+        use super::decode_audio_input;
+        let stream_url = std::path::Path::new("https://example.com/audio/stream.mp3");
+        let error = decode_audio_input(stream_url, 16000, false, None).unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+        assert!(
+            error.message.contains("requires FFmpeg"),
+            "Expected 'requires FFmpeg', got: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn test_from_plan_accepts_network_stream_url() {
+        let mut p = plan();
+        p.input_path = PathBuf::from("https://example.com/live/stream.m3u8");
+        p.file_config = None; // bypass disk model existence check after input path check
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            p,
+            &VadEngineSet::default(),
+            &PunctuationEngineSet::default(),
+        )
+        .expect_err("should reach model file_config check rather than failing input_path check");
+        assert_eq!(error.kind, AsrPortErrorKind::Model);
     }
 }

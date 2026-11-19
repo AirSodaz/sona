@@ -235,199 +235,224 @@ export function useEmbySync(): UseEmbySyncReturn {
     setSelectedItemIds(new Set());
   }, [targetLanguage, onlyMissingTargetSubtitles]);
 
-  // Connect to Emby server
-  const handleConnect = useCallback(async (cfgToTest?: EmbyConnectionConfig) => {
-    const targetConfig = cfgToTest || configRef.current;
-    if (!targetConfig.serverUrl.trim() || !targetConfig.apiKey.trim()) {
-      setIsConfigModalOpen(true);
-      return;
-    }
-
-    const seq = ++connectSeqRef.current;
-    fetchSeqRef.current++;
-    clearTimeout(debounceTimerRef.current ?? undefined);
-    debounceTimerRef.current = null;
-    setIsConnecting(true);
-    setConnectionError(null);
+  const syncProfilesFromBackend = useCallback(async () => {
     try {
-      const curProfile = activeProfileRef.current;
-      const effectiveProfile: MediaServerProfile =
-        curProfile &&
-        curProfile.serverUrl.trim().replace(/\/+$/, '') ===
-          targetConfig.serverUrl.trim().replace(/\/+$/, '')
-          ? {
-              ...curProfile,
-              serverUrl: targetConfig.serverUrl,
-              apiKey: targetConfig.apiKey,
-              username: targetConfig.username ?? curProfile.username,
-              adminUserId: targetConfig.adminUserId ?? curProfile.adminUserId,
-              allowInvalidCerts: targetConfig.allowInvalidCerts ?? curProfile.allowInvalidCerts,
-            }
-          : {
-              id: curProfile?.id || 'temp',
-              name: curProfile?.name || 'Media Server',
-              serverType: curProfile?.serverType ?? 'emby',
-              serverUrl: targetConfig.serverUrl,
-              apiKey: targetConfig.apiKey,
-              username: targetConfig.username,
-              adminUserId: targetConfig.adminUserId,
-              allowInvalidCerts: targetConfig.allowInvalidCerts,
-              createdAt: curProfile?.createdAt ?? Date.now(),
-              updatedAt: Date.now(),
-            };
-
-      let info: EmbyServerInfo | null = null;
-      try {
-        info = await testMediaServerConnection(effectiveProfile);
-      } catch {
-        // fallback to legacy testEmbyConnection
+      const loadedProfiles = await listMediaServerProfiles();
+      if (Array.isArray(loadedProfiles) && loadedProfiles.length > 0) {
+        setProfiles(loadedProfiles);
+        const active =
+          loadedProfiles.find((p) => p.id === activeProfileRef.current?.id) || loadedProfiles[0];
+        setActiveProfileId(active.id);
+        setActiveProfile(active);
       }
-      if (!info) {
-        info = await testEmbyConnection(targetConfig);
-      }
-      if (seq !== connectSeqRef.current) return;
-      try {
-        await saveEmbyConfig(targetConfig);
-      } catch {
-        // ignore save error
-      }
-      if (seq !== connectSeqRef.current) return;
-      setConfig(targetConfig);
-      setIsConfigModalOpen(false);
-
-      // Clear stale items, selection, and audio tracks on server switch
-      setItems([]);
-      setSelectedItemIds(new Set());
-      setAudioTrackMap({});
-      setExpandedSeasons(new Set());
-
-      let libs: EmbyLibrary[] = [];
-      try {
-        const msLibs = await getMediaServerLibraries(effectiveProfile.id);
-        if (Array.isArray(msLibs) && msLibs.length > 0) {
-          libs = msLibs;
-        }
-      } catch {
-        // fallback
-      }
-      if (libs.length === 0) {
-        try {
-          const embyLibs = await getEmbyLibraries();
-          if (Array.isArray(embyLibs)) {
-            libs = embyLibs;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (seq !== connectSeqRef.current) return;
-      setLibraries(libs);
-      if (libs.length > 0) {
-        setSelectedLibraryId((prev) => {
-          if (prev && libs.some((lib) => lib.id === prev)) {
-            return prev;
-          }
-          return libs[0].id;
-        });
-      } else {
-        setSelectedLibraryId(null);
-      }
-      setServerInfo(info);
-      useToolsStore.getState().setEmbyServerName(info.serverName);
-    } catch (err: unknown) {
-      if (seq !== connectSeqRef.current) return;
-      setConnectionError(extractErrorMessage(err) || String(err));
-      setServerInfo(null);
-      useToolsStore.getState().setEmbyServerName(null);
-      setLibraries([]);
-      setSelectedLibraryId(null);
-      setItems([]);
-      setSelectedItemIds(new Set());
-      setAudioTrackMap({});
-    } finally {
-      if (seq === connectSeqRef.current) {
-        setIsConnecting(false);
-      }
+    } catch {
+      // ignore in environments where mediaServerService is not mocked
     }
   }, []);
+
+  // Connect to Emby server
+  const handleConnect = useCallback(
+    async (cfgToTest?: EmbyConnectionConfig) => {
+      const targetConfig = cfgToTest || configRef.current;
+      if (!targetConfig.serverUrl.trim() || !targetConfig.apiKey.trim()) {
+        setIsConfigModalOpen(true);
+        return;
+      }
+
+      const seq = ++connectSeqRef.current;
+      fetchSeqRef.current++;
+      clearTimeout(debounceTimerRef.current ?? undefined);
+      debounceTimerRef.current = null;
+      setIsConnecting(true);
+      setConnectionError(null);
+      try {
+        const curProfile = activeProfileRef.current;
+        const effectiveProfile: MediaServerProfile =
+          curProfile &&
+          curProfile.serverUrl.trim().replace(/\/+$/, '') ===
+            targetConfig.serverUrl.trim().replace(/\/+$/, '')
+            ? {
+                ...curProfile,
+                serverUrl: targetConfig.serverUrl,
+                apiKey: targetConfig.apiKey,
+                username: targetConfig.username ?? curProfile.username,
+                adminUserId: targetConfig.adminUserId ?? curProfile.adminUserId,
+                allowInvalidCerts: targetConfig.allowInvalidCerts ?? curProfile.allowInvalidCerts,
+              }
+            : {
+                id: curProfile?.id || 'temp',
+                name: curProfile?.name || 'Media Server',
+                serverType: curProfile?.serverType ?? 'emby',
+                serverUrl: targetConfig.serverUrl,
+                apiKey: targetConfig.apiKey,
+                username: targetConfig.username,
+                adminUserId: targetConfig.adminUserId,
+                allowInvalidCerts: targetConfig.allowInvalidCerts,
+                createdAt: curProfile?.createdAt ?? Date.now(),
+                updatedAt: Date.now(),
+              };
+
+        let info: EmbyServerInfo | null = null;
+        try {
+          info = await testMediaServerConnection(effectiveProfile);
+        } catch {
+          // fallback to legacy testEmbyConnection
+        }
+        if (!info) {
+          info = await testEmbyConnection(targetConfig);
+        }
+        if (seq !== connectSeqRef.current) return;
+        try {
+          await saveEmbyConfig(targetConfig);
+        } catch {
+          // ignore save error
+        }
+        if (seq !== connectSeqRef.current) return;
+        await syncProfilesFromBackend();
+        if (seq !== connectSeqRef.current) return;
+        setConfig(targetConfig);
+        setIsConfigModalOpen(false);
+
+        // Clear stale items, selection, and audio tracks on server switch
+        setItems([]);
+        setSelectedItemIds(new Set());
+        setAudioTrackMap({});
+        setExpandedSeasons(new Set());
+
+        let libs: EmbyLibrary[] = [];
+        try {
+          const msLibs = await getMediaServerLibraries(effectiveProfile.id);
+          if (Array.isArray(msLibs) && msLibs.length > 0) {
+            libs = msLibs;
+          }
+        } catch {
+          // fallback
+        }
+        if (libs.length === 0) {
+          try {
+            const embyLibs = await getEmbyLibraries();
+            if (Array.isArray(embyLibs)) {
+              libs = embyLibs;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        if (seq !== connectSeqRef.current) return;
+        setLibraries(libs);
+        if (libs.length > 0) {
+          setSelectedLibraryId((prev) => {
+            if (prev && libs.some((lib) => lib.id === prev)) {
+              return prev;
+            }
+            return libs[0].id;
+          });
+        } else {
+          setSelectedLibraryId(null);
+        }
+        setServerInfo(info);
+        useToolsStore.getState().setEmbyServerName(info.serverName);
+      } catch (err: unknown) {
+        if (seq !== connectSeqRef.current) return;
+        setConnectionError(extractErrorMessage(err) || String(err));
+        setServerInfo(null);
+        useToolsStore.getState().setEmbyServerName(null);
+        setLibraries([]);
+        setSelectedLibraryId(null);
+        setItems([]);
+        setSelectedItemIds(new Set());
+        setAudioTrackMap({});
+      } finally {
+        if (seq === connectSeqRef.current) {
+          setIsConnecting(false);
+        }
+      }
+    },
+    [syncProfilesFromBackend]
+  );
 
   // Login to Emby server with username and password
-  const handleLogin = useCallback(async (payload: EmbyLoginPayload) => {
-    if (!payload.serverUrl.trim() || !payload.username.trim()) {
-      setIsConfigModalOpen(true);
-      return;
-    }
-
-    const seq = ++connectSeqRef.current;
-    fetchSeqRef.current++;
-    clearTimeout(debounceTimerRef.current ?? undefined);
-    debounceTimerRef.current = null;
-    setIsConnecting(true);
-    setConnectionError(null);
-    try {
-      const info = await loginEmby(payload);
-      if (seq !== connectSeqRef.current) return;
-      const saved = await getEmbyConfig();
-      if (saved) {
-        setConfig(saved);
+  const handleLogin = useCallback(
+    async (payload: EmbyLoginPayload) => {
+      if (!payload.serverUrl.trim() || !payload.username.trim()) {
+        setIsConfigModalOpen(true);
+        return;
       }
-      setIsConfigModalOpen(false);
 
-      // Clear stale items, selection, and audio tracks on server switch
-      setItems([]);
-      setSelectedItemIds(new Set());
-      setAudioTrackMap({});
-      setExpandedSeasons(new Set());
-
-      let libs: EmbyLibrary[] = [];
+      const seq = ++connectSeqRef.current;
+      fetchSeqRef.current++;
+      clearTimeout(debounceTimerRef.current ?? undefined);
+      debounceTimerRef.current = null;
+      setIsConnecting(true);
+      setConnectionError(null);
       try {
-        const msLibs = await getMediaServerLibraries(activeProfileRef.current?.id);
-        if (Array.isArray(msLibs) && msLibs.length > 0) {
-          libs = msLibs;
+        const info = await loginEmby(payload);
+        if (seq !== connectSeqRef.current) return;
+        const saved = await getEmbyConfig();
+        if (saved) {
+          setConfig(saved);
         }
-      } catch {
-        // fallback
-      }
-      if (libs.length === 0) {
+        await syncProfilesFromBackend();
+        if (seq !== connectSeqRef.current) return;
+        setIsConfigModalOpen(false);
+
+        // Clear stale items, selection, and audio tracks on server switch
+        setItems([]);
+        setSelectedItemIds(new Set());
+        setAudioTrackMap({});
+        setExpandedSeasons(new Set());
+
+        let libs: EmbyLibrary[] = [];
         try {
-          const embyLibs = await getEmbyLibraries();
-          if (Array.isArray(embyLibs)) {
-            libs = embyLibs;
+          const msLibs = await getMediaServerLibraries(activeProfileRef.current?.id);
+          if (Array.isArray(msLibs) && msLibs.length > 0) {
+            libs = msLibs;
           }
         } catch {
-          // ignore
+          // fallback
+        }
+        if (libs.length === 0) {
+          try {
+            const embyLibs = await getEmbyLibraries();
+            if (Array.isArray(embyLibs)) {
+              libs = embyLibs;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        if (seq !== connectSeqRef.current) return;
+        setLibraries(libs);
+        if (libs.length > 0) {
+          setSelectedLibraryId((prev) => {
+            if (prev && libs.some((lib) => lib.id === prev)) {
+              return prev;
+            }
+            return libs[0].id;
+          });
+        } else {
+          setSelectedLibraryId(null);
+        }
+        setServerInfo(info);
+        useToolsStore.getState().setEmbyServerName(info.serverName);
+      } catch (err: unknown) {
+        if (seq !== connectSeqRef.current) return;
+        setConnectionError(extractErrorMessage(err) || String(err));
+        setServerInfo(null);
+        useToolsStore.getState().setEmbyServerName(null);
+        setLibraries([]);
+        setSelectedLibraryId(null);
+        setItems([]);
+        setSelectedItemIds(new Set());
+        setAudioTrackMap({});
+      } finally {
+        if (seq === connectSeqRef.current) {
+          setIsConnecting(false);
         }
       }
-      if (seq !== connectSeqRef.current) return;
-      setLibraries(libs);
-      if (libs.length > 0) {
-        setSelectedLibraryId((prev) => {
-          if (prev && libs.some((lib) => lib.id === prev)) {
-            return prev;
-          }
-          return libs[0].id;
-        });
-      } else {
-        setSelectedLibraryId(null);
-      }
-      setServerInfo(info);
-      useToolsStore.getState().setEmbyServerName(info.serverName);
-    } catch (err: unknown) {
-      if (seq !== connectSeqRef.current) return;
-      setConnectionError(extractErrorMessage(err) || String(err));
-      setServerInfo(null);
-      useToolsStore.getState().setEmbyServerName(null);
-      setLibraries([]);
-      setSelectedLibraryId(null);
-      setItems([]);
-      setSelectedItemIds(new Set());
-      setAudioTrackMap({});
-    } finally {
-      if (seq === connectSeqRef.current) {
-        setIsConnecting(false);
-      }
-    }
-  }, []);
+    },
+    [syncProfilesFromBackend]
+  );
 
   // Load initial saved config on mount
   useEffect(() => {
@@ -752,16 +777,10 @@ export function useEmbySync(): UseEmbySyncReturn {
       const audioStreamIndex = audioTrackMap[item.id] ?? bestAudio?.index ?? 0;
       const selectedAudio =
         (item.mediaStreams ?? []).find((s) => s.index === audioStreamIndex) ?? bestAudio;
-      let sourceLanguage: string | undefined;
-      if (overrides.asrLanguage) {
-        sourceLanguage = overrides.asrLanguage;
-      } else {
-        const rawLang = selectedAudio?.language?.trim().toLowerCase();
-        if (rawLang && rawLang !== 'und') {
-          const norm = normalizeLanguageCode(rawLang);
-          sourceLanguage = norm || undefined;
-        }
-      }
+      const rawLang = selectedAudio?.language?.trim().toLowerCase();
+      const audioTrackLanguage =
+        rawLang && rawLang !== 'und' ? normalizeLanguageCode(rawLang) || undefined : undefined;
+      const sourceLanguage = overrides.asrLanguage || audioTrackLanguage;
 
       let existingExternalSubtitleIndex: number | undefined;
       if (effectiveOverwrite) {
@@ -795,6 +814,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         subtitleMode: effectiveSubtitleMode,
         targetLanguage,
         sourceLanguage,
+        audioTrackLanguage,
         existingExternalSubtitleIndex,
         serverId: activeProfile?.id || serverInfo.id,
         serverUrl: activeProfile?.serverUrl || config.serverUrl,

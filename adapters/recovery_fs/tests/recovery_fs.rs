@@ -117,3 +117,28 @@ fn recovery_adapter_composes_snapshot_store_source_paths_and_clock() {
     assert_eq!(loaded.updated_at, Some(42));
     assert_eq!(loaded.items[0].updated_at, 42);
 }
+
+#[test]
+fn network_stream_urls_are_considered_resumable_sources() {
+    let dir = tempdir().unwrap();
+    let adapter = FsRecoveryAdapter::new(dir.path().to_path_buf());
+
+    let saved = adapter
+        .save_snapshot_at(
+            vec![
+                serde_json::from_value::<RecoveryItemInput>(json!({
+                    "id": "recovery-stream-1",
+                    "filename": "Live Stream",
+                    "filePath": "https://live.example.com/playlist.m3u8",
+                    "resolution": "pending",
+                    "segments": []
+                }))
+                .unwrap(),
+            ],
+            100,
+        )
+        .unwrap();
+
+    assert!(saved.items[0].has_source_file);
+    assert!(saved.items[0].can_resume);
+}

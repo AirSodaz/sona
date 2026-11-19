@@ -4,10 +4,63 @@ use crate::integrations::emby::{
     EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyLoginPayload,
     EmbyServerInfo, EmbyState, SubtitleUploadPayload,
 };
+use crate::integrations::media_server::{MediaServerProfile, MediaServerRegistry, MediaServerType};
 use crate::services::DesktopServices;
 
 fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> String {
     crate::commands::media_server::sanitize_media_server_error(err, api_key)
+}
+
+fn sync_legacy_emby_to_registry(
+    registry: &MediaServerRegistry,
+    config: &EmbyConnectionConfig,
+    server_name: Option<&str>,
+) {
+    let active_emby = registry
+        .get_active_id()
+        .and_then(|id| registry.get_profile(&id))
+        .filter(|p| p.server_type == MediaServerType::Emby);
+
+    let (profile_id, profile_name, created_at) = match active_emby {
+        Some(existing) => (existing.id, existing.name, existing.created_at),
+        None => {
+            let now = chrono::Utc::now().timestamp_millis();
+            let fallback_created = registry
+                .get_profile("default-emby")
+                .map(|p| p.created_at)
+                .unwrap_or(now);
+            let name = server_name
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("Emby Server")
+                .to_string();
+            ("default-emby".to_string(), name, fallback_created)
+        }
+    };
+
+    let profile = MediaServerProfile {
+        id: profile_id.clone(),
+        name: profile_name,
+        server_type: MediaServerType::Emby,
+        server_url: config.server_url.clone(),
+        api_key: config.api_key.clone(),
+        username: config.username.clone(),
+        admin_user_id: config.admin_user_id.clone(),
+        allow_invalid_certs: config.allow_invalid_certs,
+        created_at,
+        updated_at: chrono::Utc::now().timestamp_millis(),
+    };
+
+    if let Err(e) = registry.register(profile) {
+        log::warn!(
+            "[Emby] Failed to sync legacy Emby profile to MediaServerRegistry: {}",
+            sanitize_emby_error(e, Some(&config.api_key))
+        );
+        return;
+    }
+    if registry.get_active_id().is_none() {
+        let _ = registry.set_active(&profile_id);
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -32,6 +85,7 @@ pub async fn emby_test_connection(
 pub async fn emby_login(
     services: State<'_, DesktopServices>,
     emby_state: State<'_, EmbyState>,
+    registry: State<'_, MediaServerRegistry>,
     payload: EmbyLoginPayload,
 ) -> Result<EmbyServerInfo, String> {
     let clean_url = crate::integrations::emby::normalize_server_url(&payload.server_url);
@@ -115,6 +169,7 @@ pub async fn emby_login(
         .map_err(|e| sanitize_emby_error(e, Some(&login_res.access_token)))?;
 
     emby_state.set_client(Some(client)).await;
+    sync_legacy_emby_to_registry(&registry, &config, Some(&info.server_name));
     let _ = services.emitter.emit(
         "app-setting-updated",
         serde_json::json!({
@@ -130,6 +185,7 @@ pub async fn emby_login(
 pub async fn emby_save_config(
     services: State<'_, DesktopServices>,
     emby_state: State<'_, EmbyState>,
+    registry: State<'_, MediaServerRegistry>,
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
     let mut config = config;
@@ -201,6 +257,7 @@ pub async fn emby_save_config(
         .save(&current_config)
         .map_err(|e| sanitize_emby_error(e, Some(&config.api_key)))?;
     emby_state.set_client(Some(client)).await;
+    sync_legacy_emby_to_registry(&registry, &config, None);
     let _ = services.emitter.emit(
         "app-setting-updated",
         serde_json::json!({
@@ -590,5 +647,32 @@ mod tests {
         assert_eq!(loaded_settings["asrLanguage"], "ja");
         assert_eq!(loaded_settings["defaultSubtitleMode"], "pure_translation");
         assert_eq!(loaded_settings["overwriteExistingExternal"], false);
+    }
+
+    #[test]
+    fn test_sync_legacy_emby_to_registry_creates_and_updates_default_emby() {
+        let registry = MediaServerRegistry::new();
+        let config = EmbyConnectionConfig {
+            server_url: "http://localhost:8096".to_string(),
+            api_key: "key-1".to_string(),
+            username: Some("admin".to_string()),
+            allow_invalid_certs: false,
+            admin_user_id: Some("uid-1".to_string()),
+        };
+
+        sync_legacy_emby_to_registry(&registry, &config, Some("My Emby"));
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+        let profile = registry.get_profile("default-emby").unwrap();
+        assert_eq!(profile.name, "My Emby");
+        assert_eq!(profile.api_key, "key-1");
+
+        let updated = EmbyConnectionConfig {
+            api_key: "key-2".to_string(),
+            ..config
+        };
+        sync_legacy_emby_to_registry(&registry, &updated, None);
+        let profile_after = registry.get_profile("default-emby").unwrap();
+        assert_eq!(profile_after.api_key, "key-2");
+        assert_eq!(profile_after.name, "My Emby");
     }
 }

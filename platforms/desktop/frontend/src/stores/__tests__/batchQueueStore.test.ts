@@ -978,15 +978,18 @@ describe('batchQueueStore', () => {
             subtitleMode: 'pure_translation',
             targetLanguage: 'zh-CN',
             sourceLanguage: 'ja',
+            audioTrackLanguage: 'ja',
           },
         ],
-        resolvedConfigSnapshot: { language: 'auto' } as unknown as AppConfig,
+        resolvedConfigSnapshot: { language: 'auto', batchLanguage: 'auto' } as unknown as AppConfig,
       });
 
       const items = useBatchQueueStore.getState().queueItems;
       expect(items).toHaveLength(1);
       expect(items[0].resolvedConfigSnapshot?.language).toBe('ja');
+      expect(items[0].resolvedConfigSnapshot?.batchLanguage).toBe('ja');
       expect(items[0].embyContext?.sourceLanguage).toBe('ja');
+      expect(items[0].embyContext?.audioTrackLanguage).toBe('ja');
     });
 
     it('addEmbyItems sanitizes serverUrl in embyContext and deduplicates existing items', () => {
