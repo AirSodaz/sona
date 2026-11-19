@@ -64,6 +64,45 @@ impl Drop for AudioStreamReader {
     }
 }
 
+pub(crate) fn configure_ffmpeg_input_args(command: &mut tokio::process::Command, url: &str) {
+    let trimmed_url = url.trim();
+    let is_http = trimmed_url
+        .get(..7)
+        .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
+        || trimmed_url
+            .get(..8)
+            .is_some_and(|s| s.eq_ignore_ascii_case("https://"));
+    if is_http {
+        command
+            .arg("-reconnect")
+            .arg("1")
+            .arg("-reconnect_streamed")
+            .arg("1")
+            .arg("-reconnect_on_network_error")
+            .arg("1")
+            .arg("-reconnect_delay_max")
+            .arg("5");
+    }
+    let is_rtsp = trimmed_url
+        .get(..7)
+        .is_some_and(|s| s.eq_ignore_ascii_case("rtsp://"));
+    if is_rtsp {
+        command
+            .arg("-rtsp_transport")
+            .arg("tcp")
+            .arg("-stimeout")
+            .arg("15000000");
+    }
+    if is_http
+        || trimmed_url
+            .get(..7)
+            .is_some_and(|s| s.eq_ignore_ascii_case("rtmp://"))
+        || is_rtsp
+    {
+        command.arg("-rw_timeout").arg("15000000");
+    }
+}
+
 pub fn is_video_or_playlist_url(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     let path = lower
@@ -196,33 +235,7 @@ impl AudioStreamReader {
             command.arg("-nostdin");
             command.arg("-loglevel").arg("error");
             let trimmed_url = config.url.trim();
-            let is_http = trimmed_url
-                .get(..7)
-                .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
-                || trimmed_url
-                    .get(..8)
-                    .is_some_and(|s| s.eq_ignore_ascii_case("https://"));
-            if is_http {
-                command
-                    .arg("-reconnect")
-                    .arg("1")
-                    .arg("-reconnect_streamed")
-                    .arg("1")
-                    .arg("-reconnect_on_network_error")
-                    .arg("1")
-                    .arg("-reconnect_delay_max")
-                    .arg("5");
-            }
-            if is_http
-                || trimmed_url
-                    .get(..7)
-                    .is_some_and(|s| s.eq_ignore_ascii_case("rtmp://"))
-                || trimmed_url
-                    .get(..7)
-                    .is_some_and(|s| s.eq_ignore_ascii_case("rtsp://"))
-            {
-                command.arg("-rw_timeout").arg("15000000");
-            }
+            configure_ffmpeg_input_args(&mut command, trimmed_url);
             command
                 .arg("-i")
                 .arg(trimmed_url)
@@ -605,5 +618,50 @@ mod tests {
         let mut wav_reader = hound::WavReader::open(&save_path).unwrap();
         let read_samples: Vec<i16> = wav_reader.samples::<i16>().map(|s| s.unwrap()).collect();
         assert_eq!(read_samples.len(), samples.len());
+    }
+
+    #[test]
+    fn test_ffmpeg_rtsp_input_arguments() {
+        let mut command = tokio::process::Command::new("ffmpeg");
+        configure_ffmpeg_input_args(&mut command, "rtsp://192.168.1.50:554/live");
+        let args: Vec<String> = command
+            .as_std()
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "-rtsp_transport" && w[1] == "tcp")
+        );
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "-stimeout" && w[1] == "15000000")
+        );
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "-rw_timeout" && w[1] == "15000000")
+        );
+        assert!(!args.iter().any(|a| a == "-reconnect"));
+    }
+
+    #[test]
+    fn test_ffmpeg_http_input_arguments() {
+        let mut command = tokio::process::Command::new("ffmpeg");
+        configure_ffmpeg_input_args(&mut command, "https://example.com/live.m3u8");
+        let args: Vec<String> = command
+            .as_std()
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        assert!(args.windows(2).any(|w| w[0] == "-reconnect" && w[1] == "1"));
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "-reconnect_delay_max" && w[1] == "5")
+        );
+        assert!(
+            args.windows(2)
+                .any(|w| w[0] == "-rw_timeout" && w[1] == "15000000")
+        );
+        assert!(!args.iter().any(|a| a == "-rtsp_transport"));
     }
 }

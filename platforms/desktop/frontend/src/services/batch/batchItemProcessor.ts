@@ -63,6 +63,8 @@ export interface BatchItemProcessorPorts {
   useHistoryStore: typeof useHistoryStore;
   useProjectStore?: typeof useProjectStore;
   pipelineExecutionEngine?: typeof pipelineExecutionEngine;
+  downloadMediaServerAudio?: typeof downloadMediaServerAudio;
+  syncMediaServerSubtitles?: typeof syncMediaServerSubtitles;
 }
 
 function resolveEffectiveReplacementSets(
@@ -163,7 +165,8 @@ export class BatchItemProcessor {
           pipeline.targetLanguage ||
           config.translationLanguage ||
           'zh-CN';
-        await syncMediaServerSubtitles(
+        const syncFn = this.ports.syncMediaServerSubtitles ?? syncMediaServerSubtitles;
+        await syncFn(
           item.segments,
           { ...mediaContext, targetLanguage },
           { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
@@ -370,21 +373,34 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      if (mediaContext && !item.streamUrl && !item.filePath) {
+      const downloadFn = this.ports.downloadMediaServerAudio ?? downloadMediaServerAudio;
+      if (mediaContext && !downloadedEmbyPath && !item.filePath?.trim()) {
         callbacks.updateStatus('processing', 0);
         logger.info('[BatchQueue] audio_download_start', diagnosticContext);
-        const downloadedPath = await downloadMediaServerAudio(
-          mediaContext.itemId,
-          mediaContext.audioStreamIndex,
-          mediaContext.serverId
-        );
-        downloadedEmbyPath = downloadedPath;
-        logger.info('[BatchQueue] audio_download_complete', {
-          ...diagnosticContext,
-          downloadFile: downloadedPath.split(/[/\\]/).pop(),
-        });
-        item.filePath = downloadedPath;
-        callbacks.updateFilePath?.(downloadedPath);
+        try {
+          const downloadedPath = await downloadFn(
+            mediaContext.itemId,
+            mediaContext.audioStreamIndex,
+            mediaContext.serverId
+          );
+          downloadedEmbyPath = downloadedPath;
+          logger.info('[BatchQueue] audio_download_complete', {
+            ...diagnosticContext,
+            downloadFile: downloadedPath.split(/[/\\]/).pop(),
+          });
+          item.filePath = downloadedPath;
+          callbacks.updateFilePath?.(downloadedPath);
+        } catch (downloadErr) {
+          if (item.streamUrl) {
+            logger.warn('[BatchQueue] audio_download_failed_fallback_to_stream', {
+              ...diagnosticContext,
+              streamUrl: item.streamUrl,
+              error: downloadErr,
+            });
+          } else {
+            throw downloadErr;
+          }
+        }
       }
 
       const isStream =
@@ -546,7 +562,8 @@ export class BatchItemProcessor {
             pipeline.targetLanguage ||
             config.translationLanguage ||
             'zh-CN';
-          await syncMediaServerSubtitles(
+          const syncFn = this.ports.syncMediaServerSubtitles ?? syncMediaServerSubtitles;
+          await syncFn(
             currentSegments,
             { ...mediaContext, targetLanguage },
             { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
@@ -685,6 +702,8 @@ export const batchItemProcessor = createBatchItemProcessor({
   useHistoryStore,
   useProjectStore,
   pipelineExecutionEngine,
+  downloadMediaServerAudio,
+  syncMediaServerSubtitles,
 });
 
 export const { processBatchQueueItem } = batchItemProcessor;

@@ -309,7 +309,41 @@ impl StreamTranscriptionJob {
             None
         };
 
-        let mut results = Vec::new();
+        struct SpeechSliceTask {
+            samples: Vec<f32>,
+            start_time: f64,
+            duration: f64,
+        }
+
+        let (slice_tx, mut slice_rx) = tokio::sync::mpsc::channel::<SpeechSliceTask>(128);
+        let worker_recognizer = Arc::clone(&recognizer);
+        let worker_punctuation = effective_punctuation.clone();
+        let worker_observer = Arc::clone(&observer);
+        let output_segment_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let worker_count = Arc::clone(&output_segment_count);
+        let worker_handle = tokio::spawn(async move {
+            let mut segments = Vec::new();
+            while let Some(task) = slice_rx.recv().await {
+                if worker_observer.is_cancelled() {
+                    break;
+                }
+                if let Some(segment) = process_speech_slice(
+                    task.samples,
+                    task.start_time,
+                    task.duration,
+                    Arc::clone(&worker_recognizer),
+                    worker_punctuation.clone(),
+                    Arc::clone(&worker_observer),
+                )
+                .await
+                {
+                    worker_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    segments.push(segment);
+                }
+            }
+            segments
+        });
+
         log::info!(
             "[BatchStream] segmentation instance_id={} effective={} fixed_chunk_s=15",
             diagnostic_id,
@@ -351,7 +385,7 @@ impl StreamTranscriptionJob {
                     diagnostic_id,
                     total_samples_streamed as f64 / 16000.0,
                     slice_count,
-                    results.len(),
+                    output_segment_count.load(std::sync::atomic::Ordering::Relaxed),
                     started_at.elapsed().as_millis(),
                 );
                 next_audio_report = total_samples_streamed + 16_000 * 60;
@@ -372,17 +406,16 @@ impl StreamTranscriptionJob {
                         let start_time = start_sample as f64 / 16000.0;
                         let duration = seg_samples.len() as f64 / 16000.0;
                         slice_count += 1;
-                        if let Some(segment) = process_speech_slice(
-                            seg_samples,
-                            start_time,
-                            duration,
-                            Arc::clone(&recognizer),
-                            effective_punctuation.clone(),
-                            Arc::clone(&observer),
-                        )
-                        .await
+                        if slice_tx
+                            .send(SpeechSliceTask {
+                                samples: seg_samples,
+                                start_time,
+                                duration,
+                            })
+                            .await
+                            .is_err()
                         {
-                            results.push(segment);
+                            break;
                         }
                     }
                     detector.pop();
@@ -394,17 +427,16 @@ impl StreamTranscriptionJob {
                     let chunk_start =
                         (total_samples_streamed - chunk_buffer.len()) as f64 / 16000.0;
                     slice_count += 1;
-                    if let Some(segment) = process_speech_slice(
-                        std::mem::take(&mut chunk_buffer),
-                        chunk_start,
-                        chunk_duration,
-                        Arc::clone(&recognizer),
-                        effective_punctuation.clone(),
-                        Arc::clone(&observer),
-                    )
-                    .await
+                    if slice_tx
+                        .send(SpeechSliceTask {
+                            samples: std::mem::take(&mut chunk_buffer),
+                            start_time: chunk_start,
+                            duration: chunk_duration,
+                        })
+                        .await
+                        .is_err()
                     {
-                        results.push(segment);
+                        break;
                     }
                 }
             }
@@ -415,7 +447,7 @@ impl StreamTranscriptionJob {
             diagnostic_id,
             total_samples_streamed as f64 / 16000.0,
             slice_count,
-            results.len(),
+            output_segment_count.load(std::sync::atomic::Ordering::Relaxed),
             observer.is_cancelled(),
             stream_error.is_some(),
             started_at.elapsed().as_millis(),
@@ -425,16 +457,19 @@ impl StreamTranscriptionJob {
         }
 
         if observer.is_cancelled() {
+            worker_handle.abort();
             reader.finish();
             return Err(AsrPortError::runtime("Task cancelled."));
         }
 
         if let Some(err) = stream_error {
+            worker_handle.abort();
             reader.finish();
             return Err(err);
         }
 
         if total_samples_streamed == 0 {
+            worker_handle.abort();
             let err_msg = reader.take_stderr_output().await;
             reader.finish();
             let msg = err_msg
@@ -451,6 +486,7 @@ impl StreamTranscriptionJob {
             detector.flush();
             while !detector.is_empty() {
                 if observer.is_cancelled() {
+                    worker_handle.abort();
                     reader.finish();
                     return Err(AsrPortError::runtime("Task cancelled."));
                 }
@@ -461,23 +497,23 @@ impl StreamTranscriptionJob {
                     let duration = seg_samples.len() as f64 / 16000.0;
                     slice_count += 1;
 
-                    if let Some(segment) = process_speech_slice(
-                        seg_samples,
-                        start_time,
-                        duration,
-                        Arc::clone(&recognizer),
-                        effective_punctuation.clone(),
-                        Arc::clone(&observer),
-                    )
-                    .await
+                    if slice_tx
+                        .send(SpeechSliceTask {
+                            samples: seg_samples,
+                            start_time,
+                            duration,
+                        })
+                        .await
+                        .is_err()
                     {
-                        results.push(segment);
+                        break;
                     }
                 }
                 detector.pop();
             }
         } else if !chunk_buffer.is_empty() {
             if observer.is_cancelled() {
+                worker_handle.abort();
                 reader.finish();
                 return Err(AsrPortError::runtime("Task cancelled."));
             }
@@ -485,19 +521,22 @@ impl StreamTranscriptionJob {
             let chunk_start =
                 total_samples_streamed.saturating_sub(chunk_buffer.len()) as f64 / 16000.0;
             slice_count += 1;
-            if let Some(segment) = process_speech_slice(
-                std::mem::take(&mut chunk_buffer),
-                chunk_start,
-                chunk_duration,
-                Arc::clone(&recognizer),
-                effective_punctuation.clone(),
-                Arc::clone(&observer),
-            )
-            .await
-            {
-                results.push(segment);
-            }
+            let _ = slice_tx
+                .send(SpeechSliceTask {
+                    samples: std::mem::take(&mut chunk_buffer),
+                    start_time: chunk_start,
+                    duration: chunk_duration,
+                })
+                .await;
         }
+
+        drop(slice_tx);
+
+        let results = worker_handle.await.map_err(|e| {
+            AsrPortError::runtime(format!(
+                "Transcription worker encountered an unexpected error: {e}"
+            ))
+        })?;
 
         log::info!(
             "[BatchStream] complete instance_id={} received_s={:.3} slices={} output_segments={} skipped_slices={} last_end_s={:.3} elapsed_ms={}",

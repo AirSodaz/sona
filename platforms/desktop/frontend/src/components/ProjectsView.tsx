@@ -7,8 +7,8 @@ import {
   hasPendingAutoSave,
   resetAutoSaveBaselineIfTracked,
 } from '../hooks/useAutoSaveTranscript';
-import { syncEmbySubtitles } from '../services/emby/embyService';
 import { historyService } from '../services/historyService';
+import { syncMediaServerSubtitles } from '../services/mediaServer/mediaServerService';
 import { documentMutationCoordinator } from '../services/task/documentMutationCoordinator';
 import {
   getProjectsWithActiveTasks,
@@ -942,7 +942,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         });
         return;
       }
-      await syncEmbySubtitles(segments, context);
+      await syncMediaServerSubtitles(segments, context);
       await useDialogStore.getState().alert(
         t('emby.resync_success', {
           defaultValue: 'Successfully synced subtitles to Emby.',

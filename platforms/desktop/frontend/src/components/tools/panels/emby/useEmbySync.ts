@@ -13,8 +13,11 @@ import {
   loadEmbyToolOverridesAsync,
 } from '../../../../services/emby/embySettingsService';
 import {
+  getMediaServerItems,
+  getMediaServerLibraries,
   listMediaServerProfiles,
   setActiveMediaServerProfile,
+  testMediaServerConnection,
 } from '../../../../services/mediaServer/mediaServerService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
 import { useProjectStore } from '../../../../stores/projectStore';
@@ -23,6 +26,7 @@ import { useTranscriptStore } from '../../../../stores/transcriptStore';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
 import type {
   EmbyConnectionConfig,
+  EmbyItemListResult,
   EmbyLibrary,
   EmbyLoginPayload,
   EmbyMediaItem,
@@ -185,21 +189,26 @@ export function useEmbySync(): UseEmbySyncReturn {
   const queueItems = useBatchQueueStore((state) => state.queueItems);
   const queuedItemIds = useMemo(() => {
     const set = new Set<string>();
+    const currentServerId = activeProfile?.id || serverInfo?.id;
     for (const item of queueItems) {
-      const emby = item.embyContext;
+      const ctx = item.mediaServerContext ?? item.embyContext;
       if (
-        emby?.itemId &&
-        (!serverInfo?.id || emby.serverId === serverInfo.id) &&
+        ctx?.itemId &&
+        (!currentServerId ||
+          ctx.serverId === currentServerId ||
+          (serverInfo?.id && ctx.serverId === serverInfo.id)) &&
         (item.status === 'pending' || item.status === 'processing')
       ) {
-        set.add(emby.itemId);
+        set.add(ctx.itemId);
       }
     }
     return set;
-  }, [queueItems, serverInfo?.id]);
+  }, [queueItems, activeProfile?.id, serverInfo?.id]);
 
   const configRef = useRef(config);
   configRef.current = config;
+  const activeProfileRef = useRef(activeProfile);
+  activeProfileRef.current = activeProfile;
   const noticeTimeoutRef = useRef<number | null>(null);
   const hasLoadedRef = useRef(false);
   const fetchSeqRef = useRef(0);
@@ -241,9 +250,47 @@ export function useEmbySync(): UseEmbySyncReturn {
     setIsConnecting(true);
     setConnectionError(null);
     try {
-      const info = await testEmbyConnection(targetConfig);
+      const curProfile = activeProfileRef.current;
+      const effectiveProfile: MediaServerProfile =
+        curProfile &&
+        curProfile.serverUrl.trim().replace(/\/+$/, '') ===
+          targetConfig.serverUrl.trim().replace(/\/+$/, '')
+          ? {
+              ...curProfile,
+              serverUrl: targetConfig.serverUrl,
+              apiKey: targetConfig.apiKey,
+              username: targetConfig.username ?? curProfile.username,
+              adminUserId: targetConfig.adminUserId ?? curProfile.adminUserId,
+              allowInvalidCerts: targetConfig.allowInvalidCerts ?? curProfile.allowInvalidCerts,
+            }
+          : {
+              id: curProfile?.id || 'temp',
+              name: curProfile?.name || 'Media Server',
+              serverType: curProfile?.serverType ?? 'emby',
+              serverUrl: targetConfig.serverUrl,
+              apiKey: targetConfig.apiKey,
+              username: targetConfig.username,
+              adminUserId: targetConfig.adminUserId,
+              allowInvalidCerts: targetConfig.allowInvalidCerts,
+              createdAt: curProfile?.createdAt ?? Date.now(),
+              updatedAt: Date.now(),
+            };
+
+      let info: EmbyServerInfo | null = null;
+      try {
+        info = await testMediaServerConnection(effectiveProfile);
+      } catch {
+        // fallback to legacy testEmbyConnection
+      }
+      if (!info) {
+        info = await testEmbyConnection(targetConfig);
+      }
       if (seq !== connectSeqRef.current) return;
-      await saveEmbyConfig(targetConfig);
+      try {
+        await saveEmbyConfig(targetConfig);
+      } catch {
+        // ignore save error
+      }
       if (seq !== connectSeqRef.current) return;
       setConfig(targetConfig);
       setIsConfigModalOpen(false);
@@ -254,7 +301,25 @@ export function useEmbySync(): UseEmbySyncReturn {
       setAudioTrackMap({});
       setExpandedSeasons(new Set());
 
-      const libs = await getEmbyLibraries();
+      let libs: EmbyLibrary[] = [];
+      try {
+        const msLibs = await getMediaServerLibraries(effectiveProfile.id);
+        if (Array.isArray(msLibs) && msLibs.length > 0) {
+          libs = msLibs;
+        }
+      } catch {
+        // fallback
+      }
+      if (libs.length === 0) {
+        try {
+          const embyLibs = await getEmbyLibraries();
+          if (Array.isArray(embyLibs)) {
+            libs = embyLibs;
+          }
+        } catch {
+          // ignore
+        }
+      }
       if (seq !== connectSeqRef.current) return;
       setLibraries(libs);
       if (libs.length > 0) {
@@ -314,7 +379,25 @@ export function useEmbySync(): UseEmbySyncReturn {
       setAudioTrackMap({});
       setExpandedSeasons(new Set());
 
-      const libs = await getEmbyLibraries();
+      let libs: EmbyLibrary[] = [];
+      try {
+        const msLibs = await getMediaServerLibraries(activeProfileRef.current?.id);
+        if (Array.isArray(msLibs) && msLibs.length > 0) {
+          libs = msLibs;
+        }
+      } catch {
+        // fallback
+      }
+      if (libs.length === 0) {
+        try {
+          const embyLibs = await getEmbyLibraries();
+          if (Array.isArray(embyLibs)) {
+            libs = embyLibs;
+          }
+        } catch {
+          // ignore
+        }
+      }
       if (seq !== connectSeqRef.current) return;
       setLibraries(libs);
       if (libs.length > 0) {
@@ -415,12 +498,30 @@ export function useEmbySync(): UseEmbySyncReturn {
       const seq = ++fetchSeqRef.current;
       setIsLoadingItems(true);
       try {
-        const res = await getEmbyItems({
-          parentId: selectedLibraryId || undefined,
-          searchTerm: searchTerm.trim() || undefined,
-          startIndex: 0,
-          limit: 300,
-        });
+        const profileId = activeProfileRef.current?.id;
+        let res: EmbyItemListResult | null = null;
+        try {
+          const msRes = await getMediaServerItems({
+            serverId: profileId,
+            parentId: selectedLibraryId || undefined,
+            searchTerm: searchTerm.trim() || undefined,
+            startIndex: 0,
+            limit: 300,
+          });
+          if (msRes && Array.isArray(msRes.items)) {
+            res = msRes;
+          }
+        } catch {
+          // fallback
+        }
+        if (!res) {
+          res = await getEmbyItems({
+            parentId: selectedLibraryId || undefined,
+            searchTerm: searchTerm.trim() || undefined,
+            startIndex: 0,
+            limit: 300,
+          });
+        }
         if (cancelled || seq !== fetchSeqRef.current) return;
         setItems(res.items);
 
@@ -474,12 +575,30 @@ export function useEmbySync(): UseEmbySyncReturn {
     setIsLoadingItems(true);
     setConnectionError(null);
     try {
-      const res = await getEmbyItems({
-        parentId: selectedLibraryId || undefined,
-        searchTerm: searchTerm.trim() || undefined,
-        startIndex: 0,
-        limit: 300,
-      });
+      const profileId = activeProfileRef.current?.id;
+      let res: EmbyItemListResult | null = null;
+      try {
+        const msRes = await getMediaServerItems({
+          serverId: profileId,
+          parentId: selectedLibraryId || undefined,
+          searchTerm: searchTerm.trim() || undefined,
+          startIndex: 0,
+          limit: 300,
+        });
+        if (msRes && Array.isArray(msRes.items)) {
+          res = msRes;
+        }
+      } catch {
+        // fallback
+      }
+      if (!res) {
+        res = await getEmbyItems({
+          parentId: selectedLibraryId || undefined,
+          searchTerm: searchTerm.trim() || undefined,
+          startIndex: 0,
+          limit: 300,
+        });
+      }
       if (seq !== fetchSeqRef.current) return;
       setItems(res.items);
       setConnectionError(null);
@@ -737,6 +856,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         }
         if (target) {
           setActiveProfile(target);
+          activeProfileRef.current = target;
           const embyCfg: EmbyConnectionConfig = {
             serverUrl: target.serverUrl,
             apiKey: target.apiKey,

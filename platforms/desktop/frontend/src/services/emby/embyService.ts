@@ -9,91 +9,23 @@ import type {
   SubtitleUploadPayload,
 } from '../../types/emby';
 import type { TranscriptSegment } from '../../types/transcript';
+import {
+  cleanSubtitleText,
+  formatSrtTimestamp,
+  generateBilingualSrt,
+  generateOriginalSrt,
+  generatePureTranslationSrt,
+} from '../mediaServer/mediaServerService';
 import { TauriCommand } from '../tauri/commands';
 import { invokeTauri } from '../tauri/invoke';
-export function formatSrtTimestamp(seconds: number): string {
-  const clamped = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-  const totalMillis = Math.round(clamped * 1000);
-  const hours = Math.floor(totalMillis / 3600000);
-  const minutes = Math.floor((totalMillis % 3600000) / 60000);
-  const secs = Math.floor((totalMillis % 60000) / 1000);
-  const millis = totalMillis % 1000;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
-}
 
-export function cleanSubtitleText(text: string): string {
-  if (!text || typeof text !== 'string') return '';
-  let converted = text
-    .replace(/\r\n|\r/g, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div)>/gi, '\n');
-  let previous: string;
-  do {
-    previous = converted;
-    converted = converted.replace(/<[^<>]*>/g, '');
-  } while (converted !== previous);
-  converted = converted
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&amp;/g, '&');
-  return converted
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join('\n');
-}
-
-/**
- * Format segments into SRT format.
- */
-function buildSrt(
-  segments: TranscriptSegment[],
-  textExtractor: (seg: TranscriptSegment) => string
-): string {
-  const blocks: string[] = [];
-  let index = 1;
-
-  for (const seg of segments) {
-    if (seg.isFinal === false) continue;
-    const text = textExtractor(seg).trim();
-    if (!text) continue;
-    const startSec = Math.max(0, Number.isFinite(seg.start) ? seg.start : 0);
-    const endSec = Math.max(startSec + 0.05, Number.isFinite(seg.end) ? seg.end : startSec + 0.05);
-    const start = formatSrtTimestamp(startSec);
-    const end = formatSrtTimestamp(endSec);
-    blocks.push(`${index}\n${start} --> ${end}\n${text}`);
-    index++;
-  }
-
-  return blocks.length > 0 ? `${blocks.join('\n\n')}\n` : '';
-}
-
-export function generatePureTranslationSrt(segments: TranscriptSegment[]): string {
-  return buildSrt(segments, (seg) => {
-    const trans = cleanSubtitleText(seg.translation || '');
-    return trans || cleanSubtitleText(seg.text || '');
-  });
-}
-
-export function generateOriginalSrt(segments: TranscriptSegment[]): string {
-  return buildSrt(segments, (seg) => cleanSubtitleText(seg.text || ''));
-}
-
-export function generateBilingualSrt(segments: TranscriptSegment[]): string {
-  return buildSrt(segments, (seg) => {
-    const trans = cleanSubtitleText(seg.translation || '');
-    const orig = cleanSubtitleText(seg.text || '');
-    if (trans && orig && trans.toLowerCase() !== orig.toLowerCase()) {
-      return `${trans}\n${orig}`;
-    }
-    return trans || orig;
-  });
-}
+export {
+  cleanSubtitleText,
+  formatSrtTimestamp,
+  generateBilingualSrt,
+  generateOriginalSrt,
+  generatePureTranslationSrt,
+};
 
 export async function loginEmby(payload: EmbyLoginPayload): Promise<EmbyServerInfo> {
   return invokeTauri(TauriCommand.emby.login, { payload });
