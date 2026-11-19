@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useBoundSessionId } from '../../contexts/TranscriptSessionContext';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
-import { syncMediaServerSubtitles } from '../../services/mediaServer/mediaServerService';
+import { resyncMediaServerSubtitles } from '../../services/mediaServer/mediaServerService';
 import {
   selectIsDocumentEditorLocked,
   useDocumentMutationLockStore,
@@ -151,7 +151,7 @@ export function TranscriptWorkbench({
     setIsSyncingEmby(true);
     setEmbySyncSuccess(false);
     try {
-      await syncMediaServerSubtitles(segments, embyContext);
+      await resyncMediaServerSubtitles(segments, embyContext);
       if (
         !isMountedRef.current ||
         useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId

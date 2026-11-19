@@ -420,7 +420,7 @@ async fn upload_subtitle_with_duplicate_recovery(
                 .map_err(|e| sanitize_media_server_error(e, Some(api_key)))?;
 
             let is_target_zh = is_chinese_language(Some(&payload.language), None);
-            let matching_external: Vec<_> = streams
+            let mut matching_external: Vec<_> = streams
                 .iter()
                 .filter(|s| {
                     if !s.stream_type.eq_ignore_ascii_case("Subtitle")
@@ -444,6 +444,7 @@ async fn upload_subtitle_with_duplicate_recovery(
                 ));
             }
 
+            matching_external.sort_by(|a, b| b.index.cmp(&a.index));
             for stream in matching_external {
                 log::info!(
                     "[MediaServer] Auto-recovering: deleting existing external subtitle track index {}",

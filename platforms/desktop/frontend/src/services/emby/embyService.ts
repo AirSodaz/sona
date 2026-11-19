@@ -10,6 +10,7 @@ import type {
 } from '../../types/emby';
 import type { TranscriptSegment } from '../../types/transcript';
 import {
+  buildMediaServerSubtitleUploadPlans,
   cleanSubtitleText,
   formatSrtTimestamp,
   generateBilingualSrt,
@@ -90,78 +91,8 @@ export async function syncEmbySubtitles(
   embyContext: EmbyTaskContext,
   options?: { deleteExistingIndex?: number }
 ): Promise<void> {
-  const targetLang = embyContext.targetLanguage || 'zh-CN';
-  const deleteIndex = options?.deleteExistingIndex ?? embyContext.existingExternalSubtitleIndex;
-
-  switch (embyContext.subtitleMode) {
-    case 'pure_translation': {
-      const content = generatePureTranslationSrt(segments);
-      if (!content.trim()) return;
-      await uploadEmbySubtitle(
-        {
-          itemId: embyContext.itemId,
-          language: targetLang,
-          format: 'srt',
-          isForced: false,
-          content,
-        },
-        deleteIndex
-      );
-      break;
-    }
-    case 'bilingual': {
-      const content = generateBilingualSrt(segments);
-      if (!content.trim()) return;
-      await uploadEmbySubtitle(
-        {
-          itemId: embyContext.itemId,
-          language: targetLang,
-          format: 'srt',
-          isForced: false,
-          content,
-        },
-        deleteIndex
-      );
-      break;
-    }
-    case 'separate_tracks': {
-      const hasTranslation = segments.some((seg) =>
-        Boolean(cleanSubtitleText(seg.translation || ''))
-      );
-      const transContent = generatePureTranslationSrt(segments);
-      if (hasTranslation && transContent.trim()) {
-        await uploadEmbySubtitle(
-          {
-            itemId: embyContext.itemId,
-            language: targetLang,
-            format: 'srt',
-            isForced: false,
-            content: transContent,
-          },
-          deleteIndex
-        );
-      }
-      const origContent = generateOriginalSrt(segments);
-      if (origContent.trim()) {
-        const originalLanguage =
-          embyContext.audioTrackLanguage ||
-          (embyContext.sourceLanguage && embyContext.sourceLanguage !== 'auto'
-            ? embyContext.sourceLanguage
-            : 'und');
-        await uploadEmbySubtitle(
-          {
-            itemId: embyContext.itemId,
-            language: originalLanguage,
-            format: 'srt',
-            isForced: false,
-            content: origContent,
-          },
-          undefined
-        );
-      }
-      break;
-    }
-    default:
-      throw new Error(`Unsupported Emby subtitle mode: ${String(embyContext.subtitleMode)}`);
+  const plans = buildMediaServerSubtitleUploadPlans(segments, embyContext, options);
+  for (const plan of plans) {
+    await uploadEmbySubtitle(plan.payload, plan.deleteExistingIndex);
   }
 }

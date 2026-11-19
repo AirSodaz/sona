@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::io::Read;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use llama_cpp_2::context::params::LlamaContextParams;
@@ -237,6 +239,7 @@ impl LlamaBatchTranscriptionJob {
             sample_rate,
             self.ffmpeg_enabled,
             self.ffmpeg_path.as_deref(),
+            Some(observer.as_ref()),
         )?;
         observer.on_progress(10.0);
         let diagnostic_id = diagnostic_label(observer.diagnostic_id());
@@ -246,7 +249,7 @@ impl LlamaBatchTranscriptionJob {
             samples.len() as f64 / sample_rate as f64
         );
 
-        let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
+        let audio_segments = self.plan_audio_segments(&samples, sample_rate, observer.as_ref())?;
         let punctuation =
             load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
         let prompt = qwen3_asr_prompt(&model, &self.hotwords, self.language_prefill)?;
@@ -309,6 +312,7 @@ impl LlamaBatchTranscriptionJob {
         &self,
         samples: &[f32],
         sample_rate: u32,
+        observer: &dyn BatchTranscriptionObserver,
     ) -> Result<Vec<AudioSegment>, AsrPortError> {
         if self.batch_segmentation_mode == BatchSegmentationMode::Whole {
             return Ok(vec![AudioSegment {
@@ -344,6 +348,7 @@ impl LlamaBatchTranscriptionJob {
             BATCH_SEGMENTATION_SAMPLE_RATE,
             self.ffmpeg_enabled,
             self.ffmpeg_path.as_deref(),
+            Some(observer),
         )?;
         Ok(segment_batch_audio(
             &detection_samples,
@@ -615,18 +620,217 @@ fn segment_completed_progress(segment_index: usize, segment_total: usize) -> f32
     BATCH_PROGRESS_START + (index + 1.0) * seg_span
 }
 
+const MAX_LLAMA_NETWORK_STREAM_SECONDS: usize = 6 * 3600;
+const MAX_FFMPEG_STDERR_BYTES: usize = 64 * 1024;
+
+fn format_decode_target(path: &Path, is_url: bool) -> String {
+    if is_url {
+        sona_core::runtime::logging::redacted_endpoint(path.to_string_lossy().trim())
+    } else {
+        path.display().to_string()
+    }
+}
+
+fn configure_ffmpeg_decode_command(
+    command: &mut Command,
+    path: &Path,
+    sample_rate: u32,
+    is_url: bool,
+) {
+    command.arg("-loglevel").arg("error");
+    if is_url {
+        let path_str = path.to_string_lossy();
+        let trimmed = path_str.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        command.arg("-nostdin");
+        if lower.starts_with("http://") || lower.starts_with("https://") {
+            command
+                .arg("-reconnect")
+                .arg("1")
+                .arg("-reconnect_streamed")
+                .arg("1")
+                .arg("-reconnect_on_network_error")
+                .arg("1")
+                .arg("-reconnect_delay_max")
+                .arg("5")
+                .arg("-rw_timeout")
+                .arg("15000000");
+        } else if lower.starts_with("rtsp://") {
+            command
+                .arg("-rtsp_transport")
+                .arg("tcp")
+                .arg("-timeout")
+                .arg("15000000")
+                .arg("-rw_timeout")
+                .arg("15000000");
+        } else if lower.starts_with("rtmp://") {
+            command.arg("-rw_timeout").arg("15000000");
+        }
+        command.arg("-i").arg(trimmed).arg("-vn");
+    } else {
+        command.arg("-i").arg(path);
+    }
+
+    command
+        .arg("-f")
+        .arg("s16le")
+        .arg("-acodec")
+        .arg("pcm_s16le")
+        .arg("-ar")
+        .arg(sample_rate.to_string())
+        .arg("-ac")
+        .arg("1")
+        .arg("-");
+}
+
+fn read_ffmpeg_pcm_stream(
+    mut child: std::process::Child,
+    ffmpeg_path: &Path,
+    target_label: &str,
+    max_pcm_bytes: Option<usize>,
+    observer: Option<&dyn BatchTranscriptionObserver>,
+) -> Result<Vec<u8>, AsrPortError> {
+    let stdout = child.stdout.take().ok_or_else(|| {
+        let _ = child.kill();
+        let _ = child.wait();
+        AsrPortError::runtime("Failed to open FFmpeg stdout pipe.")
+    })?;
+    let stderr = child.stderr.take();
+
+    let stderr_handle = stderr.map(|mut err_pipe| {
+        std::thread::spawn(move || {
+            let mut collected = Vec::new();
+            let mut buf = [0u8; 4096];
+            while let Ok(n) = err_pipe.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                if collected.len() + n > MAX_FFMPEG_STDERR_BYTES {
+                    let excess = (collected.len() + n) - MAX_FFMPEG_STDERR_BYTES;
+                    if excess < collected.len() {
+                        collected.drain(0..excess);
+                    } else {
+                        collected.clear();
+                    }
+                }
+                collected.extend_from_slice(&buf[..n]);
+            }
+            String::from_utf8_lossy(&collected).trim().to_string()
+        })
+    });
+
+    let (chunk_tx, chunk_rx) = std::sync::mpsc::sync_channel::<Result<Vec<u8>, std::io::Error>>(64);
+    let stdout_handle = std::thread::spawn(move || {
+        let mut reader = stdout;
+        let mut buf = [0u8; 32 * 1024];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if chunk_tx.send(Ok(buf[..n].to_vec())).is_err() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    let _ = chunk_tx.send(Err(err));
+                    break;
+                }
+            }
+        }
+    });
+
+    let mut pcm_bytes = Vec::new();
+    let mut read_error: Option<std::io::Error> = None;
+
+    loop {
+        if observer.is_some_and(|obs| obs.is_cancelled()) {
+            let _ = child.kill();
+            let _ = child.wait();
+            drop(chunk_rx);
+            let _ = stdout_handle.join();
+            if let Some(handle) = stderr_handle {
+                let _ = handle.join();
+            }
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
+
+        match chunk_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Ok(chunk)) => {
+                if let Some(limit) = max_pcm_bytes
+                    && pcm_bytes.len().saturating_add(chunk.len()) > limit
+                {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    drop(chunk_rx);
+                    let _ = stdout_handle.join();
+                    if let Some(handle) = stderr_handle {
+                        let _ = handle.join();
+                    }
+                    return Err(AsrPortError::invalid_request(format!(
+                        "Network stream {target_label} exceeded the maximum supported batch duration ({} hours). Use streaming transcription for unbounded live streams.",
+                        MAX_LLAMA_NETWORK_STREAM_SECONDS / 3600
+                    )));
+                }
+                pcm_bytes.extend_from_slice(&chunk);
+            }
+            Ok(Err(err)) => {
+                read_error = Some(err);
+                break;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    let _ = stdout_handle.join();
+    let status = child.wait().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!(
+                "Failed to wait for FFmpeg audio decoder {}: {error}",
+                ffmpeg_path.display()
+            ),
+        )
+    })?;
+    let stderr_text = stderr_handle
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default();
+    let sanitized_stderr =
+        sona_core::runtime::logging::sanitize_credentials_text(&stderr_text, None);
+
+    if let Some(err) = read_error {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!("Failed to read decoded audio from {target_label}: {err}"),
+        ));
+    }
+
+    if !status.success() {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!("Failed to decode audio input {target_label}: {sanitized_stderr}"),
+        ));
+    }
+
+    Ok(pcm_bytes)
+}
+
 fn decode_audio_input(
     path: &Path,
     sample_rate: u32,
     ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
+    observer: Option<&dyn BatchTranscriptionObserver>,
 ) -> Result<Vec<f32>, AsrPortError> {
+    if observer.is_some_and(|obs| obs.is_cancelled()) {
+        return Err(AsrPortError::runtime("Task cancelled."));
+    }
     let path_str = path.to_string_lossy();
     let is_url = sona_core::history::is_network_url(&path_str);
+    let target_label = format_decode_target(path, is_url);
     if is_url && !ffmpeg_enabled {
         return Err(AsrPortError::invalid_request(format!(
-            "Failed to decode network stream {}: Network stream transcription with llama.cpp requires FFmpeg to be enabled in settings.",
-            path.display()
+            "Failed to decode network stream {target_label}: Network stream transcription with llama.cpp requires FFmpeg to be enabled in settings."
         )));
     }
     if ffmpeg_enabled {
@@ -641,8 +845,7 @@ fn decode_audio_input(
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!(
-                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
-                        path.display()
+                        "Failed to decode audio file {target_label}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder."
                     ),
                 ));
             }
@@ -655,8 +858,7 @@ fn decode_audio_input(
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!(
-                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
-                        path.display()
+                        "Failed to decode audio file {target_label}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder."
                     ),
                 ));
             }
@@ -670,70 +872,38 @@ fn decode_audio_input(
             command.creation_flags(0x0800_0000);
         }
 
-        command.arg("-loglevel").arg("error");
-        if is_url {
-            let lower = path_str.trim().to_ascii_lowercase();
-            command.arg("-nostdin");
-            if lower.starts_with("http://") || lower.starts_with("https://") {
-                command
-                    .arg("-reconnect")
-                    .arg("1")
-                    .arg("-reconnect_streamed")
-                    .arg("1")
-                    .arg("-reconnect_on_network_error")
-                    .arg("1")
-                    .arg("-reconnect_delay_max")
-                    .arg("5")
-                    .arg("-rw_timeout")
-                    .arg("15000000");
-            } else if lower.starts_with("rtsp://") {
-                command
-                    .arg("-rtsp_transport")
-                    .arg("tcp")
-                    .arg("-stimeout")
-                    .arg("15000000");
-            } else if lower.starts_with("rtmp://") {
-                command.arg("-rw_timeout").arg("15000000");
-            }
-            command.arg("-vn");
-        }
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        configure_ffmpeg_decode_command(&mut command, path, sample_rate, is_url);
 
-        let output = command
-            .arg("-i")
-            .arg(path)
-            .arg("-f")
-            .arg("s16le")
-            .arg("-acodec")
-            .arg("pcm_s16le")
-            .arg("-ar")
-            .arg(sample_rate.to_string())
-            .arg("-ac")
-            .arg("1")
-            .arg("-")
-            .output()
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::FileSystem,
-                    format!(
-                        "Failed to run FFmpeg audio decoder {}: {error}",
-                        ffmpeg_path.display()
-                    ),
-                )
-            })?;
+        let child = command.spawn().map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!(
+                    "Failed to run FFmpeg audio decoder {}: {error}",
+                    ffmpeg_path.display()
+                ),
+            )
+        })?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!("Failed to decode audio input {}: {stderr}", path.display()),
-            ));
-        }
+        let max_pcm_bytes = if is_url {
+            Some(
+                MAX_LLAMA_NETWORK_STREAM_SECONDS
+                    .saturating_mul(sample_rate as usize)
+                    .saturating_mul(2),
+            )
+        } else {
+            None
+        };
+        let pcm_bytes =
+            read_ffmpeg_pcm_stream(child, &ffmpeg_path, &target_label, max_pcm_bytes, observer)?;
 
-        let samples = pcm_s16le_bytes_to_f32(&output.stdout);
+        let samples = pcm_s16le_bytes_to_f32(&pcm_bytes);
         if samples.is_empty() {
             return Err(AsrPortError::invalid_request(format!(
-                "Decoded audio input contains no samples: {}",
-                path.display()
+                "Decoded audio input contains no samples: {target_label}"
             )));
         }
         Ok(samples)
@@ -741,18 +911,16 @@ fn decode_audio_input(
         match sona_core::audio::decode_audio_file(path, sample_rate) {
             Ok(samples) if !samples.is_empty() => Ok(samples),
             Ok(_) => Err(AsrPortError::invalid_request(format!(
-                "Decoded audio input contains no samples: {}",
-                path.display()
+                "Decoded audio input contains no samples: {target_label}"
             ))),
             Err(sona_core::audio::AudioDecodeError::Io(io_err)) => Err(AsrPortError::new(
                 AsrPortErrorKind::FileSystem,
-                format!("Failed to read audio file {}: {io_err}", path.display()),
+                format!("Failed to read audio file {target_label}: {io_err}"),
             )),
             Err(builtin_err) => Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Failed to decode audio file {}: built-in decoder cannot process this file ({builtin_err}). Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
-                    path.display()
+                    "Failed to decode audio file {target_label}: built-in decoder cannot process this file ({builtin_err}). Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG)."
                 ),
             )),
         }
@@ -1247,12 +1415,13 @@ mod tests {
         truncate_hotwords, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
-    use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
+    use sona_core::ports::asr::{AsrPortErrorKind, BatchTranscriptionObserver, LocalAsrEngine};
     use sona_core::ports::punctuation::PunctuationEngineSet;
     use sona_core::ports::vad::VadEngineSet;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
     use sona_core::transcription::segmentation::AudioSegment;
-    use std::path::PathBuf;
+    use sona_core::transcription::transcript::TranscriptUpdate;
+    use std::path::{Path, PathBuf};
 
     fn empty_vad_engines() -> VadEngineSet {
         VadEngineSet::empty()
@@ -1681,7 +1850,7 @@ mod tests {
         write_minimal_test_wav(&wav_path, 16000, 1600);
 
         let missing_path = std::path::Path::new("C:/nonexistent/ffmpeg.exe");
-        let result = decode_audio_input(&wav_path, 16000, true, Some(missing_path));
+        let result = decode_audio_input(&wav_path, 16000, true, Some(missing_path), None);
         let error = result.unwrap_err();
         assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
         assert!(
@@ -1700,7 +1869,7 @@ mod tests {
             std::env::temp_dir().join(format!("llama-test-invalid-{}.xyz", uuid::Uuid::new_v4()));
         std::fs::write(&invalid_path, b"not a valid audio file").unwrap();
 
-        let result = decode_audio_input(&invalid_path, 16000, false, None);
+        let result = decode_audio_input(&invalid_path, 16000, false, None, None);
         let error = result.unwrap_err();
         assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
         assert!(
@@ -1719,7 +1888,7 @@ mod tests {
             std::env::temp_dir().join(format!("llama-test-builtin-{}.wav", uuid::Uuid::new_v4()));
         write_minimal_test_wav(&wav_path, 16000, 1600);
 
-        let result = decode_audio_input(&wav_path, 16000, false, None);
+        let result = decode_audio_input(&wav_path, 16000, false, None, None);
         assert!(result.is_ok());
         let samples = result.unwrap();
         assert_eq!(samples.len(), 1600);
@@ -1730,14 +1899,74 @@ mod tests {
     #[test]
     fn test_decode_audio_input_network_stream_requires_ffmpeg() {
         use super::decode_audio_input;
-        let stream_url = std::path::Path::new("https://example.com/audio/stream.mp3");
-        let error = decode_audio_input(stream_url, 16000, false, None).unwrap_err();
+        let stream_url = std::path::Path::new("https://user:secret@example.com/audio/stream.mp3?api_key=abc");
+        let error = decode_audio_input(stream_url, 16000, false, None, None).unwrap_err();
         assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
         assert!(
             error.message.contains("requires FFmpeg"),
             "Expected 'requires FFmpeg', got: {}",
             error.message
         );
+        assert!(!error.message.contains("secret"));
+        assert!(!error.message.contains("api_key=abc"));
+    }
+
+    #[test]
+    fn test_configure_ffmpeg_decode_command_rtsp_and_http_flags() {
+        use super::configure_ffmpeg_decode_command;
+
+        let mut rtsp_cmd = std::process::Command::new("ffmpeg");
+        configure_ffmpeg_decode_command(
+            &mut rtsp_cmd,
+            Path::new("  rtsp://127.0.0.1:554/live  "),
+            16000,
+            true,
+        );
+        let rtsp_args: Vec<String> = rtsp_cmd
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        assert!(
+            rtsp_args
+                .windows(2)
+                .any(|w| w[0] == "-rtsp_transport" && w[1] == "tcp")
+        );
+        assert!(
+            rtsp_args
+                .windows(2)
+                .any(|w| w[0] == "-timeout" && w[1] == "15000000")
+        );
+        assert!(
+            rtsp_args
+                .windows(2)
+                .any(|w| w[0] == "-rw_timeout" && w[1] == "15000000")
+        );
+        assert!(!rtsp_args.iter().any(|a| a == "-stimeout"));
+        let i_pos = rtsp_args.iter().position(|a| a == "-i").unwrap();
+        let vn_pos = rtsp_args.iter().position(|a| a == "-vn").unwrap();
+        assert_eq!(rtsp_args[i_pos + 1], "rtsp://127.0.0.1:554/live");
+        assert!(vn_pos > i_pos);
+    }
+
+    #[test]
+    fn test_decode_audio_input_respects_cancellation() {
+        use super::decode_audio_input;
+
+        struct CancelledObserver;
+        impl BatchTranscriptionObserver for CancelledObserver {
+            fn on_progress(&self, _: f32) {}
+            fn on_transcript_update(&self, _: &TranscriptUpdate) {}
+            fn is_cancelled(&self) -> bool {
+                true
+            }
+        }
+
+        let observer = CancelledObserver;
+        let stream_url = std::path::Path::new("https://example.com/audio/stream.mp3");
+        let error =
+            decode_audio_input(stream_url, 16000, true, None, Some(&observer)).unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::Runtime);
+        assert!(error.message.contains("Task cancelled"));
     }
 
     #[test]

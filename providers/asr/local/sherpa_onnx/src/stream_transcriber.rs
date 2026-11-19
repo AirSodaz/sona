@@ -399,6 +399,7 @@ impl StreamTranscriptionJob {
 
             if let Some(detector) = vad_detector.as_mut() {
                 detector.accept_waveform(&frame);
+                let mut channel_closed = false;
                 while !detector.is_empty() {
                     if let Some(speech_segment) = detector.front() {
                         let seg_samples = speech_segment.samples().to_vec();
@@ -415,10 +416,14 @@ impl StreamTranscriptionJob {
                             .await
                             .is_err()
                         {
+                            channel_closed = true;
                             break;
                         }
                     }
                     detector.pop();
+                }
+                if channel_closed {
+                    break;
                 }
             } else {
                 chunk_buffer.extend_from_slice(&frame);
@@ -538,11 +543,20 @@ impl StreamTranscriptionJob {
 
         drop(slice_tx);
 
-        let results = worker_handle.await.map_err(|e| {
-            AsrPortError::runtime(format!(
-                "Transcription worker encountered an unexpected error: {e}"
-            ))
-        })?;
+        let results = match worker_handle.await {
+            Ok(results) => results,
+            Err(e) => {
+                reader.finish();
+                return Err(AsrPortError::runtime(format!(
+                    "Transcription worker encountered an unexpected error: {e}"
+                )));
+            }
+        };
+
+        if observer.is_cancelled() {
+            reader.finish();
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
 
         if results.is_empty()
             && let Some(err) = stream_error

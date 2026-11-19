@@ -90,7 +90,7 @@ pub(crate) fn configure_ffmpeg_input_args(command: &mut tokio::process::Command,
         command
             .arg("-rtsp_transport")
             .arg("tcp")
-            .arg("-stimeout")
+            .arg("-timeout")
             .arg("15000000");
     }
     if is_http
@@ -635,8 +635,9 @@ mod tests {
         );
         assert!(
             args.windows(2)
-                .any(|w| w[0] == "-stimeout" && w[1] == "15000000")
+                .any(|w| w[0] == "-timeout" && w[1] == "15000000")
         );
+        assert!(!args.iter().any(|a| a == "-stimeout"));
         assert!(
             args.windows(2)
                 .any(|w| w[0] == "-rw_timeout" && w[1] == "15000000")
