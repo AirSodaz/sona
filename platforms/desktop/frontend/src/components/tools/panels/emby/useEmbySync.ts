@@ -292,17 +292,20 @@ export function useEmbySync(): UseEmbySyncReturn {
   );
 
   const fetchLibrariesForProfile = useCallback(
-    async (profileId?: string): Promise<EmbyLibrary[]> => {
+    async (profileId?: string, allowLegacyEmbyFallback = false): Promise<EmbyLibrary[]> => {
       let libs: EmbyLibrary[] = [];
       try {
-        const msLibs = await getMediaServerLibraries(profileId);
-        if (Array.isArray(msLibs) && msLibs.length > 0) {
+        const mediaServerId = profileId ?? (allowLegacyEmbyFallback ? 'default-emby' : undefined);
+        const msLibs = await getMediaServerLibraries(mediaServerId);
+        if (Array.isArray(msLibs)) {
           libs = msLibs;
         }
-      } catch {
-        // fallback to legacy Emby libraries
+      } catch (error) {
+        if (!allowLegacyEmbyFallback) {
+          throw error;
+        }
       }
-      if (libs.length === 0) {
+      if (libs.length === 0 && allowLegacyEmbyFallback) {
         try {
           const embyLibs = await getEmbyLibraries();
           if (Array.isArray(embyLibs)) {
@@ -370,13 +373,17 @@ export function useEmbySync(): UseEmbySyncReturn {
               };
 
         let info: EmbyServerInfo | null = null;
-        try {
+        if (effectiveProfile.serverType === 'emby') {
+          try {
+            info = await testMediaServerConnection(effectiveProfile);
+          } catch {
+            // Use the legacy command when the media-server command is unavailable.
+          }
+          if (!info) {
+            info = await testEmbyConnection(targetConfig);
+          }
+        } else {
           info = await testMediaServerConnection(effectiveProfile);
-        } catch {
-          // fallback to legacy testEmbyConnection
-        }
-        if (!info) {
-          info = await testEmbyConnection(targetConfig);
         }
         if (seq !== connectSeqRef.current) return;
 
@@ -401,7 +408,7 @@ export function useEmbySync(): UseEmbySyncReturn {
               preferredServerUrl: targetConfig.serverUrl,
               preferredServerType: 'emby',
             });
-            resolvedProfileId = synced?.id ?? activeProfileRef.current?.id;
+            resolvedProfileId = synced?.id ?? effectiveProfile.id;
           }
         }
         if (seq !== connectSeqRef.current) return;
@@ -414,7 +421,10 @@ export function useEmbySync(): UseEmbySyncReturn {
         setAudioTrackMap({});
         setExpandedSeasons(new Set());
 
-        const libs = await fetchLibrariesForProfile(resolvedProfileId);
+        const libs = await fetchLibrariesForProfile(
+          resolvedProfileId,
+          effectiveProfile.serverType === 'emby' && effectiveProfile.id === 'default-emby'
+        );
         if (seq !== connectSeqRef.current) return;
         setLibraries(libs);
         if (libs.length > 0) {
@@ -494,7 +504,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setAudioTrackMap({});
         setExpandedSeasons(new Set());
 
-        const libs = await fetchLibrariesForProfile(synced?.id ?? activeProfileRef.current?.id);
+        const libs = await fetchLibrariesForProfile(synced?.id ?? 'default-emby', true);
         if (seq !== connectSeqRef.current) return;
         setLibraries(libs);
         if (libs.length > 0) {
@@ -602,7 +612,12 @@ export function useEmbySync(): UseEmbySyncReturn {
       const seq = ++fetchSeqRef.current;
       setIsLoadingItems(true);
       try {
-        const profileId = activeProfileRef.current?.id;
+        const allowLegacyEmbyFallback =
+          activeProfileRef.current === null ||
+          (activeProfileRef.current.serverType === 'emby' &&
+            activeProfileRef.current.id === 'default-emby');
+        const profileId =
+          activeProfileRef.current?.id ?? (allowLegacyEmbyFallback ? 'default-emby' : undefined);
         let res: EmbyItemListResult | null = null;
         try {
           const msRes = await getMediaServerItems({
@@ -615,10 +630,15 @@ export function useEmbySync(): UseEmbySyncReturn {
           if (msRes && Array.isArray(msRes.items)) {
             res = msRes;
           }
-        } catch {
-          // fallback
+        } catch (error) {
+          if (!allowLegacyEmbyFallback) {
+            throw error;
+          }
         }
         if (!res) {
+          if (!allowLegacyEmbyFallback) {
+            throw new Error('The selected media server did not return an item list.');
+          }
           res = await getEmbyItems({
             parentId: selectedLibraryId || undefined,
             searchTerm: searchTerm.trim() || undefined,
@@ -679,7 +699,12 @@ export function useEmbySync(): UseEmbySyncReturn {
     setIsLoadingItems(true);
     setConnectionError(null);
     try {
-      const profileId = activeProfileRef.current?.id;
+      const allowLegacyEmbyFallback =
+        activeProfileRef.current === null ||
+        (activeProfileRef.current.serverType === 'emby' &&
+          activeProfileRef.current.id === 'default-emby');
+      const profileId =
+        activeProfileRef.current?.id ?? (allowLegacyEmbyFallback ? 'default-emby' : undefined);
       let res: EmbyItemListResult | null = null;
       try {
         const msRes = await getMediaServerItems({
@@ -692,10 +717,15 @@ export function useEmbySync(): UseEmbySyncReturn {
         if (msRes && Array.isArray(msRes.items)) {
           res = msRes;
         }
-      } catch {
-        // fallback
+      } catch (error) {
+        if (!allowLegacyEmbyFallback) {
+          throw error;
+        }
       }
       if (!res) {
+        if (!allowLegacyEmbyFallback) {
+          throw new Error('The selected media server did not return an item list.');
+        }
         res = await getEmbyItems({
           parentId: selectedLibraryId || undefined,
           searchTerm: searchTerm.trim() || undefined,

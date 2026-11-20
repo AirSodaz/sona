@@ -2,13 +2,40 @@ use tauri::State;
 
 use crate::integrations::emby::{
     EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyLoginPayload,
-    EmbyServerInfo, EmbyState, SubtitleUploadPayload,
+    EmbyServerInfo, EmbyState, EmbyStreamInfo, SubtitleUploadPayload,
 };
 use crate::integrations::media_server::{MediaServerProfile, MediaServerRegistry, MediaServerType};
 use crate::services::DesktopServices;
 
 fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> String {
     crate::commands::media_server::sanitize_media_server_error(err, api_key)
+}
+
+fn unique_duplicate_subtitle_index(
+    streams: &[EmbyStreamInfo],
+    language: &str,
+    is_forced: bool,
+) -> Option<i32> {
+    let is_target_zh = crate::integrations::emby::is_chinese_language(Some(language), None);
+    let mut matches = streams.iter().filter(|stream| {
+        if !stream.stream_type.eq_ignore_ascii_case("Subtitle")
+            || !stream.is_external
+            || stream.is_forced != is_forced
+        {
+            return false;
+        }
+        if is_target_zh {
+            crate::integrations::emby::is_chinese_language(
+                stream.language.as_deref(),
+                stream.display_title.as_deref(),
+            )
+        } else {
+            crate::integrations::emby::language_matches(stream.language.as_deref(), language)
+        }
+    });
+
+    let candidate = matches.next()?;
+    matches.next().is_none().then_some(candidate.index)
 }
 
 fn sync_legacy_emby_to_registry(
@@ -560,49 +587,23 @@ pub async fn emby_upload_subtitle(
                 .await
                 .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
-            let is_target_zh =
-                crate::integrations::emby::is_chinese_language(Some(&payload.language), None);
-            let mut matching_external: Vec<_> = streams
-                .iter()
-                .filter(|s| {
-                    if !s.stream_type.eq_ignore_ascii_case("Subtitle")
-                        || !s.is_external
-                        || s.is_forced != payload.is_forced
-                    {
-                        return false;
-                    }
-                    if is_target_zh {
-                        crate::integrations::emby::is_chinese_language(
-                            s.language.as_deref(),
-                            s.display_title.as_deref(),
-                        )
-                    } else {
-                        crate::integrations::emby::language_matches(
-                            s.language.as_deref(),
-                            &payload.language,
-                        )
-                    }
-                })
-                .collect();
-
-            if matching_external.is_empty() {
+            let Some(stream_index) =
+                unique_duplicate_subtitle_index(&streams, &payload.language, payload.is_forced)
+            else {
                 return Err(sanitize_emby_error(
                     EmbyError::DuplicateSubtitle,
                     Some(&api_key),
                 ));
-            }
+            };
 
-            matching_external.sort_by(|a, b| b.index.cmp(&a.index));
-            for stream in matching_external {
-                log::info!(
-                    "[Emby] Auto-recovering: deleting existing external subtitle track index {}",
-                    stream.index
-                );
-                client
-                    .delete_subtitle(&payload.item_id, stream.index)
-                    .await
-                    .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
-            }
+            log::info!(
+                "[Emby] Auto-recovering: deleting existing external subtitle track index {}",
+                stream_index
+            );
+            client
+                .delete_subtitle(&payload.item_id, stream_index)
+                .await
+                .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
             client
                 .upload_subtitle(&payload)
@@ -625,6 +626,37 @@ pub async fn emby_upload_subtitle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_duplicate_recovery_rejects_ambiguous_chinese_tracks() {
+        let streams = [
+            EmbyStreamInfo {
+                index: 5,
+                stream_type: "Subtitle".to_string(),
+                language: Some("chs".to_string()),
+                display_title: Some("简体中文".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            },
+            EmbyStreamInfo {
+                index: 6,
+                stream_type: "Subtitle".to_string(),
+                language: Some("cht".to_string()),
+                display_title: Some("繁體中文".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            },
+        ];
+
+        assert_eq!(
+            unique_duplicate_subtitle_index(&streams, "zh-CN", false),
+            None
+        );
+    }
 
     #[test]
     fn test_sanitize_emby_error_redacts_api_key_and_query() {
@@ -774,7 +806,10 @@ mod tests {
         sync_legacy_emby_to_registry(&registry, &updated, None, Some(&mut persisted_config));
         let servers_after: Vec<MediaServerProfile> =
             serde_json::from_value(persisted_config["mediaServers"].clone()).unwrap();
-        let default_emby = servers_after.iter().find(|p| p.id == "default-emby").unwrap();
+        let default_emby = servers_after
+            .iter()
+            .find(|p| p.id == "default-emby")
+            .unwrap();
         assert_eq!(default_emby.name, "My Emby");
         assert_eq!(default_emby.api_key, "emby-key-2");
     }

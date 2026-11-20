@@ -444,17 +444,22 @@ async fn upload_subtitle_with_duplicate_recovery(
                 ));
             }
 
-            matching_external.sort_by(|a, b| b.index.cmp(&a.index));
-            for stream in matching_external {
-                log::info!(
-                    "[MediaServer] Auto-recovering: deleting existing external subtitle track index {}",
-                    stream.index
-                );
-                client
-                    .delete_subtitle(&payload.item_id, stream.index)
-                    .await
-                    .map_err(|e| sanitize_media_server_error(e, Some(api_key)))?;
+            if matching_external.len() != 1 {
+                return Err(sanitize_media_server_error(
+                    MediaServerError::DuplicateSubtitle,
+                    Some(api_key),
+                ));
             }
+
+            let stream = matching_external[0];
+            log::info!(
+                "[MediaServer] Auto-recovering: deleting existing external subtitle track index {}",
+                stream.index
+            );
+            client
+                .delete_subtitle(&payload.item_id, stream.index)
+                .await
+                .map_err(|e| sanitize_media_server_error(e, Some(api_key)))?;
 
             client
                 .upload_subtitle(payload)
@@ -724,5 +729,67 @@ mod tests {
             2
         );
         assert_eq!(*client.deleted_indices.lock().unwrap(), vec![5]);
+    }
+
+    #[tokio::test]
+    async fn test_upload_subtitle_duplicate_recovery_preserves_ambiguous_chinese_tracks() {
+        use crate::integrations::media_server::MediaServerStreamInfo;
+
+        let client = MockDuplicateRecoverClient {
+            profile: MediaServerProfile {
+                id: "emby-1".to_string(),
+                name: "Emby".to_string(),
+                server_type: MediaServerType::Emby,
+                server_url: "http://localhost:8096".to_string(),
+                api_key: "key".to_string(),
+                username: None,
+                admin_user_id: None,
+                allow_invalid_certs: false,
+                created_at: 1000,
+                updated_at: 1000,
+            },
+            upload_attempts: std::sync::atomic::AtomicUsize::new(0),
+            deleted_indices: std::sync::Mutex::new(Vec::new()),
+            streams: vec![
+                MediaServerStreamInfo {
+                    index: 5,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("chs".to_string()),
+                    display_title: Some("简体中文".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+                MediaServerStreamInfo {
+                    index: 6,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("cht".to_string()),
+                    display_title: Some("繁體中文".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+            ],
+        };
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "zh-CN".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
+        };
+
+        let result = upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert!(client.deleted_indices.lock().unwrap().is_empty());
     }
 }

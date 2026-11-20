@@ -127,6 +127,88 @@ describe('useEmbySync', () => {
     expect(embyService.saveEmbyConfig).not.toHaveBeenCalled();
   });
 
+  it('does not fall back to legacy Emby libraries when Jellyfin returns no libraries', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'jf-1' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([jellyfinProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-jf-guid',
+      serverName: 'Remote Jellyfin',
+      version: '10.9.1',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'jellyfin',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 0,
+      items: [],
+    });
+    vi.mocked(embyService.getEmbyLibraries).mockResolvedValue([
+      { id: 'legacy-emby-library', name: 'Legacy Emby Library' },
+    ]);
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+
+    expect(result.current.libraries).toEqual([]);
+    expect(embyService.getEmbyLibraries).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy library fallback for the default Emby profile', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'default-emby' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([embyProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 0,
+      items: [],
+    });
+    vi.mocked(embyService.getEmbyLibraries).mockResolvedValue([
+      { id: 'legacy-library', name: 'Legacy Library' },
+    ]);
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+
+    expect(result.current.libraries).toEqual([{ id: 'legacy-library', name: 'Legacy Library' }]);
+    expect(mediaServerService.getMediaServerLibraries).toHaveBeenCalledWith('default-emby');
+    expect(embyService.getEmbyLibraries).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not use legacy Emby connection checks for a Jellyfin profile', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'jf-1' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([jellyfinProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockRejectedValue(
+      new Error('Jellyfin connection failed')
+    );
+    vi.mocked(embyService.testEmbyConnection).mockResolvedValue({
+      id: 'wrong-server',
+      serverName: 'Legacy Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.connectionError).toBe('Jellyfin connection failed');
+    });
+
+    expect(embyService.testEmbyConnection).not.toHaveBeenCalled();
+  });
+
   it('selectProfile switches to Jellyfin without overwriting legacy Emby config', async () => {
     vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([
       embyProfile,
@@ -172,6 +254,55 @@ describe('useEmbySync', () => {
     expect(result.current.serverInfo?.serverName).toBe('Remote Jellyfin');
     expect(mediaServerService.getMediaServerLibraries).toHaveBeenLastCalledWith('jf-1');
     expect(embyService.saveEmbyConfig).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to legacy Emby items when a Jellyfin item request fails', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'jf-1' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([jellyfinProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-jf-guid',
+      serverName: 'Remote Jellyfin',
+      version: '10.9.1',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'jellyfin',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-jf', name: 'Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 0,
+      items: [],
+    });
+    vi.mocked(embyService.getEmbyItems).mockResolvedValue({
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'legacy-emby-item',
+          name: 'Legacy Item',
+          hasChineseSubtitles: false,
+          hasEmbeddedChinese: false,
+          mediaStreams: [],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+      expect(mediaServerService.getMediaServerItems).toHaveBeenCalled();
+    });
+    vi.mocked(embyService.getEmbyItems).mockClear();
+    vi.mocked(mediaServerService.getMediaServerItems).mockRejectedValueOnce(
+      new Error('Jellyfin item request failed')
+    );
+
+    await act(async () => {
+      await result.current.fetchItems();
+    });
+
+    expect(embyService.getEmbyItems).not.toHaveBeenCalled();
+    expect(result.current.connectionError).toBe('Jellyfin item request failed');
   });
 
   it('handleLogin syncs new Emby profile before fetching libraries even when Jellyfin was active', async () => {
