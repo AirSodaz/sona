@@ -436,5 +436,69 @@ describe('mediaServerService', () => {
         })
       );
     });
+
+    it('drops stale context.existingExternalSubtitleIndex unless options.deleteExistingIndex is explicitly given', async () => {
+      vi.mocked(invokeTauri).mockImplementation((async (cmd: string) => {
+        if (cmd === TauriCommand.mediaServer.listProfiles) {
+          return [
+            {
+              id: 'default-emby',
+              name: 'My Emby',
+              serverType: 'emby',
+              serverUrl: 'http://emby.local:8096',
+              apiKey: 'key',
+              allowInvalidCerts: false,
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ];
+        }
+        return undefined;
+      }) as typeof invokeTauri);
+
+      await resyncMediaServerSubtitles(segments, {
+        serverId: 'default-emby',
+        serverUrl: 'http://emby.local:8096',
+        itemId: 'item-1',
+        itemName: 'Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: 5,
+      });
+
+      expect(invokeTauri).toHaveBeenCalledWith(
+        TauriCommand.mediaServer.uploadSubtitle,
+        expect.objectContaining({
+          serverId: 'default-emby',
+          deleteExistingExternalIndex: undefined,
+        })
+      );
+
+      vi.mocked(invokeTauri).mockClear();
+
+      await resyncMediaServerSubtitles(
+        segments,
+        {
+          serverId: 'default-emby',
+          serverUrl: 'http://emby.local:8096',
+          itemId: 'item-1',
+          itemName: 'Movie',
+          audioStreamIndex: 1,
+          subtitleMode: 'bilingual',
+          targetLanguage: 'zh-CN',
+          existingExternalSubtitleIndex: 5,
+        },
+        { deleteExistingIndex: 8 }
+      );
+
+      expect(invokeTauri).toHaveBeenCalledWith(
+        TauriCommand.mediaServer.uploadSubtitle,
+        expect.objectContaining({
+          serverId: 'default-emby',
+          deleteExistingExternalIndex: 8,
+        })
+      );
+    });
   });
 });

@@ -302,26 +302,35 @@ export function useEmbySync(): UseEmbySyncReturn {
   const fetchLibrariesForProfile = useCallback(
     async (profileId?: string, allowLegacyEmbyFallback = false): Promise<EmbyLibrary[]> => {
       let libs: EmbyLibrary[] = [];
+      let primaryError: unknown = null;
+      let primarySucceeded = false;
       try {
         const mediaServerId = profileId ?? (allowLegacyEmbyFallback ? 'default-emby' : undefined);
         const msLibs = await getMediaServerLibraries(mediaServerId);
         if (Array.isArray(msLibs)) {
           libs = msLibs;
+          primarySucceeded = true;
         }
       } catch (error) {
         if (!allowLegacyEmbyFallback) {
           throw error;
         }
+        primaryError = error;
       }
       if (libs.length === 0 && allowLegacyEmbyFallback) {
         try {
           const embyLibs = await getEmbyLibraries();
           if (Array.isArray(embyLibs)) {
-            libs = embyLibs;
+            return embyLibs;
           }
-        } catch {
-          // ignore
+        } catch (fallbackError) {
+          if (!primarySucceeded) {
+            throw primaryError ?? fallbackError;
+          }
         }
+      }
+      if (!primarySucceeded && primaryError) {
+        throw primaryError;
       }
       return libs;
     },
@@ -342,6 +351,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
       const seq = ++connectSeqRef.current;
       fetchSeqRef.current++;
+      setIsLoadingItems(false);
       clearTimeout(debounceTimerRef.current ?? undefined);
       debounceTimerRef.current = null;
       setIsConnecting(true);
@@ -381,15 +391,25 @@ export function useEmbySync(): UseEmbySyncReturn {
           effectiveProfile.serverType === 'emby' &&
           effectiveProfile.id !== 'default-emby';
 
+        const allowLegacyEmbyFallback =
+          effectiveProfile.serverType === 'emby' && effectiveProfile.id === 'default-emby';
         let info: EmbyServerInfo | null = null;
-        if (effectiveProfile.serverType === 'emby') {
+        if (allowLegacyEmbyFallback) {
+          let primaryError: unknown = null;
           try {
-            info = await testMediaServerConnection(effectiveProfile);
-          } catch {
-            // Use the legacy command when the media-server command is unavailable.
+            info = (await testMediaServerConnection(effectiveProfile)) ?? null;
+          } catch (err) {
+            primaryError = err;
           }
           if (!info) {
-            info = await testEmbyConnection(targetConfig);
+            try {
+              info = (await testEmbyConnection(targetConfig)) ?? null;
+            } catch (fallbackErr) {
+              throw primaryError ?? fallbackErr;
+            }
+          }
+          if (!info) {
+            throw primaryError ?? new Error('Failed to connect to media server.');
           }
         } else {
           info = await testMediaServerConnection(effectiveProfile);
@@ -423,10 +443,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setAudioTrackMap({});
         setExpandedSeasons(new Set());
 
-        const libs = await fetchLibrariesForProfile(
-          resolvedProfileId,
-          effectiveProfile.serverType === 'emby' && effectiveProfile.id === 'default-emby'
-        );
+        const libs = await fetchLibrariesForProfile(resolvedProfileId, allowLegacyEmbyFallback);
         if (seq !== connectSeqRef.current) return;
         setLibraries(libs);
         if (libs.length > 0) {
@@ -451,6 +468,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setItems([]);
         setSelectedItemIds(new Set());
         setAudioTrackMap({});
+        setIsLoadingItems(false);
       } finally {
         if (seq === connectSeqRef.current) {
           setIsConnecting(false);
@@ -482,6 +500,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
       const seq = ++connectSeqRef.current;
       fetchSeqRef.current++;
+      setIsLoadingItems(false);
       clearTimeout(debounceTimerRef.current ?? undefined);
       debounceTimerRef.current = null;
       setIsConnecting(true);
@@ -531,6 +550,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setItems([]);
         setSelectedItemIds(new Set());
         setAudioTrackMap({});
+        setIsLoadingItems(false);
       } finally {
         if (seq === connectSeqRef.current) {
           setIsConnecting(false);
@@ -603,7 +623,10 @@ export function useEmbySync(): UseEmbySyncReturn {
 
   // Fetch items for selected library and search term with debounce and race cancellation
   useEffect(() => {
-    if (!serverInfo) return;
+    if (!serverInfo) {
+      setIsLoadingItems(false);
+      return;
+    }
 
     let cancelled = false;
     if (debounceTimerRef.current) {
@@ -1051,6 +1074,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         setServerInfo(null);
         setConnectionError(null);
         setIsConnecting(false);
+        setIsLoadingItems(false);
         setConfig({ serverUrl: '', apiKey: '', allowInvalidCerts: false });
         useConfigStore.getState().setConfig({ activeMediaServerId: undefined });
         useToolsStore.getState().setEmbyServerName(null);

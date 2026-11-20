@@ -169,8 +169,8 @@ export class BatchItemProcessor {
         const syncFn = this.ports.syncMediaServerSubtitles ?? syncMediaServerSubtitles;
         await syncFn(
           item.segments,
-          { ...mediaContext, targetLanguage },
-          { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
+          { ...mediaContext, targetLanguage, existingExternalSubtitleIndex: undefined },
+          { deleteExistingIndex: undefined }
         );
         item.errorStage = undefined;
         logger.info('[BatchQueue] subtitle_sync_complete', {

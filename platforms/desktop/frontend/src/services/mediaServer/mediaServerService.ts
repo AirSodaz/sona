@@ -322,14 +322,21 @@ export async function resyncMediaServerSubtitles(
     // ignore if profile listing is unavailable
   }
 
-  let resolvedContext = context;
+  let resolvedContext: MediaServerTaskContext = {
+    ...context,
+    existingExternalSubtitleIndex: undefined,
+  };
   let hasProfileMatch = false;
 
   if (profiles.length > 0) {
     const byId = context.serverId ? profiles.find((p) => p.id === context.serverId) : undefined;
     if (byId) {
       hasProfileMatch = true;
-      resolvedContext = { ...context, serverId: byId.id, serverType: byId.serverType };
+      resolvedContext = {
+        ...resolvedContext,
+        serverId: byId.id,
+        serverType: byId.serverType,
+      };
     } else {
       const targetUrl = normalizeServerUrlForMatch(context.serverUrl);
       const byUrl = targetUrl
@@ -341,7 +348,11 @@ export async function resyncMediaServerSubtitles(
         : undefined;
       if (byUrl) {
         hasProfileMatch = true;
-        resolvedContext = { ...context, serverId: byUrl.id, serverType: byUrl.serverType };
+        resolvedContext = {
+          ...resolvedContext,
+          serverId: byUrl.id,
+          serverType: byUrl.serverType,
+        };
       }
     }
   }

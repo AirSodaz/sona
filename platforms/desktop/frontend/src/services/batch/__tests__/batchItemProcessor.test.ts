@@ -561,6 +561,60 @@ describe('BatchItemProcessor', () => {
     expect(item.errorStage).toBeUndefined();
   });
 
+  it('drops stale existingExternalSubtitleIndex when retrying failed upload', async () => {
+    const existingSegments = [
+      { id: 'seg-1', start: 0, end: 2, text: 'Hello', translation: '你好', isFinal: true },
+    ];
+    const item: BatchQueueItem = {
+      id: 'batch-emby-retry-stale-index',
+      filename: 'Emby Movie Retry',
+      filePath: '',
+      status: 'pending',
+      progress: 95,
+      segments: existingSegments,
+      projectId: null,
+      errorStage: 'upload',
+      mediaServerContext: {
+        serverId: 'server-1',
+        serverType: 'emby',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-retry',
+        itemName: 'Emby Movie Retry',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: 5,
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(syncEmbySubtitles).toHaveBeenCalledWith(
+      existingSegments,
+      expect.objectContaining({
+        itemId: 'movie-retry',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: undefined,
+      }),
+      { deleteExistingIndex: undefined }
+    );
+    expect(item.errorStage).toBeUndefined();
+  });
+
   it('prioritizes downloadEmbyAudio even when streamUrl is present', async () => {
     const item: BatchQueueItem = {
       id: 'batch-emby-stream',

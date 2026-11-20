@@ -432,34 +432,57 @@ impl AudioStreamReader {
                 if offset < 2 {
                     let wait_result =
                         tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
-                    if let Ok(Ok(status)) = wait_result {
-                        if !status.success() {
-                            let stderr_output = if let Some(task) = stderr_task.take() {
-                                task.await.unwrap_or_default()
-                            } else {
-                                String::new()
-                            };
-                            let stderr_trimmed = sanitize_stream_diagnostic(stderr_output.trim());
-                            return Err(AsrPortError::new(
-                                AsrPortErrorKind::Runtime,
-                                if stderr_trimmed.is_empty() {
-                                    format!("FFmpeg stream process exited with status {status}")
+                    match wait_result {
+                        Ok(Ok(status)) => {
+                            if !status.success() {
+                                let stderr_output = if let Some(mut task) = stderr_task.take() {
+                                    match tokio::time::timeout(
+                                        std::time::Duration::from_millis(500),
+                                        &mut task,
+                                    )
+                                    .await
+                                    {
+                                        Ok(Ok(stderr)) => stderr,
+                                        Ok(Err(_)) => String::new(),
+                                        Err(_) => {
+                                            task.abort();
+                                            String::new()
+                                        }
+                                    }
                                 } else {
-                                    format!("FFmpeg stream error ({status}): {stderr_trimmed}")
-                                },
+                                    String::new()
+                                };
+                                let stderr_trimmed =
+                                    sanitize_stream_diagnostic(stderr_output.trim());
+                                return Err(AsrPortError::new(
+                                    AsrPortErrorKind::Runtime,
+                                    if stderr_trimmed.is_empty() {
+                                        format!("FFmpeg stream process exited with status {status}")
+                                    } else {
+                                        format!("FFmpeg stream error ({status}): {stderr_trimmed}")
+                                    },
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            log::warn!(
+                                "[BatchStream] ffmpeg_wait_timeout process_id={:?}",
+                                child.id()
+                            );
+                            let _ = child.start_kill();
+                            return Err(AsrPortError::runtime(
+                                "Timed out waiting for FFmpeg stream process to exit",
                             ));
                         }
-                    } else if wait_result.is_err() {
-                        log::warn!(
-                            "[BatchStream] ffmpeg_wait_timeout process_id={:?}",
-                            child.id()
-                        );
-                        let _ = child.start_kill();
-                    } else {
-                        log::warn!(
-                            "[BatchStream] ffmpeg_wait_failed process_id={:?}",
-                            child.id()
-                        );
+                        Ok(Err(e)) => {
+                            log::warn!(
+                                "[BatchStream] ffmpeg_wait_failed process_id={:?} error={e}",
+                                child.id()
+                            );
+                            return Err(AsrPortError::runtime(format!(
+                                "Failed to wait for FFmpeg stream process: {e}"
+                            )));
+                        }
                     }
                     return Ok(None);
                 }

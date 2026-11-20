@@ -188,15 +188,108 @@ pub(crate) fn list_profiles_from_state(
     Ok(registry.list_profiles())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LegacyEmbySyncAction {
+    NoChange,
+    Update(crate::integrations::emby::EmbyConnectionConfig),
+    Clear,
+}
+
+fn clear_legacy_emby_keys(obj: &mut serde_json::Map<String, Value>) {
+    for key in [
+        "embyServerUrl",
+        "emby_server_url",
+        "embyApiKey",
+        "emby_api_key",
+        "embyToken",
+        "emby_token",
+        "embyUsername",
+        "emby_username",
+        "embyAdminUserId",
+        "emby_admin_user_id",
+        "embyAllowInvalidCerts",
+        "emby_allow_invalid_certs",
+    ] {
+        obj.remove(key);
+    }
+}
+
+fn write_legacy_emby_keys(
+    obj: &mut serde_json::Map<String, Value>,
+    cfg: &crate::integrations::emby::EmbyConnectionConfig,
+) {
+    obj.insert(
+        "embyServerUrl".to_string(),
+        Value::String(cfg.server_url.clone()),
+    );
+    obj.insert("embyApiKey".to_string(), Value::String(cfg.api_key.clone()));
+    obj.remove("embyToken");
+    obj.remove("emby_token");
+    obj.remove("emby_api_key");
+    obj.remove("emby_server_url");
+    if let Some(user) = &cfg.username {
+        obj.insert("embyUsername".to_string(), Value::String(user.clone()));
+    } else {
+        obj.remove("embyUsername");
+    }
+    obj.remove("emby_username");
+    obj.insert(
+        "embyAllowInvalidCerts".to_string(),
+        Value::Bool(cfg.allow_invalid_certs),
+    );
+    obj.remove("emby_allow_invalid_certs");
+    if let Some(admin_id) = &cfg.admin_user_id {
+        obj.insert(
+            "embyAdminUserId".to_string(),
+            Value::String(admin_id.clone()),
+        );
+    } else {
+        obj.remove("embyAdminUserId");
+    }
+    obj.remove("emby_admin_user_id");
+}
+
+fn validate_download_filename(filename: &str) -> Result<String, String> {
+    let trimmed = filename.trim();
+    if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("Invalid download filename".to_string());
+    }
+    let mut components = std::path::Path::new(trimmed).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Ok(trimmed.to_string()),
+        _ => Err("Invalid download filename".to_string()),
+    }
+}
+
 pub(crate) fn save_profile_to_state(
     services: &DesktopServices,
     registry: &MediaServerRegistry,
     mut profile: MediaServerProfile,
-) -> Result<(), String> {
+) -> Result<LegacyEmbySyncAction, String> {
     profile.server_url = normalize_server_url(&profile.server_url);
     profile.api_key = profile.api_key.trim().to_string();
     if profile.server_url.is_empty() || profile.api_key.is_empty() {
         return Err("Server URL and API key cannot be empty".to_string());
+    }
+    let parsed_url =
+        reqwest::Url::parse(&profile.server_url).map_err(|e| format!("Invalid server URL: {e}"))?;
+    if !matches!(parsed_url.scheme(), "http" | "https")
+        || parsed_url.host_str().is_none_or(|h| h.is_empty())
+    {
+        return Err("Invalid server URL: must include a valid http/https host".to_string());
+    }
+
+    match profile.server_type {
+        MediaServerType::Emby => {
+            EmbyClient::new(profile.clone())
+                .map(|_| ())
+                .map_err(|e| sanitize_media_server_error(e, Some(&profile.api_key)))?;
+        }
+        MediaServerType::Jellyfin => {
+            JellyfinClient::new(profile.clone())
+                .map(|_| ())
+                .map_err(|e| sanitize_media_server_error(e, Some(&profile.api_key)))?;
+        }
     }
 
     let mut config = services
@@ -221,6 +314,12 @@ pub(crate) fn save_profile_to_state(
         }
     }
 
+    let previous_profile = profiles
+        .iter()
+        .find(|p| p.id == profile.id)
+        .cloned()
+        .or_else(|| registry.get_profile(&profile.id));
+
     if let Some(existing) = profiles.iter_mut().find(|p| p.id == profile.id) {
         *existing = profile.clone();
     } else {
@@ -242,6 +341,53 @@ pub(crate) fn save_profile_to_state(
         active_id.unwrap()
     };
 
+    let legacy_emby_url = config
+        .get("embyServerUrl")
+        .or_else(|| config.get("emby_server_url"))
+        .and_then(|v| v.as_str())
+        .map(normalize_server_url)
+        .filter(|s| !s.is_empty());
+
+    let to_legacy_cfg = || crate::integrations::emby::EmbyConnectionConfig {
+        server_url: profile.server_url.clone(),
+        api_key: profile.api_key.clone(),
+        username: profile.username.clone(),
+        allow_invalid_certs: profile.allow_invalid_certs,
+        admin_user_id: profile.admin_user_id.clone(),
+    };
+
+    let legacy_action = if profile.id == "default-emby" {
+        if profile.server_type == MediaServerType::Emby {
+            LegacyEmbySyncAction::Update(to_legacy_cfg())
+        } else {
+            LegacyEmbySyncAction::Clear
+        }
+    } else if let Some(ref legacy_url) = legacy_emby_url {
+        let prev_matched_legacy = previous_profile.as_ref().is_some_and(|prev| {
+            prev.server_type == MediaServerType::Emby
+                && normalize_server_url(&prev.server_url).eq_ignore_ascii_case(legacy_url)
+        });
+        let other_matches_legacy = profiles.iter().any(|p| {
+            p.id != profile.id
+                && p.server_type == MediaServerType::Emby
+                && normalize_server_url(&p.server_url).eq_ignore_ascii_case(legacy_url)
+        });
+        let curr_matches_legacy = profile.server_type == MediaServerType::Emby
+            && normalize_server_url(&profile.server_url).eq_ignore_ascii_case(legacy_url);
+
+        if profile.server_type == MediaServerType::Emby
+            && (curr_matches_legacy || (prev_matched_legacy && !other_matches_legacy))
+        {
+            LegacyEmbySyncAction::Update(to_legacy_cfg())
+        } else if prev_matched_legacy && !other_matches_legacy {
+            LegacyEmbySyncAction::Clear
+        } else {
+            LegacyEmbySyncAction::NoChange
+        }
+    } else {
+        LegacyEmbySyncAction::NoChange
+    };
+
     if let Some(obj) = config.as_object_mut() {
         obj.insert(
             "mediaServers".to_string(),
@@ -251,20 +397,25 @@ pub(crate) fn save_profile_to_state(
             "activeMediaServerId".to_string(),
             serde_json::Value::String(next_active_id.clone()),
         );
+        match &legacy_action {
+            LegacyEmbySyncAction::Update(cfg) => write_legacy_emby_keys(obj, cfg),
+            LegacyEmbySyncAction::Clear => clear_legacy_emby_keys(obj),
+            LegacyEmbySyncAction::NoChange => {}
+        }
     }
 
     services.config.save(&config)?;
 
     registry
         .register(profile.clone())
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| sanitize_media_server_error(e, Some(&profile.api_key)))?;
 
     if should_set_active {
         let _ = registry.set_active(&next_active_id);
     }
 
     emit_config_updated(services, &config);
-    Ok(())
+    Ok(legacy_action)
 }
 
 pub(crate) fn delete_profile_from_state(
@@ -337,7 +488,8 @@ pub(crate) fn delete_profile_from_state(
             })
     });
 
-    let should_clear_legacy_emby = profile_id == "default-emby" || deleted_matches_legacy_url;
+    let should_clear_legacy_emby =
+        profile_id == "default-emby" || deleted_matches_legacy_url || profiles.is_empty();
 
     if let Some(obj) = config.as_object_mut() {
         obj.insert(
@@ -357,22 +509,7 @@ pub(crate) fn delete_profile_from_state(
             }
         }
         if should_clear_legacy_emby {
-            for key in [
-                "embyServerUrl",
-                "emby_server_url",
-                "embyApiKey",
-                "emby_api_key",
-                "embyToken",
-                "emby_token",
-                "embyUsername",
-                "emby_username",
-                "embyAdminUserId",
-                "emby_admin_user_id",
-                "embyAllowInvalidCerts",
-                "emby_allow_invalid_certs",
-            ] {
-                obj.remove(key);
-            }
+            clear_legacy_emby_keys(obj);
         }
     }
 
@@ -395,12 +532,25 @@ pub fn media_server_list_profiles(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn media_server_save_profile(
+pub async fn media_server_save_profile(
     services: State<'_, DesktopServices>,
     registry: State<'_, MediaServerRegistry>,
+    emby_state: State<'_, crate::integrations::emby::EmbyState>,
     profile: MediaServerProfile,
 ) -> Result<(), String> {
-    save_profile_to_state(&services, &registry, profile)
+    let legacy_action = save_profile_to_state(&services, &registry, profile)?;
+    match legacy_action {
+        LegacyEmbySyncAction::Update(cfg) => {
+            if let Ok(client) = crate::integrations::emby::EmbyClient::new(cfg) {
+                emby_state.set_client(Some(client)).await;
+            }
+        }
+        LegacyEmbySyncAction::Clear => {
+            emby_state.set_client(None).await;
+        }
+        LegacyEmbySyncAction::NoChange => {}
+    }
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -519,14 +669,15 @@ pub async fn media_server_download_audio(
         .await
         .map_err(|e| format!("Failed to create download directory: {e}"))?;
 
-    let file_name = filename.unwrap_or_else(|| {
-        format!(
+    let file_name = match filename {
+        Some(raw) => validate_download_filename(&raw)?,
+        None => format!(
             "media_server_{}_{}_{}.mp3",
             clean_id,
             stream_index.unwrap_or(0),
             uuid::Uuid::new_v4()
-        )
-    });
+        ),
+    };
     let target_path = dir.join(file_name);
 
     client
@@ -599,9 +750,16 @@ async fn execute_subtitle_upload(
         SubtitleTrackCandidate, unique_duplicate_subtitle_index,
     };
 
+    if let Some(idx) = delete_existing_external_index
+        && idx < 0
+    {
+        return Err("Invalid external subtitle index: cannot be negative".to_string());
+    }
+
     let mut deleted_any = false;
+    let mut predelete_auto_error: Option<String> = None;
     if allow_overwrite {
-        if let Some(idx) = delete_existing_external_index.filter(|&idx| idx >= 0) {
+        if let Some(idx) = delete_existing_external_index {
             match client.delete_subtitle(&payload.item_id, idx).await {
                 Ok(_) => {
                     deleted_any = true;
@@ -633,10 +791,11 @@ async fn execute_subtitle_upload(
                                 deleted_any = true;
                             }
                             Err(e) => {
+                                let sanitized = sanitize_media_server_error(&e, Some(api_key));
                                 log::warn!(
-                                    "Failed to delete existing external subtitle {idx}: {}",
-                                    sanitize_media_server_error(&e, Some(api_key))
+                                    "Failed to delete existing external subtitle {idx}: {sanitized}"
                                 );
+                                predelete_auto_error = Some(sanitized);
                             }
                         }
                     }
@@ -652,8 +811,15 @@ async fn execute_subtitle_upload(
         }
     }
 
-    upload_subtitle_with_duplicate_recovery(client, payload, api_key, deleted_any, allow_overwrite)
-        .await
+    upload_subtitle_with_duplicate_recovery(
+        client,
+        payload,
+        api_key,
+        deleted_any,
+        allow_overwrite,
+        predelete_auto_error,
+    )
+    .await
 }
 
 async fn upload_subtitle_with_duplicate_recovery(
@@ -662,6 +828,7 @@ async fn upload_subtitle_with_duplicate_recovery(
     api_key: &str,
     deleted_any: bool,
     allow_overwrite: bool,
+    predelete_auto_error: Option<String>,
 ) -> Result<(), String> {
     use crate::integrations::media_server::{
         SubtitleTrackCandidate, unique_duplicate_subtitle_index,
@@ -670,6 +837,9 @@ async fn upload_subtitle_with_duplicate_recovery(
     match client.upload_subtitle(payload).await {
         Ok(()) => Ok(()),
         Err(MediaServerError::DuplicateSubtitle) if allow_overwrite && !deleted_any => {
+            if let Some(err_msg) = predelete_auto_error {
+                return Err(err_msg);
+            }
             log::info!(
                 "[MediaServer] Duplicate subtitle detected for item {}, attempting auto-recovery",
                 payload.item_id
@@ -964,7 +1134,7 @@ mod tests {
             content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
         };
 
-        upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true)
+        upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true, None)
             .await
             .expect("duplicate subtitle should auto-recover by deleting matching external track");
 
@@ -1028,7 +1198,8 @@ mod tests {
         };
 
         let result =
-            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true).await;
+            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true, None)
+                .await;
 
         assert!(result.is_err());
         assert_eq!(
@@ -1079,7 +1250,8 @@ mod tests {
         };
 
         let result =
-            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, false).await;
+            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, false, None)
+                .await;
 
         assert!(result.is_err());
         assert_eq!(
@@ -1426,6 +1598,274 @@ mod tests {
         assert_eq!(
             no_overwrite_client
                 .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test]
+    fn test_save_profile_updates_legacy_emby_config_for_default_emby() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = build_test_services(&temp_dir);
+        let initial_config = serde_json::json!({
+            "embyServerUrl": "http://old-emby.local:8096",
+            "embyApiKey": "old-key",
+            "embyUsername": "old-user"
+        });
+        services.config.save(&initial_config).unwrap();
+
+        let registry = MediaServerRegistry::new();
+        hydrate_media_server_registry(&registry, &initial_config);
+
+        let updated_default = MediaServerProfile {
+            id: "default-emby".to_string(),
+            name: "Updated Emby".to_string(),
+            server_type: MediaServerType::Emby,
+            server_url: "http://new-emby.local:8096/".to_string(),
+            api_key: "new-key".to_string(),
+            username: Some("new-admin".to_string()),
+            admin_user_id: Some("uid-99".to_string()),
+            allow_invalid_certs: true,
+            created_at: 1000,
+            updated_at: 2000,
+        };
+
+        let action = save_profile_to_state(&services, &registry, updated_default).unwrap();
+        assert_eq!(
+            action,
+            LegacyEmbySyncAction::Update(crate::integrations::emby::EmbyConnectionConfig {
+                server_url: "http://new-emby.local:8096".to_string(),
+                api_key: "new-key".to_string(),
+                username: Some("new-admin".to_string()),
+                allow_invalid_certs: true,
+                admin_user_id: Some("uid-99".to_string()),
+            })
+        );
+
+        let saved_cfg = services.config.load().unwrap().unwrap();
+        assert_eq!(saved_cfg["embyServerUrl"], "http://new-emby.local:8096");
+        assert_eq!(saved_cfg["embyApiKey"], "new-key");
+        assert_eq!(saved_cfg["embyUsername"], "new-admin");
+        assert_eq!(saved_cfg["embyAdminUserId"], "uid-99");
+        assert_eq!(saved_cfg["embyAllowInvalidCerts"], true);
+    }
+
+    #[test]
+    fn test_save_profile_invalid_url_does_not_persist() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = build_test_services(&temp_dir);
+        let registry = MediaServerRegistry::new();
+
+        let invalid_profile = MediaServerProfile {
+            id: "bad-1".to_string(),
+            name: "Bad Server".to_string(),
+            server_type: MediaServerType::Emby,
+            server_url: "http://invalid host name".to_string(),
+            api_key: "key".to_string(),
+            username: None,
+            admin_user_id: None,
+            allow_invalid_certs: false,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+
+        let err = save_profile_to_state(&services, &registry, invalid_profile).unwrap_err();
+        assert!(err.contains("Invalid server URL"));
+        assert!(services.config.load().unwrap().is_none());
+        assert!(registry.list_profiles().is_empty());
+    }
+
+    #[test]
+    fn test_delete_last_profile_clears_orphaned_legacy_emby_config() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = build_test_services(&temp_dir);
+        let jf = make_jellyfin_profile();
+        let initial_config = serde_json::json!({
+            "mediaServers": [jf.clone()],
+            "activeMediaServerId": "jf-1",
+            "embyServerUrl": "http://orphan-emby.local:8096",
+            "embyApiKey": "orphan-key"
+        });
+        services.config.save(&initial_config).unwrap();
+
+        let registry = MediaServerRegistry::new();
+        hydrate_media_server_registry(&registry, &initial_config);
+
+        let cleared = delete_profile_from_state(&services, &registry, "jf-1").unwrap();
+        assert!(cleared);
+        let saved_cfg = services.config.load().unwrap().unwrap();
+        assert_eq!(saved_cfg["mediaServers"], serde_json::json!([]));
+        assert!(saved_cfg.get("embyServerUrl").is_none());
+        assert!(saved_cfg.get("embyApiKey").is_none());
+    }
+
+    #[test]
+    fn test_validate_download_filename_rejects_traversal() {
+        assert_eq!(
+            validate_download_filename("track_01.mp3").unwrap(),
+            "track_01.mp3"
+        );
+        for bad in [
+            "",
+            "   ",
+            ".",
+            "..",
+            "../evil.mp3",
+            "..\\evil.mp3",
+            "sub/track.mp3",
+            "sub\\track.mp3",
+            "/etc/passwd",
+        ] {
+            assert!(
+                validate_download_filename(bad).is_err(),
+                "expected '{bad}' to be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_subtitle_upload_rejects_negative_index() {
+        let client = MockSucceedingUploadClient {
+            profile: make_jellyfin_profile(),
+            upload_attempts: std::sync::atomic::AtomicUsize::new(0),
+            deleted_indices: std::sync::Mutex::new(Vec::new()),
+            streams: vec![],
+        };
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "en".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\nHello\n".to_string(),
+        };
+
+        let err = execute_subtitle_upload(&client, &payload, Some(-1), true, "key")
+            .await
+            .unwrap_err();
+        assert!(err.contains("cannot be negative"));
+        assert_eq!(
+            client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_subtitle_upload_does_not_retry_failed_auto_predelete_on_duplicate() {
+        use crate::integrations::media_server::MediaServerStreamInfo;
+
+        #[derive(Debug)]
+        struct MockFailingDeleteClient {
+            profile: MediaServerProfile,
+            get_streams_calls: std::sync::atomic::AtomicUsize,
+            delete_calls: std::sync::atomic::AtomicUsize,
+            upload_calls: std::sync::atomic::AtomicUsize,
+            streams: Vec<MediaServerStreamInfo>,
+        }
+
+        #[async_trait::async_trait]
+        impl crate::integrations::media_server::MediaServerClient for MockFailingDeleteClient {
+            fn profile(&self) -> &MediaServerProfile {
+                &self.profile
+            }
+            async fn test_connection(
+                &self,
+            ) -> Result<crate::integrations::media_server::MediaServerInfo, MediaServerError>
+            {
+                unreachable!()
+            }
+            async fn get_libraries(&self) -> Result<Vec<MediaServerLibrary>, MediaServerError> {
+                unreachable!()
+            }
+            async fn get_items(
+                &self,
+                _: Option<&str>,
+                _: Option<&str>,
+                _: u32,
+                _: u32,
+            ) -> Result<MediaServerItemListResult, MediaServerError> {
+                unreachable!()
+            }
+            async fn get_item_streams(
+                &self,
+                _: &str,
+            ) -> Result<Vec<MediaServerStreamInfo>, MediaServerError> {
+                self.get_streams_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(self.streams.clone())
+            }
+            async fn download_audio_stream(
+                &self,
+                _: &str,
+                _: Option<i32>,
+                _: &std::path::Path,
+            ) -> Result<u64, MediaServerError> {
+                unreachable!()
+            }
+            async fn upload_subtitle(
+                &self,
+                _: &MediaServerSubtitleUploadPayload,
+            ) -> Result<(), MediaServerError> {
+                self.upload_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(MediaServerError::DuplicateSubtitle)
+            }
+            async fn delete_subtitle(&self, _: &str, _: i32) -> Result<(), MediaServerError> {
+                self.delete_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(MediaServerError::ServerError(
+                    "Delete denied (403)".to_string(),
+                ))
+            }
+            async fn refresh_item_metadata(&self, _: &str) -> Result<(), MediaServerError> {
+                Ok(())
+            }
+        }
+
+        let client = MockFailingDeleteClient {
+            profile: make_jellyfin_profile(),
+            get_streams_calls: std::sync::atomic::AtomicUsize::new(0),
+            delete_calls: std::sync::atomic::AtomicUsize::new(0),
+            upload_calls: std::sync::atomic::AtomicUsize::new(0),
+            streams: vec![MediaServerStreamInfo {
+                index: 5,
+                stream_type: "Subtitle".to_string(),
+                language: Some("en".to_string()),
+                display_title: Some("English".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            }],
+        };
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "en".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\nHello\n".to_string(),
+        };
+
+        let err = execute_subtitle_upload(&client, &payload, None, true, "key")
+            .await
+            .unwrap_err();
+        assert!(err.contains("Delete denied"));
+        assert_eq!(
+            client
+                .get_streams_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            client
+                .delete_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            client
+                .upload_calls
                 .load(std::sync::atomic::Ordering::SeqCst),
             1
         );

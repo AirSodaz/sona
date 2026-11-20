@@ -755,4 +755,100 @@ describe('useEmbySync', () => {
     expect(queue).toHaveLength(1);
     expect(queue[0].mediaServerContext?.existingExternalSubtitleIndex).toBeUndefined();
   });
+
+  it('surfaces library fetch errors for default-emby when both primary and legacy fallback fail', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'default-emby' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([embyProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockRejectedValue(
+      new Error('Unauthorized library access')
+    );
+    vi.mocked(embyService.getEmbyLibraries).mockRejectedValue(new Error('Legacy failed'));
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.connectionError).toBe('Unauthorized library access');
+    });
+
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.libraries).toEqual([]);
+  });
+
+  it('does not fall back to legacy testEmbyConnection for a named Emby profile', async () => {
+    const workEmbyProfile: MediaServerProfile = {
+      ...embyProfile,
+      id: 'emby-work',
+      name: 'Work Emby',
+    };
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'emby-work' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([workEmbyProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockRejectedValue(
+      new Error('Named Emby auth error')
+    );
+    vi.mocked(embyService.testEmbyConnection).mockResolvedValue({
+      id: 'wrong-server',
+      serverName: 'Wrong Legacy Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.connectionError).toBe('Named Emby auth error');
+    });
+
+    expect(result.current.isConnected).toBe(false);
+    expect(embyService.testEmbyConnection).not.toHaveBeenCalled();
+  });
+
+  it('resets isLoadingItems when reloadProfiles clears all profiles during an in-flight fetch', async () => {
+    vi.mocked(mediaServerService.listMediaServerProfiles)
+      .mockResolvedValueOnce([embyProfile])
+      .mockResolvedValueOnce([]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-1', name: 'Movies' },
+    ]);
+
+    let resolvePendingItems: ((val: { totalRecordCount: number; items: [] }) => void) | undefined;
+    vi.mocked(mediaServerService.getMediaServerItems).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePendingItems = resolve;
+        })
+    );
+
+    const { result } = renderHook(() => useEmbySync());
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+    });
+    await waitFor(() => {
+      expect(result.current.isLoadingItems).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.reloadProfiles();
+    });
+
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.isLoadingItems).toBe(false);
+
+    resolvePendingItems?.({ totalRecordCount: 0, items: [] });
+  });
 });

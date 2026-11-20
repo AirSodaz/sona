@@ -367,14 +367,17 @@ pub async fn emby_save_config(
     Ok(())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn emby_get_config(
-    services: State<'_, DesktopServices>,
-) -> Result<Option<EmbyConnectionConfig>, String> {
-    let config = services.config.load()?;
-    let Some(config_val) = config else {
-        return Ok(None);
-    };
+pub(crate) fn extract_legacy_emby_config(
+    config_val: &serde_json::Value,
+) -> Option<EmbyConnectionConfig> {
+    let media_servers_explicitly_empty = config_val
+        .get("mediaServers")
+        .or_else(|| config_val.get("media_servers"))
+        .and_then(|v| v.as_array())
+        .is_some_and(|arr| arr.is_empty());
+    if media_servers_explicitly_empty {
+        return None;
+    }
 
     let server_url = config_val
         .get("embyServerUrl")
@@ -415,17 +418,25 @@ pub fn emby_get_config(
         let clean_url = server_url.trim();
         let clean_key = api_key.trim();
         if !clean_url.is_empty() && !clean_key.is_empty() {
-            return Ok(Some(EmbyConnectionConfig {
+            return Some(EmbyConnectionConfig {
                 server_url: clean_url.to_string(),
                 api_key: clean_key.to_string(),
                 username,
                 allow_invalid_certs,
                 admin_user_id,
-            }));
+            });
         }
     }
 
-    Ok(None)
+    None
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn emby_get_config(
+    services: State<'_, DesktopServices>,
+) -> Result<Option<EmbyConnectionConfig>, String> {
+    let config = services.config.load()?;
+    Ok(config.as_ref().and_then(extract_legacy_emby_config))
 }
 #[tauri::command(rename_all = "camelCase")]
 pub fn emby_get_processing_settings(
@@ -596,6 +607,7 @@ pub async fn emby_upload_subtitle(
     let allow_overwrite = allow_overwrite.unwrap_or(true);
 
     let mut deleted_any = false;
+    let mut predelete_auto_error: Option<String> = None;
     if let Some(idx) = delete_existing_external_index {
         if idx < 0 {
             return Err("Invalid external subtitle index: cannot be negative".to_string());
@@ -624,10 +636,11 @@ pub async fn emby_upload_subtitle(
                             deleted_any = true;
                         }
                         Err(e) => {
+                            let sanitized = sanitize_emby_error(&e, Some(&api_key));
                             log::warn!(
-                                "Failed to delete existing external subtitle {idx}: {}",
-                                sanitize_emby_error(&e, Some(&api_key))
+                                "Failed to delete existing external subtitle {idx}: {sanitized}"
                             );
+                            predelete_auto_error = Some(sanitized);
                         }
                     }
                 }
@@ -646,6 +659,9 @@ pub async fn emby_upload_subtitle(
     match upload_result {
         Ok(_) => {}
         Err(EmbyError::DuplicateSubtitle) if allow_overwrite && !deleted_any => {
+            if let Some(err_msg) = predelete_auto_error {
+                return Err(err_msg);
+            }
             log::info!(
                 "[Emby] Duplicate subtitle detected for item {}, attempting auto-recovery",
                 payload.item_id
@@ -957,5 +973,21 @@ mod tests {
         assert_eq!(servers.len(), 1);
         assert_eq!(servers[0].id, "default-emby");
         assert_eq!(servers[0].name, "Home Emby");
+    }
+
+    #[test]
+    fn test_extract_legacy_emby_config_returns_none_when_media_servers_explicitly_empty() {
+        let cfg = serde_json::json!({
+            "mediaServers": [],
+            "embyServerUrl": "http://legacy.local:8096",
+            "embyApiKey": "legacy-key"
+        });
+        assert_eq!(extract_legacy_emby_config(&cfg), None);
+
+        let legacy_only = serde_json::json!({
+            "embyServerUrl": "http://legacy.local:8096",
+            "embyApiKey": "legacy-key"
+        });
+        assert!(extract_legacy_emby_config(&legacy_only).is_some());
     }
 }

@@ -146,6 +146,33 @@ async fn process_speech_slice(
     Some(transcript_segment)
 }
 
+struct AbortOnDrop<T>(Option<tokio::task::JoinHandle<T>>);
+
+impl<T> AbortOnDrop<T> {
+    fn new(handle: tokio::task::JoinHandle<T>) -> Self {
+        Self(Some(handle))
+    }
+
+    fn abort(&mut self) {
+        if let Some(handle) = self.0.take() {
+            handle.abort();
+        }
+    }
+
+    async fn join(mut self) -> Result<T, tokio::task::JoinError> {
+        let handle = self.0.as_mut().expect("worker handle already taken");
+        let result = handle.await;
+        self.0 = None;
+        result
+    }
+}
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.abort();
+    }
+}
+
 impl StreamTranscriptionJob {
     pub fn from_plan(
         plan: BatchTranscribePlan,
@@ -316,33 +343,6 @@ impl StreamTranscriptionJob {
             samples: Vec<f32>,
             start_time: f64,
             duration: f64,
-        }
-
-        struct AbortOnDrop<T>(Option<tokio::task::JoinHandle<T>>);
-
-        impl<T> AbortOnDrop<T> {
-            fn new(handle: tokio::task::JoinHandle<T>) -> Self {
-                Self(Some(handle))
-            }
-
-            fn abort(&mut self) {
-                if let Some(handle) = self.0.take() {
-                    handle.abort();
-                }
-            }
-
-            async fn join(mut self) -> Result<T, tokio::task::JoinError> {
-                match self.0.take() {
-                    Some(handle) => handle.await,
-                    None => unreachable!("worker handle already taken"),
-                }
-            }
-        }
-
-        impl<T> Drop for AbortOnDrop<T> {
-            fn drop(&mut self) {
-                self.abort();
-            }
         }
 
         let (slice_tx, mut slice_rx) = tokio::sync::mpsc::channel::<SpeechSliceTask>(128);
@@ -641,15 +641,6 @@ mod tests {
 
     #[tokio::test]
     async fn abort_on_drop_cancels_spawned_task_when_dropped() {
-        struct AbortGuard<T>(Option<tokio::task::JoinHandle<T>>);
-        impl<T> Drop for AbortGuard<T> {
-            fn drop(&mut self) {
-                if let Some(handle) = self.0.take() {
-                    handle.abort();
-                }
-            }
-        }
-
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
         let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
         let handle = tokio::spawn(async move {
@@ -658,7 +649,7 @@ mod tests {
             let _ = done_tx.send(());
         });
 
-        let guard = AbortGuard(Some(handle));
+        let guard = AbortOnDrop::new(handle);
         drop(guard);
 
         assert!(
@@ -666,6 +657,31 @@ mod tests {
             "spawned task should drop captured sender on abort"
         );
         assert!(done_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn abort_on_drop_cancels_spawned_task_when_join_future_is_dropped() {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+        let handle = tokio::spawn(async move {
+            let _tx = tx;
+            let _ = started_tx.send(());
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        });
+
+        let guard = AbortOnDrop::new(handle);
+        let _ = started_rx.await;
+
+        tokio::select! {
+            biased;
+            _ = tokio::task::yield_now() => {}
+            _ = guard.join() => panic!("worker should not finish before yield_now"),
+        }
+
+        assert!(
+            rx.await.is_err(),
+            "dropping join future should abort the spawned worker task"
+        );
     }
 
     #[test]

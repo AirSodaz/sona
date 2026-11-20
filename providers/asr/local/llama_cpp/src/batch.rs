@@ -638,6 +638,13 @@ fn format_decode_target(path: &Path, is_url: bool) -> String {
     }
 }
 
+fn sanitize_ffmpeg_stderr(stderr: &str) -> String {
+    sona_core::runtime::logging::sanitize_log_text(stderr)
+        .chars()
+        .take(1024)
+        .collect()
+}
+
 fn configure_ffmpeg_decode_command(
     command: &mut Command,
     path: &Path,
@@ -832,8 +839,7 @@ fn read_ffmpeg_pcm_stream(
     let stderr_text = stderr_handle
         .and_then(|handle| handle.join().ok())
         .unwrap_or_default();
-    let sanitized_stderr =
-        sona_core::runtime::logging::sanitize_credentials_text(&stderr_text, None);
+    let sanitized_stderr = sanitize_ffmpeg_stderr(&stderr_text);
 
     if !status.success() {
         return Err(AsrPortError::new(
@@ -2105,5 +2111,18 @@ mod tests {
         let _ = std::fs::remove_file(vad_path);
         assert_eq!(observed_rate.load(Ordering::SeqCst), 16_000);
         assert_eq!(segments.len(), 1);
+    }
+
+    #[test]
+    fn test_sanitize_ffmpeg_stderr_redacts_rtsp_userinfo_and_signed_urls() {
+        let stderr = "rtsp://admin:SuperSecret@192.168.1.50:554/live: Connection refused\n\
+                      https://cdn.example.com/signed/secret-path/playlist.m3u8?sig=abcd1234: 403 Forbidden";
+        let sanitized = super::sanitize_ffmpeg_stderr(stderr);
+        assert!(sanitized.contains("Connection refused"));
+        assert!(sanitized.contains("403 Forbidden"));
+        assert!(!sanitized.contains("SuperSecret"));
+        assert!(!sanitized.contains("admin:"));
+        assert!(!sanitized.contains("secret-path"));
+        assert!(!sanitized.contains("abcd1234"));
     }
 }

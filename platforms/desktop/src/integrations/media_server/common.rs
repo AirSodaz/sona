@@ -85,7 +85,7 @@ fn extract_base_lang(code: &str) -> &str {
 pub fn is_chinese_code(clean: &str) -> bool {
     let base = extract_base_lang(clean);
     matches!(
-        clean,
+        base,
         "zh" | "chi"
             | "zho"
             | "chs"
@@ -102,7 +102,7 @@ pub fn is_chinese_code(clean: &str) -> bool {
             | "hak"
             | "min"
             | "nan"
-    ) || matches!(base, "zh" | "chi" | "zho" | "chs" | "cht" | "zhs" | "zht")
+    )
 }
 
 fn language_family(clean: &str) -> &str {
@@ -116,6 +116,8 @@ fn language_family(clean: &str) -> &str {
         "ru" | "rus" | "russian" => "ru",
         "it" | "ita" | "italian" => "it",
         "pt" | "por" | "portuguese" => "pt",
+        "nl" | "nld" | "dut" | "dutch" => "nl",
+        "pl" | "pol" | "polish" => "pl",
         "yue" | "cantonese" => "yue",
         _ => clean,
     }
@@ -126,7 +128,7 @@ fn is_explicit_non_chinese_code(clean: &str) -> bool {
     let fam = language_family(base);
     matches!(
         fam,
-        "en" | "ja" | "ko" | "es" | "fr" | "de" | "ru" | "it" | "pt"
+        "en" | "ja" | "ko" | "es" | "fr" | "de" | "ru" | "it" | "pt" | "nl" | "pl"
     )
 }
 
@@ -136,51 +138,55 @@ pub fn is_chinese_language(lang: Option<&str>, display_title: Option<&str>) -> b
         if is_chinese_code(&clean) {
             return true;
         }
-        let base = extract_base_lang(&clean);
-        if is_chinese_code(base) {
-            return true;
+        if is_explicit_non_chinese_code(&clean) {
+            return false;
         }
     }
 
     if let Some(title) = display_title {
         let title_lower = title.to_ascii_lowercase();
-        let lang_code = lang.map(|l| l.trim().to_ascii_lowercase());
-        let lang_is_explicitly_non_chinese = lang_code
-            .as_deref()
-            .map(is_explicit_non_chinese_code)
-            .unwrap_or(false);
-
-        let explicit_chinese_keywords = [
+        let cjk_chinese_keywords = [
             "中文字幕",
             "中文",
+            "中字",
+            "简中",
+            "簡中",
+            "繁中",
             "简体",
+            "簡體",
             "繁体",
-            "国语",
+            "繁體",
             "普通话",
+            "普通話",
+            "国语",
+            "國語",
             "粤语",
-            "chinese",
-            "chs",
-            "cht",
-            "mandarin",
-            "cantonese",
+            "粵語",
+            "汉语",
+            "漢語",
+            "简",
+            "繁",
+            "双语",
+            "汉",
         ];
 
-        let has_explicit_chinese_keyword = explicit_chinese_keywords
+        if cjk_chinese_keywords
             .iter()
-            .any(|kw| title_lower.contains(kw));
-
-        if has_explicit_chinese_keyword {
+            .any(|kw| title_lower.contains(kw))
+        {
             return true;
         }
 
-        if !lang_is_explicitly_non_chinese {
-            let broad_chinese_keywords = ["简", "繁", "双语", "汉"];
-            if broad_chinese_keywords
-                .iter()
-                .any(|kw| title_lower.contains(kw))
-            {
-                return true;
-            }
+        if title_lower
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|token| {
+                matches!(
+                    token,
+                    "chinese" | "mandarin" | "cantonese" | "chs" | "cht" | "zhs" | "zht"
+                )
+            })
+        {
+            return true;
         }
     }
 
@@ -718,7 +724,43 @@ mod tests {
         assert!(is_chinese_language(Some("chs-CN"), None));
         assert!(is_chinese_language(Some("zh-CN"), None));
         assert!(is_chinese_language(None, Some("Movie.chs.srt")));
+        assert!(is_chinese_language(None, Some("[CHT] Sub")));
         assert!(is_chinese_language(None, Some("中文字幕")));
+        assert!(is_chinese_language(Some("cmn-Hans"), None));
+        assert!(is_chinese_language(Some("yue-HK"), None));
+        assert!(language_matches(Some("cmn-Hans"), "zh-CN"));
+        assert!(language_matches(Some("yue-HK"), "zh-CN"));
         assert!(!is_chinese_language(Some("en"), Some("English")));
+        assert!(!is_chinese_language(Some("de"), Some("Deutsch (Matches)")));
+        assert!(!is_chinese_language(Some("en"), Some("Yachts")));
+        assert!(!is_chinese_language(None, Some("Yachts")));
+        assert!(!is_chinese_language(None, Some("Architects")));
+    }
+
+    #[test]
+    fn test_unique_duplicate_subtitle_index_ignores_non_chinese_substrings() {
+        let streams = [
+            SubtitleTrackCandidate {
+                index: 1,
+                stream_type: "Subtitle",
+                language: Some("de"),
+                display_title: Some("Deutsch (Matches)"),
+                is_external: true,
+                is_forced: false,
+            },
+            SubtitleTrackCandidate {
+                index: 2,
+                stream_type: "Subtitle",
+                language: Some("en"),
+                display_title: Some("Yachts"),
+                is_external: true,
+                is_forced: false,
+            },
+        ];
+
+        assert_eq!(
+            unique_duplicate_subtitle_index(streams, "zh-CN", false),
+            None
+        );
     }
 }
