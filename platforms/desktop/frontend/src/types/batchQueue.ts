@@ -23,6 +23,7 @@ export interface MediaServerTaskContext {
   targetLanguage: string;
   sourceLanguage?: string;
   audioTrackLanguage?: string;
+  overwriteExistingExternal?: boolean;
   existingExternalSubtitleIndex?: number;
   mediaSourceId?: string;
   container?: string;

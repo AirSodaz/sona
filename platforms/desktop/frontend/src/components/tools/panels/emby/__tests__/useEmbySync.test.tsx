@@ -412,4 +412,165 @@ describe('useEmbySync', () => {
     expect(queue[0].mediaServerContext?.audioTrackLanguage).toBe('ja');
     expect(result.current.queuedItemIds.has('anime-1')).toBe(true);
   });
+
+  it('persists selectProfile selection in useConfigStore across unmount and remount', async () => {
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'default-emby' });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([
+      embyProfile,
+      jellyfinProfile,
+    ]);
+    vi.mocked(mediaServerService.setActiveMediaServerProfile).mockResolvedValue(undefined);
+    vi.mocked(mediaServerService.testMediaServerConnection)
+      .mockResolvedValueOnce({
+        id: 'srv-emby-guid',
+        serverName: 'Home Emby',
+        version: '4.8.8.0',
+        hasSubtitleManagerPlugin: true,
+        serverType: 'emby',
+      })
+      .mockResolvedValue({
+        id: 'srv-jf-guid',
+        serverName: 'Remote Jellyfin',
+        version: '10.9.1',
+        hasSubtitleManagerPlugin: true,
+        serverType: 'jellyfin',
+      });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-1', name: 'Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 0,
+      items: [],
+    });
+
+    const first = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(first.result.current.activeProfileId).toBe('default-emby');
+    });
+
+    await act(async () => {
+      await first.result.current.selectProfile('jf-1');
+    });
+    expect(useConfigStore.getState().config.activeMediaServerId).toBe('jf-1');
+    first.unmount();
+
+    const remounted = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(remounted.result.current.isConnected).toBe(true);
+    });
+    expect(remounted.result.current.activeProfileId).toBe('jf-1');
+  });
+
+  it('calls saveEmbyConfig instead of overwriting named profile when handleConnect uses a different URL', async () => {
+    const namedEmby: MediaServerProfile = {
+      id: 'emby-work',
+      name: 'Work Emby',
+      serverType: 'emby',
+      serverUrl: 'http://work.local:8096',
+      apiKey: 'work-key',
+      allowInvalidCerts: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    useConfigStore.getState().setConfig({ activeMediaServerId: 'emby-work' });
+    vi.mocked(mediaServerService.listMediaServerProfiles)
+      .mockResolvedValueOnce([namedEmby])
+      .mockResolvedValueOnce([
+        namedEmby,
+        {
+          ...embyProfile,
+          serverUrl: 'http://home.local:8096',
+          apiKey: 'home-key',
+        },
+      ]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-1', name: 'Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 0,
+      items: [],
+    });
+    vi.mocked(embyService.saveEmbyConfig).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(result.current.activeProfileId).toBe('emby-work');
+    });
+
+    await act(async () => {
+      await result.current.handleConnect({
+        serverUrl: 'http://home.local:8096',
+        apiKey: 'home-key',
+        allowInvalidCerts: false,
+      });
+    });
+
+    expect(embyService.saveEmbyConfig).toHaveBeenCalledWith({
+      serverUrl: 'http://home.local:8096',
+      apiKey: 'home-key',
+      allowInvalidCerts: false,
+    });
+    expect(mediaServerService.saveMediaServerProfile).not.toHaveBeenCalled();
+  });
+
+  it('stores overwriteExistingExternal=false on mediaServerContext when overwrite is disabled', async () => {
+    saveEmbyToolOverrides({ overwriteExistingExternal: false });
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([embyProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-1', name: 'Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'movie-1',
+          name: 'Movie 1',
+          itemType: 'Movie',
+          hasChineseSubtitles: true,
+          hasEmbeddedChinese: false,
+          mediaStreams: [
+            {
+              index: 2,
+              streamType: 'Subtitle',
+              language: 'chi',
+              isExternal: true,
+              isForced: false,
+              isDefault: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.toggleItemSelection('movie-1');
+    });
+    act(() => {
+      result.current.handleSubmitBatch();
+    });
+
+    const queue = useBatchQueueStore.getState().queueItems;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].mediaServerContext?.overwriteExistingExternal).toBe(false);
+    expect(queue[0].mediaServerContext?.existingExternalSubtitleIndex).toBeUndefined();
+  });
 });

@@ -226,6 +226,42 @@ describe('mediaServerService', () => {
         })
       );
     });
+
+    it('omits deleteExistingExternalIndex and passes allowOverwrite=false when overwriteExistingExternal is false', async () => {
+      vi.mocked(invokeTauri).mockResolvedValue(undefined);
+
+      await syncMediaServerSubtitles(segments, {
+        ...context,
+        subtitleMode: 'separate_tracks',
+        sourceLanguage: 'en',
+        overwriteExistingExternal: false,
+      });
+
+      expect(invokeTauri).toHaveBeenNthCalledWith(1, TauriCommand.mediaServer.uploadSubtitle, {
+        serverId: 'srv-jellyfin-99',
+        deleteExistingExternalIndex: undefined,
+        allowOverwrite: false,
+        payload: {
+          itemId: 'item-101',
+          language: 'zh-CN',
+          format: 'srt',
+          isForced: false,
+          content: expect.stringContaining('欢迎'),
+        },
+      });
+      expect(invokeTauri).toHaveBeenNthCalledWith(2, TauriCommand.mediaServer.uploadSubtitle, {
+        serverId: 'srv-jellyfin-99',
+        deleteExistingExternalIndex: undefined,
+        allowOverwrite: false,
+        payload: {
+          itemId: 'item-101',
+          language: 'en',
+          format: 'srt',
+          isForced: false,
+          content: expect.stringContaining('Welcome'),
+        },
+      });
+    });
   });
 
   describe('resyncMediaServerSubtitles', () => {
@@ -293,6 +329,110 @@ describe('mediaServerService', () => {
         TauriCommand.emby.uploadSubtitle,
         expect.objectContaining({
           payload: expect.objectContaining({ itemId: 'item-1' }),
+        })
+      );
+    });
+
+    it('does not fall back to legacy emby uploadSubtitle on item not found errors', async () => {
+      vi.mocked(invokeTauri).mockImplementation((async (cmd: string) => {
+        if (cmd === TauriCommand.mediaServer.listProfiles) {
+          return [];
+        }
+        if (cmd === TauriCommand.mediaServer.uploadSubtitle) {
+          throw new Error('Item not found');
+        }
+        return undefined;
+      }) as typeof invokeTauri);
+
+      await expect(
+        resyncMediaServerSubtitles(segments, {
+          serverId: 'legacy-guid',
+          serverUrl: 'http://emby.local:8096',
+          itemId: 'item-1',
+          itemName: 'Movie',
+          audioStreamIndex: 1,
+          subtitleMode: 'bilingual',
+          targetLanguage: 'zh-CN',
+        })
+      ).rejects.toThrow('Item not found');
+
+      expect(invokeTauri).not.toHaveBeenCalledWith(
+        TauriCommand.emby.uploadSubtitle,
+        expect.anything()
+      );
+    });
+
+    it('does not fall back to legacy emby uploadSubtitle when legacy Emby serverUrl differs', async () => {
+      vi.mocked(invokeTauri).mockImplementation((async (cmd: string) => {
+        if (cmd === TauriCommand.mediaServer.listProfiles) {
+          return [];
+        }
+        if (cmd === TauriCommand.mediaServer.uploadSubtitle) {
+          throw new Error("Media server profile 'old-emby' not found");
+        }
+        if (cmd === TauriCommand.emby.getConfig) {
+          return {
+            serverUrl: 'http://different-emby.local:8096',
+            apiKey: 'key',
+            allowInvalidCerts: false,
+          };
+        }
+        return undefined;
+      }) as typeof invokeTauri);
+
+      await expect(
+        resyncMediaServerSubtitles(segments, {
+          serverId: 'old-emby',
+          serverUrl: 'http://emby.local:8096',
+          itemId: 'item-1',
+          itemName: 'Movie',
+          audioStreamIndex: 1,
+          subtitleMode: 'bilingual',
+          targetLanguage: 'zh-CN',
+        })
+      ).rejects.toThrow("Media server profile 'old-emby' not found");
+
+      expect(invokeTauri).not.toHaveBeenCalledWith(
+        TauriCommand.emby.uploadSubtitle,
+        expect.anything()
+      );
+    });
+
+    it('overrides overwriteExistingExternal=false with allowOverwrite=true on explicit resync', async () => {
+      vi.mocked(invokeTauri).mockImplementation((async (cmd: string) => {
+        if (cmd === TauriCommand.mediaServer.listProfiles) {
+          return [
+            {
+              id: 'default-emby',
+              name: 'My Emby',
+              serverType: 'emby',
+              serverUrl: 'http://emby.local:8096',
+              apiKey: 'key',
+              allowInvalidCerts: false,
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ];
+        }
+        return undefined;
+      }) as typeof invokeTauri);
+
+      await resyncMediaServerSubtitles(segments, {
+        serverId: 'default-emby',
+        serverUrl: 'http://emby.local:8096',
+        itemId: 'item-1',
+        itemName: 'Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+        overwriteExistingExternal: false,
+      });
+
+      expect(invokeTauri).toHaveBeenCalledWith(
+        TauriCommand.mediaServer.uploadSubtitle,
+        expect.objectContaining({
+          serverId: 'default-emby',
+          allowOverwrite: true,
         })
       );
     });

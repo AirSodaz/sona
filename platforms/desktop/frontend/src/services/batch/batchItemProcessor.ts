@@ -393,9 +393,14 @@ export class BatchItemProcessor {
           callbacks.updateFilePath?.(downloadedPath);
         } catch (downloadErr) {
           if (item.streamUrl) {
+            const audioTrackSelectionMayBeIgnored =
+              typeof mediaContext.audioStreamIndex === 'number' &&
+              mediaContext.audioStreamIndex > 0 &&
+              /[?&]Static=true(?:&|$)/i.test(item.streamUrl);
             logger.warn('[BatchQueue] audio_download_failed_fallback_to_stream', {
               ...diagnosticContext,
               streamUrl: item.streamUrl,
+              audioTrackSelectionMayBeIgnored,
               error: downloadErr,
             });
           } else {

@@ -78,21 +78,23 @@ export async function downloadEmbyAudio(itemId: string, streamIndex?: number): P
 }
 export async function uploadEmbySubtitle(
   payload: SubtitleUploadPayload,
-  deleteExistingExternalIndex?: number
+  deleteExistingExternalIndex?: number,
+  allowOverwrite?: boolean
 ): Promise<void> {
   return invokeTauri(TauriCommand.emby.uploadSubtitle, {
     payload,
     deleteExistingExternalIndex,
+    ...(allowOverwrite !== undefined ? { allowOverwrite } : {}),
   });
 }
 
 export async function syncEmbySubtitles(
   segments: TranscriptSegment[],
   embyContext: EmbyTaskContext,
-  options?: { deleteExistingIndex?: number }
+  options?: { deleteExistingIndex?: number; allowOverwrite?: boolean }
 ): Promise<void> {
   const plans = buildMediaServerSubtitleUploadPlans(segments, embyContext, options);
   for (const plan of plans) {
-    await uploadEmbySubtitle(plan.payload, plan.deleteExistingIndex);
+    await uploadEmbySubtitle(plan.payload, plan.deleteExistingIndex, plan.allowOverwrite);
   }
 }

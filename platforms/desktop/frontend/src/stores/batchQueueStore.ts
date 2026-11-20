@@ -55,6 +55,7 @@ export interface AddEmbyItemEntry {
   targetLanguage: string;
   sourceLanguage?: string;
   audioTrackLanguage?: string;
+  overwriteExistingExternal?: boolean;
   existingExternalSubtitleIndex?: number;
   serverId: string;
   serverUrl: string;
@@ -597,6 +598,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         targetLanguage: opt.targetLanguage,
         sourceLanguage: opt.sourceLanguage,
         audioTrackLanguage: opt.audioTrackLanguage,
+        overwriteExistingExternal: opt.overwriteExistingExternal,
         existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
         mediaSourceId: opt.mediaSourceId,
         container: opt.container,

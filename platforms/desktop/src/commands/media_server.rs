@@ -13,6 +13,16 @@ pub fn sanitize_media_server_error(err: impl std::fmt::Display, api_key: Option<
     sona_core::runtime::logging::sanitize_credentials_text(&err.to_string(), api_key)
 }
 
+fn emit_config_updated(services: &DesktopServices, config: &Value) {
+    let _ = services.emitter.emit(
+        "app-setting-updated",
+        serde_json::json!({
+            "key": "sona-config",
+            "value": config,
+        }),
+    );
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn media_server_test_connection(
     mut profile: MediaServerProfile,
@@ -163,6 +173,7 @@ pub fn media_server_save_profile(
         let _ = registry.set_active(&profile.id);
     }
 
+    emit_config_updated(&services, &config);
     Ok(())
 }
 
@@ -219,6 +230,7 @@ pub fn media_server_delete_profile(
     services.config.save(&config)?;
     registry.unregister(&profile_id);
 
+    emit_config_updated(&services, &config);
     Ok(())
 }
 
@@ -246,6 +258,7 @@ pub fn media_server_set_active_profile(
     }
 
     services.config.save(&config)?;
+    emit_config_updated(&services, &config);
     Ok(())
 }
 
@@ -347,6 +360,7 @@ pub async fn media_server_upload_subtitle(
     server_id: Option<String>,
     mut payload: MediaServerSubtitleUploadPayload,
     delete_existing_external_index: Option<i32>,
+    allow_overwrite: Option<bool>,
 ) -> Result<(), String> {
     let clean_id = payload.item_id.trim();
     if clean_id.is_empty()
@@ -376,9 +390,10 @@ pub async fn media_server_upload_subtitle(
         .get(server_id.as_deref())
         .map_err(|e| e.to_string())?;
     let api_key = client.profile().api_key.clone();
+    let allow_overwrite = allow_overwrite.unwrap_or(true);
 
     let mut deleted_any = false;
-    if let Some(idx) = delete_existing_external_index.filter(|&idx| idx >= 0) {
+    if allow_overwrite && let Some(idx) = delete_existing_external_index.filter(|&idx| idx >= 0) {
         match client.delete_subtitle(&payload.item_id, idx).await {
             Ok(_) => {
                 deleted_any = true;
@@ -392,8 +407,14 @@ pub async fn media_server_upload_subtitle(
         }
     }
 
-    upload_subtitle_with_duplicate_recovery(client.as_ref(), &payload, &api_key, deleted_any)
-        .await?;
+    upload_subtitle_with_duplicate_recovery(
+        client.as_ref(),
+        &payload,
+        &api_key,
+        deleted_any,
+        allow_overwrite,
+    )
+    .await?;
 
     let _ = client.refresh_item_metadata(&payload.item_id).await;
     Ok(())
@@ -404,12 +425,15 @@ async fn upload_subtitle_with_duplicate_recovery(
     payload: &MediaServerSubtitleUploadPayload,
     api_key: &str,
     deleted_any: bool,
+    allow_overwrite: bool,
 ) -> Result<(), String> {
-    use crate::integrations::media_server::{is_chinese_language, language_matches};
+    use crate::integrations::media_server::{
+        SubtitleTrackCandidate, unique_duplicate_subtitle_index,
+    };
 
     match client.upload_subtitle(payload).await {
         Ok(()) => Ok(()),
-        Err(MediaServerError::DuplicateSubtitle) if !deleted_any => {
+        Err(MediaServerError::DuplicateSubtitle) if allow_overwrite && !deleted_any => {
             log::info!(
                 "[MediaServer] Duplicate subtitle detected for item {}, attempting auto-recovery",
                 payload.item_id
@@ -419,45 +443,30 @@ async fn upload_subtitle_with_duplicate_recovery(
                 .await
                 .map_err(|e| sanitize_media_server_error(e, Some(api_key)))?;
 
-            let is_target_zh = is_chinese_language(Some(&payload.language), None);
-            let mut matching_external: Vec<_> = streams
-                .iter()
-                .filter(|s| {
-                    if !s.stream_type.eq_ignore_ascii_case("Subtitle")
-                        || !s.is_external
-                        || s.is_forced != payload.is_forced
-                    {
-                        return false;
-                    }
-                    if is_target_zh {
-                        is_chinese_language(s.language.as_deref(), s.display_title.as_deref())
-                    } else {
-                        language_matches(s.language.as_deref(), &payload.language)
-                    }
-                })
-                .collect();
-
-            if matching_external.is_empty() {
+            let Some(stream_index) = unique_duplicate_subtitle_index(
+                streams.iter().map(|s| SubtitleTrackCandidate {
+                    index: s.index,
+                    stream_type: &s.stream_type,
+                    language: s.language.as_deref(),
+                    display_title: s.display_title.as_deref(),
+                    is_external: s.is_external,
+                    is_forced: s.is_forced,
+                }),
+                &payload.language,
+                payload.is_forced,
+            ) else {
                 return Err(sanitize_media_server_error(
                     MediaServerError::DuplicateSubtitle,
                     Some(api_key),
                 ));
-            }
+            };
 
-            if matching_external.len() != 1 {
-                return Err(sanitize_media_server_error(
-                    MediaServerError::DuplicateSubtitle,
-                    Some(api_key),
-                ));
-            }
-
-            let stream = matching_external[0];
             log::info!(
                 "[MediaServer] Auto-recovering: deleting existing external subtitle track index {}",
-                stream.index
+                stream_index
             );
             client
-                .delete_subtitle(&payload.item_id, stream.index)
+                .delete_subtitle(&payload.item_id, stream_index)
                 .await
                 .map_err(|e| sanitize_media_server_error(e, Some(api_key)))?;
 
@@ -511,6 +520,7 @@ pub fn media_server_save_processing_settings(
     }
 
     services.config.save(&current_config)?;
+    emit_config_updated(&services, &current_config);
     Ok(())
 }
 
@@ -718,7 +728,7 @@ mod tests {
             content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
         };
 
-        upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false)
+        upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true)
             .await
             .expect("duplicate subtitle should auto-recover by deleting matching external track");
 
@@ -781,7 +791,59 @@ mod tests {
             content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
         };
 
-        let result = upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false).await;
+        let result =
+            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, true).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert!(client.deleted_indices.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_upload_subtitle_duplicate_recovery_skipped_when_overwrite_disabled() {
+        use crate::integrations::media_server::MediaServerStreamInfo;
+
+        let client = MockDuplicateRecoverClient {
+            profile: MediaServerProfile {
+                id: "emby-1".to_string(),
+                name: "Emby".to_string(),
+                server_type: MediaServerType::Emby,
+                server_url: "http://localhost:8096".to_string(),
+                api_key: "key".to_string(),
+                username: None,
+                admin_user_id: None,
+                allow_invalid_certs: false,
+                created_at: 1000,
+                updated_at: 1000,
+            },
+            upload_attempts: std::sync::atomic::AtomicUsize::new(0),
+            deleted_indices: std::sync::Mutex::new(Vec::new()),
+            streams: vec![MediaServerStreamInfo {
+                index: 5,
+                stream_type: "Subtitle".to_string(),
+                language: Some("chs".to_string()),
+                display_title: Some("简体中文".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            }],
+        };
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "zh-CN".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
+        };
+
+        let result =
+            upload_subtitle_with_duplicate_recovery(&client, &payload, "key", false, false).await;
 
         assert!(result.is_err());
         assert_eq!(

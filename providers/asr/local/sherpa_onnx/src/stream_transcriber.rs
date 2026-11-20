@@ -98,6 +98,9 @@ async fn process_speech_slice(
     };
 
     let (decoded, text) = decoded;
+    if observer.is_cancelled() {
+        return None;
+    }
     log::debug!(
         "[BatchStream] slice_complete instance_id={} start_s={:.3} duration_s={:.3} text_chars={} elapsed_ms={}",
         diagnostic_id,
@@ -315,13 +318,40 @@ impl StreamTranscriptionJob {
             duration: f64,
         }
 
+        struct AbortOnDrop<T>(Option<tokio::task::JoinHandle<T>>);
+
+        impl<T> AbortOnDrop<T> {
+            fn new(handle: tokio::task::JoinHandle<T>) -> Self {
+                Self(Some(handle))
+            }
+
+            fn abort(&mut self) {
+                if let Some(handle) = self.0.take() {
+                    handle.abort();
+                }
+            }
+
+            async fn join(mut self) -> Result<T, tokio::task::JoinError> {
+                match self.0.take() {
+                    Some(handle) => handle.await,
+                    None => unreachable!("worker handle already taken"),
+                }
+            }
+        }
+
+        impl<T> Drop for AbortOnDrop<T> {
+            fn drop(&mut self) {
+                self.abort();
+            }
+        }
+
         let (slice_tx, mut slice_rx) = tokio::sync::mpsc::channel::<SpeechSliceTask>(128);
         let worker_recognizer = Arc::clone(&recognizer);
         let worker_punctuation = effective_punctuation.clone();
         let worker_observer = Arc::clone(&observer);
         let output_segment_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let worker_count = Arc::clone(&output_segment_count);
-        let worker_handle = tokio::spawn(async move {
+        let mut worker_handle = AbortOnDrop::new(tokio::spawn(async move {
             let mut segments = Vec::new();
             while let Some(task) = slice_rx.recv().await {
                 if worker_observer.is_cancelled() {
@@ -342,7 +372,7 @@ impl StreamTranscriptionJob {
                 }
             }
             segments
-        });
+        }));
 
         log::info!(
             "[BatchStream] segmentation instance_id={} effective={} fixed_chunk_s=15",
@@ -543,7 +573,7 @@ impl StreamTranscriptionJob {
 
         drop(slice_tx);
 
-        let results = match worker_handle.await {
+        let results = match worker_handle.join().await {
             Ok(results) => results,
             Err(e) => {
                 reader.finish();
@@ -558,12 +588,23 @@ impl StreamTranscriptionJob {
             return Err(AsrPortError::runtime("Task cancelled."));
         }
 
-        if results.is_empty()
-            && let Some(err) = stream_error
-        {
-            reader.finish();
-            return Err(err);
-        }
+        let output_segments = results.len();
+        let results = match finalize_stream_result(results, stream_error) {
+            Ok(results) => results,
+            Err(err) => {
+                log::warn!(
+                    "[BatchStream] failed_after_flush instance_id={} received_s={:.3} slices={} output_segments={} elapsed_ms={} detail={}",
+                    diagnostic_id,
+                    total_samples_streamed as f64 / 16000.0,
+                    slice_count,
+                    output_segments,
+                    started_at.elapsed().as_millis(),
+                    sanitize_stream_diagnostic(&err.to_string()),
+                );
+                reader.finish();
+                return Err(err);
+            }
+        };
 
         log::info!(
             "[BatchStream] complete instance_id={} received_s={:.3} slices={} output_segments={} skipped_slices={} last_end_s={:.3} elapsed_ms={}",
@@ -581,5 +622,71 @@ impl StreamTranscriptionJob {
         reader.finish();
         observer.on_progress(100.0);
         Ok(results)
+    }
+}
+
+fn finalize_stream_result(
+    results: Vec<TranscriptSegment>,
+    stream_error: Option<AsrPortError>,
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    if let Some(err) = stream_error {
+        return Err(err);
+    }
+    Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn abort_on_drop_cancels_spawned_task_when_dropped() {
+        struct AbortGuard<T>(Option<tokio::task::JoinHandle<T>>);
+        impl<T> Drop for AbortGuard<T> {
+            fn drop(&mut self) {
+                if let Some(handle) = self.0.take() {
+                    handle.abort();
+                }
+            }
+        }
+
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
+        let handle = tokio::spawn(async move {
+            let _tx = tx;
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            let _ = done_tx.send(());
+        });
+
+        let guard = AbortGuard(Some(handle));
+        drop(guard);
+
+        assert!(
+            rx.await.is_err(),
+            "spawned task should drop captured sender on abort"
+        );
+        assert!(done_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn stream_error_is_propagated_even_when_partial_segments_exist() {
+        let partial = vec![TranscriptSegment {
+            id: "seg-1".to_string(),
+            text: "partial".to_string(),
+            start: 0.0,
+            end: 1.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }];
+        let err = finalize_stream_result(partial, Some(AsrPortError::runtime("stream dropped")))
+            .expect_err("mid-stream error must not succeed with partial segments");
+        assert!(err.to_string().contains("stream dropped"));
     }
 }

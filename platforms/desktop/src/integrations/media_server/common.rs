@@ -211,6 +211,39 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
     language_family(s_base) == language_family(pref_base)
 }
 
+pub struct SubtitleTrackCandidate<'a> {
+    pub index: i32,
+    pub stream_type: &'a str,
+    pub language: Option<&'a str>,
+    pub display_title: Option<&'a str>,
+    pub is_external: bool,
+    pub is_forced: bool,
+}
+
+pub fn unique_duplicate_subtitle_index<'a>(
+    streams: impl IntoIterator<Item = SubtitleTrackCandidate<'a>>,
+    language: &str,
+    is_forced: bool,
+) -> Option<i32> {
+    let is_target_zh = is_chinese_language(Some(language), None);
+    let mut matches = streams.into_iter().filter(|stream| {
+        if !stream.stream_type.eq_ignore_ascii_case("Subtitle")
+            || !stream.is_external
+            || stream.is_forced != is_forced
+        {
+            return false;
+        }
+        if is_target_zh {
+            is_chinese_language(stream.language, stream.display_title)
+        } else {
+            language_matches(stream.language, language)
+        }
+    });
+
+    let candidate = matches.next()?;
+    matches.next().is_none().then_some(candidate.index)
+}
+
 pub fn select_best_audio_stream<'a>(
     streams: &'a [MediaServerStreamInfo],
     preferred_language: Option<&str>,
