@@ -1,10 +1,10 @@
 use super::VadModelRunner;
-use ndarray::{Array3, ArrayView1, ArrayView2};
+use ndarray::{Array1, Array3, ArrayView2};
 use ort::session::Session;
-use ort::value::Value;
+use ort::value::{TensorRef, Value};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 pub const DEFAULT_SILERO_WINDOW_SIZE: usize = 512; // 32ms @ 16kHz
 pub const SILERO_CONTEXT_SIZE: usize = 64; // 4ms context @ 16kHz
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,7 +14,7 @@ enum SileroVersion {
 }
 
 pub struct SileroVadRunner {
-    session: Arc<Session>,
+    session: Arc<Mutex<Session>>,
     version: SileroVersion,
     audio_input_name: String,
     sr_input_name: Option<String>,
@@ -29,17 +29,18 @@ pub struct SileroVadRunner {
 }
 
 impl SileroVadRunner {
-    pub fn from_session(session: Arc<Session>) -> Result<Self, AsrPortError> {
+    pub fn from_session(session: Arc<Mutex<Session>>) -> Result<Self, AsrPortError> {
+        let session_metadata = session.lock().unwrap_or_else(|e| e.into_inner());
         let mut audio_input_name = None;
         let mut sr_input_name = None;
         let mut has_h = false;
         let mut has_c = false;
         let mut has_state = false;
 
-        for input in &session.inputs {
-            match input.name.as_str() {
-                "input" | "waveform" | "x" => audio_input_name = Some(input.name.clone()),
-                "sr" => sr_input_name = Some(input.name.clone()),
+        for input in session_metadata.inputs() {
+            match input.name() {
+                "input" | "waveform" | "x" => audio_input_name = Some(input.name().to_string()),
+                "sr" => sr_input_name = Some(input.name().to_string()),
                 "state" => has_state = true,
                 "h" => has_h = true,
                 "c" => has_c = true,
@@ -60,10 +61,10 @@ impl SileroVadRunner {
                 "Unsupported Silero model: missing recurrent state inputs ('state' or 'h')",
             ));
         }
-        let has_output = session
-            .outputs
+        let has_output = session_metadata
+            .outputs()
             .iter()
-            .any(|o| o.name == "output" || o.name == "prob");
+            .any(|o| o.name() == "output" || o.name() == "prob");
         if !has_output {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
@@ -78,14 +79,14 @@ impl SileroVadRunner {
                     "Unsupported Silero V4 model: found 'h' input but missing 'c' (cell state)",
                 ));
             }
-            let has_hn = session
-                .outputs
+            let has_hn = session_metadata
+                .outputs()
                 .iter()
-                .any(|o| o.name == "hn" || o.name == "new_h");
-            let has_cn = session
-                .outputs
+                .any(|o| o.name() == "hn" || o.name() == "new_h");
+            let has_cn = session_metadata
+                .outputs()
                 .iter()
-                .any(|o| o.name == "cn" || o.name == "new_c");
+                .any(|o| o.name() == "cn" || o.name() == "new_c");
             if !has_hn || !has_cn {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::Model,
@@ -94,10 +95,10 @@ impl SileroVadRunner {
             }
             SileroVersion::V4
         } else {
-            let has_state_out = session
-                .outputs
+            let has_state_out = session_metadata
+                .outputs()
                 .iter()
-                .any(|o| o.name == "stateN" || o.name == "state");
+                .any(|o| o.name() == "stateN" || o.name() == "state");
             if !has_state_out {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::Model,
@@ -106,6 +107,7 @@ impl SileroVadRunner {
             }
             SileroVersion::V5OrV6
         };
+        drop(session_metadata);
         Ok(Self {
             session,
             version,
@@ -151,7 +153,7 @@ impl VadModelRunner for SileroVadRunner {
         }
 
         let sr_val = if self.sr_input_name.is_some() {
-            let sr_arr = ArrayView1::from(&[crate::shared::SUPPORTED_SAMPLE_RATE as i64]);
+            let sr_arr = Array1::from_vec(vec![crate::shared::SUPPORTED_SAMPLE_RATE as i64]);
             Some(Value::from_array(sr_arr).map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
@@ -188,14 +190,14 @@ impl VadModelRunner for SileroVadRunner {
                         format!("Failed to construct audio tensor view: {e}"),
                     )
                 })?;
-                let audio_val = Value::from_array(audio_view).map_err(|e| {
+                let audio_val = TensorRef::from_array_view(audio_view).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind audio value: {e}"),
                     )
                 })?;
 
-                let state_val = Value::from_array(self.state.view()).map_err(|e| {
+                let state_val = TensorRef::from_array_view(self.state.view()).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind state: {e}"),
@@ -216,7 +218,9 @@ impl VadModelRunner for SileroVadRunner {
                     ));
                 }
 
-                let outputs = self.session.run(inputs).map_err(|e| {
+                let session_handle = Arc::clone(&self.session);
+                let mut session = session_handle.lock().unwrap_or_else(|e| e.into_inner());
+                let outputs = session.run(inputs).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Silero inference failed: {e}"),
@@ -234,7 +238,7 @@ impl VadModelRunner for SileroVadRunner {
                     })?;
                 let raw_prob = {
                     let (_, output_data) =
-                        output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                        output_tensor.try_extract_tensor::<f32>().map_err(|e| {
                             AsrPortError::new(
                                 AsrPortErrorKind::Runtime,
                                 format!("Failed to extract output probability: {e}"),
@@ -262,14 +266,12 @@ impl VadModelRunner for SileroVadRunner {
                             "Missing 'stateN' or 'state' in Silero outputs",
                         )
                     })?;
-                let (_, data) = next_state_tensor
-                    .try_extract_raw_tensor::<f32>()
-                    .map_err(|e| {
-                        AsrPortError::new(
-                            AsrPortErrorKind::Runtime,
-                            format!("Failed to extract state tensor: {e}"),
-                        )
-                    })?;
+                let (_, data) = next_state_tensor.try_extract_tensor::<f32>().map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to extract state tensor: {e}"),
+                    )
+                })?;
                 if data.len() != 2 * 128 {
                     let len = data.len();
                     drop(outputs);
@@ -304,17 +306,17 @@ impl VadModelRunner for SileroVadRunner {
                             format!("Failed to construct audio tensor view: {e}"),
                         )
                     })?;
-                let audio_val = Value::from_array(audio_view).map_err(|e| {
+                let audio_val = TensorRef::from_array_view(audio_view).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to bind audio value: {e}"),
                     )
                 })?;
 
-                let h_val = Value::from_array(self.h.view()).map_err(|e| {
+                let h_val = TensorRef::from_array_view(self.h.view()).map_err(|e| {
                     AsrPortError::new(AsrPortErrorKind::Runtime, format!("Failed to bind h: {e}"))
                 })?;
-                let c_val = Value::from_array(self.c.view()).map_err(|e| {
+                let c_val = TensorRef::from_array_view(self.c.view()).map_err(|e| {
                     AsrPortError::new(AsrPortErrorKind::Runtime, format!("Failed to bind c: {e}"))
                 })?;
 
@@ -333,7 +335,9 @@ impl VadModelRunner for SileroVadRunner {
                     ));
                 }
 
-                let outputs = self.session.run(inputs).map_err(|e| {
+                let session_handle = Arc::clone(&self.session);
+                let mut session = session_handle.lock().unwrap_or_else(|e| e.into_inner());
+                let outputs = session.run(inputs).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Silero V4 inference failed: {e}"),
@@ -351,7 +355,7 @@ impl VadModelRunner for SileroVadRunner {
                     })?;
                 let raw_prob = {
                     let (_, output_data) =
-                        output_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                        output_tensor.try_extract_tensor::<f32>().map_err(|e| {
                             AsrPortError::new(
                                 AsrPortErrorKind::Runtime,
                                 format!("Failed to extract output probability: {e}"),
@@ -379,7 +383,7 @@ impl VadModelRunner for SileroVadRunner {
                             "Missing 'hn' or 'new_h' in Silero V4 outputs",
                         )
                     })?;
-                let (_, h_data) = hn_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                let (_, h_data) = hn_tensor.try_extract_tensor::<f32>().map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to extract hn: {e}"),
@@ -409,7 +413,7 @@ impl VadModelRunner for SileroVadRunner {
                             "Missing 'cn' or 'new_c' in Silero V4 outputs",
                         )
                     })?;
-                let (_, c_data) = cn_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                let (_, c_data) = cn_tensor.try_extract_tensor::<f32>().map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
                         format!("Failed to extract cn: {e}"),

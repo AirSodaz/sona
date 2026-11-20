@@ -4,17 +4,17 @@ use crate::fbank::{
 };
 use ndarray::{ArrayD, ArrayView4, ArrayViewD, IxDyn};
 use ort::session::Session;
-use ort::value::Value;
+use ort::value::{TensorRef, Value};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::collections::VecDeque;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const CACHE_SHAPE: [usize; 4] = [1, 128, 19, 1];
 const CACHE_LEN: usize = 128 * 19;
 
 pub struct FsmnVadRunner {
-    session: Arc<Session>,
+    session: Arc<Mutex<Session>>,
     fbank: FbankExtractor,
     cmvn: CmvnParams,
     // Ping-pong caches for 4 FSMN layers
@@ -34,11 +34,21 @@ pub struct FsmnVadRunner {
 }
 
 impl FsmnVadRunner {
-    pub fn from_session(session: Arc<Session>, path: Option<&Path>) -> Result<Self, AsrPortError> {
-        let has_speech = session.inputs.iter().any(|i| i.name == "speech");
+    pub fn from_session(
+        session: Arc<Mutex<Session>>,
+        path: Option<&Path>,
+    ) -> Result<Self, AsrPortError> {
+        let session_metadata = session.lock().unwrap_or_else(|e| e.into_inner());
+        let has_speech = session_metadata
+            .inputs()
+            .iter()
+            .any(|i| i.name() == "speech");
         let has_caches = (0..4).all(|idx| {
             let in_name = format!("in_cache{idx}");
-            session.inputs.iter().any(|i| i.name == in_name)
+            session_metadata
+                .inputs()
+                .iter()
+                .any(|i| i.name() == in_name)
         });
         if !has_speech || !has_caches {
             return Err(AsrPortError::new(
@@ -47,10 +57,16 @@ impl FsmnVadRunner {
             ));
         }
 
-        let has_logits = session.outputs.iter().any(|o| o.name == "logits");
+        let has_logits = session_metadata
+            .outputs()
+            .iter()
+            .any(|o| o.name() == "logits");
         let has_out_caches = (0..4).all(|idx| {
             let out_name = format!("out_cache{idx}");
-            session.outputs.iter().any(|o| o.name == out_name)
+            session_metadata
+                .outputs()
+                .iter()
+                .any(|o| o.name() == out_name)
         });
         if !has_logits || !has_out_caches {
             return Err(AsrPortError::new(
@@ -58,6 +74,7 @@ impl FsmnVadRunner {
                 "Unsupported FSMN model: missing 'logits' or 'out_cache0..3' outputs",
             ));
         }
+        drop(session_metadata);
 
         let mut cmvn = CmvnParams::default();
         if let Some(p) = path {
@@ -241,7 +258,7 @@ impl VadModelRunner for FsmnVadRunner {
                     format!("Failed to build FSMN speech tensor view: {e}"),
                 )
             })?;
-        let speech_val = Value::from_array(speech_view).map_err(|e| {
+        let speech_val = TensorRef::from_array_view(speech_view).map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("Failed to bind FSMN speech input: {e}"),
@@ -256,36 +273,41 @@ impl VadModelRunner for FsmnVadRunner {
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
         let c3_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache3)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let inputs =
-            vec![
-                ("speech", ort::session::SessionInputValue::from(speech_val)),
-                (
-                    "in_cache0",
-                    ort::session::SessionInputValue::from(Value::from_array(c0_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+        let inputs = vec![
+            ("speech", ort::session::SessionInputValue::from(speech_val)),
+            (
+                "in_cache0",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c0_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache1",
-                    ort::session::SessionInputValue::from(Value::from_array(c1_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache1",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c1_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache2",
-                    ort::session::SessionInputValue::from(Value::from_array(c2_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache2",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c2_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache3",
-                    ort::session::SessionInputValue::from(Value::from_array(c3_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache3",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c3_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-            ];
+            ),
+        ];
 
-        let outputs = self.session.run(inputs).map_err(|e| {
+        let session_handle = Arc::clone(&self.session);
+        let mut session = session_handle.lock().unwrap_or_else(|e| e.into_inner());
+        let outputs = session.run(inputs).map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("FSMN VAD inference failed: {e}"),
@@ -295,7 +317,7 @@ impl VadModelRunner for FsmnVadRunner {
         let logits_tensor = outputs.get("logits").ok_or_else(|| {
             AsrPortError::new(AsrPortErrorKind::Runtime, "Missing logits in FSMN output")
         })?;
-        let (_, logits_data) = logits_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+        let (_, logits_data) = logits_tensor.try_extract_tensor::<f32>().map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("Failed to extract FSMN logits: {e}"),
@@ -330,7 +352,7 @@ impl VadModelRunner for FsmnVadRunner {
                     ));
                 }
             };
-            let (_, data) = match cache_tensor.try_extract_raw_tensor::<f32>() {
+            let (_, data) = match cache_tensor.try_extract_tensor::<f32>() {
                 Ok(res) => res,
                 Err(e) => {
                     drop(outputs);
@@ -413,36 +435,41 @@ impl VadModelRunner for FsmnVadRunner {
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
         let c3_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache3)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let inputs =
-            vec![
-                ("speech", ort::session::SessionInputValue::from(speech_val)),
-                (
-                    "in_cache0",
-                    ort::session::SessionInputValue::from(Value::from_array(c0_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+        let inputs = vec![
+            ("speech", ort::session::SessionInputValue::from(speech_val)),
+            (
+                "in_cache0",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c0_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache1",
-                    ort::session::SessionInputValue::from(Value::from_array(c1_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache1",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c1_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache2",
-                    ort::session::SessionInputValue::from(Value::from_array(c2_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache2",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c2_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-                (
-                    "in_cache3",
-                    ort::session::SessionInputValue::from(Value::from_array(c3_view).map_err(
-                        |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
-                    )?),
+            ),
+            (
+                "in_cache3",
+                ort::session::SessionInputValue::from(
+                    TensorRef::from_array_view(c3_view)
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?,
                 ),
-            ];
+            ),
+        ];
 
-        let outputs = self.session.run(inputs).map_err(|e| {
+        let session_handle = Arc::clone(&self.session);
+        let mut session = session_handle.lock().unwrap_or_else(|e| e.into_inner());
+        let outputs = session.run(inputs).map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("Batch FSMN VAD inference failed: {e}"),
@@ -452,7 +479,7 @@ impl VadModelRunner for FsmnVadRunner {
         let logits_tensor = outputs.get("logits").ok_or_else(|| {
             AsrPortError::new(AsrPortErrorKind::Runtime, "Missing logits in FSMN output")
         })?;
-        let (shape, logits_data) = logits_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+        let (shape, logits_data) = logits_tensor.try_extract_tensor::<f32>().map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Runtime,
                 format!("Failed to extract FSMN logits: {e}"),

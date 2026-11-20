@@ -191,7 +191,7 @@ function downloadOnnxRuntimeGpu({
 }
 
 function downloadSherpaOnnxCuda({
-  version = '2.0.1',
+  version = '2.0.2',
   ortVersion = '1.28.2',
   cudaVersion = '12.4',
   cacheDir,
@@ -451,7 +451,7 @@ function stageCudaAddonFiles({
   version = '0.3.0',
   cudaVersion = '12.4',
   llamaCppRef = 'b11429',
-  sherpaOnnxVersion = '2.0.1',
+  sherpaOnnxVersion = '2.0.2',
 }) {
   fs.mkdirSync(stagedDir, { recursive: true });
 
@@ -601,7 +601,7 @@ function runCli() {
 
   const addonVersion = options['addon-version'] || '0.3.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
-  const sherpaVersion = options['sherpa-version'] || '2.0.1';
+  const sherpaVersion = options['sherpa-version'] || '2.0.2';
   const ortVersion = options['ort-version'] || '1.28.2';
   const llamaRef = options['llama-ref'] || 'b11429';
   const outputDir = path.resolve(options['output-dir'] || path.join(repoRoot, 'dist', 'cuda-addon'));
