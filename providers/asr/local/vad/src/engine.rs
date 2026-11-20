@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
-static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Session>>>> =
+static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<Session>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Prunes idle VAD sessions from the global cache.
@@ -60,7 +60,7 @@ pub fn cached_session_count_matching<F: Fn(&Path) -> bool>(predicate: F) -> usiz
         .count()
 }
 
-pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPortError> {
+pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Mutex<Session>>, AsrPortError> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     {
         let cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
@@ -83,7 +83,7 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPort
             )
         })?;
 
-    let session_arc = Arc::new(session);
+    let session_arc = Arc::new(Mutex::new(session));
     let mut cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let entry = cache.entry(canonical).or_insert(session_arc);
     Ok(entry.clone())

@@ -37,7 +37,7 @@ function createCudaAddonManifest({
   addonVersion,
   cudaVersion = '12.4',
   llamaCppRef = 'b11429',
-  sherpaOnnxVersion = '2.0.1',
+  sherpaOnnxVersion = '2.0.2',
   targetOs = null,
   targetArch = null,
   repo = 'AirSodaz/sona',
@@ -119,7 +119,7 @@ function runCli() {
       addonVersion: options.version || options['addon-version'],
       cudaVersion: options['cuda-version'] || '12.4',
       llamaCppRef: options['llama-ref'] || 'b11429',
-      sherpaOnnxVersion: options['sherpa-version'] || '2.0.1',
+      sherpaOnnxVersion: options['sherpa-version'] || '2.0.2',
       // The aggregated release manifest covers every platform, so a target is only
       // recorded when the caller states one explicitly.
       targetOs: options['target-os'] || null,

@@ -3,6 +3,7 @@ use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Value;
 use sona_core::ports::translation::TranslationPortError;
 use std::path::Path;
+use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
 struct BeamHypothesis {
@@ -29,8 +30,8 @@ fn log_softmax(logits: &[f32]) -> Vec<f32> {
 }
 
 pub struct OnnxNmtModel {
-    encoder_session: Option<Session>,
-    decoder_session: Option<Session>,
+    encoder_session: Option<Mutex<Session>>,
+    decoder_session: Option<Mutex<Session>>,
     source_tokenizer: SentencePieceTokenizer,
     target_tokenizer: SentencePieceTokenizer,
     max_length: usize,
@@ -87,8 +88,8 @@ impl OnnxNmtModel {
             .commit_from_file(&decoder_path)
             .map_err(TranslationPortError::engine_failed)?;
         Ok(Self {
-            encoder_session: Some(encoder_session),
-            decoder_session: Some(decoder_session),
+            encoder_session: Some(Mutex::new(encoder_session)),
+            decoder_session: Some(Mutex::new(decoder_session)),
             source_tokenizer,
             target_tokenizer,
             max_length: 256,
@@ -155,14 +156,12 @@ impl OnnxNmtModel {
         let attention_mask_val = Value::from_array(attention_mask_array)
             .map_err(TranslationPortError::inference_failed)?;
 
+        let mut encoder = encoder.lock().unwrap_or_else(|e| e.into_inner());
         let encoder_outputs = encoder
-            .run(
-                ort::inputs![
-                    "input_ids" => input_ids_val,
-                    "attention_mask" => attention_mask_val,
-                ]
-                .map_err(TranslationPortError::inference_failed)?,
-            )
+            .run(ort::inputs![
+                "input_ids" => input_ids_val,
+                "attention_mask" => attention_mask_val,
+            ])
             .map_err(TranslationPortError::inference_failed)?;
 
         let last_hidden_state = encoder_outputs
@@ -172,15 +171,19 @@ impl OnnxNmtModel {
                 TranslationPortError::inference_failed("Encoder missing last_hidden_state output")
             })?;
 
-        let (last_hidden_shape, last_hidden_data) = last_hidden_state
-            .try_extract_raw_tensor::<f32>()
-            .map_err(TranslationPortError::inference_failed)?;
+        let (last_hidden_shape, last_hidden_data) =
+            last_hidden_state
+                .try_extract_tensor::<f32>()
+                .map_err(TranslationPortError::inference_failed)?;
 
         let hidden_dim = if last_hidden_shape.len() >= 3 {
             last_hidden_shape[2] as usize
         } else {
             512
         };
+        let last_hidden_data = last_hidden_data.to_vec();
+        drop(encoder_outputs);
+        drop(encoder);
 
         let start_pad = self.target_tokenizer.pad_id.unwrap_or(65000) as i64;
         let eos_id = self.target_tokenizer.eos_id as i64;
@@ -230,7 +233,7 @@ impl OnnxNmtModel {
                 None => {
                     let mut b_hidden_data = Vec::with_capacity(b * seq_len * hidden_dim);
                     for _ in 0..b {
-                        b_hidden_data.extend_from_slice(last_hidden_data);
+                        b_hidden_data.extend_from_slice(&last_hidden_data);
                     }
                     let hidden_states_array =
                         ndarray::Array3::from_shape_vec((b, seq_len, hidden_dim), b_hidden_data)
@@ -251,6 +254,7 @@ impl OnnxNmtModel {
                 }
             };
 
+            let mut decoder = decoder.lock().unwrap_or_else(|e| e.into_inner());
             let decoder_outputs = decoder
                 .run(vec![
                     (
@@ -267,7 +271,7 @@ impl OnnxNmtModel {
             })?;
 
             let (logits_shape, logits_data) = logits_val
-                .try_extract_raw_tensor::<f32>()
+                .try_extract_tensor::<f32>()
                 .map_err(TranslationPortError::inference_failed)?;
 
             let vocab_size = if logits_shape.len() >= 3 {
@@ -279,6 +283,9 @@ impl OnnxNmtModel {
             };
 
             let current_seq_len = logits_shape[1] as usize;
+            let logits_data = logits_data.to_vec();
+            drop(decoder_outputs);
+            drop(decoder);
             let last_step = if current_seq_len > 0 {
                 current_seq_len - 1
             } else {
