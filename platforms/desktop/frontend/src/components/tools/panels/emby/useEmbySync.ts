@@ -225,6 +225,8 @@ export function useEmbySync(): UseEmbySyncReturn {
   configRef.current = config;
   const activeProfileRef = useRef(activeProfile);
   activeProfileRef.current = activeProfile;
+  const serverInfoRef = useRef(serverInfo);
+  serverInfoRef.current = serverInfo;
   const noticeTimeoutRef = useRef<number | null>(null);
   const hasLoadedRef = useRef(false);
   const fetchSeqRef = useRef(0);
@@ -893,14 +895,15 @@ export function useEmbySync(): UseEmbySyncReturn {
 
       let existingExternalSubtitleIndex: number | undefined;
       if (effectiveOverwrite) {
-        const extSub = (item.mediaStreams ?? []).find(
+        const matchingExtSubs = (item.mediaStreams ?? []).filter(
           (s) =>
             s.streamType?.toLowerCase() === 'subtitle' &&
             s.isExternal &&
+            !s.isForced &&
             matchSubtitleLanguage(s.language, s.displayTitle, targetLanguage)
         );
-        if (extSub) {
-          existingExternalSubtitleIndex = extSub.index;
+        if (matchingExtSubs.length === 1) {
+          existingExternalSubtitleIndex = matchingExtSubs[0].index;
         }
       }
 
@@ -1008,24 +1011,60 @@ export function useEmbySync(): UseEmbySyncReturn {
       const list = await listMediaServerProfiles();
       setProfiles(list);
       if (list.length > 0) {
+        const prevActive = activeProfileRef.current;
         const storedActiveId = useConfigStore.getState().config?.activeMediaServerId;
         const stillActive =
-          list.find((p) => p.id === activeProfileId) ||
+          (prevActive?.id && list.find((p) => p.id === prevActive.id)) ||
           (storedActiveId && list.find((p) => p.id === storedActiveId)) ||
           list[0];
         activeProfileRef.current = stillActive;
         setActiveProfileId(stillActive.id);
         setActiveProfile(stillActive);
+        if (storedActiveId !== stillActive.id) {
+          useConfigStore.getState().setConfig({ activeMediaServerId: stillActive.id });
+        }
+        const nextCfg = toConnectionConfig(stillActive);
+        setConfig(nextCfg);
+        const needsReconnect =
+          !prevActive ||
+          !serverInfoRef.current ||
+          prevActive.id !== stillActive.id ||
+          prevActive.serverType !== stillActive.serverType ||
+          normalizeServerUrl(prevActive.serverUrl) !== normalizeServerUrl(stillActive.serverUrl) ||
+          prevActive.apiKey !== stillActive.apiKey ||
+          Boolean(prevActive.allowInvalidCerts) !== Boolean(stillActive.allowInvalidCerts);
+        if (needsReconnect) {
+          await connectWithTarget({
+            targetConfig: nextCfg,
+            profile: stillActive,
+            persistLegacyEmby: false,
+          });
+        }
       } else {
+        connectSeqRef.current++;
+        fetchSeqRef.current++;
+        clearTimeout(debounceTimerRef.current ?? undefined);
+        debounceTimerRef.current = null;
         activeProfileRef.current = null;
         setActiveProfileId(null);
         setActiveProfile(null);
         setServerInfo(null);
+        setConnectionError(null);
+        setIsConnecting(false);
+        setConfig({ serverUrl: '', apiKey: '', allowInvalidCerts: false });
+        useConfigStore.getState().setConfig({ activeMediaServerId: undefined });
+        useToolsStore.getState().setEmbyServerName(null);
+        setLibraries([]);
+        setSelectedLibraryId(null);
+        setItems([]);
+        setSelectedItemIds(new Set());
+        setAudioTrackMap({});
+        setExpandedSeasons(new Set());
       }
     } catch (err) {
       logger.error('[EmbySync] Failed to reload profiles:', err);
     }
-  }, [activeProfileId]);
+  }, [connectWithTarget]);
 
   return {
     profiles,

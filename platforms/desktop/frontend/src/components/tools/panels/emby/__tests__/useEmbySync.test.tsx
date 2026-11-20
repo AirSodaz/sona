@@ -573,4 +573,186 @@ describe('useEmbySync', () => {
     expect(queue[0].mediaServerContext?.overwriteExistingExternal).toBe(false);
     expect(queue[0].mediaServerContext?.existingExternalSubtitleIndex).toBeUndefined();
   });
+
+  it('reloadProfiles reconnects when active profile is deleted or its credentials change', async () => {
+    vi.mocked(mediaServerService.listMediaServerProfiles)
+      .mockResolvedValueOnce([embyProfile, jellyfinProfile])
+      .mockResolvedValueOnce([jellyfinProfile])
+      .mockResolvedValueOnce([{ ...jellyfinProfile, apiKey: 'jf-key-rotated' }]);
+    vi.mocked(mediaServerService.testMediaServerConnection)
+      .mockResolvedValueOnce({
+        id: 'srv-emby-guid',
+        serverName: 'Home Emby',
+        version: '4.8.8.0',
+        hasSubtitleManagerPlugin: true,
+        serverType: 'emby',
+      })
+      .mockResolvedValueOnce({
+        id: 'srv-jf-guid',
+        serverName: 'Remote Jellyfin',
+        version: '10.9.1',
+        hasSubtitleManagerPlugin: true,
+        serverType: 'jellyfin',
+      })
+      .mockResolvedValueOnce({
+        id: 'srv-jf-guid',
+        serverName: 'Remote Jellyfin Rotated',
+        version: '10.9.1',
+        hasSubtitleManagerPlugin: true,
+        serverType: 'jellyfin',
+      });
+    vi.mocked(mediaServerService.getMediaServerLibraries)
+      .mockResolvedValueOnce([{ id: 'lib-emby', name: 'Emby Movies' }])
+      .mockResolvedValueOnce([{ id: 'lib-jf', name: 'JF Movies' }])
+      .mockResolvedValueOnce([{ id: 'lib-jf-2', name: 'JF Series' }]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'jf-item-1',
+          name: 'JF Episode',
+          itemType: 'Movie',
+          hasChineseSubtitles: false,
+          hasEmbeddedChinese: false,
+          mediaStreams: [],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(true);
+      expect(result.current.activeProfileId).toBe('default-emby');
+    });
+
+    // Active profile deleted -> falls back to remaining Jellyfin profile and reconnects
+    await act(async () => {
+      await result.current.reloadProfiles();
+    });
+    expect(result.current.activeProfileId).toBe('jf-1');
+    expect(result.current.serverInfo?.serverName).toBe('Remote Jellyfin');
+    expect(result.current.libraries).toEqual([{ id: 'lib-jf', name: 'JF Movies' }]);
+    expect(mediaServerService.testMediaServerConnection).toHaveBeenLastCalledWith(jellyfinProfile);
+
+    // Active profile API key edited -> reconnects with updated credentials
+    await act(async () => {
+      await result.current.reloadProfiles();
+    });
+    expect(result.current.serverInfo?.serverName).toBe('Remote Jellyfin Rotated');
+    expect(result.current.libraries).toEqual([{ id: 'lib-jf-2', name: 'JF Series' }]);
+    expect(mediaServerService.testMediaServerConnection).toHaveBeenLastCalledWith({
+      ...jellyfinProfile,
+      apiKey: 'jf-key-rotated',
+    });
+  });
+
+  it('reloadProfiles clears connection and browse state when all profiles are deleted', async () => {
+    vi.mocked(mediaServerService.listMediaServerProfiles)
+      .mockResolvedValueOnce([embyProfile])
+      .mockResolvedValueOnce([]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValueOnce({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValueOnce([
+      { id: 'lib-emby', name: 'Emby Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValueOnce({
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'movie-1',
+          name: 'Movie 1',
+          itemType: 'Movie',
+          hasChineseSubtitles: false,
+          hasEmbeddedChinese: false,
+          mediaStreams: [],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+    expect(useToolsStore.getState().embyServerName).toBe('Home Emby');
+
+    await act(async () => {
+      await result.current.reloadProfiles();
+    });
+
+    expect(result.current.activeProfileId).toBeNull();
+    expect(result.current.activeProfile).toBeNull();
+    expect(result.current.serverInfo).toBeNull();
+    expect(result.current.isConnected).toBe(false);
+    expect(result.current.libraries).toEqual([]);
+    expect(result.current.selectedLibraryId).toBeNull();
+    expect(result.current.items).toEqual([]);
+    expect(useToolsStore.getState().embyServerName).toBeNull();
+  });
+
+  it('handleSubmitBatch leaves existingExternalSubtitleIndex undefined when multiple external Chinese tracks exist', async () => {
+    vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([embyProfile]);
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue({
+      id: 'srv-emby-guid',
+      serverName: 'Home Emby',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+      serverType: 'emby',
+    });
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue([
+      { id: 'lib-1', name: 'Movies' },
+    ]);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'movie-ambiguous',
+          name: 'Movie Ambiguous',
+          itemType: 'Movie',
+          hasChineseSubtitles: true,
+          hasEmbeddedChinese: false,
+          mediaStreams: [
+            {
+              index: 5,
+              streamType: 'Subtitle',
+              language: 'chs',
+              displayTitle: '简体中文',
+              isExternal: true,
+              isForced: false,
+              isDefault: false,
+            },
+            {
+              index: 6,
+              streamType: 'Subtitle',
+              language: 'cht',
+              displayTitle: '繁體中文',
+              isExternal: true,
+              isForced: false,
+              isDefault: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useEmbySync());
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.toggleItemSelection('movie-ambiguous');
+    });
+    act(() => {
+      result.current.handleSubmitBatch();
+    });
+
+    const queue = useBatchQueueStore.getState().queueItems;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].mediaServerContext?.existingExternalSubtitleIndex).toBeUndefined();
+  });
 });

@@ -457,6 +457,9 @@ describe('BatchItemProcessor', () => {
     );
     expect(useEmbyHistoryStore.getState().getContext('hist-1')).toEqual(item.embyContext);
     expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenLastCalledWith('');
+    expect(item.filePath).toBe('');
+    expect(remove).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
     expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         pipeline: expect.objectContaining({
@@ -702,7 +705,9 @@ describe('BatchItemProcessor', () => {
     await processor.processBatchQueueItem({ item, config, callbacks });
 
     expect(downloadMediaServerAudio).toHaveBeenCalledWith('movie-prec', 2, 'server-1');
-    expect(item.filePath).toBe('/tmp/downloaded-track.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded-track.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenLastCalledWith('');
+    expect(item.filePath).toBe('');
     expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
     expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
       '/tmp/downloaded-track.mp3'

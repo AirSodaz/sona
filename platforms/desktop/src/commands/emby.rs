@@ -613,6 +613,33 @@ pub async fn emby_upload_subtitle(
                 }
             }
         }
+    } else if allow_overwrite && !payload.language.eq_ignore_ascii_case("und") {
+        match client.get_item_streams(&payload.item_id).await {
+            Ok(streams) => {
+                if let Some(idx) =
+                    unique_duplicate_subtitle_index(&streams, &payload.language, payload.is_forced)
+                {
+                    match client.delete_subtitle(&payload.item_id, idx).await {
+                        Ok(_) => {
+                            deleted_any = true;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Failed to delete existing external subtitle {idx}: {}",
+                                sanitize_emby_error(&e, Some(&api_key))
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to inspect existing streams before subtitle upload for {}: {}",
+                    payload.item_id,
+                    sanitize_emby_error(&e, Some(&api_key))
+                );
+            }
+        }
     }
 
     let upload_result = client.upload_subtitle(&payload).await;

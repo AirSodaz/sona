@@ -621,10 +621,6 @@ export class BatchItemProcessor {
       } catch (historyError) {
         logger.error('[BatchQueue] Failed to persist partial result after error:', historyError);
       }
-      if (downloadedEmbyPath) {
-        item.filePath = '';
-        callbacks.updateFilePath?.('');
-      }
       if (currentSegments.length > 0) {
         item.segments = currentSegments;
         callbacks.updateSegments(currentSegments);
@@ -636,6 +632,8 @@ export class BatchItemProcessor {
       throw error;
     } finally {
       if (downloadedEmbyPath) {
+        item.filePath = '';
+        callbacks.updateFilePath?.('');
         await this.removeTempFile(downloadedEmbyPath);
       }
       await this.removeTempFile(tempWavPath);

@@ -92,27 +92,105 @@ pub async fn media_server_login(
     })
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn media_server_list_profiles(
-    services: State<'_, DesktopServices>,
-    registry: State<'_, MediaServerRegistry>,
+pub(crate) fn hydrate_media_server_registry(registry: &MediaServerRegistry, config_val: &Value) {
+    let media_servers_val = config_val
+        .get("mediaServers")
+        .or_else(|| config_val.get("media_servers"));
+    let has_explicit_media_servers = media_servers_val.is_some_and(|v| v.is_array());
+    let profiles: Vec<MediaServerProfile> = media_servers_val
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let active_id = config_val
+        .get("activeMediaServerId")
+        .or_else(|| config_val.get("active_media_server_id"))
+        .and_then(|v| v.as_str());
+
+    if !profiles.is_empty() {
+        for profile in profiles {
+            if let Err(e) = registry.register(profile) {
+                log::warn!("[MediaServer] Failed to register profile on startup: {e}");
+            }
+        }
+        if let Some(id) = active_id {
+            let _ = registry.set_active(id);
+        }
+    } else if !has_explicit_media_servers {
+        let server_url = config_val
+            .get("embyServerUrl")
+            .or_else(|| config_val.get("emby_server_url"))
+            .and_then(|v| v.as_str());
+        let api_key = config_val
+            .get("embyToken")
+            .or_else(|| config_val.get("emby_token"))
+            .or_else(|| config_val.get("embyApiKey"))
+            .or_else(|| config_val.get("emby_api_key"))
+            .and_then(|v| v.as_str());
+        let username = config_val
+            .get("embyUsername")
+            .or_else(|| config_val.get("emby_username"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let allow_invalid_certs = config_val
+            .get("embyAllowInvalidCerts")
+            .or_else(|| config_val.get("emby_allow_invalid_certs"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let admin_user_id = config_val
+            .get("embyAdminUserId")
+            .or_else(|| config_val.get("emby_admin_user_id"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        if let (Some(url), Some(key)) = (server_url, api_key)
+            && !url.trim().is_empty()
+            && !key.trim().is_empty()
+        {
+            let now = chrono::Utc::now().timestamp_millis();
+            let profile = MediaServerProfile {
+                id: "default-emby".to_string(),
+                name: "Emby Server".to_string(),
+                server_type: MediaServerType::Emby,
+                server_url: url.trim().to_string(),
+                api_key: key.trim().to_string(),
+                username,
+                admin_user_id,
+                allow_invalid_certs,
+                created_at: now,
+                updated_at: now,
+            };
+            if let Err(e) = registry.register(profile) {
+                log::warn!("[MediaServer] Failed to register legacy default-emby on startup: {e}");
+            } else {
+                let _ = registry.set_active("default-emby");
+            }
+        }
+    }
+}
+
+pub(crate) fn list_profiles_from_state(
+    services: &DesktopServices,
+    registry: &MediaServerRegistry,
 ) -> Result<Vec<MediaServerProfile>, String> {
     let config = services.config.load()?;
     if let Some(servers) = config
         .as_ref()
         .and_then(|c| c.get("mediaServers").or_else(|| c.get("media_servers")))
         && let Ok(profiles) = serde_json::from_value::<Vec<MediaServerProfile>>(servers.clone())
-        && !profiles.is_empty()
+        && (!profiles.is_empty() || registry.list_profiles().is_empty())
     {
         return Ok(profiles);
     }
     Ok(registry.list_profiles())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn media_server_save_profile(
-    services: State<'_, DesktopServices>,
-    registry: State<'_, MediaServerRegistry>,
+pub(crate) fn save_profile_to_state(
+    services: &DesktopServices,
+    registry: &MediaServerRegistry,
     mut profile: MediaServerProfile,
 ) -> Result<(), String> {
     profile.server_url = normalize_server_url(&profile.server_url);
@@ -127,11 +205,21 @@ pub fn media_server_save_profile(
         .filter(|v| v.is_object())
         .unwrap_or_else(|| serde_json::json!({}));
 
-    let mut profiles: Vec<MediaServerProfile> = config
+    let media_servers_val = config
         .get("mediaServers")
-        .or_else(|| config.get("media_servers"))
+        .or_else(|| config.get("media_servers"));
+    let has_persisted_servers = media_servers_val.is_some_and(|v| v.is_array());
+    let mut profiles: Vec<MediaServerProfile> = media_servers_val
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
+
+    if !has_persisted_servers {
+        for reg_profile in registry.list_profiles() {
+            if !profiles.iter().any(|p| p.id == reg_profile.id) {
+                profiles.push(reg_profile);
+            }
+        }
+    }
 
     if let Some(existing) = profiles.iter_mut().find(|p| p.id == profile.id) {
         *existing = profile.clone();
@@ -143,7 +231,9 @@ pub fn media_server_save_profile(
         .get("activeMediaServerId")
         .or_else(|| config.get("active_media_server_id"))
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .or_else(|| registry.get_active_id())
+        .filter(|id| profiles.iter().any(|p| p.id == *id));
 
     let should_set_active = active_id.is_none() || profiles.len() == 1;
     let next_active_id = if should_set_active {
@@ -170,43 +260,84 @@ pub fn media_server_save_profile(
         .map_err(|e| e.to_string())?;
 
     if should_set_active {
-        let _ = registry.set_active(&profile.id);
+        let _ = registry.set_active(&next_active_id);
     }
 
-    emit_config_updated(&services, &config);
+    emit_config_updated(services, &config);
     Ok(())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn media_server_delete_profile(
-    services: State<'_, DesktopServices>,
-    registry: State<'_, MediaServerRegistry>,
-    profile_id: String,
-) -> Result<(), String> {
+pub(crate) fn delete_profile_from_state(
+    services: &DesktopServices,
+    registry: &MediaServerRegistry,
+    profile_id: &str,
+) -> Result<bool, String> {
     let mut config = services
         .config
         .load()?
         .filter(|v| v.is_object())
         .unwrap_or_else(|| serde_json::json!({}));
 
-    let mut profiles: Vec<MediaServerProfile> = config
+    let media_servers_val = config
         .get("mediaServers")
-        .or_else(|| config.get("media_servers"))
+        .or_else(|| config.get("media_servers"));
+    let has_persisted_servers = media_servers_val.is_some_and(|v| v.is_array());
+    let mut profiles: Vec<MediaServerProfile> = media_servers_val
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
+
+    if !has_persisted_servers {
+        for reg_profile in registry.list_profiles() {
+            if !profiles.iter().any(|p| p.id == reg_profile.id) {
+                profiles.push(reg_profile);
+            }
+        }
+    }
+
+    let deleted_profile = profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+        .or_else(|| registry.get_profile(profile_id));
 
     profiles.retain(|p| p.id != profile_id);
 
     let active_id = config
         .get("activeMediaServerId")
         .or_else(|| config.get("active_media_server_id"))
-        .and_then(|v| v.as_str());
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| registry.get_active_id());
 
-    let next_active = if active_id == Some(&profile_id) {
-        profiles.first().map(|p| p.id.clone())
-    } else {
-        active_id.map(|s| s.to_string())
+    let next_active = match active_id {
+        Some(ref id) if id != profile_id && profiles.iter().any(|p| p.id == *id) => {
+            Some(id.clone())
+        }
+        _ => profiles.first().map(|p| p.id.clone()),
     };
+
+    let legacy_emby_url = config
+        .get("embyServerUrl")
+        .or_else(|| config.get("emby_server_url"))
+        .and_then(|v| v.as_str())
+        .map(normalize_server_url)
+        .filter(|s| !s.is_empty());
+
+    let deleted_matches_legacy_url = deleted_profile.as_ref().is_some_and(|p| {
+        p.server_type == MediaServerType::Emby
+            && legacy_emby_url.as_ref().is_some_and(|legacy_url| {
+                let deleted_url = normalize_server_url(&p.server_url);
+                !deleted_url.is_empty()
+                    && deleted_url.eq_ignore_ascii_case(legacy_url)
+                    && !profiles.iter().any(|rem| {
+                        rem.server_type == MediaServerType::Emby
+                            && normalize_server_url(&rem.server_url)
+                                .eq_ignore_ascii_case(legacy_url)
+                    })
+            })
+    });
+
+    let should_clear_legacy_emby = profile_id == "default-emby" || deleted_matches_legacy_url;
 
     if let Some(obj) = config.as_object_mut() {
         obj.insert(
@@ -225,12 +356,64 @@ pub fn media_server_delete_profile(
                 obj.remove("active_media_server_id");
             }
         }
+        if should_clear_legacy_emby {
+            for key in [
+                "embyServerUrl",
+                "emby_server_url",
+                "embyApiKey",
+                "emby_api_key",
+                "embyToken",
+                "emby_token",
+                "embyUsername",
+                "emby_username",
+                "embyAdminUserId",
+                "emby_admin_user_id",
+                "embyAllowInvalidCerts",
+                "emby_allow_invalid_certs",
+            ] {
+                obj.remove(key);
+            }
+        }
     }
 
     services.config.save(&config)?;
-    registry.unregister(&profile_id);
+    registry.unregister(profile_id);
+    if let Some(ref id) = next_active {
+        let _ = registry.set_active(id);
+    }
 
-    emit_config_updated(&services, &config);
+    emit_config_updated(services, &config);
+    Ok(should_clear_legacy_emby)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn media_server_list_profiles(
+    services: State<'_, DesktopServices>,
+    registry: State<'_, MediaServerRegistry>,
+) -> Result<Vec<MediaServerProfile>, String> {
+    list_profiles_from_state(&services, &registry)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn media_server_save_profile(
+    services: State<'_, DesktopServices>,
+    registry: State<'_, MediaServerRegistry>,
+    profile: MediaServerProfile,
+) -> Result<(), String> {
+    save_profile_to_state(&services, &registry, profile)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn media_server_delete_profile(
+    services: State<'_, DesktopServices>,
+    registry: State<'_, MediaServerRegistry>,
+    emby_state: State<'_, crate::integrations::emby::EmbyState>,
+    profile_id: String,
+) -> Result<(), String> {
+    let should_clear_legacy_emby = delete_profile_from_state(&services, &registry, &profile_id)?;
+    if should_clear_legacy_emby {
+        emby_state.set_client(None).await;
+    }
     Ok(())
 }
 
@@ -392,32 +575,85 @@ pub async fn media_server_upload_subtitle(
     let api_key = client.profile().api_key.clone();
     let allow_overwrite = allow_overwrite.unwrap_or(true);
 
-    let mut deleted_any = false;
-    if allow_overwrite && let Some(idx) = delete_existing_external_index.filter(|&idx| idx >= 0) {
-        match client.delete_subtitle(&payload.item_id, idx).await {
-            Ok(_) => {
-                deleted_any = true;
-            }
-            Err(e) => {
-                log::warn!(
-                    "Failed to delete existing external subtitle {idx}: {}",
-                    sanitize_media_server_error(&e, Some(&api_key))
-                );
-            }
-        }
-    }
-
-    upload_subtitle_with_duplicate_recovery(
+    execute_subtitle_upload(
         client.as_ref(),
         &payload,
-        &api_key,
-        deleted_any,
+        delete_existing_external_index,
         allow_overwrite,
+        &api_key,
     )
     .await?;
 
     let _ = client.refresh_item_metadata(&payload.item_id).await;
     Ok(())
+}
+
+async fn execute_subtitle_upload(
+    client: &dyn crate::integrations::media_server::MediaServerClient,
+    payload: &MediaServerSubtitleUploadPayload,
+    delete_existing_external_index: Option<i32>,
+    allow_overwrite: bool,
+    api_key: &str,
+) -> Result<(), String> {
+    use crate::integrations::media_server::{
+        SubtitleTrackCandidate, unique_duplicate_subtitle_index,
+    };
+
+    let mut deleted_any = false;
+    if allow_overwrite {
+        if let Some(idx) = delete_existing_external_index.filter(|&idx| idx >= 0) {
+            match client.delete_subtitle(&payload.item_id, idx).await {
+                Ok(_) => {
+                    deleted_any = true;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to delete existing external subtitle {idx}: {}",
+                        sanitize_media_server_error(&e, Some(api_key))
+                    );
+                }
+            }
+        } else if !payload.language.eq_ignore_ascii_case("und") {
+            match client.get_item_streams(&payload.item_id).await {
+                Ok(streams) => {
+                    if let Some(idx) = unique_duplicate_subtitle_index(
+                        streams.iter().map(|s| SubtitleTrackCandidate {
+                            index: s.index,
+                            stream_type: &s.stream_type,
+                            language: s.language.as_deref(),
+                            display_title: s.display_title.as_deref(),
+                            is_external: s.is_external,
+                            is_forced: s.is_forced,
+                        }),
+                        &payload.language,
+                        payload.is_forced,
+                    ) {
+                        match client.delete_subtitle(&payload.item_id, idx).await {
+                            Ok(_) => {
+                                deleted_any = true;
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to delete existing external subtitle {idx}: {}",
+                                    sanitize_media_server_error(&e, Some(api_key))
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to inspect existing streams before subtitle upload for {}: {}",
+                        payload.item_id,
+                        sanitize_media_server_error(&e, Some(api_key))
+                    );
+                }
+            }
+        }
+    }
+
+    upload_subtitle_with_duplicate_recovery(client, payload, api_key, deleted_any, allow_overwrite)
+        .await
 }
 
 async fn upload_subtitle_with_duplicate_recovery(
@@ -853,5 +1089,345 @@ mod tests {
             1
         );
         assert!(client.deleted_indices.lock().unwrap().is_empty());
+    }
+
+    fn build_test_services(temp_dir: &tempfile::TempDir) -> DesktopServices {
+        let ctx = std::sync::Arc::new(
+            sona_sqlite::SqliteApplicationContext::open(temp_dir.path()).unwrap(),
+        );
+        let sqlite = crate::platform::database::DesktopSqliteState::new(ctx);
+        let emitter = std::sync::Arc::new(crate::platform::event::MockEventEmitter::new());
+        DesktopServices::builder()
+            .sqlite(sqlite)
+            .event_emitter(emitter)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_save_profile_preserves_hydrated_legacy_default_emby() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = build_test_services(&temp_dir);
+        let legacy_config = serde_json::json!({
+            "embyServerUrl": "http://legacy-emby.local:8096",
+            "embyApiKey": "legacy-key",
+            "embyUsername": "admin"
+        });
+        services.config.save(&legacy_config).unwrap();
+
+        let registry = MediaServerRegistry::new();
+        hydrate_media_server_registry(&registry, &legacy_config);
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+
+        let jellyfin = MediaServerProfile {
+            id: "jf-1".to_string(),
+            name: "My Jellyfin".to_string(),
+            server_type: MediaServerType::Jellyfin,
+            server_url: "http://jellyfin.local:8096".to_string(),
+            api_key: "jf-key".to_string(),
+            username: None,
+            admin_user_id: None,
+            allow_invalid_certs: false,
+            created_at: 2000,
+            updated_at: 2000,
+        };
+        save_profile_to_state(&services, &registry, jellyfin).unwrap();
+
+        let listed = list_profiles_from_state(&services, &registry).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert!(listed.iter().any(|p| p.id == "default-emby"));
+        assert!(listed.iter().any(|p| p.id == "jf-1"));
+
+        let saved_cfg = services.config.load().unwrap().unwrap();
+        let persisted_servers: Vec<MediaServerProfile> =
+            serde_json::from_value(saved_cfg["mediaServers"].clone()).unwrap();
+        assert_eq!(persisted_servers.len(), 2);
+        assert_eq!(saved_cfg["activeMediaServerId"], "default-emby");
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+    }
+
+    #[test]
+    fn test_delete_default_emby_clears_legacy_config_and_prevents_resurrection() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let services = build_test_services(&temp_dir);
+        let legacy_config = serde_json::json!({
+            "embyServerUrl": "http://legacy-emby.local:8096",
+            "embyApiKey": "legacy-key",
+            "embyToken": "legacy-token",
+            "embyUsername": "admin",
+            "embyAdminUserId": "uid-1",
+            "embyAllowInvalidCerts": true
+        });
+        services.config.save(&legacy_config).unwrap();
+
+        let registry = MediaServerRegistry::new();
+        hydrate_media_server_registry(&registry, &legacy_config);
+        assert_eq!(registry.list_profiles().len(), 1);
+
+        let cleared_legacy =
+            delete_profile_from_state(&services, &registry, "default-emby").unwrap();
+        assert!(cleared_legacy);
+        assert!(registry.list_profiles().is_empty());
+
+        let saved_cfg = services.config.load().unwrap().unwrap();
+        assert_eq!(saved_cfg["mediaServers"], serde_json::json!([]));
+        assert!(saved_cfg.get("activeMediaServerId").is_none());
+        assert!(saved_cfg.get("embyServerUrl").is_none());
+        assert!(saved_cfg.get("embyApiKey").is_none());
+        assert!(saved_cfg.get("embyToken").is_none());
+        assert!(saved_cfg.get("embyUsername").is_none());
+        assert!(saved_cfg.get("embyAdminUserId").is_none());
+        assert!(saved_cfg.get("embyAllowInvalidCerts").is_none());
+
+        let restarted_registry = MediaServerRegistry::new();
+        hydrate_media_server_registry(&restarted_registry, &saved_cfg);
+        assert!(restarted_registry.list_profiles().is_empty());
+        assert!(
+            list_profiles_from_state(&services, &restarted_registry)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[derive(Debug)]
+    struct MockSucceedingUploadClient {
+        profile: MediaServerProfile,
+        upload_attempts: std::sync::atomic::AtomicUsize,
+        deleted_indices: std::sync::Mutex<Vec<i32>>,
+        streams: Vec<crate::integrations::media_server::MediaServerStreamInfo>,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::integrations::media_server::MediaServerClient for MockSucceedingUploadClient {
+        fn profile(&self) -> &MediaServerProfile {
+            &self.profile
+        }
+        async fn test_connection(
+            &self,
+        ) -> Result<crate::integrations::media_server::MediaServerInfo, MediaServerError> {
+            unreachable!()
+        }
+        async fn get_libraries(&self) -> Result<Vec<MediaServerLibrary>, MediaServerError> {
+            unreachable!()
+        }
+        async fn get_items(
+            &self,
+            _: Option<&str>,
+            _: Option<&str>,
+            _: u32,
+            _: u32,
+        ) -> Result<MediaServerItemListResult, MediaServerError> {
+            unreachable!()
+        }
+        async fn get_item_streams(
+            &self,
+            _item_id: &str,
+        ) -> Result<Vec<crate::integrations::media_server::MediaServerStreamInfo>, MediaServerError>
+        {
+            Ok(self.streams.clone())
+        }
+        async fn download_audio_stream(
+            &self,
+            _: &str,
+            _: Option<i32>,
+            _: &std::path::Path,
+        ) -> Result<u64, MediaServerError> {
+            unreachable!()
+        }
+        async fn upload_subtitle(
+            &self,
+            _payload: &MediaServerSubtitleUploadPayload,
+        ) -> Result<(), MediaServerError> {
+            self.upload_attempts
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        async fn delete_subtitle(
+            &self,
+            _item_id: &str,
+            subtitle_index: i32,
+        ) -> Result<(), MediaServerError> {
+            self.deleted_indices.lock().unwrap().push(subtitle_index);
+            Ok(())
+        }
+        async fn refresh_item_metadata(&self, _item_id: &str) -> Result<(), MediaServerError> {
+            Ok(())
+        }
+    }
+
+    fn make_jellyfin_profile() -> MediaServerProfile {
+        MediaServerProfile {
+            id: "jf-1".to_string(),
+            name: "Jellyfin".to_string(),
+            server_type: MediaServerType::Jellyfin,
+            server_url: "http://localhost:8096".to_string(),
+            api_key: "key".to_string(),
+            username: None,
+            admin_user_id: None,
+            allow_invalid_certs: false,
+            created_at: 1000,
+            updated_at: 1000,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_subtitle_upload_predeletes_unique_external_track_without_index() {
+        use crate::integrations::media_server::MediaServerStreamInfo;
+
+        let client = MockSucceedingUploadClient {
+            profile: make_jellyfin_profile(),
+            upload_attempts: std::sync::atomic::AtomicUsize::new(0),
+            deleted_indices: std::sync::Mutex::new(Vec::new()),
+            streams: vec![
+                MediaServerStreamInfo {
+                    index: 2,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("en".to_string()),
+                    display_title: Some("English".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+                MediaServerStreamInfo {
+                    index: 3,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("zh".to_string()),
+                    display_title: Some("Chinese".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+            ],
+        };
+        let payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "en".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\nHello\n".to_string(),
+        };
+
+        execute_subtitle_upload(&client, &payload, None, true, "key")
+            .await
+            .unwrap();
+
+        assert_eq!(*client.deleted_indices.lock().unwrap(), vec![2]);
+        assert_eq!(
+            client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_subtitle_upload_skips_predelete_for_ambiguous_und_or_no_overwrite() {
+        use crate::integrations::media_server::MediaServerStreamInfo;
+
+        let make_client = || MockSucceedingUploadClient {
+            profile: make_jellyfin_profile(),
+            upload_attempts: std::sync::atomic::AtomicUsize::new(0),
+            deleted_indices: std::sync::Mutex::new(Vec::new()),
+            streams: vec![
+                MediaServerStreamInfo {
+                    index: 5,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("chs".to_string()),
+                    display_title: Some("简体中文".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+                MediaServerStreamInfo {
+                    index: 6,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("cht".to_string()),
+                    display_title: Some("繁體中文".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+                MediaServerStreamInfo {
+                    index: 7,
+                    stream_type: "Subtitle".to_string(),
+                    language: Some("en".to_string()),
+                    display_title: Some("English".to_string()),
+                    codec: Some("srt".to_string()),
+                    is_external: true,
+                    is_forced: false,
+                    is_default: false,
+                },
+            ],
+        };
+
+        // Ambiguous Chinese tracks (chs + cht)
+        let ambiguous_client = make_client();
+        let zh_payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "zh-CN".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\n你好\n".to_string(),
+        };
+        execute_subtitle_upload(&ambiguous_client, &zh_payload, None, true, "key")
+            .await
+            .unwrap();
+        assert!(ambiguous_client.deleted_indices.lock().unwrap().is_empty());
+        assert_eq!(
+            ambiguous_client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+
+        // language == "und"
+        let und_client = make_client();
+        let und_payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "und".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\nHello\n".to_string(),
+        };
+        execute_subtitle_upload(&und_client, &und_payload, None, true, "key")
+            .await
+            .unwrap();
+        assert!(und_client.deleted_indices.lock().unwrap().is_empty());
+        assert_eq!(
+            und_client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+
+        // allow_overwrite == false
+        let no_overwrite_client = make_client();
+        let en_payload = MediaServerSubtitleUploadPayload {
+            item_id: "movie-1".to_string(),
+            language: "en".to_string(),
+            format: "srt".to_string(),
+            is_forced: false,
+            content: "1\n00:00:00,000 --> 00:00:01,000\nHello\n".to_string(),
+        };
+        execute_subtitle_upload(&no_overwrite_client, &en_payload, None, false, "key")
+            .await
+            .unwrap();
+        assert!(
+            no_overwrite_client
+                .deleted_indices
+                .lock()
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            no_overwrite_client
+                .upload_attempts
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
     }
 }
