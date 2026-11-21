@@ -317,7 +317,16 @@ describe('BatchItemProcessor', () => {
     ).resolves.toBeUndefined();
     expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalled();
     expect(callbacks.onHistorySaved).toHaveBeenCalled();
-    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalled();
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            id: 'seg-1',
+            timing: expect.objectContaining({ level: 'segment' }),
+          }),
+        ],
+      })
+    );
   });
 
   it('rethrows Task cancelled when stream is cancelled with zero segments', async () => {
@@ -448,6 +457,9 @@ describe('BatchItemProcessor', () => {
     );
     expect(useEmbyHistoryStore.getState().getContext('hist-1')).toEqual(item.embyContext);
     expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenLastCalledWith('');
+    expect(item.filePath).toBe('');
+    expect(remove).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
     expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         pipeline: expect.objectContaining({
@@ -549,7 +561,61 @@ describe('BatchItemProcessor', () => {
     expect(item.errorStage).toBeUndefined();
   });
 
-  it('uses streamUrl directly as inputSource without calling downloadEmbyAudio when streamUrl is present', async () => {
+  it('drops stale existingExternalSubtitleIndex when retrying failed upload', async () => {
+    const existingSegments = [
+      { id: 'seg-1', start: 0, end: 2, text: 'Hello', translation: '你好', isFinal: true },
+    ];
+    const item: BatchQueueItem = {
+      id: 'batch-emby-retry-stale-index',
+      filename: 'Emby Movie Retry',
+      filePath: '',
+      status: 'pending',
+      progress: 95,
+      segments: existingSegments,
+      projectId: null,
+      errorStage: 'upload',
+      mediaServerContext: {
+        serverId: 'server-1',
+        serverType: 'emby',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-retry',
+        itemName: 'Emby Movie Retry',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: 5,
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(syncEmbySubtitles).toHaveBeenCalledWith(
+      existingSegments,
+      expect.objectContaining({
+        itemId: 'movie-retry',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: undefined,
+      }),
+      { deleteExistingIndex: undefined }
+    );
+    expect(item.errorStage).toBeUndefined();
+  });
+
+  it('prioritizes downloadEmbyAudio even when streamUrl is present', async () => {
     const item: BatchQueueItem = {
       id: 'batch-emby-stream',
       filename: 'Emby Movie Stream',
@@ -585,16 +651,69 @@ describe('BatchItemProcessor', () => {
     };
 
     vi.mocked(downloadEmbyAudio).mockClear();
+    vi.mocked(downloadEmbyAudio).mockResolvedValueOnce('/tmp/downloaded_emby.mp3');
     vi.mocked(mockPorts.transcriptionService.transcribeFile).mockClear();
     vi.mocked(syncEmbySubtitles).mockClear();
     vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
 
     await processor.processBatchQueueItem({ item, config, callbacks });
 
-    expect(downloadEmbyAudio).not.toHaveBeenCalled();
+    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-stream', 2, 'server-1');
     expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
     expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
-      'http://localhost:8096/Videos/movie-stream/stream.mkv?Static=true&MediaSourceId=mediasource_1'
+      '/tmp/downloaded_emby.mp3'
+    );
+  });
+
+  it('falls back to streamUrl if downloadEmbyAudio fails and streamUrl is present', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-fallback-stream',
+      filename: 'Emby Movie Fallback',
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl:
+        'http://localhost:8096/Videos/movie-fallback/stream.mkv?Static=true&MediaSourceId=mediasource_1',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-fallback',
+        itemName: 'Emby Movie Fallback',
+        audioStreamIndex: 1,
+        subtitleMode: 'pure_translation',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockClear();
+    vi.mocked(downloadEmbyAudio).mockRejectedValueOnce(
+      new Error('Audio stream transcoding unavailable')
+    );
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockClear();
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-fallback', 1, 'server-1');
+    expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
+    expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
+      'http://localhost:8096/Videos/movie-fallback/stream.mkv?Static=true&MediaSourceId=mediasource_1'
     );
   });
 
@@ -640,7 +759,9 @@ describe('BatchItemProcessor', () => {
     await processor.processBatchQueueItem({ item, config, callbacks });
 
     expect(downloadMediaServerAudio).toHaveBeenCalledWith('movie-prec', 2, 'server-1');
-    expect(item.filePath).toBe('/tmp/downloaded-track.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded-track.mp3');
+    expect(callbacks.updateFilePath).toHaveBeenLastCalledWith('');
+    expect(item.filePath).toBe('');
     expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
     expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
       '/tmp/downloaded-track.mp3'

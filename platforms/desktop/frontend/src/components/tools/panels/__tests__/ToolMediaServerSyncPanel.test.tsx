@@ -5,6 +5,8 @@ import type * as EmbyServiceModule from '../../../../services/emby/embyService';
 import * as embyService from '../../../../services/emby/embyService';
 import type * as MediaServerServiceModule from '../../../../services/mediaServer/mediaServerService';
 import * as mediaServerService from '../../../../services/mediaServer/mediaServerService';
+import { useConfigStore } from '../../../../stores/configStore';
+import { useToolsStore } from '../../../../stores/toolsStore';
 import type {
   MediaServerInfo,
   MediaServerLibrary,
@@ -47,6 +49,7 @@ vi.mock('../../../../services/emby/embyService', async (importOriginal) => {
     loginEmby: vi.fn(),
     getEmbyLibraries: vi.fn(),
     getEmbyItems: vi.fn(),
+    getEmbyProcessingSettings: vi.fn(),
   };
 });
 
@@ -100,6 +103,9 @@ describe('ToolMediaServerSyncPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    useConfigStore.getState().setConfig({ activeMediaServerId: undefined });
+    useToolsStore.setState({ embyServerName: null });
+    vi.mocked(embyService.getEmbyProcessingSettings).mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -108,9 +114,9 @@ describe('ToolMediaServerSyncPanel', () => {
 
   it('renders plugin missing banner for Emby when plugin is absent', async () => {
     vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([mockEmbyProfile]);
-    vi.mocked(embyService.testEmbyConnection).mockResolvedValue(mockEmbyInfo);
-    vi.mocked(embyService.getEmbyLibraries).mockResolvedValue(mockEmbyLibraries);
-    vi.mocked(embyService.getEmbyItems).mockResolvedValue({
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue(mockEmbyInfo);
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue(mockEmbyLibraries);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
       totalRecordCount: 0,
       items: [],
     });
@@ -128,9 +134,9 @@ describe('ToolMediaServerSyncPanel', () => {
 
   it('suppresses plugin missing banner and shows native active pill for Jellyfin', async () => {
     vi.mocked(mediaServerService.listMediaServerProfiles).mockResolvedValue([mockJellyfinProfile]);
-    vi.mocked(embyService.testEmbyConnection).mockResolvedValue(mockJellyfinInfo);
-    vi.mocked(embyService.getEmbyLibraries).mockResolvedValue(mockJellyfinLibraries);
-    vi.mocked(embyService.getEmbyItems).mockResolvedValue({
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValue(mockJellyfinInfo);
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValue(mockJellyfinLibraries);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValue({
       totalRecordCount: 0,
       items: [],
     });
@@ -157,9 +163,9 @@ describe('ToolMediaServerSyncPanel', () => {
     vi.mocked(mediaServerService.setActiveMediaServerProfile).mockResolvedValue(undefined);
 
     // Initial load as Emby
-    vi.mocked(embyService.testEmbyConnection).mockResolvedValueOnce(mockEmbyInfo);
-    vi.mocked(embyService.getEmbyLibraries).mockResolvedValueOnce(mockEmbyLibraries);
-    vi.mocked(embyService.getEmbyItems).mockResolvedValueOnce({
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValueOnce(mockEmbyInfo);
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValueOnce(mockEmbyLibraries);
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValueOnce({
       totalRecordCount: 0,
       items: [],
     });
@@ -171,9 +177,11 @@ describe('ToolMediaServerSyncPanel', () => {
     });
 
     // Setup mock responses for Jellyfin profile switch
-    vi.mocked(embyService.testEmbyConnection).mockResolvedValueOnce(mockJellyfinInfo);
-    vi.mocked(embyService.getEmbyLibraries).mockResolvedValueOnce(mockJellyfinLibraries);
-    vi.mocked(embyService.getEmbyItems).mockResolvedValueOnce({
+    vi.mocked(mediaServerService.testMediaServerConnection).mockResolvedValueOnce(mockJellyfinInfo);
+    vi.mocked(mediaServerService.getMediaServerLibraries).mockResolvedValueOnce(
+      mockJellyfinLibraries
+    );
+    vi.mocked(mediaServerService.getMediaServerItems).mockResolvedValueOnce({
       totalRecordCount: 0,
       items: [],
     });

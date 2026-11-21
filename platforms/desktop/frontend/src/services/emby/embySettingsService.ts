@@ -175,6 +175,7 @@ export function buildEmbyEffectiveConfig(
 
   if (overrides.asrLanguage !== undefined && overrides.asrLanguage !== null) {
     snapshot.language = overrides.asrLanguage;
+    snapshot.batchLanguage = overrides.asrLanguage;
   }
 
   if (overrides.enableTimeline !== undefined && overrides.enableTimeline !== null) {

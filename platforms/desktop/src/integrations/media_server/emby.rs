@@ -186,10 +186,10 @@ pub(crate) fn is_subtitle_manager_plugin(plugin: &Value) -> bool {
 
     let name_val = plugin.get("Name").or_else(|| plugin.get("name"));
     if let Some(name) = name_val.and_then(|v| v.as_str()) {
-        let lower = name.to_ascii_lowercase();
-        if lower == "subtitlemanager"
-            || lower == "subtitle manager"
-            || lower == "emby.subtitlemanager"
+        let lower = name.trim().to_ascii_lowercase();
+        if lower.contains("subtitlemanager")
+            || lower.contains("subtitle manager")
+            || name.contains("字幕管理")
         {
             return true;
         }
@@ -680,5 +680,18 @@ mod tests {
             client.url("/SubtitleManager/DeleteSubtitle"),
             "http://localhost:8096/SubtitleManager/DeleteSubtitle"
         );
+    }
+
+    #[test]
+    fn test_is_subtitle_manager_plugin_variants() {
+        assert!(is_subtitle_manager_plugin(
+            &serde_json::json!({ "Name": "Emby.SubtitleManager v1.2" })
+        ));
+        assert!(is_subtitle_manager_plugin(
+            &serde_json::json!({ "Name": "字幕管理插件" })
+        ));
+        assert!(!is_subtitle_manager_plugin(
+            &serde_json::json!({ "Name": "Fanart" })
+        ));
     }
 }

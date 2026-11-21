@@ -238,4 +238,33 @@ describe('recoveryService', () => {
     );
     expect(queue.segments).toEqual([segment]);
   });
+
+  it('restores url_stream sourceType and streamUrl for network URL items', () => {
+    const item = recoveryItem({
+      id: 'recovery-stream-1',
+      filename: 'Live Broadcast',
+      filePath: '  https://live.example.com/channel/playlist.m3u8  ',
+    });
+
+    const queue = toBatchQueueItem(item);
+
+    expect(queue.sourceType).toBe('url_stream');
+    expect(queue.filePath).toBe('https://live.example.com/channel/playlist.m3u8');
+    expect(queue.streamUrl).toBe('https://live.example.com/channel/playlist.m3u8');
+  });
+
+  it('does not treat empty-host network URLs as url_stream sources', () => {
+    for (const invalidPath of ['http://', 'https://  ', 'rtmp:///live']) {
+      const queue = toBatchQueueItem(
+        recoveryItem({
+          id: `recovery-invalid-${invalidPath}`,
+          filename: 'Invalid',
+          filePath: invalidPath,
+        })
+      );
+
+      expect(queue.sourceType).toBeUndefined();
+      expect(queue.streamUrl).toBeUndefined();
+    }
+  });
 });

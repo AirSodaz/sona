@@ -159,12 +159,14 @@ export async function downloadMediaServerAudio(
 export async function uploadMediaServerSubtitle(
   payload: MediaServerSubtitleUploadPayload,
   deleteExistingExternalIndex?: number,
-  serverId?: string
+  serverId?: string,
+  allowOverwrite?: boolean
 ): Promise<void> {
   return invokeTauri(TauriCommand.mediaServer.uploadSubtitle, {
     payload,
     deleteExistingExternalIndex,
     serverId,
+    ...(allowOverwrite !== undefined ? { allowOverwrite } : {}),
   });
 }
 
@@ -178,82 +180,221 @@ export async function saveMediaServerProcessingSettings(
   return invokeTauri(TauriCommand.mediaServer.saveProcessingSettings, { settings });
 }
 
-export async function syncMediaServerSubtitles(
+export interface SubtitleUploadPlan {
+  payload: MediaServerSubtitleUploadPayload;
+  deleteExistingIndex?: number;
+  allowOverwrite?: boolean;
+}
+
+export function buildMediaServerSubtitleUploadPlans(
   segments: TranscriptSegment[],
   context: MediaServerTaskContext,
-  options?: { deleteExistingIndex?: number }
-): Promise<void> {
+  options?: { deleteExistingIndex?: number; allowOverwrite?: boolean }
+): SubtitleUploadPlan[] {
   const targetLang = context.targetLanguage || 'zh-CN';
-  const deleteIndex = options?.deleteExistingIndex ?? context.existingExternalSubtitleIndex;
+  const allowOverwrite = options?.allowOverwrite ?? context.overwriteExistingExternal;
+  const deleteIndex =
+    allowOverwrite === false
+      ? undefined
+      : (options?.deleteExistingIndex ?? context.existingExternalSubtitleIndex);
 
   switch (context.subtitleMode) {
     case 'pure_translation': {
       const content = generatePureTranslationSrt(segments);
-      if (!content.trim()) return;
-      await uploadMediaServerSubtitle(
+      if (!content.trim()) return [];
+      return [
         {
-          itemId: context.itemId,
-          language: targetLang,
-          format: 'srt',
-          isForced: false,
-          content,
+          payload: {
+            itemId: context.itemId,
+            language: targetLang,
+            format: 'srt',
+            isForced: false,
+            content,
+          },
+          deleteExistingIndex: deleteIndex,
+          allowOverwrite,
         },
-        deleteIndex,
-        context.serverId
-      );
-      break;
+      ];
     }
     case 'bilingual': {
       const content = generateBilingualSrt(segments);
-      if (!content.trim()) return;
-      await uploadMediaServerSubtitle(
+      if (!content.trim()) return [];
+      return [
         {
-          itemId: context.itemId,
-          language: targetLang,
-          format: 'srt',
-          isForced: false,
-          content,
+          payload: {
+            itemId: context.itemId,
+            language: targetLang,
+            format: 'srt',
+            isForced: false,
+            content,
+          },
+          deleteExistingIndex: deleteIndex,
+          allowOverwrite,
         },
-        deleteIndex,
-        context.serverId
-      );
-      break;
+      ];
     }
     case 'separate_tracks': {
+      const plans: SubtitleUploadPlan[] = [];
       const hasTranslation = segments.some((seg) =>
         Boolean(cleanSubtitleText(seg.translation || ''))
       );
       const transContent = generatePureTranslationSrt(segments);
       if (hasTranslation && transContent.trim()) {
-        await uploadMediaServerSubtitle(
-          {
+        plans.push({
+          payload: {
             itemId: context.itemId,
             language: targetLang,
             format: 'srt',
             isForced: false,
             content: transContent,
           },
-          deleteIndex,
-          context.serverId
-        );
+          deleteExistingIndex: deleteIndex,
+          allowOverwrite,
+        });
       }
       const origContent = generateOriginalSrt(segments);
       if (origContent.trim()) {
-        await uploadMediaServerSubtitle(
-          {
+        const explicitSource =
+          context.sourceLanguage && context.sourceLanguage !== 'auto'
+            ? context.sourceLanguage
+            : undefined;
+        const originalLanguage = explicitSource || context.audioTrackLanguage || 'und';
+        plans.push({
+          payload: {
             itemId: context.itemId,
-            language: context.sourceLanguage || 'und',
+            language: originalLanguage,
             format: 'srt',
             isForced: false,
             content: origContent,
           },
-          undefined,
-          context.serverId
-        );
+          deleteExistingIndex: undefined,
+          allowOverwrite,
+        });
       }
-      break;
+      return plans;
     }
     default:
       throw new Error(`Unsupported media server subtitle mode: ${String(context.subtitleMode)}`);
+  }
+}
+
+export async function syncMediaServerSubtitles(
+  segments: TranscriptSegment[],
+  context: MediaServerTaskContext,
+  options?: { deleteExistingIndex?: number; allowOverwrite?: boolean }
+): Promise<void> {
+  const plans = buildMediaServerSubtitleUploadPlans(segments, context, options);
+  for (const plan of plans) {
+    await uploadMediaServerSubtitle(
+      plan.payload,
+      plan.deleteExistingIndex,
+      context.serverId,
+      plan.allowOverwrite
+    );
+  }
+}
+
+function normalizeServerUrlForMatch(url?: string): string {
+  return (url ?? '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+function isProfileMissingError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /Media server profile\b.*\bnot found/i.test(message) ||
+    message.includes('ServerNotFound') ||
+    message.includes('No active media server')
+  );
+}
+
+export async function resyncMediaServerSubtitles(
+  segments: TranscriptSegment[],
+  context: MediaServerTaskContext,
+  options?: { deleteExistingIndex?: number; allowOverwrite?: boolean }
+): Promise<void> {
+  let profiles: MediaServerProfile[] = [];
+  try {
+    const loaded = await listMediaServerProfiles();
+    if (Array.isArray(loaded)) {
+      profiles = loaded;
+    }
+  } catch {
+    // ignore if profile listing is unavailable
+  }
+
+  let resolvedContext: MediaServerTaskContext = {
+    ...context,
+    existingExternalSubtitleIndex: undefined,
+  };
+  let hasProfileMatch = false;
+
+  if (profiles.length > 0) {
+    const byId = context.serverId ? profiles.find((p) => p.id === context.serverId) : undefined;
+    if (byId) {
+      hasProfileMatch = true;
+      resolvedContext = {
+        ...resolvedContext,
+        serverId: byId.id,
+        serverType: byId.serverType,
+      };
+    } else {
+      const targetUrl = normalizeServerUrlForMatch(context.serverUrl);
+      const byUrl = targetUrl
+        ? profiles.find(
+            (p) =>
+              normalizeServerUrlForMatch(p.serverUrl) === targetUrl &&
+              (!context.serverType || p.serverType === context.serverType)
+          )
+        : undefined;
+      if (byUrl) {
+        hasProfileMatch = true;
+        resolvedContext = {
+          ...resolvedContext,
+          serverId: byUrl.id,
+          serverType: byUrl.serverType,
+        };
+      }
+    }
+  }
+
+  const effectiveOptions =
+    options?.allowOverwrite !== undefined
+      ? options
+      : context.overwriteExistingExternal === false
+        ? { ...options, allowOverwrite: true }
+        : options;
+
+  if (hasProfileMatch || context.serverType === 'jellyfin') {
+    await syncMediaServerSubtitles(segments, resolvedContext, effectiveOptions);
+    return;
+  }
+
+  try {
+    await syncMediaServerSubtitles(segments, resolvedContext, effectiveOptions);
+  } catch (err) {
+    if (!isProfileMissingError(err)) {
+      throw err;
+    }
+    const targetUrl = normalizeServerUrlForMatch(resolvedContext.serverUrl);
+    if (targetUrl) {
+      let legacyConfig: { serverUrl?: string } | null | undefined;
+      try {
+        legacyConfig = await invokeTauri(TauriCommand.emby.getConfig);
+      } catch {
+        legacyConfig = undefined;
+      }
+      const legacyUrl = normalizeServerUrlForMatch(legacyConfig?.serverUrl);
+      if (legacyUrl && legacyUrl !== targetUrl) {
+        throw err;
+      }
+    }
+    const plans = buildMediaServerSubtitleUploadPlans(segments, resolvedContext, effectiveOptions);
+    for (const plan of plans) {
+      await invokeTauri(TauriCommand.emby.uploadSubtitle, {
+        payload: plan.payload,
+        deleteExistingExternalIndex: plan.deleteExistingIndex,
+        ...(plan.allowOverwrite !== undefined ? { allowOverwrite: plan.allowOverwrite } : {}),
+      });
+    }
   }
 }

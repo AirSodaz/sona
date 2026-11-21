@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../../types/batchQueue';
-import { processNextBatchQueueItems } from '../batchQueueCoordinator';
+import type { AppConfig } from '../../../types/config';
+import {
+  createBatchTaskLedgerId,
+  isTaskLedgerCancelRequested,
+  patchTaskLedgerRecord,
+} from '../../taskLedgerBuilders';
+import { createBatchQueueCoordinator, processNextBatchQueueItems } from '../batchQueueCoordinator';
 
 function makeQueueItem(id: string, status: BatchQueueItemStatus): BatchQueueItem {
   return {
@@ -68,5 +74,57 @@ describe('batchQueueCoordinator', () => {
 
     expect(setQueueProcessing).toHaveBeenCalledWith(false);
     expect(processItem).not.toHaveBeenCalled();
+  });
+
+  it('allows upload retry when mediaServerContext is present and ASR is unconfigured', async () => {
+    const mediaItem: BatchQueueItem = {
+      ...makeQueueItem('ms-upload-retry', 'pending'),
+      errorStage: 'upload',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+      mediaServerContext: {
+        serverId: 'srv-1',
+        serverType: 'jellyfin',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'item-1',
+        itemName: 'Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+    const processBatchQueueItem = vi.fn().mockResolvedValue(undefined);
+    const coordinator = createBatchQueueCoordinator({
+      emitAutomationTaskSettled: vi.fn(),
+      asrConfigService: {
+        resolveAsrTranscriptionRequest: vi.fn().mockReturnValue({ engine: 'local', mode: 'batch' }),
+        isAsrRequestConfigured: vi.fn().mockReturnValue(false),
+      } as unknown as Parameters<typeof createBatchQueueCoordinator>[0]['asrConfigService'],
+      batchItemProcessor: {
+        processBatchQueueItem,
+      } as unknown as Parameters<typeof createBatchQueueCoordinator>[0]['batchItemProcessor'],
+      createBatchTaskLedgerId,
+      isTaskLedgerCancelRequested,
+      patchTaskLedgerRecord,
+    });
+
+    const updateItemStatus = vi.fn();
+    const setItemError = vi.fn();
+    await coordinator.processBatchQueueItemLifecycle(mediaItem.id, {
+      getQueueItems: () => [mediaItem],
+      getQueueItem: () => mediaItem,
+      getFallbackConfigSnapshot: () => ({}) as AppConfig,
+      updateItemStatus,
+      updateItemSegments: vi.fn(),
+      setItemError,
+      applySavedHistory: vi.fn(),
+      setItemExportPath: vi.fn(),
+      setItemActiveInstanceId: vi.fn(),
+      isActiveItem: () => true,
+      scheduleNext: vi.fn(),
+    });
+
+    expect(setItemError).not.toHaveBeenCalled();
+    expect(processBatchQueueItem).toHaveBeenCalledTimes(1);
+    expect(updateItemStatus).toHaveBeenCalledWith(mediaItem.id, 'complete', 100);
   });
 });

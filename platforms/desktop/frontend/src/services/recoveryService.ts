@@ -266,12 +266,24 @@ function queueSnapshotWrite(
   }, RECOVERY_WRITE_DEBOUNCE_MS);
 }
 
+function isNetworkStreamUrl(path: string): boolean {
+  const trimmed = path.trim();
+  const match = /^(https?|rtmp|rtsp):\/\/(.+)$/i.exec(trimmed);
+  if (!match) return false;
+  const rest = match[2].trimStart();
+  const hostPart = rest.split(/[/?#]/, 1)[0] ?? '';
+  return hostPart.trim().length > 0;
+}
+
 export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
+  const isStreamUrl = isNetworkStreamUrl(item.filePath);
+  const normalizedPath = isStreamUrl ? item.filePath.trim() : item.filePath;
   return {
     id: item.id,
     recoveryId: item.id,
     filename: item.filename,
-    filePath: item.filePath,
+    filePath: normalizedPath,
+    ...(isStreamUrl ? { sourceType: 'url_stream' as const, streamUrl: normalizedPath } : {}),
     status: 'pending',
     progress: 0,
     segments: Array.isArray(item.segments) ? item.segments : [],

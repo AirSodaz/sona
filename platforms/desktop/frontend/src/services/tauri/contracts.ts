@@ -880,7 +880,11 @@ type ManualTauriCommandContractMap = {
     result: string;
   };
   [TauriCommand.emby.uploadSubtitle]: {
-    args: { payload: SubtitleUploadPayload; deleteExistingExternalIndex?: number };
+    args: {
+      payload: SubtitleUploadPayload;
+      deleteExistingExternalIndex?: number;
+      allowOverwrite?: boolean;
+    };
     result: undefined;
   };
   [TauriCommand.mediaServer.testConnection]: {
@@ -930,6 +934,7 @@ type ManualTauriCommandContractMap = {
       serverId?: string;
       payload: MediaServerSubtitleUploadPayload;
       deleteExistingExternalIndex?: number;
+      allowOverwrite?: boolean;
     };
     result: undefined;
   };

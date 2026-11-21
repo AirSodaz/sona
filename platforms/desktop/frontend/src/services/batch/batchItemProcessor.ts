@@ -12,6 +12,7 @@ import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { getScenarioLanguage } from '../../utils/scenarioModels';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
+import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { exportService } from '../exportService';
@@ -63,6 +64,8 @@ export interface BatchItemProcessorPorts {
   useHistoryStore: typeof useHistoryStore;
   useProjectStore?: typeof useProjectStore;
   pipelineExecutionEngine?: typeof pipelineExecutionEngine;
+  downloadMediaServerAudio?: typeof downloadMediaServerAudio;
+  syncMediaServerSubtitles?: typeof syncMediaServerSubtitles;
 }
 
 function resolveEffectiveReplacementSets(
@@ -163,10 +166,11 @@ export class BatchItemProcessor {
           pipeline.targetLanguage ||
           config.translationLanguage ||
           'zh-CN';
-        await syncMediaServerSubtitles(
+        const syncFn = this.ports.syncMediaServerSubtitles ?? syncMediaServerSubtitles;
+        await syncFn(
           item.segments,
-          { ...mediaContext, targetLanguage },
-          { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
+          { ...mediaContext, targetLanguage, existingExternalSubtitleIndex: undefined },
+          { deleteExistingIndex: undefined }
         );
         item.errorStage = undefined;
         logger.info('[BatchQueue] subtitle_sync_complete', {
@@ -370,21 +374,39 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      if (mediaContext && !item.streamUrl && !item.filePath) {
+      const downloadFn = this.ports.downloadMediaServerAudio ?? downloadMediaServerAudio;
+      if (mediaContext && !downloadedEmbyPath && !item.filePath?.trim()) {
         callbacks.updateStatus('processing', 0);
         logger.info('[BatchQueue] audio_download_start', diagnosticContext);
-        const downloadedPath = await downloadMediaServerAudio(
-          mediaContext.itemId,
-          mediaContext.audioStreamIndex,
-          mediaContext.serverId
-        );
-        downloadedEmbyPath = downloadedPath;
-        logger.info('[BatchQueue] audio_download_complete', {
-          ...diagnosticContext,
-          downloadFile: downloadedPath.split(/[/\\]/).pop(),
-        });
-        item.filePath = downloadedPath;
-        callbacks.updateFilePath?.(downloadedPath);
+        try {
+          const downloadedPath = await downloadFn(
+            mediaContext.itemId,
+            mediaContext.audioStreamIndex,
+            mediaContext.serverId
+          );
+          downloadedEmbyPath = downloadedPath;
+          logger.info('[BatchQueue] audio_download_complete', {
+            ...diagnosticContext,
+            downloadFile: downloadedPath.split(/[/\\]/).pop(),
+          });
+          item.filePath = downloadedPath;
+          callbacks.updateFilePath?.(downloadedPath);
+        } catch (downloadErr) {
+          if (item.streamUrl) {
+            const audioTrackSelectionMayBeIgnored =
+              typeof mediaContext.audioStreamIndex === 'number' &&
+              mediaContext.audioStreamIndex > 0 &&
+              /[?&]Static=true(?:&|$)/i.test(item.streamUrl);
+            logger.warn('[BatchQueue] audio_download_failed_fallback_to_stream', {
+              ...diagnosticContext,
+              streamUrl: item.streamUrl,
+              audioTrackSelectionMayBeIgnored,
+              error: downloadErr,
+            });
+          } else {
+            throw downloadErr;
+          }
+        }
       }
 
       const isStream =
@@ -448,7 +470,9 @@ export class BatchItemProcessor {
         const isExplicitCancel = callbacks.isCancelRequested();
         const isTaskCancelError = extractErrorMessage(transcribeError).includes('Task cancelled');
         if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
-          segments = currentSegments;
+          const normalized = normalizeTranscriptSegments(currentSegments);
+          setCurrentSegments(normalized);
+          segments = normalized;
         } else {
           scheduler?.cancel();
           throw transcribeError;
@@ -546,7 +570,8 @@ export class BatchItemProcessor {
             pipeline.targetLanguage ||
             config.translationLanguage ||
             'zh-CN';
-          await syncMediaServerSubtitles(
+          const syncFn = this.ports.syncMediaServerSubtitles ?? syncMediaServerSubtitles;
+          await syncFn(
             currentSegments,
             { ...mediaContext, targetLanguage },
             { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
@@ -596,10 +621,6 @@ export class BatchItemProcessor {
       } catch (historyError) {
         logger.error('[BatchQueue] Failed to persist partial result after error:', historyError);
       }
-      if (downloadedEmbyPath) {
-        item.filePath = '';
-        callbacks.updateFilePath?.('');
-      }
       if (currentSegments.length > 0) {
         item.segments = currentSegments;
         callbacks.updateSegments(currentSegments);
@@ -611,6 +632,8 @@ export class BatchItemProcessor {
       throw error;
     } finally {
       if (downloadedEmbyPath) {
+        item.filePath = '';
+        callbacks.updateFilePath?.('');
         await this.removeTempFile(downloadedEmbyPath);
       }
       await this.removeTempFile(tempWavPath);
@@ -685,6 +708,8 @@ export const batchItemProcessor = createBatchItemProcessor({
   useHistoryStore,
   useProjectStore,
   pipelineExecutionEngine,
+  downloadMediaServerAudio,
+  syncMediaServerSubtitles,
 });
 
 export const { processBatchQueueItem } = batchItemProcessor;

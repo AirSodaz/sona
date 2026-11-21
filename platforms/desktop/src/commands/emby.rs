@@ -2,12 +2,158 @@ use tauri::State;
 
 use crate::integrations::emby::{
     EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyLoginPayload,
-    EmbyServerInfo, EmbyState, SubtitleUploadPayload,
+    EmbyServerInfo, EmbyState, EmbyStreamInfo, SubtitleUploadPayload,
 };
+use crate::integrations::media_server::{MediaServerProfile, MediaServerRegistry, MediaServerType};
 use crate::services::DesktopServices;
 
 fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> String {
     crate::commands::media_server::sanitize_media_server_error(err, api_key)
+}
+
+fn unique_duplicate_subtitle_index(
+    streams: &[EmbyStreamInfo],
+    language: &str,
+    is_forced: bool,
+) -> Option<i32> {
+    use crate::integrations::media_server::{
+        SubtitleTrackCandidate, unique_duplicate_subtitle_index as find_unique_index,
+    };
+
+    find_unique_index(
+        streams.iter().map(|stream| SubtitleTrackCandidate {
+            index: stream.index,
+            stream_type: &stream.stream_type,
+            language: stream.language.as_deref(),
+            display_title: stream.display_title.as_deref(),
+            is_external: stream.is_external,
+            is_forced: stream.is_forced,
+        }),
+        language,
+        is_forced,
+    )
+}
+
+fn sync_legacy_emby_to_registry(
+    registry: &MediaServerRegistry,
+    config: &EmbyConnectionConfig,
+    server_name: Option<&str>,
+    persisted_config: Option<&mut serde_json::Value>,
+) {
+    let normalized_target_url =
+        crate::integrations::media_server::normalize_server_url(&config.server_url);
+    let urls_match = |a: &str, b: &str| {
+        crate::integrations::media_server::normalize_server_url(a)
+            .eq_ignore_ascii_case(&crate::integrations::media_server::normalize_server_url(b))
+    };
+    let trimmed_server_name = server_name.map(str::trim).filter(|s| !s.is_empty());
+
+    let mut persisted_profiles: Vec<MediaServerProfile> = persisted_config
+        .as_deref()
+        .and_then(|c| c.get("mediaServers").or_else(|| c.get("media_servers")))
+        .and_then(|v| serde_json::from_value::<Vec<MediaServerProfile>>(v.clone()).ok())
+        .unwrap_or_default();
+
+    let active_emby = registry
+        .get_active_id()
+        .and_then(|id| registry.get_profile(&id))
+        .filter(|p| p.server_type == MediaServerType::Emby);
+
+    let url_matched_emby = registry
+        .list_profiles()
+        .into_iter()
+        .chain(persisted_profiles.iter().cloned())
+        .find(|p| {
+            p.server_type == MediaServerType::Emby
+                && urls_match(&p.server_url, &normalized_target_url)
+        });
+
+    let existing_default = registry.get_profile("default-emby").or_else(|| {
+        persisted_profiles
+            .iter()
+            .find(|p| p.id == "default-emby")
+            .cloned()
+    });
+
+    let (profile_id, profile_name, created_at) = match active_emby {
+        Some(existing)
+            if existing.id == "default-emby"
+                || urls_match(&existing.server_url, &normalized_target_url) =>
+        {
+            let same_url = urls_match(&existing.server_url, &normalized_target_url);
+            let name = if !same_url || existing.name == "Emby Server" {
+                trimmed_server_name
+                    .map(str::to_string)
+                    .unwrap_or(existing.name)
+            } else {
+                existing.name
+            };
+            (existing.id, name, existing.created_at)
+        }
+        _ => match url_matched_emby {
+            Some(existing) => {
+                let name = if existing.name == "Emby Server" {
+                    trimmed_server_name
+                        .map(str::to_string)
+                        .unwrap_or(existing.name)
+                } else {
+                    existing.name
+                };
+                (existing.id, name, existing.created_at)
+            }
+            None => {
+                let now = chrono::Utc::now().timestamp_millis();
+                let fallback_created = existing_default
+                    .as_ref()
+                    .map(|p| p.created_at)
+                    .unwrap_or(now);
+                let name = trimmed_server_name
+                    .map(str::to_string)
+                    .or_else(|| existing_default.as_ref().map(|p| p.name.clone()))
+                    .unwrap_or_else(|| "Emby Server".to_string());
+                ("default-emby".to_string(), name, fallback_created)
+            }
+        },
+    };
+
+    let profile = MediaServerProfile {
+        id: profile_id.clone(),
+        name: profile_name,
+        server_type: MediaServerType::Emby,
+        server_url: config.server_url.clone(),
+        api_key: config.api_key.clone(),
+        username: config.username.clone(),
+        admin_user_id: config.admin_user_id.clone(),
+        allow_invalid_certs: config.allow_invalid_certs,
+        created_at,
+        updated_at: chrono::Utc::now().timestamp_millis(),
+    };
+
+    if let Err(e) = registry.register(profile.clone()) {
+        log::warn!(
+            "[Emby] Failed to sync legacy Emby profile to MediaServerRegistry: {}",
+            sanitize_emby_error(e, Some(&config.api_key))
+        );
+        return;
+    }
+    let _ = registry.set_active(&profile_id);
+
+    if let Some(cfg_val) = persisted_config {
+        if let Some(existing) = persisted_profiles.iter_mut().find(|p| p.id == profile.id) {
+            *existing = profile;
+        } else {
+            persisted_profiles.push(profile);
+        }
+        if let Some(obj) = cfg_val.as_object_mut() {
+            if let Ok(serialized) = serde_json::to_value(&persisted_profiles) {
+                obj.insert("mediaServers".to_string(), serialized);
+            }
+            obj.insert(
+                "activeMediaServerId".to_string(),
+                serde_json::Value::String(profile_id),
+            );
+        }
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -32,6 +178,7 @@ pub async fn emby_test_connection(
 pub async fn emby_login(
     services: State<'_, DesktopServices>,
     emby_state: State<'_, EmbyState>,
+    registry: State<'_, MediaServerRegistry>,
     payload: EmbyLoginPayload,
 ) -> Result<EmbyServerInfo, String> {
     let clean_url = crate::integrations::emby::normalize_server_url(&payload.server_url);
@@ -109,6 +256,13 @@ pub async fn emby_login(
         );
     }
 
+    sync_legacy_emby_to_registry(
+        &registry,
+        &config,
+        Some(&info.server_name),
+        Some(&mut current_config),
+    );
+
     services
         .config
         .save(&current_config)
@@ -130,6 +284,7 @@ pub async fn emby_login(
 pub async fn emby_save_config(
     services: State<'_, DesktopServices>,
     emby_state: State<'_, EmbyState>,
+    registry: State<'_, MediaServerRegistry>,
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
     let mut config = config;
@@ -196,6 +351,7 @@ pub async fn emby_save_config(
             obj.remove("emby_admin_user_id");
         }
     }
+    sync_legacy_emby_to_registry(&registry, &config, None, Some(&mut current_config));
     services
         .config
         .save(&current_config)
@@ -211,14 +367,17 @@ pub async fn emby_save_config(
     Ok(())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn emby_get_config(
-    services: State<'_, DesktopServices>,
-) -> Result<Option<EmbyConnectionConfig>, String> {
-    let config = services.config.load()?;
-    let Some(config_val) = config else {
-        return Ok(None);
-    };
+pub(crate) fn extract_legacy_emby_config(
+    config_val: &serde_json::Value,
+) -> Option<EmbyConnectionConfig> {
+    let media_servers_explicitly_empty = config_val
+        .get("mediaServers")
+        .or_else(|| config_val.get("media_servers"))
+        .and_then(|v| v.as_array())
+        .is_some_and(|arr| arr.is_empty());
+    if media_servers_explicitly_empty {
+        return None;
+    }
 
     let server_url = config_val
         .get("embyServerUrl")
@@ -259,17 +418,25 @@ pub fn emby_get_config(
         let clean_url = server_url.trim();
         let clean_key = api_key.trim();
         if !clean_url.is_empty() && !clean_key.is_empty() {
-            return Ok(Some(EmbyConnectionConfig {
+            return Some(EmbyConnectionConfig {
                 server_url: clean_url.to_string(),
                 api_key: clean_key.to_string(),
                 username,
                 allow_invalid_certs,
                 admin_user_id,
-            }));
+            });
         }
     }
 
-    Ok(None)
+    None
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn emby_get_config(
+    services: State<'_, DesktopServices>,
+) -> Result<Option<EmbyConnectionConfig>, String> {
+    let config = services.config.load()?;
+    Ok(config.as_ref().and_then(extract_legacy_emby_config))
 }
 #[tauri::command(rename_all = "camelCase")]
 pub fn emby_get_processing_settings(
@@ -406,6 +573,7 @@ pub async fn emby_upload_subtitle(
     emby_state: State<'_, EmbyState>,
     mut payload: SubtitleUploadPayload,
     delete_existing_external_index: Option<i32>,
+    allow_overwrite: Option<bool>,
 ) -> Result<(), String> {
     let clean_id = payload.item_id.trim();
     if clean_id.is_empty()
@@ -436,19 +604,51 @@ pub async fn emby_upload_subtitle(
         .await
         .map_err(|e| sanitize_emby_error(e, None))?;
     let api_key = client.config().api_key.clone();
+    let allow_overwrite = allow_overwrite.unwrap_or(true);
 
     let mut deleted_any = false;
+    let mut predelete_auto_error: Option<String> = None;
     if let Some(idx) = delete_existing_external_index {
         if idx < 0 {
             return Err("Invalid external subtitle index: cannot be negative".to_string());
         }
-        match client.delete_subtitle(&payload.item_id, idx).await {
-            Ok(_) => {
-                deleted_any = true;
+        if allow_overwrite {
+            match client.delete_subtitle(&payload.item_id, idx).await {
+                Ok(_) => {
+                    deleted_any = true;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to delete existing external subtitle {idx}: {}",
+                        sanitize_emby_error(&e, Some(&api_key))
+                    );
+                }
+            }
+        }
+    } else if allow_overwrite && !payload.language.eq_ignore_ascii_case("und") {
+        match client.get_item_streams(&payload.item_id).await {
+            Ok(streams) => {
+                if let Some(idx) =
+                    unique_duplicate_subtitle_index(&streams, &payload.language, payload.is_forced)
+                {
+                    match client.delete_subtitle(&payload.item_id, idx).await {
+                        Ok(_) => {
+                            deleted_any = true;
+                        }
+                        Err(e) => {
+                            let sanitized = sanitize_emby_error(&e, Some(&api_key));
+                            log::warn!(
+                                "Failed to delete existing external subtitle {idx}: {sanitized}"
+                            );
+                            predelete_auto_error = Some(sanitized);
+                        }
+                    }
+                }
             }
             Err(e) => {
                 log::warn!(
-                    "Failed to delete existing external subtitle {idx}: {}",
+                    "Failed to inspect existing streams before subtitle upload for {}: {}",
+                    payload.item_id,
                     sanitize_emby_error(&e, Some(&api_key))
                 );
             }
@@ -458,7 +658,10 @@ pub async fn emby_upload_subtitle(
     let upload_result = client.upload_subtitle(&payload).await;
     match upload_result {
         Ok(_) => {}
-        Err(EmbyError::DuplicateSubtitle) if !deleted_any => {
+        Err(EmbyError::DuplicateSubtitle) if allow_overwrite && !deleted_any => {
+            if let Some(err_msg) = predelete_auto_error {
+                return Err(err_msg);
+            }
             log::info!(
                 "[Emby] Duplicate subtitle detected for item {}, attempting auto-recovery",
                 payload.item_id
@@ -468,48 +671,28 @@ pub async fn emby_upload_subtitle(
                 .await
                 .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
-            let is_target_zh =
-                crate::integrations::emby::is_chinese_language(Some(&payload.language), None);
-            let matching_external = streams.iter().find(|s| {
-                if !s.stream_type.eq_ignore_ascii_case("Subtitle")
-                    || !s.is_external
-                    || s.is_forced != payload.is_forced
-                {
-                    return false;
-                }
-                if is_target_zh {
-                    crate::integrations::emby::is_chinese_language(
-                        s.language.as_deref(),
-                        s.display_title.as_deref(),
-                    )
-                } else {
-                    crate::integrations::emby::language_matches(
-                        s.language.as_deref(),
-                        &payload.language,
-                    )
-                }
-            });
-
-            if let Some(stream) = matching_external {
-                log::info!(
-                    "[Emby] Auto-recovering: deleting existing external subtitle track index {}",
-                    stream.index
-                );
-                client
-                    .delete_subtitle(&payload.item_id, stream.index)
-                    .await
-                    .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
-
-                client
-                    .upload_subtitle(&payload)
-                    .await
-                    .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
-            } else {
+            let Some(stream_index) =
+                unique_duplicate_subtitle_index(&streams, &payload.language, payload.is_forced)
+            else {
                 return Err(sanitize_emby_error(
                     EmbyError::DuplicateSubtitle,
                     Some(&api_key),
                 ));
-            }
+            };
+
+            log::info!(
+                "[Emby] Auto-recovering: deleting existing external subtitle track index {}",
+                stream_index
+            );
+            client
+                .delete_subtitle(&payload.item_id, stream_index)
+                .await
+                .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
+
+            client
+                .upload_subtitle(&payload)
+                .await
+                .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
         }
         Err(e) => return Err(sanitize_emby_error(e, Some(&api_key))),
     }
@@ -527,6 +710,37 @@ pub async fn emby_upload_subtitle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_duplicate_recovery_rejects_ambiguous_chinese_tracks() {
+        let streams = [
+            EmbyStreamInfo {
+                index: 5,
+                stream_type: "Subtitle".to_string(),
+                language: Some("chs".to_string()),
+                display_title: Some("简体中文".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            },
+            EmbyStreamInfo {
+                index: 6,
+                stream_type: "Subtitle".to_string(),
+                language: Some("cht".to_string()),
+                display_title: Some("繁體中文".to_string()),
+                codec: Some("srt".to_string()),
+                is_external: true,
+                is_forced: false,
+                is_default: false,
+            },
+        ];
+
+        assert_eq!(
+            unique_duplicate_subtitle_index(&streams, "zh-CN", false),
+            None
+        );
+    }
 
     #[test]
     fn test_sanitize_emby_error_redacts_api_key_and_query() {
@@ -590,5 +804,190 @@ mod tests {
         assert_eq!(loaded_settings["asrLanguage"], "ja");
         assert_eq!(loaded_settings["defaultSubtitleMode"], "pure_translation");
         assert_eq!(loaded_settings["overwriteExistingExternal"], false);
+    }
+
+    #[test]
+    fn test_sync_legacy_emby_to_registry_creates_and_updates_default_emby() {
+        let registry = MediaServerRegistry::new();
+        let config = EmbyConnectionConfig {
+            server_url: "http://localhost:8096".to_string(),
+            api_key: "key-1".to_string(),
+            username: Some("admin".to_string()),
+            allow_invalid_certs: false,
+            admin_user_id: Some("uid-1".to_string()),
+        };
+
+        sync_legacy_emby_to_registry(&registry, &config, Some("My Emby"), None);
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+        let profile = registry.get_profile("default-emby").unwrap();
+        assert_eq!(profile.name, "My Emby");
+        assert_eq!(profile.api_key, "key-1");
+
+        let updated = EmbyConnectionConfig {
+            api_key: "key-2".to_string(),
+            ..config
+        };
+        sync_legacy_emby_to_registry(&registry, &updated, None, None);
+        let profile_after = registry.get_profile("default-emby").unwrap();
+        assert_eq!(profile_after.api_key, "key-2");
+        assert_eq!(profile_after.name, "My Emby");
+    }
+
+    #[test]
+    fn test_sync_legacy_emby_persists_media_servers_without_overwriting_jellyfin() {
+        let registry = MediaServerRegistry::new();
+        let jellyfin = MediaServerProfile {
+            id: "jf-1".to_string(),
+            name: "My Jellyfin".to_string(),
+            server_type: MediaServerType::Jellyfin,
+            server_url: "http://jellyfin.local:8096".to_string(),
+            api_key: "jf-key".to_string(),
+            username: None,
+            admin_user_id: None,
+            allow_invalid_certs: false,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        registry.register(jellyfin.clone()).unwrap();
+        registry.set_active("jf-1").unwrap();
+
+        let mut persisted_config = serde_json::json!({
+            "mediaServers": [jellyfin],
+            "activeMediaServerId": "jf-1"
+        });
+        let emby_cfg = EmbyConnectionConfig {
+            server_url: "http://emby.local:8096".to_string(),
+            api_key: "emby-key".to_string(),
+            username: Some("admin".to_string()),
+            allow_invalid_certs: false,
+            admin_user_id: None,
+        };
+
+        sync_legacy_emby_to_registry(
+            &registry,
+            &emby_cfg,
+            Some("My Emby"),
+            Some(&mut persisted_config),
+        );
+
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+        assert_eq!(persisted_config["activeMediaServerId"], "default-emby");
+        let servers: Vec<MediaServerProfile> =
+            serde_json::from_value(persisted_config["mediaServers"].clone()).unwrap();
+        assert_eq!(servers.len(), 2);
+        assert_eq!(servers[0].id, "jf-1");
+        assert_eq!(servers[0].server_type, MediaServerType::Jellyfin);
+        assert_eq!(servers[1].id, "default-emby");
+        assert_eq!(servers[1].server_type, MediaServerType::Emby);
+        assert_eq!(servers[1].name, "My Emby");
+
+        // Subsequent save with None server_name preserves custom name on default-emby
+        let updated = EmbyConnectionConfig {
+            api_key: "emby-key-2".to_string(),
+            ..emby_cfg
+        };
+        registry.set_active("jf-1").unwrap();
+        sync_legacy_emby_to_registry(&registry, &updated, None, Some(&mut persisted_config));
+        let servers_after: Vec<MediaServerProfile> =
+            serde_json::from_value(persisted_config["mediaServers"].clone()).unwrap();
+        let default_emby = servers_after
+            .iter()
+            .find(|p| p.id == "default-emby")
+            .unwrap();
+        assert_eq!(default_emby.name, "My Emby");
+        assert_eq!(default_emby.api_key, "emby-key-2");
+    }
+
+    #[test]
+    fn test_sync_legacy_emby_does_not_overwrite_named_profile_for_different_url() {
+        let registry = MediaServerRegistry::new();
+        let work_emby = MediaServerProfile {
+            id: "emby-work".to_string(),
+            name: "Work Emby".to_string(),
+            server_type: MediaServerType::Emby,
+            server_url: "http://work.local:8096".to_string(),
+            api_key: "work-key".to_string(),
+            username: Some("work-user".to_string()),
+            admin_user_id: None,
+            allow_invalid_certs: false,
+            created_at: 1000,
+            updated_at: 1000,
+        };
+        registry.register(work_emby.clone()).unwrap();
+        registry.set_active("emby-work").unwrap();
+
+        let mut persisted_config = serde_json::json!({
+            "mediaServers": [work_emby],
+            "activeMediaServerId": "emby-work"
+        });
+        let home_cfg = EmbyConnectionConfig {
+            server_url: "http://home.local:8096".to_string(),
+            api_key: "home-key".to_string(),
+            username: Some("home-user".to_string()),
+            allow_invalid_certs: false,
+            admin_user_id: None,
+        };
+
+        sync_legacy_emby_to_registry(
+            &registry,
+            &home_cfg,
+            Some("Home Emby"),
+            Some(&mut persisted_config),
+        );
+
+        let untouched_work = registry.get_profile("emby-work").unwrap();
+        assert_eq!(untouched_work.server_url, "http://work.local:8096");
+        assert_eq!(untouched_work.api_key, "work-key");
+        assert_eq!(untouched_work.name, "Work Emby");
+
+        assert_eq!(registry.get_active_id(), Some("default-emby".to_string()));
+        let default_emby = registry.get_profile("default-emby").unwrap();
+        assert_eq!(default_emby.server_url, "http://home.local:8096");
+        assert_eq!(default_emby.api_key, "home-key");
+        assert_eq!(default_emby.name, "Home Emby");
+        assert_eq!(persisted_config["activeMediaServerId"], "default-emby");
+    }
+
+    #[test]
+    fn test_sync_legacy_emby_persists_when_media_servers_initially_empty() {
+        let registry = MediaServerRegistry::new();
+        let mut persisted_config = serde_json::json!({});
+        let emby_cfg = EmbyConnectionConfig {
+            server_url: "http://emby.local:8096".to_string(),
+            api_key: "emby-key".to_string(),
+            username: Some("admin".to_string()),
+            allow_invalid_certs: false,
+            admin_user_id: None,
+        };
+
+        sync_legacy_emby_to_registry(
+            &registry,
+            &emby_cfg,
+            Some("Home Emby"),
+            Some(&mut persisted_config),
+        );
+
+        assert_eq!(persisted_config["activeMediaServerId"], "default-emby");
+        let servers: Vec<MediaServerProfile> =
+            serde_json::from_value(persisted_config["mediaServers"].clone()).unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].id, "default-emby");
+        assert_eq!(servers[0].name, "Home Emby");
+    }
+
+    #[test]
+    fn test_extract_legacy_emby_config_returns_none_when_media_servers_explicitly_empty() {
+        let cfg = serde_json::json!({
+            "mediaServers": [],
+            "embyServerUrl": "http://legacy.local:8096",
+            "embyApiKey": "legacy-key"
+        });
+        assert_eq!(extract_legacy_emby_config(&cfg), None);
+
+        let legacy_only = serde_json::json!({
+            "embyServerUrl": "http://legacy.local:8096",
+            "embyApiKey": "legacy-key"
+        });
+        assert!(extract_legacy_emby_config(&legacy_only).is_some());
     }
 }

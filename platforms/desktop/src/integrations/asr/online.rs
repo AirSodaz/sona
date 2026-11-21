@@ -191,7 +191,11 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
 
         let _ = emitter.emit(
             super::BATCH_PROGRESS_EVENT,
-            serde_json::json!([file_path.to_string_lossy().as_ref(), 100.0_f32]),
+            serde_json::json!([
+                file_path.to_string_lossy().as_ref(),
+                100.0_f32,
+                &instance_id
+            ]),
         );
 
         Ok(segments)
