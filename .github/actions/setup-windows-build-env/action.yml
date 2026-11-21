@@ -1,9 +1,36 @@
 name: 'Setup Windows build environment'
-description: 'Configure long paths, Ninja, Clang-cl, and short target directory junction on Windows'
+description: 'Configure long paths, Ninja, LLVM/Clang 22+, and short target directory junction on Windows'
 
 runs:
   using: 'composite'
   steps:
+    - name: Cache LLVM 22.1.8 (Windows)
+      if: runner.os == 'Windows'
+      id: cache-llvm
+      uses: actions/cache@v6
+      with:
+        path: C:\llvm\22.1.8
+        key: llvm-22.1.8-windows-x64
+
+    - name: Install LLVM 22.1.8 (Windows)
+      if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        $llvmDir = "C:\llvm\22.1.8"
+        New-Item -ItemType Directory -Force -Path $llvmDir | Out-Null
+        curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 `
+          "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe" `
+          -o "LLVM-22.1.8-win64.exe"
+        7z x "LLVM-22.1.8-win64.exe" "-o$llvmDir" -y | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "7z extraction failed with exit code $LASTEXITCODE" }
+        Remove-Item -Force "LLVM-22.1.8-win64.exe"
+        $pluginsDir = Join-Path $llvmDir '$PLUGINSDIR'
+        if (Test-Path $pluginsDir) { Remove-Item -Recurse -Force $pluginsDir -ErrorAction SilentlyContinue }
+        if (!(Test-Path "$llvmDir\bin\clang-cl.exe")) {
+          throw "clang-cl.exe not found in $llvmDir\bin"
+        }
+
     - name: Configure Windows build environment
       if: runner.os == 'Windows'
       shell: pwsh
@@ -14,7 +41,12 @@ runs:
         Add-MpPreference -ExclusionPath "C:\", "D:\", "T:\" -ErrorAction SilentlyContinue
         Add-MpPreference -ExclusionProcess "cargo.exe", "rustc.exe", "sccache.exe", "clang-cl.exe", "lld-link.exe", "link.exe", "ninja.exe", "cmake.exe" -ErrorAction SilentlyContinue
 
-        # 2. Configure C/C++ compiler and CMake/Ninja settings
+        # 2. Prepend LLVM 22.1.8 to PATH so clang-cl/lld-link match VS 2026 MSVC STL >= Clang 22 requirement
+        $llvmBin = "C:\llvm\22.1.8\bin"
+        "$llvmBin" >> $env:GITHUB_PATH
+        $env:PATH = "$llvmBin;$env:PATH"
+
+        # 3. Configure C/C++ compiler and CMake/Ninja settings
         "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
         "CMAKE_OBJECT_PATH_MAX=1024" >> $env:GITHUB_ENV
         "CMAKE_BUILD_PARALLEL_LEVEL=4" >> $env:GITHUB_ENV
@@ -28,7 +60,7 @@ runs:
         "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
         "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
 
-        # 3. Use lld-link (fast LLVM linker) for 3-5x faster linking on Windows
+        # 4. Use lld-link (fast LLVM linker) for 3-5x faster linking on Windows
         "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
         "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
         # Short path junction: target/ → C:\t avoids MAX_PATH issues with
@@ -50,5 +82,6 @@ runs:
         }
         subst T: C:\t
         "CARGO_TARGET_DIR=T:\" >> $env:GITHUB_ENV
+        (Get-Command clang-cl).Source
         clang-cl --version
         ninja --version
