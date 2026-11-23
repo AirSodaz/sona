@@ -333,7 +333,7 @@ export function ToolCliPanel(): React.JSX.Element {
           >
             <div className="tool-cli-actions-row">
               <span className="badge badge-subtle">{status?.installType || '-'}</span>
-              <span className="badge badge-subtle">v{status?.version || '0.10.4'}</span>
+              <span className="badge badge-subtle">v{status?.version || '0.10.5'}</span>
             </div>
           </SettingsItem>
         </SettingsSection>

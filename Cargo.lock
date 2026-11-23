@@ -6555,7 +6555,7 @@ dependencies = [
 
 [[package]]
 name = "sona"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -6623,7 +6623,7 @@ dependencies = [
 
 [[package]]
 name = "sona-api-server"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -6649,7 +6649,7 @@ dependencies = [
 
 [[package]]
 name = "sona-application"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6668,7 +6668,7 @@ dependencies = [
 
 [[package]]
 name = "sona-archive"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "bzip2 0.6.1",
  "log",
@@ -6684,7 +6684,7 @@ dependencies = [
 
 [[package]]
 name = "sona-audio-capture"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "cpal",
  "log",
@@ -6696,11 +6696,11 @@ dependencies = [
 
 [[package]]
 name = "sona-bin-shim"
-version = "0.10.4"
+version = "0.10.5"
 
 [[package]]
 name = "sona-cli"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -6740,7 +6740,7 @@ dependencies = [
 
 [[package]]
 name = "sona-core"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "bitflags 2.13.2",
@@ -6770,7 +6770,7 @@ dependencies = [
 
 [[package]]
 name = "sona-export"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "log",
  "sona-application",
@@ -6780,7 +6780,7 @@ dependencies = [
 
 [[package]]
 name = "sona-llama-cpp"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "encoding_rs",
@@ -6793,7 +6793,7 @@ dependencies = [
 
 [[package]]
 name = "sona-mcp"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "chrono",
  "clap",
@@ -6807,7 +6807,7 @@ dependencies = [
 
 [[package]]
 name = "sona-media-detector"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "sona-core",
@@ -6817,7 +6817,7 @@ dependencies = [
 
 [[package]]
 name = "sona-model-downloads"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -6841,7 +6841,7 @@ dependencies = [
 
 [[package]]
 name = "sona-online-asr"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "aimux-core",
  "aimux-providers",
@@ -6862,7 +6862,7 @@ dependencies = [
 
 [[package]]
 name = "sona-online-llm"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "aimux-core",
  "aimux-providers",
@@ -6879,7 +6879,7 @@ dependencies = [
 
 [[package]]
 name = "sona-punct"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "sherpa-onnx",
  "sona-core",
@@ -6887,7 +6887,7 @@ dependencies = [
 
 [[package]]
 name = "sona-recovery-fs"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "log",
  "serde",
@@ -6899,7 +6899,7 @@ dependencies = [
 
 [[package]]
 name = "sona-runtime-fs"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "chrono",
  "glob",
@@ -6916,7 +6916,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sherpa-onnx"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "hound",
@@ -6933,7 +6933,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sqlite"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6956,7 +6956,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sync"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "argon2",
  "async-trait",
@@ -6981,7 +6981,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sync-s3"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -7004,7 +7004,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sync-webdav"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -7027,7 +7027,7 @@ dependencies = [
 
 [[package]]
 name = "sona-translation-onnx"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "log",
@@ -7043,7 +7043,7 @@ dependencies = [
 
 [[package]]
 name = "sona-ts-bind"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -7056,7 +7056,7 @@ dependencies = [
 
 [[package]]
 name = "sona-uniffi-bind"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -7091,14 +7091,14 @@ dependencies = [
 
 [[package]]
 name = "sona-uniffi-bindgen"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "sona-vad"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "log",
  "ndarray",
