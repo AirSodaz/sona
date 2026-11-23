@@ -1,5 +1,5 @@
 import { Copy, History, Sparkles, X } from 'lucide-react';
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
 import { useAuxWindowLogLevel } from '../hooks/useAuxWindowLogLevel';
@@ -24,6 +24,7 @@ import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { logger } from '../utils/logger';
 
 const WAVEFORM_WEIGHTS = [0.45, 0.75, 1.0, 0.75, 0.45] as const;
+const WAVEFORM_BAR_IDS = WAVEFORM_WEIGHTS.map((_, i) => `waveform-bar-${i}`);
 const MIN_BAR_HEIGHT = 4;
 const MAX_BAR_HEIGHT = 18;
 
@@ -96,6 +97,52 @@ async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
   }
 }
 
+function computeWaveformBarHeight(
+  weight: number,
+  index: number,
+  peakLevel: number,
+  flags: {
+    isError: boolean;
+    isPolishing: boolean;
+    isTranslating: boolean;
+    isSegment: boolean;
+  }
+): number {
+  if (flags.isError) {
+    return 4;
+  }
+  if (flags.isPolishing || flags.isTranslating) {
+    const activePattern = [6, 12, 16, 12, 6];
+    return activePattern[index];
+  }
+  const isSpeaking = flags.isSegment || peakLevel > 0.05;
+  if (isSpeaking) {
+    const boost = Math.min(1, Math.max(peakLevel * 2.2, flags.isSegment ? 0.35 : 0.15));
+    return Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
+  }
+  const idlePattern = [4, 7, 10, 7, 4];
+  return idlePattern[index];
+}
+
+function applyWaveformHeights(
+  container: HTMLDivElement | null,
+  peakLevel: number,
+  flags: {
+    isError: boolean;
+    isPolishing: boolean;
+    isTranslating: boolean;
+    isSegment: boolean;
+  }
+): void {
+  if (!container) return;
+  for (let i = 0; i < WAVEFORM_WEIGHTS.length; i++) {
+    const barEl = container.children[i] as HTMLElement | undefined;
+    if (barEl) {
+      barEl.style.height = `${computeWaveformBarHeight(WAVEFORM_WEIGHTS[i], i, peakLevel, flags)}px`;
+    }
+  }
+}
+
 export function VoiceTypingOverlay() {
   useAuxWindowLanguage();
   useAuxWindowLogLevel();
@@ -103,7 +150,8 @@ export function VoiceTypingOverlay() {
   const rootRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const resolvedTheme = useAuxWindowTheme();
-  const [peakLevel, setPeakLevel] = useState<number>(0);
+  const peakLevelRef = useRef<number>(0);
+  const waveformRef = useRef<HTMLDivElement>(null);
   const storeHistoryItems = useVoiceTypingHistoryStore((state) => state.items);
   const overlayState = useAuxWindowState({
     label: VOICE_TYPING_WINDOW_LABEL,
@@ -205,7 +253,20 @@ export function VoiceTypingOverlay() {
       window.removeEventListener('blur', handleBlur);
     };
   }, [handleCancel, overlayState.phase]);
+  const shouldListenPeak =
+    overlayState.phase === 'preparing' ||
+    overlayState.phase === 'listening' ||
+    overlayState.phase === 'segment';
+  const isSegmentRef = useRef(false);
+  isSegmentRef.current = overlayState.phase === 'segment' && overlayState.text.trim().length > 0;
+  const lastPeakSessionRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (!shouldListenPeak) {
+      peakLevelRef.current = 0;
+      return;
+    }
+
     let isMounted = true;
     let unlisten: (() => void) | undefined;
 
@@ -213,7 +274,13 @@ export function VoiceTypingOverlay() {
       if (!isMounted) return;
       const raw = typeof event.payload === 'number' ? Math.abs(event.payload) : 0;
       const normalized = Math.min(1, Math.max(0, raw / 32767));
-      setPeakLevel(normalized);
+      peakLevelRef.current = normalized;
+      applyWaveformHeights(waveformRef.current, normalized, {
+        isError: false,
+        isPolishing: false,
+        isTranslating: false,
+        isSegment: isSegmentRef.current,
+      });
     })
       .then((fn) => {
         if (!isMounted) {
@@ -230,7 +297,7 @@ export function VoiceTypingOverlay() {
       isMounted = false;
       unlisten?.();
     };
-  }, []);
+  }, [shouldListenPeak]);
   useEffect(() => {
     const previousDocumentBackground = document.documentElement.style.background;
     const previousBodyBackground = document.body.style.background;
@@ -302,6 +369,31 @@ export function VoiceTypingOverlay() {
     }
   }, [displayText, phase, resolvedTheme]);
 
+  useLayoutEffect(() => {
+    if (
+      !shouldListenPeak ||
+      overlayState.phase === 'preparing' ||
+      lastPeakSessionRef.current !== overlayState.sessionId
+    ) {
+      peakLevelRef.current = 0;
+      lastPeakSessionRef.current = overlayState.sessionId;
+    }
+    applyWaveformHeights(waveformRef.current, shouldListenPeak ? peakLevelRef.current : 0, {
+      isError,
+      isPolishing,
+      isTranslating,
+      isSegment,
+    });
+  }, [
+    isError,
+    isPolishing,
+    isTranslating,
+    isSegment,
+    overlayState.phase,
+    overlayState.sessionId,
+    shouldListenPeak,
+  ]);
+
   let containerStyle: CSSProperties;
 
   if (isPolishing || isTranslating) {
@@ -348,23 +440,6 @@ export function VoiceTypingOverlay() {
     };
   }
 
-  const isSpeaking = isSegment || peakLevel > 0.05;
-  const barHeights = WAVEFORM_WEIGHTS.map((weight, i) => {
-    let height: number;
-    if (isError) {
-      height = 4;
-    } else if (isPolishing || isTranslating) {
-      const activePattern = [6, 12, 16, 12, 6];
-      height = activePattern[i];
-    } else if (isSpeaking) {
-      const boost = Math.min(1, Math.max(peakLevel * 2.2, isSegment ? 0.35 : 0.15));
-      height = Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
-    } else {
-      const idlePattern = [4, 7, 10, 7, 4];
-      height = idlePattern[i];
-    }
-    return { id: `waveform-bar-${i}`, height };
-  });
   return (
     <div
       data-testid="voice-typing-overlay-root"
@@ -566,6 +641,7 @@ export function VoiceTypingOverlay() {
         <div data-testid="voice-typing-bubble" style={containerStyle}>
           {/* 5-bar Waveform Visualizer */}
           <div
+            ref={waveformRef}
             data-testid="voice-typing-waveform"
             aria-label="audio waveform"
             style={{
@@ -576,12 +652,11 @@ export function VoiceTypingOverlay() {
               flexShrink: 0,
             }}
           >
-            {barHeights.map((bar) => (
+            {WAVEFORM_BAR_IDS.map((barId) => (
               <div
-                key={bar.id}
+                key={barId}
                 style={{
                   width: '3px',
-                  height: `${bar.height}px`,
                   borderRadius: '999px',
                   background: isError
                     ? '#fca5a5'

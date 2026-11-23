@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
 import { captionSessionRuntime } from '../captionSessionRuntime';
 import { captionWindowService } from '../captionWindowService';
-import { TauriEvent } from '../tauri/events';
 
 const tauriCoreMocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -128,13 +127,6 @@ describe('captionSessionRuntime', () => {
   });
 
   it('starts and stops native caption capture through the caption service', async () => {
-    const unlisten = vi.fn();
-    tauriEventMocks.listen.mockImplementation((event: string) => {
-      if (event === TauriEvent.audio.systemPeak) {
-        return Promise.resolve(unlisten);
-      }
-      return Promise.resolve(vi.fn());
-    });
     await captionSessionRuntime.start(config, () => true, vi.fn());
     await captionSessionRuntime.stop();
 
@@ -154,7 +146,7 @@ describe('captionSessionRuntime', () => {
       })
     );
     expect(transcriptionServiceMocks.captionStop).toHaveBeenCalledTimes(1);
-    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(tauriEventMocks.listen).not.toHaveBeenCalledWith('system-audio', expect.any(Function));
   });
 
   it('updates caption window style through the runtime boundary', async () => {
@@ -188,13 +180,9 @@ describe('captionSessionRuntime', () => {
       return callCount <= 2;
     });
 
-    const unlisten = vi.fn();
-    tauriEventMocks.listen.mockResolvedValue(unlisten);
-
     await captionSessionRuntime.start(config, isActive, vi.fn());
 
     expect(transcriptionServiceMocks.captionStop).toHaveBeenCalledTimes(1);
-    expect(unlisten).toHaveBeenCalledTimes(1);
     expect(captionWindowService.close).toHaveBeenCalledTimes(1);
   });
   it('skips restartRecognizer when the caption session is not running', async () => {

@@ -223,10 +223,31 @@ const sessionCacheBySessionId = new Map<
   }
 >();
 
+export function evictSessionStoreCache(sessionId: string): void {
+  sessionCacheBySessionId.delete(sessionId);
+  if (sessionId !== 'default') {
+    sessionActionsById.delete(sessionId);
+  }
+}
+
 export function resetSessionStoreCache(): void {
   sessionCacheBySessionId.clear();
   sessionActionsById.clear();
 }
+
+useTranscriptStore.subscribe((state, prevState) => {
+  if (state.sessions === prevState.sessions) return;
+  for (const cachedId of sessionCacheBySessionId.keys()) {
+    if (cachedId !== 'default' && !(cachedId in state.sessions)) {
+      evictSessionStoreCache(cachedId);
+    }
+  }
+  for (const cachedId of sessionActionsById.keys()) {
+    if (cachedId !== 'default' && !(cachedId in state.sessions)) {
+      sessionActionsById.delete(cachedId);
+    }
+  }
+});
 
 export function getSessionStoreState(
   state: TranscriptStore,

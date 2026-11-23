@@ -295,4 +295,15 @@ describe('historyService', () => {
     });
     expect(record?.segments[0].timing).toBeUndefined();
   });
+
+  it('updateItemMeta passes historyId and updates matching the Rust Tauri contract', async () => {
+    testContext.invokeMock.mockResolvedValue(undefined);
+
+    await historyService.updateItemMeta('hist-1', { title: 'Renamed', icon: 'Mic' });
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('history_update_item_meta', {
+      historyId: 'hist-1',
+      updates: { title: 'Renamed', icon: 'Mic' },
+    });
+  });
 });

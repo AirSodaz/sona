@@ -46,6 +46,44 @@ import {
   toSessionSidecarKey,
 } from './transcriptSidecarState';
 
+function pruneEvictedSidecarStates(
+  state: Pick<TranscriptStore, 'autoSaveStates' | 'summaryStates' | 'llmStates'>,
+  evictedKeys: Iterable<string>
+): Partial<Pick<TranscriptStore, 'autoSaveStates' | 'summaryStates' | 'llmStates'>> {
+  let nextAutoSaveStates: Record<string, AutoSaveState> | undefined;
+  let nextSummaryStates: Record<string, TranscriptSummaryState> | undefined;
+  let nextLlmStates: Record<string, LlmState> | undefined;
+
+  for (const key of evictedKeys) {
+    if (!key) continue;
+    if ((nextAutoSaveStates ?? state.autoSaveStates)[key]) {
+      nextAutoSaveStates ??= { ...state.autoSaveStates };
+      delete nextAutoSaveStates[key];
+    }
+    const summaryEntry = (nextSummaryStates ?? state.summaryStates)[key];
+    if (summaryEntry && !summaryEntry.isGenerating) {
+      nextSummaryStates ??= { ...state.summaryStates };
+      delete nextSummaryStates[key];
+    }
+    const llmEntry = (nextLlmStates ?? state.llmStates)[key];
+    if (
+      llmEntry &&
+      !llmEntry.isPolishing &&
+      !llmEntry.isTranslating &&
+      !llmEntry.isRetranscribing
+    ) {
+      nextLlmStates ??= { ...state.llmStates };
+      delete nextLlmStates[key];
+    }
+  }
+
+  return {
+    ...(nextAutoSaveStates ? { autoSaveStates: nextAutoSaveStates } : {}),
+    ...(nextSummaryStates ? { summaryStates: nextSummaryStates } : {}),
+    ...(nextLlmStates ? { llmStates: nextLlmStates } : {}),
+  };
+}
+
 let activeBatchItemIdResolver: (() => string | null) | null = null;
 
 export function registerBatchActiveItemIdResolver(resolver: () => string | null): void {
@@ -746,28 +784,23 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         return state;
       }
       const existing = state.sessions[sessionId];
-      const nextAutoSaveStates = { ...state.autoSaveStates };
-      let autoSaveChanged = false;
-      const sessionSidecarKey = toSessionSidecarKey(sessionId);
-      if (nextAutoSaveStates[sessionSidecarKey]) {
-        delete nextAutoSaveStates[sessionSidecarKey];
-        autoSaveChanged = true;
-      }
+      const evictedSidecarKeys = new Set<string>([toSessionSidecarKey(sessionId)]);
       if (!existing) {
-        return autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : state;
+        const sidecarPatch = pruneEvictedSidecarStates(state, evictedSidecarKeys);
+        return Object.keys(sidecarPatch).length > 0 ? sidecarPatch : state;
       }
       revokeBlobAudioUrl(existing.audioUrl);
-      if (existing.sourceHistoryId && nextAutoSaveStates[existing.sourceHistoryId]) {
-        delete nextAutoSaveStates[existing.sourceHistoryId];
-        autoSaveChanged = true;
+      if (existing.sourceHistoryId) {
+        evictedSidecarKeys.add(existing.sourceHistoryId);
       }
+      const sidecarPatch = pruneEvictedSidecarStates(state, evictedSidecarKeys);
       if (sessionId === 'default') {
         return {
           sessions: {
             ...state.sessions,
             default: { ...DEFAULT_SESSION_DATA },
           },
-          ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+          ...sidecarPatch,
         };
       }
       const nextSessions = { ...state.sessions };
@@ -779,7 +812,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           state.createLiveSessionId === sessionId ? 'default' : state.createLiveSessionId,
         createBatchAdhocSessionId:
           state.createBatchAdhocSessionId === sessionId ? null : state.createBatchAdhocSessionId,
-        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+        ...sidecarPatch,
       };
     });
   },
@@ -792,6 +825,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let nextActiveSessionId = state.activeSessionId;
       let nextCreateLiveSessionId = state.createLiveSessionId;
       let nextCreateBatchAdhocSessionId = state.createBatchAdhocSessionId;
+      const evictedSidecarKeys = new Set<string>();
 
       for (const [sessionId, session] of Object.entries(state.sessions)) {
         if (sessionId === state.recordingSessionId) {
@@ -805,6 +839,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         }
         changed = true;
         revokeBlobAudioUrl(session.audioUrl);
+        evictedSidecarKeys.add(toSessionSidecarKey(sessionId));
+        if (session.sourceHistoryId) {
+          evictedSidecarKeys.add(session.sourceHistoryId);
+        }
         if (sessionId === 'default') {
           nextSessions.default = { ...DEFAULT_SESSION_DATA };
         } else {
@@ -821,21 +859,13 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         }
       }
 
-      const nextAutoSaveStates = { ...state.autoSaveStates };
-      let autoSaveChanged = false;
       for (const id of idSet) {
-        if (nextAutoSaveStates[id]) {
-          delete nextAutoSaveStates[id];
-          autoSaveChanged = true;
-        }
-        const sessionSidecarKey = toSessionSidecarKey(id);
-        if (nextAutoSaveStates[sessionSidecarKey]) {
-          delete nextAutoSaveStates[sessionSidecarKey];
-          autoSaveChanged = true;
-        }
+        evictedSidecarKeys.add(id);
+        evictedSidecarKeys.add(toSessionSidecarKey(id));
       }
+      const sidecarPatch = pruneEvictedSidecarStates(state, evictedSidecarKeys);
 
-      if (!changed && !autoSaveChanged) {
+      if (!changed && Object.keys(sidecarPatch).length === 0) {
         return state;
       }
       return {
@@ -847,7 +877,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
               createBatchAdhocSessionId: nextCreateBatchAdhocSessionId,
             }
           : {}),
-        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+        ...sidecarPatch,
       };
     });
   },
@@ -880,14 +910,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         return state;
       }
 
-      const nextAutoSaveStates = { ...state.autoSaveStates };
-      let autoSaveChanged = false;
-      for (const id of evictedIds) {
-        if (nextAutoSaveStates[id]) {
-          delete nextAutoSaveStates[id];
-          autoSaveChanged = true;
-        }
-      }
+      const sidecarPatch = pruneEvictedSidecarStates(state, evictedIds);
 
       return {
         sessions: nextSessions,
@@ -899,7 +922,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           state.createBatchAdhocSessionId && nextSessions[state.createBatchAdhocSessionId]
             ? state.createBatchAdhocSessionId
             : null,
-        ...(autoSaveChanged ? { autoSaveStates: nextAutoSaveStates } : {}),
+        ...sidecarPatch,
       };
     });
   },

@@ -222,4 +222,54 @@ describe('RecognizerLifecycle', () => {
     await expect(lifecycle.stopExternal('failed')).rejects.toThrow('release failed');
     expect(mocks.listenCallbacks['recording-translation-failed']).toBeUndefined();
   });
+
+  it('registers the latest listener when a callback is replaced mid-subscription', async () => {
+    const firstListen = Promise.withResolvers<() => void>();
+    const firstUnlisten = vi.fn(() => {
+      delete mocks.listenCallbacks['recording-translation-session-a'];
+    });
+    const secondUnlisten = vi.fn(() => {
+      delete mocks.listenCallbacks['recording-translation-session-b'];
+    });
+
+    mocks.listen.mockImplementationOnce(async (eventName, callback) => {
+      mocks.listenCallbacks[eventName] = callback;
+      return firstListen.promise;
+    });
+    mocks.listen.mockImplementationOnce(async (eventName, callback) => {
+      mocks.listenCallbacks[eventName] = callback;
+      return secondUnlisten;
+    });
+
+    const RecognizerLifecycle = await loadLifecycle();
+    const lifecycle = new RecognizerLifecycle('record');
+    const firstUpdate = vi.fn();
+    const secondUpdate = vi.fn();
+
+    lifecycle.registerCallback(firstUpdate, vi.fn(), { sessionId: 'session-a' });
+    const firstEnsure = lifecycle.ensureGlobalBus();
+
+    lifecycle.registerCallback(secondUpdate, vi.fn(), { sessionId: 'session-b' });
+    const secondEnsure = lifecycle.ensureGlobalBus();
+
+    firstListen.resolve(firstUnlisten);
+    await Promise.all([firstEnsure, secondEnsure]);
+
+    expect(firstUnlisten).toHaveBeenCalledTimes(1);
+    expect(mocks.listenCallbacks['recording-translation-session-b']).toBeDefined();
+
+    mocks.listenCallbacks['recording-translation-session-b']({
+      payload: {
+        sessionId: 'session-b',
+        stage: 'final',
+        update: {
+          removeIds: [],
+          upsertSegments: [{ id: 'seg-b', text: 'hello b', start: 0, end: 1, isFinal: true }],
+        },
+      },
+    });
+
+    expect(firstUpdate).not.toHaveBeenCalled();
+    expect(secondUpdate).toHaveBeenCalledTimes(1);
+  });
 });
