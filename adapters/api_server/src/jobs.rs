@@ -68,26 +68,28 @@ impl JobManager {
     pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), ApiServerJobError> {
         let job_id = job.job_id.clone();
         let file_path = job.file_path.clone();
+        self.jobs.write().await.insert(
+            job_id.clone(),
+            JobEntry {
+                status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: Some(file_path),
+                abort_handle: None,
+            },
+        );
         match self.sender.try_send(job) {
             Ok(()) => {
                 log::info!("[ServerJob] task_queued job_id={job_id}");
-                self.jobs.write().await.insert(
-                    job_id,
-                    JobEntry {
-                        status: JobStatus::Pending,
-                        created_at: std::time::Instant::now(),
-                        completed_at: None,
-                        file_path: Some(file_path),
-                        abort_handle: None,
-                    },
-                );
                 Ok(())
             }
             Err(mpsc::error::TrySendError::Full(_)) => {
+                self.jobs.write().await.remove(&job_id);
                 log::warn!("[ServerJob] task_rejected job_id={job_id} reason=queue_full");
                 Err(ApiServerJobError::QueueFull { job_id })
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.jobs.write().await.remove(&job_id);
                 log::warn!("[ServerJob] task_rejected job_id={job_id} reason=queue_closed");
                 Err(ApiServerJobError::QueueClosed { job_id })
             }

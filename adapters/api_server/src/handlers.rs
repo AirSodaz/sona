@@ -155,11 +155,16 @@ pub fn validate_webhook_url(url: &str) -> Result<(), &'static str> {
     let host = parsed
         .host_str()
         .ok_or("Invalid webhook_url: missing host")?;
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        if ip.is_unspecified() {
+    let host_unbracketed = host
+        .strip_prefix('[')
+        .and_then(|inner| inner.strip_suffix(']'))
+        .unwrap_or(host);
+    if let Ok(ip) = host_unbracketed.parse::<std::net::IpAddr>() {
+        let canonical = ip.to_canonical();
+        if canonical.is_unspecified() {
             return Err("Invalid webhook_url: unspecified IP addresses are not permitted");
         }
-        match ip {
+        match canonical {
             std::net::IpAddr::V4(ipv4) => {
                 if ipv4.is_link_local() {
                     return Err("Invalid webhook_url: link-local IP addresses are not permitted");

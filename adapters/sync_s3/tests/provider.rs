@@ -276,15 +276,15 @@ async fn s3_object_store_end_to_end_against_mock_server() {
         _ => panic!("expected created"),
     };
 
-    // Second put_if_absent on same key must conflict
+    // Second put_if_absent on same key must return AlreadyExists on 412 Precondition Failed
     let conflict = store
         .put_if_absent(&key, b"overwrite attempt".to_vec())
         .await
         .unwrap();
-    match conflict {
-        SyncPutResult::Conflict { .. } | SyncPutResult::AlreadyExists { .. } => {}
-        _ => panic!("expected conflict/already exists"),
-    }
+    assert!(
+        matches!(conflict, SyncPutResult::AlreadyExists { .. }),
+        "expected AlreadyExists on conditional create conflict, got {conflict:?}"
+    );
 
     // 3. Get
     let obj = store.get(&key).await.unwrap().expect("object must exist");
@@ -324,6 +324,67 @@ async fn s3_object_store_end_to_end_against_mock_server() {
     // Get after delete
     let after_del = store.get(&key).await.unwrap();
     assert!(after_del.is_none());
+}
+
+#[tokio::test]
+async fn s3_get_rejects_oversized_objects_and_precondition_xml_distinguishes_cas_vs_create() {
+    let oversized_len = 72 * 1024 * 1024 + 1;
+    let app = Router::new().fallback(any(move |req: Request| async move {
+        let path = req.uri().path().to_string();
+        if req.method() == axum::http::Method::GET && path.ends_with("/oversized.sync") {
+            return (StatusCode::OK, vec![0u8; oversized_len]).into_response();
+        }
+        if req.method() == axum::http::Method::PUT && path.ends_with("/xml-precondition.sync") {
+            return (
+                StatusCode::BAD_REQUEST,
+                r#"<?xml version="1.0" encoding="UTF-8"?><Error><Code>PreconditionFailed</Code><Message>Precondition failed</Message></Error>"#,
+            )
+                .into_response();
+        }
+        StatusCode::NOT_FOUND.into_response()
+    }));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let config = S3ObjectStoreConfig {
+        endpoint: format!("http://127.0.0.1:{port}"),
+        region: "us-east-1".to_string(),
+        bucket: "test-bucket".to_string(),
+        remote_root: "sona".to_string(),
+        access_key_id: "AKIAIOSFODNN7EXAMPLE".to_string(),
+        secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string(),
+        session_token: None,
+        force_path_style: true,
+    };
+    let store = S3ObjectStore::new(config).unwrap();
+
+    let oversized_key = SyncObjectKey::parse("vaults/v1/oversized.sync").unwrap();
+    let oversized_err = store
+        .get(&oversized_key)
+        .await
+        .expect_err("oversized payload must be rejected");
+    assert!(
+        oversized_err
+            .to_string()
+            .contains("exceeds maximum allowed limit")
+    );
+
+    let precondition_key = SyncObjectKey::parse("vaults/v1/xml-precondition.sync").unwrap();
+    let create_res = store
+        .put_if_absent(&precondition_key, b"create".to_vec())
+        .await
+        .unwrap();
+    assert!(matches!(create_res, SyncPutResult::AlreadyExists { .. }));
+
+    let cas_res = store
+        .compare_and_swap(&precondition_key, Some("etag-1"), b"update".to_vec())
+        .await
+        .unwrap();
+    assert!(matches!(cas_res, SyncPutResult::Conflict { .. }));
 }
 
 fn md5_or_simple(bytes: &[u8]) -> u64 {

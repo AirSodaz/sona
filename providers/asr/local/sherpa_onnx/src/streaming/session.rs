@@ -517,9 +517,9 @@ async fn flush_session_impl_inner(
 
     if let Some(recognizer) = instance.recognizer_clone()
         && let Some(r) = recognizer.online()
-        && let Some(stream) = instance.take_stream()
+        && let Some(mut stream) = instance.take_stream()
     {
-        let st = &stream;
+        let st = &mut stream;
         let inference_started = Instant::now();
         let current_time = instance.total_samples as f64 / 16000.0;
         let buffered_samples =
@@ -961,10 +961,10 @@ async fn feed_audio_samples_inner(
         Ok(())
     } else if let Some(r) = recognizer.online() {
         let inference_started = Instant::now();
-        let stream = instance
+        let mut stream = instance
             .take_stream()
             .ok_or("Stream not initialized for online model")?;
-        let st = &stream;
+        let st = &mut stream;
 
         let decode_started = Instant::now();
         accept_online_samples(st, samples);

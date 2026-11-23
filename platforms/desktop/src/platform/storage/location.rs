@@ -695,17 +695,21 @@ pub async fn migrate_data_directory(
     {
         log::warn!("Failed to allow target history directory in asset scope: {e}");
     }
-    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
+    crate::platform::database::reload_sqlite_application_context(app, new_context)?;
 
     let new_dashboard_service =
         crate::platform::dashboard::create_dashboard_service(target_path.clone(), new_db);
     if let Some(dashboard_state) =
         app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
     {
-        let _ = dashboard_state.reload(new_dashboard_service);
+        dashboard_state.reload(new_dashboard_service)?;
     }
 
     if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.sync.configure(
+            target_path.join(crate::platform::sync::SYNC_CONFIG_FILE),
+            services.sqlite.clone(),
+        );
         services.sync.reset().await;
     }
 
@@ -771,14 +775,6 @@ pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesI
     let server_was_running = stop_api_server_for_migration(app).await?;
     let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
-    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
-        let _ = current_db.with_write_connection(|conn| {
-            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
-            Ok(())
-        });
-    }
-
     let new_db = crate::platform::database::open_and_migrate_sqlite_for_path_with_prompt(
         &default_data_dir,
         crate::platform::startup_dialog::prompt_legacy_database_migration,
@@ -789,6 +785,15 @@ pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesI
             .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
     );
 
+    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
+        let _ = current_db.with_write_connection(|conn| {
+            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
+            Ok(())
+        });
+        current_db.close();
+    }
+
     let default_history_dir = default_data_dir.join("history");
     if let Err(e) = app
         .asset_protocol_scope()
@@ -796,17 +801,21 @@ pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesI
     {
         log::warn!("Failed to allow default history directory in asset scope: {e}");
     }
-    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
+    crate::platform::database::reload_sqlite_application_context(app, new_context)?;
 
     let new_dashboard_service =
         crate::platform::dashboard::create_dashboard_service(default_data_dir.clone(), new_db);
     if let Some(dashboard_state) =
         app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
     {
-        let _ = dashboard_state.reload(new_dashboard_service);
+        dashboard_state.reload(new_dashboard_service)?;
     }
 
     if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.sync.configure(
+            default_data_dir.join(crate::platform::sync::SYNC_CONFIG_FILE),
+            services.sqlite.clone(),
+        );
         services.sync.reset().await;
     }
     let mut bootstrap = load_bootstrap_config(&default_data_dir);

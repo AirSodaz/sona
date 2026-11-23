@@ -202,7 +202,7 @@ impl StreamTranscriptionJob {
 
         for provider in gpu_plan.provider_options() {
             if observer.is_cancelled() {
-                return Err(AsrPortError::runtime("Task cancelled."));
+                return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
             }
             let cache_key = OfflineRecognizerCacheKey {
                 model_path: self.model_path.clone(),
@@ -494,7 +494,7 @@ impl StreamTranscriptionJob {
         if observer.is_cancelled() {
             worker_handle.abort();
             reader.finish();
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
 
         if total_samples_streamed == 0 {
@@ -529,7 +529,9 @@ impl StreamTranscriptionJob {
                 if observer.is_cancelled() {
                     worker_handle.abort();
                     reader.finish();
-                    return Err(AsrPortError::runtime("Task cancelled."));
+                    return Err(
+                        AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")
+                    );
                 }
                 if let Some(speech_segment) = detector.front() {
                     let seg_samples = speech_segment.samples().to_vec();
@@ -556,7 +558,7 @@ impl StreamTranscriptionJob {
             if observer.is_cancelled() {
                 worker_handle.abort();
                 reader.finish();
-                return Err(AsrPortError::runtime("Task cancelled."));
+                return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
             }
             let chunk_duration = chunk_buffer.len() as f64 / 16000.0;
             let chunk_start =
@@ -585,7 +587,7 @@ impl StreamTranscriptionJob {
 
         if observer.is_cancelled() {
             reader.finish();
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
 
         let output_segments = results.len();

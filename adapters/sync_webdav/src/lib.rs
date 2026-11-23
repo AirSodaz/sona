@@ -208,12 +208,18 @@ impl WebDavObjectStore {
             if current == self.server_url {
                 break;
             }
-            let Ok(mut segments) = current.path_segments_mut() else {
+            let previous = current.as_str().to_owned();
+            {
+                let Ok(mut segments) = current.path_segments_mut() else {
+                    break;
+                };
+                segments.pop_if_empty();
+                segments.pop();
+                segments.push("");
+            }
+            if current.as_str() == previous {
                 break;
-            };
-            segments.pop();
-            segments.push("");
-            drop(segments);
+            }
         }
     }
 

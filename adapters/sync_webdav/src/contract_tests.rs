@@ -565,3 +565,38 @@ async fn listing_nonexistent_collection_does_not_poison_known_cache() {
     let retrieved = store.get(&key).await.unwrap().unwrap();
     assert_eq!(retrieved.bytes, b"data");
 }
+
+#[tokio::test]
+async fn evict_known_collection_and_ancestors_terminates_on_trailing_slash_urls() {
+    let server = TestServer::start().await;
+    let store = server.store(Duration::from_secs(2));
+
+    let nested = Url::parse(&format!("{}root/sub/leaf/", server.base_url)).unwrap();
+    let parent = Url::parse(&format!("{}root/sub/", server.base_url)).unwrap();
+    let root = Url::parse(&format!("{}root/", server.base_url)).unwrap();
+    let server_root = Url::parse(&server.base_url).unwrap();
+
+    store.mark_known_collection(&server_root);
+    store.mark_known_collection(&root);
+    store.mark_known_collection(&parent);
+    store.mark_known_collection(&nested);
+
+    store.evict_known_collection_and_ancestors(&nested);
+
+    assert!(!store.is_known_collection(&nested));
+    assert!(!store.is_known_collection(&parent));
+    assert!(!store.is_known_collection(&root));
+    assert!(!store.is_known_collection(&server_root));
+
+    // Also verify eviction terminates cleanly at origin root even if URL sits above server_url.
+    let origin_root = Url::parse(&format!(
+        "{}://{}:{}/",
+        server_root.scheme(),
+        server_root.host_str().unwrap(),
+        server_root.port_or_known_default().unwrap()
+    ))
+    .unwrap();
+    store.mark_known_collection(&origin_root);
+    store.evict_known_collection_and_ancestors(&origin_root);
+    assert!(!store.is_known_collection(&origin_root));
+}

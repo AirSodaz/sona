@@ -76,7 +76,6 @@ impl BatchCancelRegistry {
         if let Ok(mut senders) = self.senders.lock() {
             if let Some(existing_tx) = senders.get(instance_id)
                 && Arc::strong_count(existing_tx) > 1
-                && !*existing_tx.borrow()
             {
                 let rx = existing_tx.subscribe();
                 let guard = BatchCancelGuard {
@@ -358,6 +357,22 @@ mod tests {
         assert!(registry.has_active_tasks().await);
         assert!(registry.cancel("shared-id").await);
         drop(new_guard);
+        assert!(!registry.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn pre_spawn_cancellation_is_observed_by_worker_re_registration() {
+        let registry = BatchCancelRegistry::new();
+        let (_pre_rx, pre_guard) = registry.register("task-race").await;
+
+        assert!(registry.cancel("task-race").await);
+
+        let (worker_rx, worker_guard) = registry.register("task-race").await;
+        assert!(*worker_rx.borrow());
+
+        drop(pre_guard);
+        assert!(registry.has_active_tasks().await);
+        drop(worker_guard);
         assert!(!registry.has_active_tasks().await);
     }
 }
