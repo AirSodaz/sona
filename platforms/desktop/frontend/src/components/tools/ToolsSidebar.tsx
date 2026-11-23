@@ -237,10 +237,20 @@ export function ToolsSidebar(): React.JSX.Element {
       descKey: 'tools.cli.desc',
       defaultDesc: 'Standalone command line interface and PATH integration',
       Icon: Terminal,
-      statusText: cliStatus?.inPath
-        ? t('tools.cli.status_in_path', { defaultValue: 'In PATH' })
-        : t('tools.cli.status_not_in_path', { defaultValue: 'Not in PATH' }),
-      statusType: cliStatus?.inPath ? 'active' : 'inactive',
+      statusText:
+        cliStatus?.pathState === 'active_other'
+          ? t('tools.cli.status_other_in_path', { defaultValue: 'Other Env Active' })
+          : cliStatus?.pathState === 'shadowed_by_other'
+            ? t('tools.cli.status_shadowed_in_path', { defaultValue: 'Shadowed in PATH' })
+            : cliStatus?.inPath
+              ? t('tools.cli.status_in_path', { defaultValue: 'In PATH' })
+              : t('tools.cli.status_not_in_path', { defaultValue: 'Not in PATH' }),
+      statusType:
+        cliStatus?.pathState === 'active_other' || cliStatus?.pathState === 'shadowed_by_other'
+          ? 'warning'
+          : cliStatus?.inPath
+            ? 'active'
+            : 'inactive',
     },
     {
       id: 'emby_sync',

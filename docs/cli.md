@@ -58,30 +58,35 @@ Quick Start:
        sona-cli live -m sensevoice
        ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \
          sona-cli live --input stdin -m sensevoice
-  5. Generate shell completion:
-       sona-cli completion bash > /etc/bash_completion.d/sona-cli
+  5. Install shell completion:
+       sona-cli completion powershell --install
+       sona-cli completion zsh --install
 
 Use 'sona-cli <COMMAND> --help' for command-specific options.
 ```
 
 #### `sona-cli completion`
 
-Generates shell auto-completion scripts
+Generates or installs shell auto-completion scripts
 
 **Options & Arguments:**
 
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
 | `<SHELL>` | - | - | Target shell to generate completions for: bash, elvish, fish, powershell, zsh |
+| `--install` | - | - | Install completion script to a standalone file and register a minimal profile loader |
+| `--uninstall` | - | - | Remove the installed standalone completion script and profile loader block |
 
 **Usage & Examples:**
 
 ```text
 Examples:
+  sona-cli completion powershell --install
+  sona-cli completion zsh --install
+  sona-cli completion bash --install
+  sona-cli completion fish --install
+  sona-cli completion powershell --uninstall
   sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli
-  sona-cli completion zsh > ~/.zfunc/_sona-cli
-  sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish
-  sona-cli completion powershell | Out-File -Append -Encoding utf8 $PROFILE
 ```
 
 #### `sona-cli config`

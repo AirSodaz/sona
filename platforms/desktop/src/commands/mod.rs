@@ -240,6 +240,11 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::media_server::media_server_save_processing_settings,
         crate::commands::cli::cli_get_status,
         crate::commands::cli::cli_set_path_enabled,
+        crate::commands::cli::cli_switch_path_to_current,
+        crate::commands::cli::cli_remove_path_entry,
         crate::commands::cli::cli_get_completion_script,
+        crate::commands::cli::cli_get_completion_statuses,
+        crate::commands::cli::cli_install_completion,
+        crate::commands::cli::cli_uninstall_completion,
     ]
 }
