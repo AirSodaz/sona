@@ -39,6 +39,7 @@ impl Punctuation {
     }
 
     pub fn new(model_path: &str, num_threads: i32) -> Result<Self, AsrPortError> {
+        crate::ensure_windows_runtime_dlls();
         let config = OfflinePunctuationConfig {
             model: OfflinePunctuationModelConfig {
                 ct_transformer: Some(model_path.to_string()),
@@ -65,6 +66,7 @@ impl Punctuation {
         vocab_path: &str,
         num_threads: i32,
     ) -> Result<Self, AsrPortError> {
+        crate::ensure_windows_runtime_dlls();
         let config = OnlinePunctuationConfig {
             model: OnlinePunctuationModelConfig {
                 cnn_bilstm: Some(model_path.to_string()),

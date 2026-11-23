@@ -31,6 +31,7 @@ static SAMPLE_EMBEDDING_CACHE: LazyLock<Mutex<HashMap<SampleCacheKey, Vec<f32>>>
 pub fn preload_speaker_embedding_extractor(
     embedding_model: &Path,
 ) -> Result<Arc<SafeSpeakerEmbeddingExtractor>, AsrPortError> {
+    crate::ensure_windows_runtime_dlls();
     let key = embedding_model.to_path_buf();
     let mut cache = EXTRACTOR_CACHE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(extractor) = cache.get(&key) {
@@ -103,6 +104,7 @@ impl Drop for SafeSpeakerEmbeddingManager {
 
 impl SafeSpeakerEmbeddingManager {
     pub fn create(dim: i32) -> Option<Self> {
+        crate::ensure_windows_runtime_dlls();
         if dim <= 0 {
             return None;
         }
@@ -509,6 +511,7 @@ pub fn run_speaker_diarization(
     segmentation_model: &Path,
     embedding_model: &Path,
 ) -> Result<Vec<SpeakerDiarizationSegment>, AsrPortError> {
+    crate::ensure_windows_runtime_dlls();
     let diarization_config = OfflineSpeakerDiarizationConfig {
         segmentation: OfflineSpeakerSegmentationModelConfig {
             pyannote: OfflineSpeakerSegmentationPyannoteModelConfig {

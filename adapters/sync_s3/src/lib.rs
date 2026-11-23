@@ -199,6 +199,7 @@ impl S3ObjectStore {
             .user_agent("Sona/1.0")
             .timeout(timeout)
             .https_only(endpoint_url.scheme() == "https")
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| store_error(format!("Failed to build HTTP client: {e}")))?;
 
@@ -554,11 +555,32 @@ impl SyncObjectStore for S3ObjectStore {
             .and_then(|h| h.to_str().ok())
             .map(|s| s.to_string());
 
-        let bytes = resp
-            .bytes()
+        if let Some(content_length) = resp.content_length()
+            && content_length > MAX_OBJECT_BYTES as u64
+        {
+            return Err(store_error(format!(
+                "S3 object size {content_length} exceeds maximum allowed limit {MAX_OBJECT_BYTES}"
+            )));
+        }
+
+        let mut resp = resp;
+        let mut bytes = Vec::with_capacity(
+            resp.content_length()
+                .and_then(|len| usize::try_from(len).ok())
+                .map_or(0, |len| len.min(MAX_OBJECT_BYTES)),
+        );
+        while let Some(chunk) = resp
+            .chunk()
             .await
             .map_err(|e| store_error(format!("Failed to read S3 object bytes: {e}")))?
-            .to_vec();
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX_OBJECT_BYTES {
+                return Err(store_error(format!(
+                    "S3 object exceeds maximum allowed limit {MAX_OBJECT_BYTES}"
+                )));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
 
         Ok(Some(SyncObject {
             metadata: SyncObjectMetadata {
@@ -582,7 +604,7 @@ impl SyncObjectStore for S3ObjectStore {
         // Aliyun OSS specific header: forbid overwriting existing object
         extra_headers.insert("x-oss-forbid-overwrite".to_string(), "true".to_string());
 
-        self.put_object(key, extra_headers, bytes).await
+        self.put_object(key, extra_headers, bytes, true).await
     }
 
     async fn compare_and_swap(
@@ -592,18 +614,21 @@ impl SyncObjectStore for S3ObjectStore {
         bytes: Vec<u8>,
     ) -> Result<SyncPutResult, SyncError> {
         let mut extra_headers = BTreeMap::new();
-        if let Some(etag) = expected_etag {
+        let is_conditional_create = if let Some(etag) = expected_etag {
             let quoted = if etag.starts_with('"') && etag.ends_with('"') {
                 etag.to_string()
             } else {
                 format!("\"{etag}\"")
             };
             extra_headers.insert("if-match".to_string(), quoted);
+            false
         } else {
             extra_headers.insert("if-none-match".to_string(), "*".to_string());
-        }
+            true
+        };
 
-        self.put_object(key, extra_headers, bytes).await
+        self.put_object(key, extra_headers, bytes, is_conditional_create)
+            .await
     }
 
     async fn delete(
@@ -668,6 +693,7 @@ impl S3ObjectStore {
         key: &SyncObjectKey,
         extra_headers: BTreeMap<String, String>,
         bytes: Vec<u8>,
+        is_conditional_create: bool,
     ) -> Result<SyncPutResult, SyncError> {
         if bytes.len() > MAX_OBJECT_BYTES {
             return Err(store_error(format!(
@@ -704,6 +730,9 @@ impl S3ObjectStore {
                 .get(ETAG)
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.trim_matches('"').to_string());
+            if is_conditional_create {
+                return Ok(SyncPutResult::AlreadyExists { etag: current_etag });
+            }
             return Ok(SyncPutResult::Conflict { current_etag });
         }
 
@@ -714,6 +743,9 @@ impl S3ObjectStore {
         let body_text = resp.text().await.unwrap_or_default();
         if let Ok(err) = parse_error_response(&body_text) {
             if err.code == "PreconditionFailed" {
+                if is_conditional_create {
+                    return Ok(SyncPutResult::AlreadyExists { etag: None });
+                }
                 return Ok(SyncPutResult::Conflict { current_etag: None });
             }
             if err.code == "FileAlreadyExists" || err.code == "ObjectAlreadyExists" {

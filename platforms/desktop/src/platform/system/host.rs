@@ -635,14 +635,42 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 }
 
 #[cfg(target_os = "windows")]
+struct ComApartmentGuard {
+    need_uninitialize: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl ComApartmentGuard {
+    unsafe fn enter() -> Self {
+        use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        Self {
+            need_uninitialize: hr.is_ok(),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ComApartmentGuard {
+    fn drop(&mut self) {
+        if self.need_uninitialize {
+            use windows::Win32::System::Com::CoUninitialize;
+            unsafe {
+                CoUninitialize();
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> {
     unsafe {
         use windows::Win32::System::Com::*;
         use windows::Win32::UI::Accessibility::*;
         use windows::core::*;
 
-        // Initialize COM for this thread
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        // Initialize COM for this thread and always pair with CoUninitialize on exit.
+        let _com_guard = ComApartmentGuard::enter();
 
         let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
         let focused_element = automation.GetFocusedElement()?;
@@ -875,7 +903,7 @@ unsafe fn get_uia_focused_selection_text() -> windows::core::Result<Option<Strin
         use windows::Win32::UI::Accessibility::*;
         use windows::core::*;
 
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let _com_guard = ComApartmentGuard::enter();
 
         let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
         let focused_element = automation.GetFocusedElement()?;
@@ -899,6 +927,20 @@ unsafe fn get_uia_focused_selection_text() -> windows::core::Result<Option<Strin
 }
 
 #[cfg(target_os = "windows")]
+struct SafeArrayDestroyGuard(*mut windows::Win32::System::Com::SAFEARRAY);
+
+#[cfg(target_os = "windows")]
+impl Drop for SafeArrayDestroyGuard {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            unsafe {
+                let _ = windows::Win32::System::Ole::SafeArrayDestroy(self.0);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 unsafe fn safearray_to_f64_vec(
     psa: *mut windows::Win32::System::Com::SAFEARRAY,
 ) -> windows::core::Result<Vec<f64>> {
@@ -908,18 +950,28 @@ unsafe fn safearray_to_f64_vec(
             return Ok(Vec::new());
         }
 
+        // UIA returns a SAFEARRAY owned by the caller here, so ensure it is destroyed
+        // even if any metadata or data-access call exits early via `?`.
+        let destroy_guard = SafeArrayDestroyGuard(psa);
+
         let lbound = SafeArrayGetLBound(psa, 1)?;
         let ubound = SafeArrayGetUBound(psa, 1)?;
-        let len = (ubound - lbound + 1) as usize;
+        if ubound < lbound {
+            return Ok(Vec::new());
+        }
+        let len = (i64::from(ubound) - i64::from(lbound) + 1) as usize;
 
         let mut data_ptr = std::ptr::null_mut();
         SafeArrayAccessData(psa, &mut data_ptr)?;
+        if len == 0 || data_ptr.is_null() {
+            let _ = SafeArrayUnaccessData(psa);
+            return Ok(Vec::new());
+        }
         let slice = std::slice::from_raw_parts(data_ptr as *const f64, len);
         let vec = slice.to_vec();
         SafeArrayUnaccessData(psa)?;
 
-        // UIA returns a SAFEARRAY owned by the caller here, so this helper consumes
-        // it fully and frees it before returning the copied coordinates.
+        std::mem::forget(destroy_guard);
         SafeArrayDestroy(psa)?;
 
         Ok(vec)

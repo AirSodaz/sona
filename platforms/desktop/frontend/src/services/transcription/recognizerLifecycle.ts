@@ -31,6 +31,7 @@ interface RecognizerCallbackRegistration {
 }
 
 const globalListeners: Map<string, UnlistenFn> = new Map();
+const pendingGlobalListeners: Map<string, Promise<void>> = new Map();
 const instanceCallbacks: Map<string, RecognizerCallbackRegistration> = new Map();
 let callbackRegistrationCounter = 0;
 
@@ -149,6 +150,24 @@ export class RecognizerLifecycle {
   }
 
   async ensureGlobalBus(): Promise<void> {
+    while (!globalListeners.has(this.instanceId) && instanceCallbacks.has(this.instanceId)) {
+      const existingPending = pendingGlobalListeners.get(this.instanceId);
+      if (existingPending) {
+        await existingPending;
+        continue;
+      }
+
+      const registrationPromise = this.registerGlobalListener().finally(() => {
+        if (pendingGlobalListeners.get(this.instanceId) === registrationPromise) {
+          pendingGlobalListeners.delete(this.instanceId);
+        }
+      });
+      pendingGlobalListeners.set(this.instanceId, registrationPromise);
+      await registrationPromise;
+    }
+  }
+
+  private async registerGlobalListener(): Promise<void> {
     if (globalListeners.has(this.instanceId)) return;
 
     const registration = instanceCallbacks.get(this.instanceId);
@@ -180,6 +199,11 @@ export class RecognizerLifecycle {
           }
         }
       );
+      if (instanceCallbacks.get(this.instanceId)?.registrationId !== registration.registrationId) {
+        unlisten();
+        return;
+      }
+      globalListeners.get(this.instanceId)?.();
       globalListeners.set(this.instanceId, unlisten);
       return;
     }
@@ -228,6 +252,11 @@ export class RecognizerLifecycle {
       }
     });
 
+    if (!instanceCallbacks.has(this.instanceId)) {
+      unlisten();
+      return;
+    }
+    globalListeners.get(this.instanceId)?.();
     globalListeners.set(this.instanceId, unlisten);
   }
 
@@ -336,6 +365,7 @@ export function resetRecognizerLifecycleForTest(): void {
     unlisten();
   }
   globalListeners.clear();
+  pendingGlobalListeners.clear();
   instanceCallbacks.clear();
   callbackRegistrationCounter = 0;
 }

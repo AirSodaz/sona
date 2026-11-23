@@ -36,6 +36,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-mcp` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
+| `sona-bin-shim` | tool |
 
 Core 包含领域契约和由 Core 所有的端口。Application 通过这些契约协调用例。Inbound Adapter 转换调用方输入；Outbound Adapter 实现由 Core 所有的端口；Provider 在 Core 端口之后实现特定引擎的 ASR 后端。Host 为运行时组合应用程序，Tool 支持开发或代码生成。
 
@@ -85,6 +86,7 @@ Core <- Outbound Adapter <------------- Host
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) 服务端 Host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
+| `tools/bin_shim/` | `sona-bin-shim` | tool | |
 
 角色根目录分别为 `core/`、`application/`、`adapters/`、`providers/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分；`providers/` 下的 Provider crate 在 Core 端口之后实现特定引擎的 ASR 后端。
 
@@ -93,6 +95,7 @@ Core <- Outbound Adapter <------------- Host
 
 - 桌面端：`platforms/desktop/src/app/setup.rs` 与 `platforms/desktop/src/platform/` 组合桌面运行时。
 - CLI：`platforms/cli/src/lib.rs` 与各个命令模块组合 CLI 命令。
+- MCP：`platforms/mcp/src/main.rs` 组合 Model Context Protocol 服务端 Host。
 - UniFFI/移动端：`platforms/uniffi/src/application_context.rs` 组合面向移动端的运行时，`platforms/uniffi/src/lib.rs` 发布对外导出面。
 
 <a id="desktop-frontend-dependencies"></a>
@@ -133,7 +136,7 @@ pnpm run generate:sona-context
 
 ### 当前的 Application 归属
 
-用例服务（History、Tag、Automation、Backup、Recovery、Config、Dashboard、Diagnostics、Export、StorageUsage、TaskLedger、LLM runtime 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的端口依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
+用例服务（History、Tag、Project、Automation、Backup、Recovery、Config、Dashboard、Diagnostics、Export、StorageUsage、TaskLedger、LLM runtime 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的端口依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
 
 另一个独立的 Application 角色包是 `sona-sync`（路径 `application/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
 
@@ -154,14 +157,14 @@ pnpm run generate:sona-context
 | 能力端口 | `core/src/ports/<capability>.rs` | 领域无关；可能被多个领域使用 |
 | 领域自有端口 | `core/src/<domain>/` | 只有该领域的用例会调用 |
 
-**能力端口**以基础设施能力命名，绝不以领域聚合命名：`FileSystem`、 `PathProvider`、`UnixMillisClock`、`EventEmitter`、`BatchTranscriber`、 `LlmCompletionPort`、`GpuAvailabilityProvider`。只有当"把它移进某一个领域"是错的时候，这个 trait 才属于这里。
+**能力端口**以基础设施能力命名，绝不以领域聚合命名：`FileSystemPort`、`PathPort`、`ClockPort`、`EventEmitterPort`、`BatchTranscriberPort`、`LlmCompletionPort`、`GpuAvailabilityPort`。只有当"把它移进某一个领域"是错的时候，这个 trait 才属于这里。
 
 **领域自有端口**是归属单一领域的 store、repository 与协作者：`HistoryStore`、 `TagStore`、`AutomationStore`、`BackupStateRepository`、`RecoverySnapshotStore`、 `SyncObjectStore`。它们放在各自领域模块下，使领域保持自描述。
 
 由此得出两条规则，均由 `scripts/core-port-placement.test.js` 强制执行：
 
 1. `core/src/ports/` 中不得声明任何 `*Store` 或 `*Repository` trait。持久化形态的 trait 按定义就归属某个领域。
-2. `core/src/ports/` 中的 trait 不得以领域聚合命名（History、Tag、Automation、 Backup、Recovery、TaskLedger、Dashboard、StorageUsage、AppConfig）。
+2. `core/src/ports/` 中的 trait 不得以领域聚合命名（History、Tag、Project、Sync、Export、Automation、 Backup、Recovery、TaskLedger、Dashboard、StorageUsage、AppConfig）。
 
 新增领域端口应使用 `core/src/<domain>/ports.rs`——`backup`、`dashboard`、 `export`、`storage_usage`、`sync` 已采用该形式。`automation`、`config`、 `history`、`recovery`、`tag`、`task_ledger` 中现有的 `repository.rs` / `store.rs` 放置属于历史沿用：它们满足上述两条规则，统一文件命名是独立的迁移切片，不是顺手可做的清理。
 
@@ -204,8 +207,9 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
 
 ### 存储基线
 
-Desktop 与 UniFFI 的最低支持版本为 v0.8.0。新数据库直接创建为 SQLite schema 7；低于该
-schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时升级。配置迁移只负责归一化
+Desktop 与 UniFFI 的最低支持版本为 v0.8.0。新数据库直接创建为 SQLite schema 11（`CURRENT_SCHEMA_VERSION = 11`），
+最小支持运行时迁移基线为 schema 8（`MIN_SUPPORTED_SCHEMA_VERSION = 8`）；低于该 schema（`< 8`）的数据库
+以及 v0.8.0 之前的 JSON 存储布局不再在运行时升级，而是触发备份与重置流程。配置迁移只负责归一化
 当前 SQLite 载荷，并处理 v0.8.0 之后的字段升级。
 
 <a id="reviewed-exceptions"></a>
@@ -244,7 +248,7 @@ v0.8.0 之前存储迁移无关。
 
 - **规范模型：** Project（`ProjectService` / Project 流水线与索引化 `project_id`）。
 - **遗留 Tag 命令废弃：** 遗留 Tag 命令接口（`tag_*`、`history_*_tag_assignments`）及从 tags 到 projects 的自动迁移已被清理废弃。桌面命令直接操作项目分配。
-- **SQLite 基线：** 最小支持架构版本已提升为 8。多标签时期的遗留架构（< 8）已废弃，并触发备份与重置流程。
+- **SQLite 基线：** 最小支持架构版本已提升为 8（`MIN_SUPPORTED_SCHEMA_VERSION = 8`）；新数据库直接创建为 schema 11（`CURRENT_SCHEMA_VERSION = 11`）。多标签时期的遗留架构（< 8）已废弃，并触发备份与重置流程。
 - **Host 接口：** Desktop Tauri 命令直接操作 Project（`project_*`、`history_update_project_assignments`、`history_reassign_project`）。
 
 ### 本地 ASR wire tag 别名
@@ -259,7 +263,7 @@ v0.8.0 之前存储迁移无关。
 每个 `*_json` UniFFI 导出都在 `scripts/multisurface-contracts.test.js` 的 `UNIFFI_JSON_ONLY_EXPORTS` 中分类。新增没有 `*_v1` 兄弟函数的 `*_json` 导出会让该测试失败，直到它被分类为止。
 
 - **`dynamic-leaf`**（动态叶子）——永久允许。载荷是任意用户配置、提供商扩展文档，或遗留 Project 兼容面，其 schema 不由本绑定拥有。
-- **`pending-migration`**（待迁移）——已评审债务。该导出把完整的快照、记录、请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。目前仅剩 `complete_llm_json`：`LlmCompletionOptions` 会牵出 response-format、 prompt-cache 与 capability policy 三棵类型树，属于独立切片。
+- **`pending-migration`**（待迁移）——已评审债务。该导出把完整的快照、记录、请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。目前所有已评审的 `pending-migration` 导出（包括 `complete_llm_v1`）均已迁移完成，不再保留待迁移项。
 
 已类型化的域保留两套接口：`_json` 作为兼容委托保留，`_v1` 承载类型化契约。所有域均已迁移：Tag、History、Task Ledger、Recovery、Automation、Storage Usage、Export、Backup、Dashboard、Diagnostics、Sync、LLM。
 
@@ -289,32 +293,26 @@ UniFFI 把 `Record` 生成为 Kotlin `data class`，其自动派生的 `toString
 <a id="verification"></a>
 ## 验证
 
-修改这些指南或角色注册表后，运行稳定指南契约：
-
-```text
-rtk node --test --test-name-pattern "stable architecture guides" scripts/crate-boundaries.test.js
-```
-
 修改包角色登记表或其依赖规则后，运行完整的 crate 边界脚本测试：
 
 ```text
-rtk node --test scripts/crate-boundaries.test.js
+node --test scripts/crate-boundaries.test.js
 ```
 
 修改 Host 依赖或上方能力矩阵行后，运行 Host 能力矩阵契约：
 
 ```text
-rtk node --test scripts/host-capability-matrix.test.js
+node --test scripts/host-capability-matrix.test.js
 ```
 
 修改 Host 组合根或矩阵能力的生产接线后，运行 Host 接线清单契约：
 
 ```text
-rtk node --test scripts/host-wiring-inventory.test.js
+node --test scripts/host-wiring-inventory.test.js
 ```
 
 在 Core 中新增或移动端口 trait 后，运行端口放置契约：
 
 ```text
-rtk node --test scripts/core-port-placement.test.js
+node --test scripts/core-port-placement.test.js
 ```

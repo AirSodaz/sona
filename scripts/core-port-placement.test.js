@@ -12,6 +12,9 @@ const corePortsDir = path.join(repoRoot, 'core', 'src', 'ports');
 const DOMAIN_AGGREGATES = [
   'History',
   'Tag',
+  'Project',
+  'Sync',
+  'Export',
   'Automation',
   'Backup',
   'Recovery',

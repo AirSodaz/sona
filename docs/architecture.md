@@ -36,6 +36,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-mcp` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
+| `sona-bin-shim` | tool |
 
 Core contains domain contracts and Core-owned ports. Application coordinates use cases through those contracts. Inbound Adapter translates caller input; Outbound Adapter implements a Core-owned port. A Host composes the application for a runtime, while a Tool supports development or code generation.
 
@@ -85,6 +86,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) server host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
+| `tools/bin_shim/` | `sona-bin-shim` | tool | |
 
 Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata. Provider crates under `providers/` implement engine-specific ASR backends behind Core ports.
 
@@ -93,6 +95,7 @@ Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`,
 
 - Desktop: `platforms/desktop/src/app/setup.rs` plus `platforms/desktop/src/platform/` compose the desktop runtime.
 - CLI: `platforms/cli/src/lib.rs` and individual command modules compose CLI commands.
+- MCP: `platforms/mcp/src/main.rs` composes the Model Context Protocol server host.
 - UniFFI/mobile: `platforms/uniffi/src/application_context.rs` composes the mobile-facing runtime, and `platforms/uniffi/src/lib.rs` publishes the exported surface.
 
 <a id="desktop-frontend-dependencies"></a>
@@ -133,7 +136,7 @@ The free functions remain: this is additive, and the exported ABI kept every exi
 
 ### Application ownership today
 
-Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard, Diagnostics, Export, StorageUsage, TaskLedger, LLM runtime, and LLM tasks) live in `sona-application` (`application/`). Each service holds only the port dependencies it needs and delegates to Core-owned port traits. Domain types, port trait definitions, and errors remain in `sona-core`.
+Use-case services (History, Tag, Project, Automation, Backup, Recovery, Config, Dashboard, Diagnostics, Export, StorageUsage, TaskLedger, LLM runtime, and LLM tasks) live in `sona-application` (`application/`). Each service holds only the port dependencies it needs and delegates to Core-owned port traits. Domain types, port trait definitions, and errors remain in `sona-core`.
 
 The other standalone Application-role package is `sona-sync` (`application/sync/`), isolated because Sync needs a provider-neutral vault and lifecycle. Do not create additional Application crates per domain; consolidate new use-case services into `sona-application` unless a clear isolation boundary warrants a separate crate.
 
@@ -154,14 +157,14 @@ Core owns every port, but not in one directory. Two placements exist and the dis
 | Capability port | `core/src/ports/<capability>.rs` | Domain-agnostic; more than one domain could use it |
 | Domain-owned port | `core/src/<domain>/` | Only that domain's use cases call it |
 
-**Capability ports** name an infrastructure capability, never a domain aggregate: `FileSystem`, `PathProvider`, `UnixMillisClock`, `EventEmitter`, `BatchTranscriber`, `LlmCompletionPort`, `GpuAvailabilityProvider`. A trait belongs here only if moving it into a single domain would be wrong.
+**Capability ports** name an infrastructure capability, never a domain aggregate: `FileSystemPort`, `PathPort`, `ClockPort`, `EventEmitterPort`, `BatchTranscriberPort`, `LlmCompletionPort`, `GpuAvailabilityPort`. A trait belongs here only if moving it into a single domain would be wrong.
 
 **Domain-owned ports** are the stores, repositories, and collaborators that belong to one domain: `HistoryStore`, `TagStore`, `AutomationStore`, `BackupStateRepository`, `RecoverySnapshotStore`, `SyncObjectStore`. They live under their domain module so the domain stays self-describing.
 
 Two rules follow, and both are enforced by `scripts/core-port-placement.test.js`:
 
 1. No `*Store` or `*Repository` trait may be declared in `core/src/ports/`. A persistence-shaped trait is by definition owned by a domain.
-2. No trait in `core/src/ports/` may be named after a domain aggregate (History, Tag, Automation, Backup, Recovery, TaskLedger, Dashboard, StorageUsage, AppConfig).
+2. No trait in `core/src/ports/` may be named after a domain aggregate (History, Tag, Project, Sync, Export, Automation, Backup, Recovery, TaskLedger, Dashboard, StorageUsage, AppConfig).
 
 New domain ports should use `core/src/<domain>/ports.rs`, the form already used by `backup`, `dashboard`, `export`, `storage_usage`, and `sync`. Existing `repository.rs` / `store.rs` placements in `automation`, `config`, `history`, `recovery`, `tag`, and `task_ledger` are grandfathered: they satisfy both rules above, and consolidating their file names is a separate slice, not a free cleanup.
 
@@ -206,9 +209,11 @@ Public caller contracts may require strings, status-and-string tuples, or langua
 ### Storage baseline
 
 Desktop and UniFFI support starts at v0.8.0. New databases are created directly at
-SQLite schema 7; databases with an older schema or the pre-v0.8.0 JSON storage
-layout are not upgraded at runtime. Configuration migration only normalizes the
-current SQLite payload and applies post-v0.8.0 field upgrades.
+SQLite schema 11 (`CURRENT_SCHEMA_VERSION = 11`); the minimum supported runtime
+migration baseline is schema 8 (`MIN_SUPPORTED_SCHEMA_VERSION = 8`). Databases
+with an older schema (`< 8`) or the pre-v0.8.0 JSON storage layout are not
+upgraded at runtime and trigger the backup-and-reset flow. Configuration migration
+only normalizes the current SQLite payload and applies post-v0.8.0 field upgrades.
 
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
@@ -258,7 +263,7 @@ removed pre-v0.8.0 storage migrations.
 
 - **Canonical model:** Project (`ProjectService` / Project pipelines and indexed `project_id`).
 - **Legacy Tag command deprecation:** The legacy Tag command surface (`tag_*`, `history_*_tag_assignments`) and tags-to-projects auto-migration have been removed. Desktop commands directly update project assignments.
-- **SQLite baseline:** Minimum supported schema version is 8. Legacy schemas (< 8) from the multi-tag era are deprecated and trigger a backup-and-reset flow.
+- **SQLite baseline:** Minimum supported schema version is 8 (`MIN_SUPPORTED_SCHEMA_VERSION = 8`); new databases are created directly at schema 11 (`CURRENT_SCHEMA_VERSION = 11`). Legacy schemas (< 8) from the multi-tag era are deprecated and trigger a backup-and-reset flow.
 - **Host surface:** Desktop Tauri commands operate on projects (`project_*`, `history_update_project_assignments`, `history_reassign_project`).
 
 ### Local ASR wire tag alias
@@ -273,7 +278,7 @@ removed pre-v0.8.0 storage migrations.
 Every `*_json` UniFFI export is classified in `scripts/multisurface-contracts.test.js` (`UNIFFI_JSON_ONLY_EXPORTS`). A new `*_json` export without a `*_v1` sibling fails that test until it is classified.
 
 - **`dynamic-leaf`** — permanently allowed. The payload is arbitrary user config, a provider extension document, or the legacy Project compatibility surface, so this binding does not own its schema.
-- **`pending-migration`** — reviewed debt. The export transports a complete snapshot, record, request, or result as a JSON string and must gain a typed `_v1` sibling. Only `complete_llm_json` remains: `LlmCompletionOptions` pulls in the response-format, prompt-cache, and capability policy trees, which is a separate slice.
+- **`pending-migration`** — reviewed debt. The export transports a complete snapshot, record, request, or result as a JSON string and must gain a typed `_v1` sibling. All reviewed `pending-migration` exports (including `complete_llm_v1`) have now been migrated and no `pending-migration` entries remain.
 
 Typed domains keep both surfaces: `_json` stays as a compatibility delegate and `_v1` carries the typed contract. Every domain is migrated: Tag, History, Task Ledger, Recovery, Automation, Storage Usage, Export, Backup, Dashboard, Diagnostics, Sync, and LLM.
 
@@ -303,32 +308,26 @@ Each client platform owns an update mechanism tailored to its operating environm
 <a id="verification"></a>
 ## Verification
 
-Run the stable-guide contract after changing these guides or the role registry:
-
-```text
-rtk node --test --test-name-pattern "stable architecture guides" scripts/crate-boundaries.test.js
-```
-
 Run the complete crate-boundary script test when changing the package-role registry or its dependency rules:
 
 ```text
-rtk node --test scripts/crate-boundaries.test.js
+node --test scripts/crate-boundaries.test.js
 ```
 
 Run the host capability matrix contract when changing host dependencies or the matrix rows above:
 
 ```text
-rtk node --test scripts/host-capability-matrix.test.js
+node --test scripts/host-capability-matrix.test.js
 ```
 
 Run the host wiring inventory when changing host composition roots or production wiring of matrix capabilities:
 
 ```text
-rtk node --test scripts/host-wiring-inventory.test.js
+node --test scripts/host-wiring-inventory.test.js
 ```
 
 Run the port placement contract after adding or moving a port trait in Core:
 
 ```text
-rtk node --test scripts/core-port-placement.test.js
+node --test scripts/core-port-placement.test.js
 ```

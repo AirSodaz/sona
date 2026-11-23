@@ -760,13 +760,13 @@ async fn test_x_asr_streaming_segment_isolation_no_duplication() {
     let chunk_size = 1024;
     let mut segments = Vec::new();
     for chunk in all_samples.chunks(chunk_size) {
-        sona_sherpa_onnx::recognizer::accept_online_samples(&stream, chunk);
-        sona_sherpa_onnx::recognizer::decode_online_ready(r, &stream);
+        sona_sherpa_onnx::recognizer::accept_online_samples(&mut stream, chunk);
+        sona_sherpa_onnx::recognizer::decode_online_ready(r, &mut stream);
         let ep = sona_sherpa_onnx::recognizer::is_online_endpoint(r, &stream);
         if ep {
             let tail = vec![0.0f32; (16000.0 * 0.8) as usize];
-            sona_sherpa_onnx::recognizer::accept_online_samples(&stream, &tail);
-            sona_sherpa_onnx::recognizer::decode_online_ready(r, &stream);
+            sona_sherpa_onnx::recognizer::accept_online_samples(&mut stream, &tail);
+            sona_sherpa_onnx::recognizer::decode_online_ready(r, &mut stream);
             if let Some(res) = sona_sherpa_onnx::recognizer::online_stream_result(r, &stream) {
                 let trimmed = res.text.trim().to_string();
                 if !trimmed.is_empty() {

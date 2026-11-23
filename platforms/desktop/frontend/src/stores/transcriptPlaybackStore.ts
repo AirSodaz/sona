@@ -67,12 +67,58 @@ export const playbackActions: PlaybackStoreActions = {
   clearSession: (options) => useTranscriptStore.getState().clearActiveTranscriptSession(options),
 };
 
+const playbackCacheBySessionId = new Map<
+  string,
+  {
+    session: SessionData;
+    state: PlaybackStoreState;
+  }
+>();
+
+export function evictPlaybackStoreCache(sessionId: string): void {
+  playbackCacheBySessionId.delete(sessionId);
+  if (sessionId !== 'default') {
+    playbackActionsById.delete(sessionId);
+  }
+}
+
+export function resetPlaybackStoreCache(): void {
+  playbackCacheBySessionId.clear();
+  playbackActionsById.clear();
+}
+
+useTranscriptStore.subscribe((state, prevState) => {
+  if (state.sessions === prevState.sessions) return;
+  for (const cachedId of playbackCacheBySessionId.keys()) {
+    if (cachedId !== 'default' && !(cachedId in state.sessions)) {
+      evictPlaybackStoreCache(cachedId);
+    }
+  }
+  for (const cachedId of playbackActionsById.keys()) {
+    if (cachedId !== 'default' && !(cachedId in state.sessions)) {
+      playbackActionsById.delete(cachedId);
+    }
+  }
+});
+
 export function getPlaybackStoreState(
   state: TranscriptStore,
   sessionId = state.activeSessionId
 ): PlaybackStoreState {
   const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
-  return Object.assign(Object.create(getPlaybackActionsFor(sessionId)), session);
+  const cached = playbackCacheBySessionId.get(sessionId);
+  if (cached && cached.session === session) {
+    return cached.state;
+  }
+  const nextState: PlaybackStoreState = Object.assign(
+    Object.create(getPlaybackActionsFor(sessionId)),
+    session
+  );
+  playbackCacheBySessionId.set(sessionId, {
+    session,
+    state: nextState,
+  });
+  return nextState;
 }
 
 export const transcriptPlaybackStore = {

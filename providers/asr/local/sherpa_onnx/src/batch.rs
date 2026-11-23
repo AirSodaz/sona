@@ -301,7 +301,7 @@ impl BatchTranscriptionJob {
 
         for provider in gpu_plan.provider_options() {
             if observer.is_cancelled() {
-                return Err(AsrPortError::runtime("Task cancelled."));
+                return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
             }
             match self
                 .transcribe_with_provider(provider.as_deref(), Arc::clone(&observer))
@@ -385,7 +385,7 @@ impl BatchTranscriptionJob {
             })?;
         }
         if observer.is_cancelled() {
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
         let samples = Arc::new(samples);
         log::info!(
@@ -422,7 +422,7 @@ impl BatchTranscriptionJob {
             ))
         })??;
         if observer.is_cancelled() {
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
         let segments = if let Some(aligner) = aligner.as_ref() {
             observer.on_progress(92.0);
@@ -439,7 +439,7 @@ impl BatchTranscriptionJob {
             segments
         };
         if observer.is_cancelled() {
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
         let segments = crate::speaker_processing::annotate_segments_with_speakers(
             &samples,
@@ -447,7 +447,7 @@ impl BatchTranscriptionJob {
             self.speaker_processing.as_ref(),
         )?;
         if observer.is_cancelled() {
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
         observer.on_transcript_update(&TranscriptUpdate {
             remove_ids: Vec::new(),
@@ -505,7 +505,7 @@ fn transcribe_samples(
             segment.duration
         );
         if observer.is_cancelled() {
-            return Err(AsrPortError::runtime("Task cancelled."));
+            return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
         }
         if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
             let cleaned_text = normalize_recognizer_text(&result.text);

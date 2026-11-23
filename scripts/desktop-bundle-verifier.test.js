@@ -258,6 +258,10 @@ test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux bu
   const cpuResult = runVerifier({ ...process.env });
   assert.equal(cpuResult.status, 0, cpuResult.stderr || cpuResult.stdout);
 
+  // Vulkan-enabled build without libggml-vulkan.so must fail verification
+  const missingVulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
+  assert.notEqual(missingVulkanResult.status, 0);
+
   // Vulkan-enabled build with libggml-vulkan.so staged
   const canonicalAppDir = path.join(
     root,
@@ -274,7 +278,16 @@ test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux bu
   fs.writeFileSync(path.join(canonicalAppDir, 'libggml-vulkan.so'), 'vulkan');
   fs.writeFileSync(path.join(runtimeLibDir, 'libggml-vulkan.so'), 'vulkan');
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  const linuxConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  for (const format of ['deb', 'rpm', 'appimage']) {
+    linuxConfig.bundle.linux[format].files['./usr/lib/sona/libggml-vulkan.so'] = path.join(
+      runtimeLibDir,
+      'libggml-vulkan.so',
+    );
+  }
+  fs.writeFileSync(configPath, JSON.stringify(linuxConfig));
   const vulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
+  assert.equal(vulkanResult.status, 0, vulkanResult.stderr || vulkanResult.stdout);
 });
 
 test('tauri bundle verification requires ggml-metal for Metal-enabled macOS builds', () => {
@@ -311,6 +324,10 @@ test('tauri bundle verification requires ggml-metal for Metal-enabled macOS buil
   const cpuResult = runVerifier({ ...process.env });
   assert.equal(cpuResult.status, 0, cpuResult.stderr || cpuResult.stdout);
 
+  // Metal-enabled build without libggml-metal.dylib must fail verification
+  const missingMetalResult = runVerifier({ ...process.env, LLAMA_ENABLE_METAL: '1' });
+  assert.notEqual(missingMetalResult.status, 0);
+
   // Metal-enabled build with libggml-metal.dylib staged
   const frameworksDir = path.join(
     root,
@@ -326,5 +343,12 @@ test('tauri bundle verification requires ggml-metal for Metal-enabled macOS buil
   fs.writeFileSync(path.join(frameworksDir, 'libggml-metal.dylib'), 'metal');
   fs.writeFileSync(path.join(runtimeLibDir, 'libggml-metal.dylib'), 'metal');
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  const macConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  macConfig.bundle.macOS.files['Frameworks/libggml-metal.dylib'] = path.join(
+    runtimeLibDir,
+    'libggml-metal.dylib',
+  );
+  fs.writeFileSync(configPath, JSON.stringify(macConfig));
   const metalResult = runVerifier({ ...process.env, LLAMA_ENABLE_METAL: '1' });
+  assert.equal(metalResult.status, 0, metalResult.stderr || metalResult.stdout);
 });

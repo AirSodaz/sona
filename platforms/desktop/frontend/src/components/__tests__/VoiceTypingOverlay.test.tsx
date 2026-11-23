@@ -709,4 +709,44 @@ describe('VoiceTypingOverlay', () => {
     expect(peakUnlisten).toHaveBeenCalledTimes(1);
     listenSpy.mockRestore();
   });
+
+  it('resets waveform bar heights after leaving active peak phase and re-entering listening', async () => {
+    render(<VoiceTypingOverlay />);
+
+    const getBarHeights = () =>
+      Array.from(screen.getByTestId('voice-typing-waveform').children).map(
+        (el) => (el as HTMLElement).style.height
+      );
+
+    expect(getBarHeights()).toEqual(['4px', '7px', '10px', '7px', '4px']);
+
+    await act(async () => {
+      mocks.listenCallbacks['microphone-audio']?.({ payload: 32767 });
+    });
+    expect(getBarHeights()).toEqual(['10px', '15px', '18px', '15px', '10px']);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'bootstrap',
+          text: '',
+          phase: 'polishing',
+          revision: 1,
+        },
+      });
+    });
+    expect(getBarHeights()).toEqual(['6px', '12px', '16px', '12px', '6px']);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'bootstrap',
+          text: '',
+          phase: 'listening',
+          revision: 2,
+        },
+      });
+    });
+    expect(getBarHeights()).toEqual(['4px', '7px', '10px', '7px', '4px']);
+  });
 });

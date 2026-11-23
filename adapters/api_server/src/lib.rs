@@ -1733,6 +1733,10 @@ mod tests {
         assert!(validate_webhook_url("http://169.254.1.1/hook").is_err());
         assert!(validate_webhook_url("http://0.0.0.0/hook").is_err());
         assert!(validate_webhook_url("http://255.255.255.255/hook").is_err());
+        assert!(validate_webhook_url("http://[::]/hook").is_err());
+        assert!(validate_webhook_url("http://[fe80::1]/hook").is_err());
+        assert!(validate_webhook_url("http://[::ffff:169.254.169.254]/hook").is_err());
+        assert!(validate_webhook_url("http://[::ffff:0.0.0.0]/hook").is_err());
         assert!(validate_webhook_url("file:///etc/passwd").is_err());
         assert!(validate_webhook_url("ftp://example.com/file").is_err());
         assert!(validate_webhook_url("not-a-url").is_err());
@@ -1799,6 +1803,45 @@ mod tests {
         assert!(job_manager.submit_job(job1).await.is_ok());
         let err = job_manager.submit_job(job2).await.unwrap_err();
         assert!(matches!(err, ApiServerJobError::QueueFull { .. }));
+        assert!(
+            job_manager.get_job("job-2").await.is_none(),
+            "rejected job must be rolled back from the job map"
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_job_inserts_entry_before_consumer_receives_from_channel() {
+        let (tx, mut rx) = mpsc::channel(4);
+        let job_manager = JobManager::new(tx);
+        let observed = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let observed_clone = std::sync::Arc::clone(&observed);
+        let manager_clone = job_manager.clone();
+
+        let consumer = tokio::spawn(async move {
+            if let Some(received) = rx.recv().await {
+                let status = manager_clone.get_job(&received.job_id).await;
+                *observed_clone.lock().unwrap() = status;
+            }
+        });
+
+        job_manager
+            .submit_job(TranscriptionJob {
+                job_id: "job-race".to_string(),
+                file_path: PathBuf::from("race.wav"),
+                model_id: "model".to_string(),
+                language: "auto".to_string(),
+                hotwords: None,
+                webhook_url: None,
+                webhook_secret: None,
+                engine: "Local".to_string(),
+                online_provider_id: None,
+                online_provider_config: None,
+            })
+            .await
+            .unwrap();
+
+        consumer.await.unwrap();
+        assert_eq!(*observed.lock().unwrap(), Some(JobStatus::Pending));
     }
 
     #[tokio::test]

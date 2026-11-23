@@ -175,13 +175,22 @@ jobs:
           LINUX_AMD64_FILE=$(find_filename "*_amd64.AppImage")
 
           # Fallback if find fails but sig exists (unlikely)
-          [ -z "$MACOS_AARCH64_FILE" ] && MACOS_AARCH64_FILE="${APP_NAME}_aarch64.app.tar.gz"
-          [ -z "$MACOS_X64_FILE" ] && MACOS_X64_FILE="${APP_NAME}_x64.app.tar.gz"
+          [ -z "$MACOS_AARCH64_FILE" ] && MACOS_AARCH64_FILE="${APP_NAME}_${VER}_aarch64.app.tar.gz"
+          [ -z "$MACOS_X64_FILE" ] && MACOS_X64_FILE="${APP_NAME}_${VER}_x64.app.tar.gz"
           [ -z "$WINDOWS_NSIS_FILE" ] && WINDOWS_NSIS_FILE="${APP_NAME}_${VER}_x64-setup.exe"
           [ -z "$WINDOWS_ARM64_NSIS_FILE" ] && WINDOWS_ARM64_NSIS_FILE="${APP_NAME}_${VER}_arm64-setup.exe"
           [ -z "$WINDOWS_MSI_FILE" ] && WINDOWS_MSI_FILE="${APP_NAME}_${VER}_x64_en-US.msi"
           [ -z "$WINDOWS_ARM64_MSI_FILE" ] && WINDOWS_ARM64_MSI_FILE="${APP_NAME}_${VER}_arm64_en-US.msi"
           [ -z "$LINUX_AMD64_FILE" ] && LINUX_AMD64_FILE="${APP_NAME}_${VER}_amd64.AppImage"
+
+          if [ -z "$MACOS_AARCH64_SIG" ] || [ -z "$MACOS_AARCH64_FILE" ] || \
+             [ -z "$MACOS_X64_SIG" ] || [ -z "$MACOS_X64_FILE" ] || \
+             [ -z "$WINDOWS_NSIS_SIG" ] || [ -z "$WINDOWS_NSIS_FILE" ] || \
+             [ -z "$WINDOWS_ARM64_NSIS_SIG" ] || [ -z "$WINDOWS_ARM64_NSIS_FILE" ] || \
+             [ -z "$LINUX_AMD64_SIG" ] || [ -z "$LINUX_AMD64_FILE" ]; then
+            echo "Error: Missing platform assets or signatures required for updater.json!"
+            exit 1
+          fi
 
           # Build updater.json
           jq -n \

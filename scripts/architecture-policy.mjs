@@ -460,22 +460,46 @@ function withoutCfgTestModules(source) {
   const cfgTest = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/gu;
   let match;
   while ((match = cfgTest.exec(result))) {
+    const afterAttr = result.slice(match.index + match[0].length);
     const module = /^\s*(?:#\[[^\]]+\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+[A-Za-z_]\w*\s*\{/u
-      .exec(result.slice(match.index + match[0].length));
-    if (!module) {
+      .exec(afterAttr);
+    if (module) {
+      const openingBrace = match.index + match[0].length + module.index + module[0].lastIndexOf('{');
+      let end;
+      try {
+        end = blockEnd(result, openingBrace);
+      } catch (error) {
+        throw new Error(
+          `${error.message}: ${result.slice(match.index, match.index + 120).replace(/\s+/gu, ' ')}`,
+        );
+      }
+      result = result.slice(0, match.index) + result.slice(end);
+      cfgTest.lastIndex = match.index;
       continue;
     }
-    const openingBrace = match.index + match[0].length + module.index + module[0].lastIndexOf('{');
-    let end;
-    try {
-      end = blockEnd(result, openingBrace);
-    } catch (error) {
-      throw new Error(
-        `${error.message}: ${result.slice(match.index, match.index + 120).replace(/\s+/gu, ' ')}`,
-      );
+
+    const fnHeader = /^\s*(?:#\[[^\]]+\]\s*)*(?:pub(?:\([^)]*\))?\s+)?(?:const\s+|unsafe\s+)?(?:async\s+)?fn\s+[A-Za-z_]\w*\b/u
+      .exec(afterAttr);
+    if (!fnHeader) {
+      continue;
     }
-    result = result.slice(0, match.index) + result.slice(end);
-    cfgTest.lastIndex = match.index;
+    const sigStart = match.index + match[0].length + fnHeader.index + fnHeader[0].length;
+    const bodyStart = signatureBodyEnd(result, sigStart);
+    if (result[bodyStart] === '{') {
+      let end;
+      try {
+        end = blockEnd(result, bodyStart);
+      } catch (error) {
+        throw new Error(
+          `${error.message}: ${result.slice(match.index, match.index + 120).replace(/\s+/gu, ' ')}`,
+        );
+      }
+      result = result.slice(0, match.index) + result.slice(end);
+      cfgTest.lastIndex = match.index;
+    } else if (result[bodyStart] === ';') {
+      result = result.slice(0, match.index) + result.slice(bodyStart + 1);
+      cfgTest.lastIndex = match.index;
+    }
   }
   return result;
 }
@@ -521,15 +545,69 @@ function isStringError(errorType) {
   return errorType === 'String' || /^\(\s*StatusCode\s*,\s*String\s*\)$/u.test(errorType);
 }
 
+function signatureBodyEnd(source, startIndex) {
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let angleDepth = 0;
+  for (let index = startIndex; index < source.length; index += 1) {
+    if (source.startsWith('//', index)) {
+      const nl = source.indexOf('\n', index + 2);
+      if (nl < 0) return source.length;
+      index = nl;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      let commentDepth = 1;
+      index += 1;
+      while (commentDepth > 0 && index + 1 < source.length) {
+        index += 1;
+        if (source.startsWith('/*', index)) {
+          commentDepth += 1;
+          index += 1;
+        } else if (source.startsWith('*/', index)) {
+          commentDepth -= 1;
+          index += 1;
+        }
+      }
+      continue;
+    }
+    const ch = source[index];
+    if (ch === '(') {
+      parenDepth += 1;
+    } else if (ch === ')') {
+      parenDepth = Math.max(0, parenDepth - 1);
+    } else if (ch === '[') {
+      bracketDepth += 1;
+    } else if (ch === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+    } else if (ch === '<' && source[index + 1] !== '=') {
+      angleDepth += 1;
+    } else if (ch === '>' && (index === 0 || source[index - 1] !== '-')) {
+      angleDepth = Math.max(0, angleDepth - 1);
+    } else if (
+      (ch === '{' || ch === ';')
+      && parenDepth === 0
+      && bracketDepth === 0
+      && angleDepth === 0
+    ) {
+      return index;
+    }
+  }
+  return source.length;
+}
+
 function functionSignatures(source, publicOnly) {
   const expression = publicOnly
-    ? /\bpub\s+(async\s+)?fn\s+([A-Za-z_]\w*)\b[\s\S]*?(?=\{|;)/gu
-    : /\b(?:async\s+)?fn\s+([A-Za-z_]\w*)\b[\s\S]*?(?=\{|;)/gu;
-  return Array.from(source.matchAll(expression), (match) => ({
-    symbol: match[publicOnly ? 2 : 1],
-    signature: publicOnly && match[1] ? 'pub async fn' : 'pub fn',
-    source: match[0],
-  }));
+    ? /\bpub\s+(?:const\s+|unsafe\s+)?(async\s+)?fn\s+([A-Za-z_]\w*)\b/gu
+    : /\b(?:const\s+|unsafe\s+)?(?:async\s+)?fn\s+([A-Za-z_]\w*)\b/gu;
+  return Array.from(source.matchAll(expression), (match) => {
+    const end = signatureBodyEnd(source, match.index + match[0].length);
+    return {
+      symbol: match[publicOnly ? 2 : 1],
+      signature: publicOnly && match[1] ? 'pub async fn' : 'pub fn',
+      source: source.slice(match.index, end),
+    };
+  });
 }
 
 function publicTraitMethods(source) {

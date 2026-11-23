@@ -143,20 +143,53 @@ where
         project_id: &str,
         cascade_action: &str,
     ) -> Result<(), TagError> {
+        let now_ms = self
+            .clock
+            .now_ms()
+            .map_err(|error| TagError::Repository(error.to_string()))?;
         self.repository
             .get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
+                    let affected_items: Vec<(String, Option<i64>)> = {
+                        let mut stmt = tx.prepare(
+                            "SELECT id, deleted_at FROM history_items WHERE project_id = ?1 AND status = 'complete'",
+                        )?;
+                        let rows = stmt.query_map([project_id], |row| {
+                            Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
+                        })?;
+                        rows.collect::<Result<Vec<_>, _>>()?
+                    };
                     if cascade_action == "deleteItems" {
                         tx.execute(
                             "UPDATE history_items SET project_id = NULL, deleted_at = COALESCE(deleted_at, ?1) WHERE project_id = ?2",
-                            rusqlite::params![legacy_change_time::now_ms() as i64, project_id],
+                            rusqlite::params![now_ms as i64, project_id],
                         )?;
                     } else {
                         tx.execute(
                             "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
                             [project_id],
                         )?;
+                    }
+                    for (item_id, existing_deleted_at) in &affected_items {
+                        record_local_field_change_in_transaction(
+                            tx,
+                            SyncEntityKind::HistoryItem,
+                            item_id,
+                            "projectId",
+                            Value::Null,
+                            now_ms,
+                        )?;
+                        if cascade_action == "deleteItems" && existing_deleted_at.is_none() {
+                            record_local_field_change_in_transaction(
+                                tx,
+                                SyncEntityKind::HistoryItem,
+                                item_id,
+                                "deletedAt",
+                                json!(now_ms as i64),
+                                now_ms,
+                            )?;
+                        }
                     }
                     tx.execute(
                         "DELETE FROM project_pipelines WHERE project_id = ?1",
@@ -166,16 +199,26 @@ where
                         "DELETE FROM app_settings WHERE key = ?1 AND (value = ?2 OR json_extract(value, '$') = ?2)",
                         rusqlite::params![ACTIVE_PROJECT_SETTINGS_KEY, project_id],
                     )?;
+                    let affected_rule_ids: Vec<String> = {
+                        let mut stmt = tx.prepare(
+                            "SELECT id FROM automation_rules WHERE project_id = ?1",
+                        )?;
+                        let rows = stmt.query_map([project_id], |row| row.get::<_, String>(0))?;
+                        rows.collect::<Result<Vec<_>, _>>()?
+                    };
                     tx.execute(
                         "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
                         [project_id],
                     )?;
+                    for rule_id in &affected_rule_ids {
+                        record_rule_project_clear_in_transaction(tx, rule_id, now_ms)?;
+                    }
                     tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
                     record_local_delete_in_transaction(
                         tx,
                         SyncEntityKind::Project,
                         project_id,
-                        legacy_change_time::now_ms() as i64 as u64,
+                        now_ms,
                     )?;
                     Ok(())
                 })
@@ -213,11 +256,7 @@ where
                         )
                         .optional()?;
                     json.map(|value| {
-                        serde_json::from_str(&value).map_err(|error| {
-                            DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(
-                                Box::new(error),
-                            ))
-                        })
+                        serde_json::from_str(&value).map_err(DatabaseError::SerializationError)
                     })
                     .transpose()
                 })
@@ -233,24 +272,27 @@ where
     ) -> Result<(), TagError> {
         let payload = serde_json::to_string(pipeline)
             .map_err(|error| TagError::Repository(error.to_string()))?;
-        let now_ms = legacy_change_time::now_ms() as i64;
+        let now_ms = self
+            .clock
+            .now_ms()
+            .map_err(|error| TagError::Repository(error.to_string()))?;
         self.repository
             .get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
                     tx.execute(
                         "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json, updated_at = excluded.updated_at",
-                        rusqlite::params![project_id, payload, now_ms],
+                        rusqlite::params![project_id, payload, now_ms as i64],
                     )?;
                     let val = serde_json::to_value(pipeline)
-                        .map_err(|e| DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
+                        .map_err(DatabaseError::SerializationError)?;
                     record_local_field_change_in_transaction(
                         tx,
                         SyncEntityKind::Project,
                         project_id,
                         "pipeline",
                         val,
-                        now_ms as u64,
+                        now_ms,
                     )?;
                     Ok(())
                 })
@@ -545,19 +587,44 @@ where
     }
 
     fn delete_tag(&self, tag_id: &str) -> Result<(), TagError> {
+        let now_ms = legacy_change_time::now_ms();
         self.get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
+                    let affected_item_ids: Vec<String> = {
+                        let mut stmt = tx.prepare(
+                            "SELECT id FROM history_items WHERE project_id = ?1 AND status = 'complete'",
+                        )?;
+                        let rows = stmt.query_map([tag_id], |row| row.get::<_, String>(0))?;
+                        rows.collect::<Result<Vec<_>, _>>()?
+                    };
+                    tx.execute(
+                        "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
+                        [tag_id],
+                    )?;
+                    for item_id in &affected_item_ids {
+                        record_history_project_clear_in_transaction(tx, item_id, now_ms)?;
+                    }
+                    let affected_rule_ids: Vec<String> = {
+                        let mut stmt = tx.prepare(
+                            "SELECT id FROM automation_rules WHERE project_id = ?1",
+                        )?;
+                        let rows = stmt.query_map([tag_id], |row| row.get::<_, String>(0))?;
+                        rows.collect::<Result<Vec<_>, _>>()?
+                    };
                     tx.execute(
                         "UPDATE automation_rules SET project_id = '', enabled = 0 WHERE project_id = ?1",
                         [tag_id],
                     )?;
+                    for rule_id in &affected_rule_ids {
+                        record_rule_project_clear_in_transaction(tx, rule_id, now_ms)?;
+                    }
                     tx.execute("DELETE FROM projects WHERE id = ?1", [tag_id])?;
                     record_local_delete_in_transaction(
                         tx,
                         SyncEntityKind::Project,
                         tag_id,
-                        legacy_change_time::now_ms(),
+                        now_ms,
                     )?;
                     Ok(())
                 })
@@ -566,19 +633,64 @@ where
     }
 
     fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), TagError> {
+        let now_ms = legacy_change_time::now_ms();
         self.get_db()
             .and_then(|db| {
-                db.with_transaction(|tx| {
+                db.with_rw_transaction(|tx| {
                     let existing_ids = load_projects(tx)?
                         .into_iter()
                         .map(|tag| tag.id)
                         .collect::<Vec<_>>();
-                    replace_tags_in_transaction(tx, &tags)?;
-                    let now_ms = legacy_change_time::now_ms();
-                    for existing_id in existing_ids
+                    let removed_ids: std::collections::BTreeSet<&str> = existing_ids
                         .iter()
-                        .filter(|existing_id| !tags.iter().any(|tag| tag.id == **existing_id))
-                    {
+                        .map(String::as_str)
+                        .filter(|existing_id| !tags.iter().any(|tag| tag.id == *existing_id))
+                        .collect();
+                    let (affected_item_ids, affected_rule_ids) = if removed_ids.is_empty() {
+                        (Vec::new(), Vec::new())
+                    } else {
+                        let item_ids: Vec<String> = {
+                            let mut stmt = tx.prepare(
+                                "SELECT id, project_id FROM history_items WHERE project_id IS NOT NULL AND status = 'complete'",
+                            )?;
+                            let rows = stmt.query_map([], |row| {
+                                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                            })?;
+                            let mut matched = Vec::new();
+                            for row in rows {
+                                let (item_id, project_id) = row?;
+                                if removed_ids.contains(project_id.as_str()) {
+                                    matched.push(item_id);
+                                }
+                            }
+                            matched
+                        };
+                        let rule_ids: Vec<String> = {
+                            let mut stmt = tx.prepare(
+                                "SELECT id, project_id FROM automation_rules WHERE project_id != ''",
+                            )?;
+                            let rows = stmt.query_map([], |row| {
+                                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                            })?;
+                            let mut matched = Vec::new();
+                            for row in rows {
+                                let (rule_id, project_id) = row?;
+                                if removed_ids.contains(project_id.as_str()) {
+                                    matched.push(rule_id);
+                                }
+                            }
+                            matched
+                        };
+                        (item_ids, rule_ids)
+                    };
+                    replace_tags_in_transaction(tx, &tags)?;
+                    for item_id in &affected_item_ids {
+                        record_history_project_clear_in_transaction(tx, item_id, now_ms)?;
+                    }
+                    for rule_id in &affected_rule_ids {
+                        record_rule_project_clear_in_transaction(tx, rule_id, now_ms)?;
+                    }
+                    for existing_id in &removed_ids {
                         record_local_delete_in_transaction(
                             tx,
                             SyncEntityKind::Project,
@@ -637,6 +749,36 @@ where
             })
             .map_err(|error| TagError::Repository(error.to_string()))
     }
+}
+
+fn record_history_project_clear_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    item_id: &str,
+    now_ms: u64,
+) -> Result<(), DatabaseError> {
+    record_local_field_change_in_transaction(
+        tx,
+        SyncEntityKind::HistoryItem,
+        item_id,
+        "projectId",
+        Value::Null,
+        now_ms,
+    )
+}
+
+fn record_rule_project_clear_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    rule_id: &str,
+    now_ms: u64,
+) -> Result<(), DatabaseError> {
+    record_local_field_change_in_transaction(
+        tx,
+        SyncEntityKind::AutomationRule,
+        rule_id,
+        "projectId",
+        json!(""),
+        now_ms,
+    )
 }
 
 pub(crate) fn record_project_sync_fields(

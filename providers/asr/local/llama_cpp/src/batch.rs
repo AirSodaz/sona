@@ -264,7 +264,7 @@ impl LlamaBatchTranscriptionJob {
         let mut results = Vec::new();
         for (segment_index, segment) in audio_segments.into_iter().enumerate() {
             if observer.is_cancelled() {
-                return Err(AsrPortError::runtime("Task cancelled."));
+                return Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED"));
             }
             let (start_sample, end_sample) = segment_bounds(&segment, sample_rate, samples.len());
             if end_sample <= start_sample {

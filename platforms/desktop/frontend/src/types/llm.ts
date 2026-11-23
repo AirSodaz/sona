@@ -1,4 +1,5 @@
 import type {
+  LlmProviderStrategy as CoreLlmProviderStrategy,
   BuiltinLlmProvider as GeneratedBuiltinLlmProvider,
   LlmProvider as GeneratedLlmProvider,
   PolishPresetId as GeneratedPolishPresetId,
@@ -56,42 +57,10 @@ export function flattenAppConfig(config: any): any {
 }
 
 export type LlmProviderStrategy =
+  | CoreLlmProviderStrategy
   | 'openai_compatible'
-  | 'open_ai'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'azure_openai'
   | 'openai_responses'
-  | 'openai_compatible_custom_path'
-  | 'google_translate'
-  | 'google_translate_free'
-  | 'perplexity'
-  | 'deep_seek'
-  | 'moonshot_ai'
-  | 'moonshot_cn'
-  | 'xiaomi'
-  | 'kimi'
-  | 'silicon_flow'
-  | 'qwen'
-  | 'qwen_portal'
-  | 'minimax_global'
-  | 'minimax_cn'
-  | 'open_router'
-  | 'lm_studio'
-  | 'groq'
-  | 'x_ai'
-  | 'mistral_ai'
-  | 'volcengine'
-  | 'chatglm'
-  | 'copilot'
-  | 'cohere'
-  | 'together'
-  | 'venice'
-  | 'hyperbolic'
-  | 'llamafile'
-  | 'local'
-  | 'local_nmt';
+  | 'openai_compatible_custom_path';
 
 export type CustomLlmProviderStrategy =
   | 'openai_compatible'

@@ -31,6 +31,9 @@ jobs:
       - name: Run lint
         run: pnpm run lint:ci
 
+      - name: Run markdown lint
+        run: pnpm run lint:md
+
       - name: Run tests
         run: pnpm run test:ci
 
@@ -95,7 +98,10 @@ jobs:
           find target/debug -xtype l -delete 2>/dev/null || true
 
       - name: Run workspace tests (excluding desktop host crate)
-        run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-export -p sona-sherpa-onnx -p sona-vad -p sona-punct -p sona-llama-cpp -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli -p sona-mcp -p sona-bin-shim
+        run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-audio-capture -p sona-export -p sona-sherpa-onnx -p sona-vad -p sona-punct -p sona-llama-cpp -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-translation-onnx -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-sync-s3 -p sona-ts-bind -p sona-uniffi-bind -p sona-cli -p sona-mcp -p sona-bin-shim
+
+      - name: Check CLI docs
+        run: pnpm run check:cli-docs
 
       - name: Run MCP integration tests
         run: |

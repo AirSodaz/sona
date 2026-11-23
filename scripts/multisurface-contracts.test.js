@@ -111,6 +111,7 @@ test('sync conflict UI reads the persisted HLC snake_case timestamp', () => {
 test('PR guardrails execute both sync application and WebDAV adapter tests', () => {
   assert.match(prGuardrails, /-p sona-sync(?=\s|$)/u);
   assert.match(prGuardrails, /-p sona-sync-webdav\b/u);
+  assert.match(prGuardrails, /-p sona-sync-s3\b/u);
   assert.doesNotMatch(prGuardrails, /-p sona-webdav\b/u);
 });
 
@@ -914,6 +915,7 @@ test('per-call reopening SQLite repositories stay behind the test-support featur
   for (const host of [
     ['platforms', 'desktop'],
     ['platforms', 'cli'],
+    ['platforms', 'mcp'],
     ['platforms', 'uniffi'],
   ]) {
     const manifest = read(...host, 'Cargo.toml');

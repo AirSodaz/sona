@@ -7,9 +7,11 @@ use sona_core::automation::repository::{
 use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::project::ports::ProjectRepository;
 use sona_core::project::{ProjectCreateInput, ProjectPipelineConfig};
+use sona_core::sync::{SyncEntityKind, SyncLocalRepository, SyncOperationKind, SyncPresetV1};
 use sona_core::tag::{TagError, TagIdGenerator, TagRecord, TagStore};
 use sona_sqlite::{
     Database, SqliteAutomationRepository, SqliteProjectAdapter, SqliteProjectRepository,
+    SqliteSyncRepository,
 };
 
 struct FixedIds;
@@ -318,4 +320,179 @@ fn project_cascade_disables_rules_that_lose_their_project() {
         .unwrap();
     assert_eq!(survivor.project_id, "proj-2");
     assert!(survivor.enabled);
+}
+
+#[test]
+fn delete_project_with_cascade_records_sync_outbox_for_items_and_rules() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        Arc::new(FixedClock),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let adapter =
+        SqliteProjectAdapter::new(Arc::clone(&db), Arc::new(FixedIds), Arc::new(FixedClock));
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    let created = ProjectRepository::create_project(
+        &adapter,
+        ProjectCreateInput {
+            name: "Work".to_string(),
+            description: Some(String::new()),
+            icon: None,
+            color: None,
+            pipeline: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(created.id, "fixed-id-1");
+
+    AutomationStore::replace_rules(&automation, &[automation_rule("fixed-id-1")]).unwrap();
+    db.with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, deleted_at, status) VALUES ('hist-new', 100, 'fixed-id-1', NULL, 'complete')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, deleted_at, status) VALUES ('hist-trashed', 100, 'fixed-id-1', 50, 'complete')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, deleted_at, status) VALUES ('hist-draft', 100, 'fixed-id-1', NULL, 'live_draft')",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    ProjectRepository::delete_project_with_cascade(&adapter, "fixed-id-1", "deleteItems").unwrap();
+
+    let ops = sync
+        .load_pending_operations(SyncPresetV1::Full, 256, usize::MAX)
+        .unwrap();
+
+    assert!(!ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem && op.entity.id == "hist-draft"
+    }));
+
+    assert!(ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::Tag
+            && op.entity.id == "fixed-id-1"
+            && matches!(op.kind, SyncOperationKind::DeleteEntity)
+    }));
+    assert!(ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem
+            && op.entity.id == "hist-new"
+            && matches!(
+                &op.kind,
+                SyncOperationKind::SetField { field, value } if field == "projectId" && value.is_null()
+            )
+    }));
+    assert!(ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem
+            && op.entity.id == "hist-new"
+            && matches!(
+                &op.kind,
+                SyncOperationKind::SetField { field, value } if field == "deletedAt" && value.as_i64() == Some(1000)
+            )
+    }));
+    assert!(ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem
+            && op.entity.id == "hist-trashed"
+            && matches!(
+                &op.kind,
+                SyncOperationKind::SetField { field, value } if field == "projectId" && value.is_null()
+            )
+    }));
+    assert!(!ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem
+            && op.entity.id == "hist-trashed"
+            && matches!(&op.kind, SyncOperationKind::SetField { field, .. } if field == "deletedAt")
+    }));
+    assert!(ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::AutomationRule
+            && op.entity.id == "rule-1"
+            && matches!(
+                &op.kind,
+                SyncOperationKind::SetField { field, value } if field == "projectId" && value.as_str() == Some("")
+            )
+    }));
+}
+
+#[test]
+fn delete_tag_and_replace_tags_record_sync_outbox_for_items_and_rules() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let sync = SqliteSyncRepository::initialize(
+        Arc::clone(&db),
+        Arc::new(FixedClock),
+        "vault-a",
+        "device-a",
+        SyncPresetV1::Full,
+    )
+    .unwrap();
+    let repository = SqliteProjectRepository::new(Arc::clone(&db));
+    let automation = SqliteAutomationRepository::new(Arc::clone(&db));
+
+    repository
+        .replace_tags(vec![
+            tag("proj-del", "DeleteMe", "#2563EB", 0),
+            tag("proj-rep", "ReplaceMe", "#DC2626", 1),
+        ])
+        .unwrap();
+    let mut rule_del = automation_rule("proj-del");
+    rule_del.id = "rule-del".to_string();
+    let mut rule_rep = automation_rule("proj-rep");
+    rule_rep.id = "rule-rep".to_string();
+    AutomationStore::replace_rules(&automation, &[rule_del, rule_rep]).unwrap();
+
+    db.with_connection(|conn| {
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, status) VALUES ('hist-del', 100, 'proj-del', 'complete')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, status) VALUES ('hist-rep', 100, 'proj-rep', 'complete')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO history_items (id, timestamp, project_id, status) VALUES ('hist-draft-del', 100, 'proj-del', 'live_draft')",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+
+    repository.delete_tag("proj-del").unwrap();
+    repository.replace_tags(vec![]).unwrap();
+
+    let ops = sync
+        .load_pending_operations(SyncPresetV1::Full, 512, usize::MAX)
+        .unwrap();
+
+    for id in ["hist-del", "hist-rep"] {
+        assert!(ops.iter().any(|op| {
+            op.entity.kind == SyncEntityKind::HistoryItem
+                && op.entity.id == id
+                && matches!(
+                    &op.kind,
+                    SyncOperationKind::SetField { field, value } if field == "projectId" && value.is_null()
+                )
+        }));
+    }
+    assert!(!ops.iter().any(|op| {
+        op.entity.kind == SyncEntityKind::HistoryItem && op.entity.id == "hist-draft-del"
+    }));
+    for rule_id in ["rule-del", "rule-rep"] {
+        assert!(ops.iter().any(|op| {
+            op.entity.kind == SyncEntityKind::AutomationRule
+                && op.entity.id == rule_id
+                && matches!(
+                    &op.kind,
+                    SyncOperationKind::SetField { field, value } if field == "projectId" && value.as_str() == Some("")
+                )
+        }));
+    }
 }

@@ -42,6 +42,7 @@ impl SherpaCtcAligner {
     }
 
     pub fn new(model_path: &Path, num_threads: i32) -> Result<Self, AlignerPortError> {
+        crate::ensure_windows_runtime_dlls();
         let onnx_path = resolve_model_onnx_path(model_path)
             .map_err(|err| AlignerPortError::model_not_found(err.to_string()))?;
         let tokens_path = resolve_model_tokens_path(model_path);

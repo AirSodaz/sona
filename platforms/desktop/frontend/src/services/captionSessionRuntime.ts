@@ -4,7 +4,6 @@ import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { captionWindowService } from './captionWindowService';
-import { TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
 import { register, unregister } from './tauri/platform/globalShortcut';
 import { captionTranscriptionService, type TranscriptionService } from './transcriptionService';
@@ -166,14 +165,11 @@ async function tryStartNativeCaptionCapture(
       deviceName: getCaptionDeviceName(config),
       callbackOwner: 'caption',
     });
-    const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
-      // The Rust backend feeds the recognizer directly for native caption capture.
-    });
 
     logger.info('[CaptionSession] Native capture started.');
     return {
       started: true,
-      unlisten,
+      unlisten: null,
     };
   } catch (error) {
     logger.warn('[CaptionSession] Native capture failed, falling back to Web API:', error);

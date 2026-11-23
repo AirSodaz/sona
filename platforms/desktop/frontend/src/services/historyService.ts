@@ -441,7 +441,7 @@ function createOperationsFromTransport(
         summaryPayload: toHistorySummaryPayloadTransport(summaryPayload),
       }),
     updateItemMeta: (id, updates) =>
-      transport.invoke(TauriCommand.history.updateItemMeta, { id, updates }),
+      transport.invoke(TauriCommand.history.updateItemMeta, { historyId: id, updates }),
     updateProjectAssignments: (ids, projectId) =>
       transport.invoke(TauriCommand.history.updateProjectAssignments, { ids, projectId }),
     updateTranscript: (historyId, segments) =>

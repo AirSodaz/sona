@@ -518,6 +518,7 @@ impl Recognizer {
         num_threads: i32,
         provider: Option<String>,
     ) -> Result<Self, AsrPortError> {
+        crate::ensure_windows_runtime_dlls();
         info!(
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
             model_type
@@ -979,11 +980,11 @@ pub fn create_online_stream(recognizer: &SafeOnlineRecognizer) -> SafeStream {
     SafeStream(recognizer.0.create_stream())
 }
 
-pub fn accept_online_samples(stream: &SafeStream, samples: &[f32]) {
+pub fn accept_online_samples(stream: &mut SafeStream, samples: &[f32]) {
     stream.0.accept_waveform(16000, samples);
 }
 
-pub fn decode_online_ready(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) {
+pub fn decode_online_ready(recognizer: &SafeOnlineRecognizer, stream: &mut SafeStream) {
     while recognizer.0.is_ready(&stream.0) {
         recognizer.0.decode(&stream.0);
     }
@@ -1007,15 +1008,15 @@ pub fn online_stream_result(
         })
 }
 
-pub fn reset_online_stream(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) {
+pub fn reset_online_stream(recognizer: &SafeOnlineRecognizer, stream: &mut SafeStream) {
     recognizer.0.reset(&stream.0);
 }
 pub fn warmup_recognizer_dry_run(recognizer: &Recognizer) {
     if let Some(r) = recognizer.online() {
-        let stream = create_online_stream(r);
+        let mut stream = create_online_stream(r);
         let dummy = vec![0.0f32; 1600];
-        accept_online_samples(&stream, &dummy);
-        decode_online_ready(r, &stream);
+        accept_online_samples(&mut stream, &dummy);
+        decode_online_ready(r, &mut stream);
     } else if let Some(r) = recognizer.offline() {
         let dummy = vec![0.0f32; 3200];
         let _ = decode_offline_samples(r, &dummy);
@@ -1055,12 +1056,15 @@ where
     Err(last_error.expect("GPU acceleration plan must include at least one provider"))
 }
 
+// SAFETY: `Recognizer` owns thread-safe sherpa-onnx recognizer handles initialized before sharing.
 unsafe impl Send for Recognizer {}
+// SAFETY: `Recognizer` only exposes shared read/decode APIs synchronized by the underlying runtime.
 unsafe impl Sync for Recognizer {}
 
 pub struct SafeStream(sherpa_onnx::OnlineStream);
+// SAFETY: `SafeStream` owns its `OnlineStream` exclusively and may be moved between threads while
+// all mutating FFI methods require `&mut SafeStream` (no `Sync`).
 unsafe impl Send for SafeStream {}
-unsafe impl Sync for SafeStream {}
 
 #[cfg(test)]
 mod tests {

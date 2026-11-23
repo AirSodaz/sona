@@ -64,6 +64,7 @@ export interface VoiceTypingServicePorts {
 
 export class VoiceTypingService {
   private initialized = false;
+  private initEpoch = 0;
 
   private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -178,6 +179,7 @@ export class VoiceTypingService {
     }
 
     this.initialized = true;
+    const epoch = ++this.initEpoch;
     logger.info('[VoiceTypingService] Initializing...');
 
     const initialConfig = this.ports.getConfig();
@@ -274,7 +276,15 @@ export class VoiceTypingService {
           void this.cancelListening();
         })
         .then((unlisten) => {
+          if (!this.initialized || this.initEpoch !== epoch) {
+            unlisten();
+            return;
+          }
+          this.cancelUnlisten?.();
           this.cancelUnlisten = unlisten;
+        })
+        .catch((err) => {
+          logger.warn('[VoiceTypingService] Failed to listen to cancel event:', err);
         });
     }
 
@@ -287,6 +297,11 @@ export class VoiceTypingService {
       }
     })
       .then((unlisten) => {
+        if (!this.initialized || this.initEpoch !== epoch) {
+          unlisten();
+          return;
+        }
+        this.reinjectUnlisten?.();
         this.reinjectUnlisten = unlisten;
       })
       .catch((err) => {
@@ -296,6 +311,7 @@ export class VoiceTypingService {
 
   public destroy() {
     this.initialized = false;
+    this.initEpoch += 1;
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
