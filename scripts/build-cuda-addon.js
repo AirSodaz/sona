@@ -511,16 +511,14 @@ function stageCudaAddonFiles({
 
   const manifestFile = path.join(stagedDir, 'cuda-addon-manifest.json');
   const targetOs = rustTargetOs(platform);
-  const manifestData = {
-    schemaVersion: 1,
+  const manifestData = createCudaAddonManifest({
     addonVersion: version,
     cudaVersion: cudaVersion || '12.4',
     llamaCppRef,
     sherpaOnnxVersion,
-    ...(targetOs ? { targetOs } : {}),
+    targetOs,
     targetArch: rustTargetArch(),
-    publishedAt: new Date().toISOString(),
-  };
+  });
   fs.writeFileSync(manifestFile, JSON.stringify(manifestData, null, 2), 'utf8');
   copiedFiles.push('cuda-addon-manifest.json');
 
@@ -637,26 +635,12 @@ function runCli() {
     ortLibDir,
     llamaLibDir,
     cudaLibPaths: cudaLibs,
+    version: addonVersion,
+    cudaVersion,
     llamaCppRef: llamaRef,
     sherpaOnnxVersion: sherpaVersion,
   });
   console.log(`  Staged ${copied.length} libraries.`);
-
-  // Generate manifest
-  const manifest = createCudaAddonManifest({
-    addonVersion,
-    cudaVersion,
-    llamaCppRef: llamaRef,
-    sherpaOnnxVersion: sherpaVersion,
-    targetOs: rustTargetOs(),
-    targetArch: rustTargetArch(),
-    artifactsDir: outputDir,
-  });
-  fs.writeFileSync(
-    path.join(stagePath, 'cuda-addon-manifest.json'),
-    JSON.stringify(manifest, null, 2),
-    'utf8',
-  );
   console.log('[CUDA Addon Builder] Staged manifest in addon directory.');
 
   if (options.package) {
