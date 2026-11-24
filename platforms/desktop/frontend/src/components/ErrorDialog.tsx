@@ -91,7 +91,7 @@ export function ErrorDialog(): React.JSX.Element | null {
         style={{
           background: 'var(--color-bg-elevated)',
           borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-xl)',
+          boxShadow: 'var(--modal-shell-shadow)',
           width: '400px',
           maxWidth: '90vw',
           padding: 'var(--spacing-lg)',

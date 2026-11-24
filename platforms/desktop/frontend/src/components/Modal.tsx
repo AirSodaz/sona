@@ -28,6 +28,8 @@ export interface ModalProps {
   shellStyle?: React.CSSProperties;
   bodyStyle?: React.CSSProperties;
   role?: 'dialog' | 'alertdialog';
+  origin?: 'standalone' | 'settings';
+  nested?: boolean;
 }
 
 export function Modal({
@@ -48,8 +50,11 @@ export function Modal({
   shellStyle,
   bodyStyle,
   role = 'dialog',
+  origin = 'standalone',
+  nested = false,
 }: ModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyContentRef = useRef<HTMLDivElement>(null);
@@ -212,6 +217,19 @@ export function Modal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
+  // Prevent duplicate backdrop dimming when nested or already displaying over another modal
+  useEffect(() => {
+    if (!isOpen || !overlayRef.current) return;
+    if (origin === 'settings' || nested) return;
+    const overlays = document.querySelectorAll(
+      '.settings-overlay, .panel-modal-overlay, .shared-modal-overlay'
+    );
+    const hasParentOverlay = Array.from(overlays).some((el) => el !== overlayRef.current);
+    if (hasParentOverlay) {
+      overlayRef.current.classList.add('shared-modal-nested');
+    }
+  }, [isOpen, origin, nested]);
+
   if (!isOpen) return null;
 
   const handleOverlayClick = () => {
@@ -227,7 +245,13 @@ export function Modal({
   return (
     <ModalPortal>
       <div
-        className={joinClassNames('shared-modal-overlay', overlayClassName)}
+        ref={overlayRef}
+        className={joinClassNames(
+          'shared-modal-overlay',
+          origin === 'settings' && 'shared-modal-origin-settings',
+          nested && 'shared-modal-nested',
+          overlayClassName
+        )}
         style={overlayStyle}
         data-modal-layer="shared-modal"
         onClick={handleOverlayClick}

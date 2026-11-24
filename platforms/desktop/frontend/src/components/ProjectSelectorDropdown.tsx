@@ -261,16 +261,27 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
               <button
                 type="button"
                 onClick={() => {
+                  setOpen(false);
+                  setQuery('');
                   setCreateName('');
                   setCreateDescription('');
                   setCreateOpen(true);
                 }}
               >
-                <PlusIcon />
-                {t('projects.new_project_button', { defaultValue: 'New Project' })}
+                <PlusIcon width={13} height={13} />
+                <span>{t('projects.new_project_button', { defaultValue: 'New Project' })}</span>
               </button>
-              <button type="button" onClick={onOpenProjects}>
-                {t('projects.open_projects_center', { defaultValue: 'Open Project Center' })}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setQuery('');
+                  onOpenProjects();
+                }}
+              >
+                <span>
+                  {t('projects.open_projects_center', { defaultValue: 'Open Project Center' })}
+                </span>
               </button>
             </div>
           </div>

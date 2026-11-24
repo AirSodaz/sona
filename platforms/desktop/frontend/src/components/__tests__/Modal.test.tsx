@@ -97,4 +97,34 @@ describe('Modal', () => {
     expect(resolve).toHaveBeenCalledTimes(1);
     expect(useDialogStore.getState().isOpen).toBe(false);
   });
+
+  it('marks overlay with shared-modal-origin-settings when origin is settings', () => {
+    render(
+      <Modal isOpen onClose={vi.fn()} title="Settings Child Modal" origin="settings">
+        <div>Child content</div>
+      </Modal>
+    );
+
+    const overlay = document.querySelector('.shared-modal-overlay');
+    expect(overlay?.classList.contains('shared-modal-origin-settings')).toBe(true);
+  });
+
+  it('marks overlay as nested when another overlay already exists in DOM', () => {
+    const parentOverlay = document.createElement('div');
+    parentOverlay.className = 'settings-overlay';
+    document.body.appendChild(parentOverlay);
+
+    try {
+      render(
+        <Modal isOpen onClose={vi.fn()} title="Nested Modal">
+          <div>Nested content</div>
+        </Modal>
+      );
+
+      const modalOverlay = document.querySelector('.shared-modal-overlay');
+      expect(modalOverlay?.classList.contains('shared-modal-nested')).toBe(true);
+    } finally {
+      parentOverlay.remove();
+    }
+  });
 });

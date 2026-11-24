@@ -129,6 +129,16 @@ export const themeTokens = {
     "fast": "var(--transition-fast)",
     "normal": "var(--transition-normal)",
     "slow": "var(--transition-slow)"
+  },
+  "modal": {
+    "backdropBg": "var(--modal-backdrop-bg)",
+    "backdropBlur": "var(--modal-backdrop-blur)",
+    "backdropFilter": "var(--modal-backdrop-filter)",
+    "borderHighlight": "var(--modal-border-highlight)",
+    "shadow": "var(--modal-shadow)",
+    "shadowPanel": "var(--modal-shadow-panel)",
+    "shellShadow": "var(--modal-shell-shadow)",
+    "panelShellShadow": "var(--modal-panel-shell-shadow)"
   }
 } as const;
 
@@ -263,6 +273,16 @@ export const lightTokens = {
     "fast": "150ms ease-out",
     "normal": "250ms ease-out",
     "slow": "350ms ease-out"
+  },
+  "modal": {
+    "backdropBg": "rgba(0, 0, 0, 0.22)",
+    "backdropBlur": "0px",
+    "backdropFilter": "none",
+    "borderHighlight": "inset 0 1px 0 rgba(255, 255, 255, 0.85)",
+    "shadow": "0 0 0 1px rgba(0, 0, 0, 0.06), 0 4px 8px -2px rgba(0, 0, 0, 0.06), 0 12px 24px -4px rgba(0, 0, 0, 0.10), 0 24px 48px -8px rgba(0, 0, 0, 0.14), 0 40px 80px -16px rgba(0, 0, 0, 0.16)",
+    "shadowPanel": "0 0 0 1px rgba(0, 0, 0, 0.06), 0 6px 12px -2px rgba(0, 0, 0, 0.08), 0 16px 32px -4px rgba(0, 0, 0, 0.12), 0 32px 64px -8px rgba(0, 0, 0, 0.16), 0 48px 96px -16px rgba(0, 0, 0, 0.20)",
+    "shellShadow": "var(--modal-border-highlight), var(--modal-shadow)",
+    "panelShellShadow": "var(--modal-border-highlight), var(--modal-shadow-panel)"
   }
 } as const;
 
@@ -395,6 +415,16 @@ export const darkTokens = {
     "fast": "150ms ease-out",
     "normal": "250ms ease-out",
     "slow": "350ms ease-out"
+  },
+  "modal": {
+    "backdropBg": "rgba(0, 0, 0, 0.40)",
+    "backdropBlur": "0px",
+    "backdropFilter": "none",
+    "borderHighlight": "inset 0 1px 0 rgba(255, 255, 255, 0.12)",
+    "shadow": "0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.40), 0 12px 24px -4px rgba(0, 0, 0, 0.50), 0 24px 48px -8px rgba(0, 0, 0, 0.60), 0 40px 80px -16px rgba(0, 0, 0, 0.72)",
+    "shadowPanel": "0 0 0 1px rgba(255, 255, 255, 0.08), 0 6px 12px -2px rgba(0, 0, 0, 0.45), 0 16px 32px -4px rgba(0, 0, 0, 0.55), 0 32px 64px -8px rgba(0, 0, 0, 0.65), 0 48px 96px -16px rgba(0, 0, 0, 0.78)",
+    "shellShadow": "var(--modal-border-highlight), var(--modal-shadow)",
+    "panelShellShadow": "var(--modal-border-highlight), var(--modal-shadow-panel)"
   }
 } as const;
 

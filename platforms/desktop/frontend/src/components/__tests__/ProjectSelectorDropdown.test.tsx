@@ -128,6 +128,9 @@ describe('ProjectSelectorDropdown', () => {
     fireEvent.click(screen.getByRole('button'));
     fireEvent.click(screen.getByRole('button', { name: /New Project/i }));
 
+    // Dropdown popover should be closed after clicking New Project
+    expect(screen.queryByRole('listbox')).toBeNull();
+
     act(() => {
       useTranscriptStore.setState({
         isRecording: true,
@@ -144,5 +147,20 @@ describe('ProjectSelectorDropdown', () => {
 
     expect(createProjectMock).toHaveBeenCalledTimes(1);
     expect(setActiveProjectIdMock).toHaveBeenCalledWith('proj-created');
+  });
+
+  it('closes dropdown popover and triggers onOpenProjects when clicking Open Project Center', () => {
+    const onOpenProjectsMock = vi.fn();
+    render(<ProjectSelectorDropdown onOpenProjects={onOpenProjectsMock} />);
+
+    // Open dropdown
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByRole('listbox')).toBeTruthy();
+
+    // Click Open Project Center
+    fireEvent.click(screen.getByRole('button', { name: /Open Project Center/i }));
+
+    expect(onOpenProjectsMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('listbox')).toBeNull();
   });
 });

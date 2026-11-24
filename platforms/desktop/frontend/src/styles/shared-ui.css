@@ -9,9 +9,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: var(--modal-backdrop-bg);
+  backdrop-filter: var(--modal-backdrop-filter, none);
+  -webkit-backdrop-filter: var(--modal-backdrop-filter, none);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,20 +20,30 @@
     forwards;
 }
 
+/* Transparent background when nested or originating from Settings to prevent double-dimming */
+.shared-modal-overlay.shared-modal-origin-settings,
+.shared-modal-overlay.shared-modal-nested,
+.shared-modal-overlay[data-modal-nested="true"] {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.shared-modal-overlay.shared-modal-origin-settings .shared-modal-shell {
+  box-shadow: var(--modal-border-highlight);
+}
+
 .shared-modal-shell {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.15),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: var(--modal-shell-shadow);
   display: flex;
   flex-direction: column;
   max-width: 92vw;
   max-height: 85vh;
   outline: none;
-  animation: shared-modal-shell-scale var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1)
+  animation: shared-modal-shell-scale var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1)
     forwards;
   overflow: hidden;
   transition:
@@ -113,11 +123,24 @@
 @keyframes shared-modal-shell-scale {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(10px);
+    transform: scale(0.97) translateY(8px);
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shared-modal-overlay {
+    animation: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .shared-modal-shell {
+    animation: none;
+    transition: none;
   }
 }
 
