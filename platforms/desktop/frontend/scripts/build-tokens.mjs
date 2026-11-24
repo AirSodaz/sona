@@ -20,6 +20,7 @@ const prefixMap = {
   typography: '--font-',
   shadows: '--shadow-',
   transitions: '--transition-',
+  modal: '--modal-',
 };
 
 export function buildTokens(inputJsonPath = tokensJsonPath) {

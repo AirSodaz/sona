@@ -7,16 +7,27 @@
   isolation: isolate;
   z-index: 2000;
   padding: var(--spacing-md);
+  background: var(--modal-backdrop-bg);
+  backdrop-filter: var(--modal-backdrop-filter, none);
+  -webkit-backdrop-filter: var(--modal-backdrop-filter, none);
+  animation: shared-modal-overlay-fade var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1)
+    forwards;
 }
 
 .panel-modal-origin-standalone {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background: var(--modal-backdrop-bg);
+  backdrop-filter: var(--modal-backdrop-filter, none);
+  -webkit-backdrop-filter: var(--modal-backdrop-filter, none);
 }
 
 .panel-modal-origin-settings {
   background: transparent;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.panel-modal-origin-settings .panel-modal-shell {
+  box-shadow: var(--modal-border-highlight);
 }
 
 .panel-modal-shell {
@@ -38,7 +49,9 @@
       color-mix(in srgb, var(--color-bg-primary) 96%, #dbeafe) 0%,
       var(--color-bg-primary) 100%
     );
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--modal-panel-shell-shadow);
+  animation: shared-modal-shell-scale var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1)
+    forwards;
 }
 
 .panel-modal-shell.panel-modal-size-settings {
@@ -258,5 +271,17 @@
 
   .panel-modal-toolbar {
     justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-modal-overlay {
+    animation: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .panel-modal-shell {
+    animation: none;
   }
 }
