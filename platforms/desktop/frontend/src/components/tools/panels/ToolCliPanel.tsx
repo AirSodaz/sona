@@ -198,8 +198,7 @@ export function ToolCliPanel(): React.JSX.Element {
       tag: 'batch',
       title: t('tools.cli.cmd_transcribe_title', { defaultValue: 'Batch Transcription' }),
       desc: t('tools.cli.cmd_transcribe_desc', {
-        defaultValue:
-          'Transcribe an audio or video file with specified ASR model and subtitle export.',
+        defaultValue: 'Transcribe audio/video files and export subtitles.',
       }),
       cmd: 'sona-cli transcribe ./audio.wav -m whisper-turbo -o ./subtitle.srt',
     },
@@ -208,8 +207,7 @@ export function ToolCliPanel(): React.JSX.Element {
       tag: 'realtime',
       title: t('tools.cli.cmd_live_title', { defaultValue: 'Live Microphone Recognition' }),
       desc: t('tools.cli.cmd_live_desc', {
-        defaultValue:
-          'Stream real-time transcription from microphone directly into standard output.',
+        defaultValue: 'Stream real-time microphone transcription to console.',
       }),
       cmd: 'sona-cli live -m sensevoice',
     },
@@ -218,7 +216,7 @@ export function ToolCliPanel(): React.JSX.Element {
       tag: 'stream',
       title: t('tools.cli.cmd_pipe_title', { defaultValue: 'Audio Pipe Stream' }),
       desc: t('tools.cli.cmd_pipe_desc', {
-        defaultValue: 'Pipe raw PCM audio data into sona-cli via stdin for automated processing.',
+        defaultValue: 'Pipe raw PCM audio into sona-cli via stdin.',
       }),
       cmd: 'ffmpeg -i video.mp4 -f s16le -ac 1 -ar 16000 - | sona-cli live --input stdin',
     },
@@ -227,7 +225,7 @@ export function ToolCliPanel(): React.JSX.Element {
       tag: 'manage',
       title: t('tools.cli.cmd_models_title', { defaultValue: 'Model Management' }),
       desc: t('tools.cli.cmd_models_desc', {
-        defaultValue: 'Inspect installed ASR/VAD/NMT models and download new ones.',
+        defaultValue: 'Inspect installed models and download new ones.',
       }),
       cmd: 'sona-cli models list',
     },
@@ -236,7 +234,7 @@ export function ToolCliPanel(): React.JSX.Element {
       tag: 'cloud',
       title: t('tools.cli.cmd_online_title', { defaultValue: 'Cloud ASR Transcription' }),
       desc: t('tools.cli.cmd_online_desc', {
-        defaultValue: 'Fast transcription using online cloud providers (e.g. Groq Whisper).',
+        defaultValue: 'Transcribe using cloud providers (e.g. Groq Whisper).',
       }),
       cmd: 'sona-cli transcribe ./meeting.m4a --online-provider groq-whisper',
     },
@@ -245,23 +243,20 @@ export function ToolCliPanel(): React.JSX.Element {
   const pathStatusHint =
     pathState === 'active_current'
       ? t('tools.cli.path_active_hint', {
-          defaultValue:
-            'Sona CLI and MCP binaries are configured in your system PATH and ready to run.',
+          defaultValue: 'Configured in system PATH and ready to run.',
         })
       : pathState === 'active_other'
         ? t('tools.cli.path_other_hint', {
-            defaultValue:
-              'Another Sona environment ({{path}}) currently takes precedence in your terminal PATH.',
+            defaultValue: 'Another environment ({{path}}) takes precedence in terminal PATH.',
             path: activeEntry?.pathDir ?? '',
           })
         : pathState === 'shadowed_by_other'
           ? t('tools.cli.path_shadowed_hint', {
-              defaultValue: 'This app is in PATH, but {{path}} takes precedence ahead of it.',
+              defaultValue: 'In PATH, but shadowed by {{path}} ahead of it.',
               path: activeEntry?.pathDir ?? '',
             })
           : t('tools.cli.path_inactive_hint', {
-              defaultValue:
-                'Enable to allow terminal commands (sona-cli, sona-mcp) to be executed globally.',
+              defaultValue: 'Enable to run sona-cli and sona-mcp directly from any terminal.',
             });
 
   const completionBadgeClass =
@@ -300,7 +295,7 @@ export function ToolCliPanel(): React.JSX.Element {
         title={t('tools.cli.title', { defaultValue: 'Sona CLI' })}
         description={t('tools.cli.description', {
           defaultValue:
-            'Standalone command line interface for offline transcription, real-time audio streams, model management, and shell automation.',
+            'Command line tool for audio transcription, real-time recognition, and automation.',
         })}
         statusText={statusText}
         statusTone={statusTone}
@@ -374,7 +369,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 </strong>{' '}
                 {t('tools.cli.path_restart_tip', {
                   defaultValue:
-                    'Please restart your terminal, CMD, PowerShell, or code editor to load the updated PATH. On Linux/macOS, ensure ~/.local/bin is in your PATH.',
+                    'Please restart your terminal or code editor to load the updated PATH.',
                 })}
               </div>
             </div>
@@ -394,8 +389,7 @@ export function ToolCliPanel(): React.JSX.Element {
           id="tools-cli-path"
           title={t('tools.cli.path_management_title', { defaultValue: 'System PATH Integration' })}
           description={t('tools.cli.path_management_desc', {
-            defaultValue:
-              'Add Sona CLI and MCP binaries to your system environment variables so you can run sona-cli from any terminal.',
+            defaultValue: 'Add CLI and MCP binaries to system PATH to run them from any terminal.',
           })}
           icon={<Terminal size={18} />}
         >
@@ -411,7 +405,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 <div>
                   {t('tools.cli.multi_env_warning_body', {
                     defaultValue:
-                      'Terminals currently resolve sona-cli from {{activeDir}} ({{version}}), rather than this running app ({{currentDir}}).',
+                      'Terminals currently resolve sona-cli from {{activeDir}} ({{version}}), rather than this running app.',
                     activeDir: activeEntry.pathDir,
                     version: activeEntry.version ? `v${activeEntry.version}` : '?',
                     currentDir: status?.binDir || status?.binaryPath || '-',
@@ -421,7 +415,7 @@ export function ToolCliPanel(): React.JSX.Element {
                   <div className="tool-cli-alert-subtext">
                     {t('tools.cli.system_path_blocked_tip', {
                       defaultValue:
-                        'A system-level PATH entry takes precedence and cannot be replaced without administrator or elevated privileges.',
+                        'A system-level PATH entry takes precedence and requires administrator privileges to modify.',
                     })}
                   </div>
                 )}
@@ -520,10 +514,6 @@ export function ToolCliPanel(): React.JSX.Element {
                   )}
                 </div>
               }
-              hint={t('tools.cli.active_bin_dir_desc', {
-                defaultValue:
-                  'First sona-cli directory resolved by terminal shells according to OS PATH precedence.',
-              })}
             >
               <div className="tool-cli-path-display-group">
                 <div
@@ -567,11 +557,10 @@ export function ToolCliPanel(): React.JSX.Element {
                 ? t('tools.cli.current_bin_directory', {
                     defaultValue: 'Current App Binary Directory',
                   })
-                : t('tools.cli.bin_directory', { defaultValue: 'Dedicated Binary Directory' })
+                : t('tools.cli.bin_directory', { defaultValue: 'App Binary Directory' })
             }
             hint={t('tools.cli.bin_dir_desc', {
-              defaultValue:
-                'Isolated bin directory preventing runtime library conflicts and command collisions.',
+              defaultValue: 'Directory containing sona-cli and sona-mcp binaries.',
             })}
           >
             <div className="tool-cli-path-display-group">
@@ -632,8 +621,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 defaultValue: 'Detected Environments in PATH',
               })}
               hint={t('tools.cli.detected_environments_desc', {
-                defaultValue:
-                  'Listed in OS PATH resolution order. Entry #1 is the executable invoked by terminals.',
+                defaultValue: 'Listed in PATH priority order. Entry #1 is invoked in terminals.',
               })}
             >
               <div className="tool-cli-env-list">
@@ -714,8 +702,7 @@ export function ToolCliPanel(): React.JSX.Element {
           id="tools-cli-completions"
           title={t('tools.cli.completions_title', { defaultValue: 'Shell Auto-Completion' })}
           description={t('tools.cli.completions_desc', {
-            defaultValue:
-              'Enable tab auto-completion for sona-cli commands, subcommands, and model parameters in your preferred shell.',
+            defaultValue: 'Enable tab auto-completion for commands and arguments.',
           })}
           icon={<Sparkles size={18} />}
         >
@@ -732,7 +719,7 @@ export function ToolCliPanel(): React.JSX.Element {
                   </strong>{' '}
                   {t('tools.cli.completion_restart_tip', {
                     defaultValue:
-                      'Restart or reload your {{shell}} session to activate the updated completions.',
+                      'Restart or reload your {{shell}} session to activate completions.',
                     shell: shellDisplayName(completionNotice),
                   })}
                 </div>
@@ -760,7 +747,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 <div>
                   {t('tools.cli.completion_legacy_warning_body', {
                     defaultValue:
-                      'Your PowerShell profile still contains an inline Register-ArgumentCompleter block for sona-cli outside the managed loader. Removing it keeps shell startup fast and prevents duplicate completions.',
+                      'Your PowerShell profile still contains legacy inline completion code. Removing it prevents duplicate completions and speeds up shell startup.',
                   })}
                 </div>
               </div>
@@ -770,7 +757,6 @@ export function ToolCliPanel(): React.JSX.Element {
           <SettingsItem
             layout="vertical"
             title={t('tools.cli.shell_picker_title', { defaultValue: 'Terminal Shell' })}
-            hint={fallbackCompletions[selectedShell].desc}
           >
             <div className="tool-cli-completion-content">
               <SegmentedSubTabs
@@ -788,7 +774,7 @@ export function ToolCliPanel(): React.JSX.Element {
                   <div className="tool-cli-managed-status">
                     <span className="tool-cli-managed-title">
                       {t('tools.cli.completion_status_title', {
-                        defaultValue: 'Managed Completion Setup',
+                        defaultValue: 'Managed Setup',
                       })}
                     </span>
                     <span className={`badge ${completionBadgeClass}`}>{completionBadgeLabel}</span>
@@ -837,7 +823,7 @@ export function ToolCliPanel(): React.JSX.Element {
                     <div className="tool-cli-meta-row">
                       <span className="tool-cli-meta-label">
                         {t('tools.cli.completion_script_file', {
-                          defaultValue: 'Standalone Script File',
+                          defaultValue: 'Completion Script',
                         })}
                       </span>
                       <div className="tool-cli-meta-value">
@@ -864,7 +850,7 @@ export function ToolCliPanel(): React.JSX.Element {
                     <div className="tool-cli-meta-row">
                       <span className="tool-cli-meta-label">
                         {t('tools.cli.completion_profile_file', {
-                          defaultValue: 'Profile Loader (1-line block)',
+                          defaultValue: 'Profile Configuration',
                         })}
                       </span>
                       <div className="tool-cli-meta-value">
@@ -877,7 +863,7 @@ export function ToolCliPanel(): React.JSX.Element {
                         ) : (
                           <span className="tool-cli-meta-muted">
                             {t('tools.cli.completion_no_profile_needed', {
-                              defaultValue: 'Auto-loaded by shell; no profile file edits required.',
+                              defaultValue: 'Auto-loaded by shell; no profile edits required.',
                             })}
                           </span>
                         )}
@@ -928,8 +914,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 <>
                   <div className="tool-cli-manual-hint">
                     {t('tools.cli.manual_profile_line_hint', {
-                      defaultValue:
-                        'Then add this single loader line to your shell profile (if not already configured):',
+                      defaultValue: 'Add this loader line to your shell profile:',
                     })}
                   </div>
                   <div className="tool-cli-terminal-card snippet-compact">
@@ -968,11 +953,10 @@ export function ToolCliPanel(): React.JSX.Element {
         <SettingsSection
           id="tools-cli-reference"
           title={t('tools.cli.quick_start_title', {
-            defaultValue: 'Quick Start & Command Reference',
+            defaultValue: 'Quick Reference',
           })}
           description={t('tools.cli.quick_start_desc', {
-            defaultValue:
-              'Common everyday command patterns for audio transcription, live streams, and pipeline automation.',
+            defaultValue: 'Common command patterns for audio transcription and live streams.',
           })}
           icon={<BookOpen size={18} />}
         >
