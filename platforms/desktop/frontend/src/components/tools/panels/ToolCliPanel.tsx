@@ -505,26 +505,36 @@ export function ToolCliPanel(): React.JSX.Element {
 
           {activeEntry && !activeEntry.isCurrentApp && (
             <SettingsItem
-              title={t('tools.cli.active_bin_directory', {
-                defaultValue: 'Active Terminal Directory',
-              })}
+              title={
+                <div className="tool-cli-title-with-badges">
+                  <span>
+                    {t('tools.cli.active_bin_directory', {
+                      defaultValue: 'Active Terminal Directory',
+                    })}
+                  </span>
+                  <span className="badge badge-subtle">
+                    {formatSourceLabel(activeEntry.source)}
+                  </span>
+                  {activeEntry.version && (
+                    <span className="badge badge-subtle">v{activeEntry.version}</span>
+                  )}
+                </div>
+              }
               hint={t('tools.cli.active_bin_dir_desc', {
                 defaultValue:
                   'First sona-cli directory resolved by terminal shells according to OS PATH precedence.',
               })}
             >
-              <div className="tool-cli-inline-code-group">
-                <span className="badge badge-subtle">{formatSourceLabel(activeEntry.source)}</span>
-                {activeEntry.version && (
-                  <span className="badge badge-subtle">v{activeEntry.version}</span>
-                )}
+              <div className="tool-cli-path-display-group">
                 <div
                   className="tool-cli-path-tooltip-wrapper"
                   data-tooltip={activeEntry.pathDir}
                   data-tooltip-pos="top"
                   data-tooltip-multiline
                 >
-                  <code className="settings-code-inline">{activeEntry.pathDir}</code>
+                  <code className="settings-code-inline tool-cli-path-code">
+                    {activeEntry.pathDir}
+                  </code>
                 </div>
                 <button
                   type="button"
@@ -540,7 +550,7 @@ export function ToolCliPanel(): React.JSX.Element {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm tool-cli-btn-icon"
                   onClick={() => openDirectory(activeEntry.pathDir)}
                   title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                   aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
@@ -564,14 +574,16 @@ export function ToolCliPanel(): React.JSX.Element {
                 'Isolated bin directory preventing runtime library conflicts and command collisions.',
             })}
           >
-            <div className="tool-cli-inline-code-group">
+            <div className="tool-cli-path-display-group">
               <div
                 className="tool-cli-path-tooltip-wrapper"
                 data-tooltip={status?.binDir || undefined}
                 data-tooltip-pos="top"
                 data-tooltip-multiline
               >
-                <code className="settings-code-inline">
+                <code
+                  className={`settings-code-inline ${status?.binDir ? 'tool-cli-path-code' : ''}`}
+                >
                   {status?.binDir || t('tools.cli.not_located', { defaultValue: 'Not located' })}
                 </code>
               </div>
@@ -591,7 +603,7 @@ export function ToolCliPanel(): React.JSX.Element {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-secondary btn-sm tool-cli-btn-icon"
                     onClick={() => status.binDir && openDirectory(status.binDir)}
                     title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                     aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
@@ -667,7 +679,7 @@ export function ToolCliPanel(): React.JSX.Element {
                     <div className="tool-cli-env-actions">
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-secondary btn-sm tool-cli-btn-icon"
                         onClick={() => openDirectory(entry.pathDir)}
                         title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                         aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
