@@ -497,60 +497,6 @@ export function ToolCliPanel(): React.JSX.Element {
             </div>
           </SettingsItem>
 
-          {activeEntry && !activeEntry.isCurrentApp && (
-            <SettingsItem
-              title={
-                <div className="tool-cli-title-with-badges">
-                  <span>
-                    {t('tools.cli.active_bin_directory', {
-                      defaultValue: 'Active Terminal Directory',
-                    })}
-                  </span>
-                  <span className="badge badge-subtle">
-                    {formatSourceLabel(activeEntry.source)}
-                  </span>
-                  {activeEntry.version && (
-                    <span className="badge badge-subtle">v{activeEntry.version}</span>
-                  )}
-                </div>
-              }
-            >
-              <div className="tool-cli-path-display-group">
-                <div
-                  className="tool-cli-path-tooltip-wrapper"
-                  data-tooltip={activeEntry.pathDir}
-                  data-tooltip-pos="top"
-                  data-tooltip-multiline
-                >
-                  <code className="settings-code-inline tool-cli-path-code">
-                    {activeEntry.pathDir}
-                  </code>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => copyToClipboard(activeEntry.pathDir, 'activeDir')}
-                >
-                  {copiedKey === 'activeDir' ? <Check size={13} /> : <Copy size={13} />}
-                  <span>
-                    {copiedKey === 'activeDir'
-                      ? t('common.copied', { defaultValue: 'Copied' })
-                      : t('common.copy', { defaultValue: 'Copy' })}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm tool-cli-btn-icon"
-                  onClick={() => openDirectory(activeEntry.pathDir)}
-                  title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
-                  aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
-                >
-                  <FolderOpen size={13} />
-                </button>
-              </div>
-            </SettingsItem>
-          )}
-
           <SettingsItem
             title={
               activeEntry && !activeEntry.isCurrentApp
@@ -667,7 +613,7 @@ export function ToolCliPanel(): React.JSX.Element {
                     <div className="tool-cli-env-actions">
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm tool-cli-btn-icon"
+                        className="btn btn-icon btn-secondary-soft btn-sm"
                         onClick={() => openDirectory(entry.pathDir)}
                         title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                         aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
@@ -677,16 +623,17 @@ export function ToolCliPanel(): React.JSX.Element {
                       {entry.canRemove && (
                         <button
                           type="button"
-                          className="btn btn-secondary btn-sm"
+                          className="btn btn-icon btn-danger-soft btn-sm"
                           disabled={removingPathDir === entry.pathDir}
                           onClick={() => void removePathEntry(entry.pathDir)}
+                          title={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
+                          aria-label={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
                         >
                           {removingPathDir === entry.pathDir ? (
                             <RefreshCw size={13} className="spin" />
                           ) : (
                             <Trash2 size={13} />
                           )}
-                          <span>{t('tools.cli.remove_entry', { defaultValue: 'Remove' })}</span>
                         </button>
                       )}
                     </div>
@@ -877,36 +824,28 @@ export function ToolCliPanel(): React.JSX.Element {
                 {t('tools.cli.manual_setup_title', { defaultValue: 'Manual Setup Commands' })}
               </div>
 
-              <div className="tool-cli-terminal-card">
-                <div className="tool-cli-terminal-header">
-                  <div className="tool-cli-terminal-dots" aria-hidden="true">
-                    <span className="tool-cli-terminal-dot dot-red" />
-                    <span className="tool-cli-terminal-dot dot-yellow" />
-                    <span className="tool-cli-terminal-dot dot-green" />
-                  </div>
-                  <span className="tool-cli-terminal-title">{selectedShell}</span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => copyToClipboard(manualScriptCmd, `shell_${selectedShell}`)}
-                  >
-                    {copiedKey === `shell_${selectedShell}` ? (
-                      <Check size={13} />
-                    ) : (
-                      <Copy size={13} />
-                    )}
-                    <span>
-                      {copiedKey === `shell_${selectedShell}`
-                        ? t('common.copied', { defaultValue: 'Copied' })
-                        : t('common.copy', { defaultValue: 'Copy' })}
-                    </span>
-                  </button>
-                </div>
+              <div className="tool-cli-terminal-card snippet-compact">
                 <div className="tool-cli-terminal-body">
                   <span className="tool-cli-prompt" aria-hidden="true">
                     {selectedShell === 'powershell' ? 'PS >' : '$'}
                   </span>
                   <code className="tool-cli-command">{manualScriptCmd}</code>
+                  <button
+                    type="button"
+                    className="btn btn-icon btn-sm tool-cli-profile-copy"
+                    onClick={() => copyToClipboard(manualScriptCmd, `shell_${selectedShell}`)}
+                    aria-label={
+                      copiedKey === `shell_${selectedShell}`
+                        ? t('common.copied', { defaultValue: 'Copied' })
+                        : t('common.copy', { defaultValue: 'Copy' })
+                    }
+                  >
+                    {copiedKey === `shell_${selectedShell}` ? (
+                      <Check size={14} />
+                    ) : (
+                      <Copy size={14} />
+                    )}
+                  </button>
                 </div>
               </div>
 

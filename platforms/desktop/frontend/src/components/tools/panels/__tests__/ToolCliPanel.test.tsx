@@ -214,7 +214,6 @@ describe('ToolCliPanel', () => {
     render(<ToolCliPanel />);
 
     expect(screen.getByText('Another Sona Environment Is Active in Terminals')).toBeDefined();
-    expect(screen.getByText('Active Terminal Directory')).toBeDefined();
     expect(screen.getAllByText('D:\\Portable\\Sona\\bin').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Detected Environments in PATH')).toBeDefined();
     expect(screen.getByText('#1')).toBeDefined();

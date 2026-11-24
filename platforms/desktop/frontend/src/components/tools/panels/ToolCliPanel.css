@@ -124,14 +124,6 @@
   box-sizing: border-box;
 }
 
-/* Title row with metadata badges */
-.tool-cli-title-with-badges {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 /* Actions cluster in settings items */
 .tool-cli-actions-row {
   display: flex;
@@ -255,6 +247,16 @@
   flex-shrink: 0;
 }
 
+.tool-cli-env-actions .btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 /* Managed Completion Card */
 .tool-cli-completion-content {
   display: flex;
@@ -342,75 +344,33 @@
   color: var(--color-text-muted);
 }
 
-/* Terminal Window Card */
+/* Terminal Snippet Card */
 .tool-cli-terminal-card {
   display: flex;
   flex-direction: column;
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md, 12px);
+  border-radius: var(--radius-sm, 10px);
   background: var(--color-bg-secondary);
   overflow: hidden;
   box-shadow: var(--shadow-xs);
   transition: border-color var(--transition-fast, 0.15s) ease;
+  margin-top: 4px;
 }
 
 .tool-cli-terminal-card:hover {
   border-color: var(--color-border-hover);
 }
 
-.tool-cli-terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--color-bg-tertiary) 45%, var(--color-bg-secondary));
-  border-bottom: 1px solid var(--color-border);
-  gap: var(--spacing-sm, 8px);
-}
-
-.tool-cli-terminal-dots {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tool-cli-terminal-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.dot-red {
-  background-color: #ff5f56;
-}
-
-.dot-yellow {
-  background-color: #ffbd2e;
-}
-
-.dot-green {
-  background-color: #27c93f;
-}
-
-.tool-cli-terminal-title {
-  font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  text-transform: capitalize;
-}
-
 .tool-cli-terminal-body {
   display: flex;
   align-items: center;
-  padding: 12px 14px;
+  padding: 9px 12px;
   gap: 10px;
   font-family: var(--font-mono, monospace);
   font-size: 0.8125rem;
   line-height: 1.5;
-  background: var(--color-bg-primary);
+  background: var(--color-bg-secondary);
   min-width: 0;
 }
 
@@ -431,17 +391,6 @@
   font-size: inherit;
 }
 
-/* Compact snippet style for cheat sheet */
-.tool-cli-terminal-card.snippet-compact {
-  margin-top: 4px;
-  border-radius: var(--radius-sm, 10px);
-}
-
-.tool-cli-terminal-card.snippet-compact .tool-cli-terminal-body {
-  padding: 9px 12px;
-  background: var(--color-bg-secondary);
-}
-
 .tool-cli-terminal-copy,
 .tool-cli-profile-copy {
   margin-left: auto;
@@ -449,6 +398,9 @@
   width: 28px;
   height: 28px;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Header pill for reference items */
