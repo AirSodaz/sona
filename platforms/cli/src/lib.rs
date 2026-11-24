@@ -1,5 +1,6 @@
 mod asr_adapter;
 pub(crate) mod asr_args;
+mod completion;
 mod config_cmd;
 mod config_template;
 mod desktop_paths;
@@ -343,7 +344,7 @@ Configuration & Service:
 System & Diagnostics:
   doctor      Checks system dependencies, audio devices, and models directory
   update      Check for updates and download Sona Desktop installation packages
-  completion  Generates shell auto-completion scripts
+  completion  Generates or installs shell auto-completion scripts
 
 Options:
 {options}{after-help}";
@@ -355,7 +356,7 @@ Options:
     version = env!("SONA_DISPLAY_VERSION"),
     about = "Standalone CLI backed by sona-core",
     help_template = CLI_HELP_TEMPLATE,
-    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
+    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli live --input stdin -m sensevoice\n  5. Install shell completion:\n       sona-cli completion powershell --install\n       sona-cli completion zsh --install\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
     /// Enable verbose logging (-v for info, -vv for debug).
@@ -396,7 +397,7 @@ enum Commands {
     /// Transcribe live audio using local or online ASR.
     #[command(name = "live", visible_alias = "transcribe-live")]
     Live(transcribe_live::TranscribeLiveArgs),
-    /// Generates shell auto-completion scripts.
+    /// Generates or installs shell auto-completion scripts.
     Completion(CompletionArgs),
     /// Checks system dependencies, audio devices, and models directory.
     Doctor(doctor::DoctorArgs),
@@ -440,13 +441,19 @@ pub struct ProvidersArgs {
 }
 #[derive(Debug, clap::Args)]
 #[command(
-    about = "Generates shell auto-completion scripts",
-    after_help = "Examples:\n  sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli\n  sona-cli completion zsh > ~/.zfunc/_sona-cli\n  sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish\n  sona-cli completion powershell | Out-File -Append -Encoding utf8 $PROFILE"
+    about = "Generates or installs shell auto-completion scripts",
+    after_help = "Examples:\n  sona-cli completion powershell --install\n  sona-cli completion zsh --install\n  sona-cli completion bash --install\n  sona-cli completion fish --install\n  sona-cli completion powershell --uninstall\n  sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli"
 )]
 pub struct CompletionArgs {
     /// Target shell to generate completions for: bash, elvish, fish, powershell, zsh.
     #[arg(value_enum)]
     pub shell: clap_complete::Shell,
+    /// Install completion script to a standalone file and register a minimal profile loader.
+    #[arg(long, conflicts_with = "uninstall")]
+    pub install: bool,
+    /// Remove the installed standalone completion script and profile loader block.
+    #[arg(long, conflicts_with = "install")]
+    pub uninstall: bool,
 }
 enum ParsedCli {
     Command(Box<Cli>),
@@ -684,11 +691,15 @@ fn try_dispatch_sync(command: Commands, io: &mut (dyn CliIo + Send)) -> Dispatch
         Commands::Config(args) => DispatchTarget::Handled(config_cmd::run_config(args).map(Some)),
         Commands::Completion(args) => {
             let mut cmd = <Cli as clap::CommandFactory>::command();
-            let mut buf = Vec::new();
-            clap_complete::generate(args.shell, &mut cmd, "sona-cli", &mut buf);
-            let res = String::from_utf8(buf)
-                .map_err(|error| CliError::Serialize(error.to_string()))
-                .map(|script| Some(CliOutput::stdout(script)));
+            let res = if args.install {
+                completion::install_completion(args.shell, &mut cmd, env!("SONA_DISPLAY_VERSION"))
+                    .map(Some)
+            } else if args.uninstall {
+                completion::uninstall_completion(args.shell).map(Some)
+            } else {
+                completion::generate_raw_script(args.shell, &mut cmd)
+                    .map(|script| Some(CliOutput::stdout(script)))
+            };
             DispatchTarget::Handled(res)
         }
         Commands::Devices(args) => DispatchTarget::Handled(run_devices(args).map(Some)),

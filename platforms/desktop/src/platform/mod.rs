@@ -1,4 +1,5 @@
 pub mod agent_control;
+pub mod cli;
 pub mod logging;
 pub mod models;
 pub mod repositories;

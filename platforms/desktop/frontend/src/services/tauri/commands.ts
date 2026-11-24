@@ -242,7 +242,12 @@ export const TauriCommand = {
   cli: {
     getStatus: 'cli_get_status',
     setPathEnabled: 'cli_set_path_enabled',
+    switchPathToCurrent: 'cli_switch_path_to_current',
+    removePathEntry: 'cli_remove_path_entry',
     getCompletionScript: 'cli_get_completion_script',
+    getCompletionStatuses: 'cli_get_completion_statuses',
+    installCompletion: 'cli_install_completion',
+    uninstallCompletion: 'cli_uninstall_completion',
   },
   emby: {
     login: 'emby_login',

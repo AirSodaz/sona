@@ -28,7 +28,7 @@ import type {
 import type { ApiServerDashboardSnapshot } from '../../types/apiServer';
 import type { BackupManifestV1, PreparedBackupImport } from '../../types/backup';
 import type { AppBuildInfo } from '../../types/build';
-import type { CliStatus } from '../../types/cli';
+import type { CliStatus, ShellCompletionStatus } from '../../types/cli';
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import type {
@@ -954,9 +954,29 @@ type ManualTauriCommandContractMap = {
     args: { enabled: boolean };
     result: CliStatus;
   };
+  [TauriCommand.cli.switchPathToCurrent]: {
+    args: undefined;
+    result: CliStatus;
+  };
+  [TauriCommand.cli.removePathEntry]: {
+    args: { pathDir: string };
+    result: CliStatus;
+  };
   [TauriCommand.cli.getCompletionScript]: {
     args: { shell: string };
     result: string;
+  };
+  [TauriCommand.cli.getCompletionStatuses]: {
+    args: undefined;
+    result: ShellCompletionStatus[];
+  };
+  [TauriCommand.cli.installCompletion]: {
+    args: { shell: string };
+    result: ShellCompletionStatus;
+  };
+  [TauriCommand.cli.uninstallCompletion]: {
+    args: { shell: string };
+    result: ShellCompletionStatus;
   };
 };
 
