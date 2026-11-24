@@ -2,9 +2,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Cloud,
-  CloudOff,
   ExternalLink,
-  Lock,
   Pause,
   Play,
   RefreshCw,
@@ -17,6 +15,7 @@ import { syncRuntimeService } from '../services/syncRuntimeService';
 import { runSyncNow, setSyncPaused } from '../services/tauri/sync';
 import { useUIConfig } from '../stores/configStore';
 import { useSyncStatusStore } from '../stores/syncStatusStore';
+import type { SyncStatusSnapshot } from '../types/sync';
 import '../styles/sync-header-pill.css';
 
 interface SyncHeaderPillProps {
@@ -42,6 +41,81 @@ function formatRelativeTime(
   return new Intl.DateTimeFormat(locale || undefined, { month: 'numeric', day: 'numeric' }).format(
     new Date(timestampMs)
   );
+}
+
+function getSyncStatusInfo(
+  status: SyncStatusSnapshot,
+  isLoaded: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  locale?: string
+): { dotClass: string; tooltipText: string } {
+  if (!isLoaded || status.state === 'disabled') {
+    return {
+      dotClass: 'is-disabled',
+      tooltipText: t('settings.sync.tooltip_disabled', {
+        defaultValue: 'Cloud Sync: Not configured',
+      }),
+    };
+  }
+
+  if (status.conflictCount > 0) {
+    return {
+      dotClass: 'is-conflict',
+      tooltipText: t('settings.sync.tooltip_conflicts', {
+        defaultValue: 'Cloud Sync: {{count}} conflicts found',
+        count: status.conflictCount,
+      }),
+    };
+  }
+
+  if (status.state === 'syncing') {
+    return {
+      dotClass: 'is-syncing',
+      tooltipText: t('settings.sync.tooltip_syncing', { defaultValue: 'Cloud Sync: Syncing...' }),
+    };
+  }
+
+  if (status.state === 'error') {
+    return {
+      dotClass: 'is-error',
+      tooltipText: t('settings.sync.tooltip_error', { defaultValue: 'Cloud Sync: Sync error' }),
+    };
+  }
+
+  if (status.state === 'paused') {
+    return {
+      dotClass: 'is-paused',
+      tooltipText: t('settings.sync.tooltip_paused', { defaultValue: 'Cloud Sync: Paused' }),
+    };
+  }
+
+  if (status.state === 'locked') {
+    return {
+      dotClass: 'is-locked',
+      tooltipText: t('settings.sync.tooltip_locked', { defaultValue: 'Cloud Sync: Locked' }),
+    };
+  }
+
+  if (status.lastSuccessAtMs) {
+    const timeStr = formatRelativeTime(
+      status.lastSuccessAtMs,
+      t('settings.sync.just_now', { defaultValue: 'Just now' }),
+      t,
+      locale
+    );
+    return {
+      dotClass: 'is-idle',
+      tooltipText: t('settings.sync.tooltip_synced_with_time', {
+        defaultValue: 'Cloud Sync: Synced ({{time}})',
+        time: timeStr,
+      }),
+    };
+  }
+
+  return {
+    dotClass: 'is-idle',
+    tooltipText: t('settings.sync.tooltip_synced', { defaultValue: 'Cloud Sync: Synced' }),
+  };
 }
 
 export function SyncHeaderPill({
@@ -112,92 +186,7 @@ export function SyncHeaderPill({
     }
   };
 
-  // Status-specific visuals
-  const renderPillContent = () => {
-    if (!isLoaded || status.state === 'disabled') {
-      return (
-        <span className="sync-pill-inner is-disabled">
-          <CloudOff size={14} />
-          <span className="sync-pill-label">
-            {t('settings.sync.pill_disabled', { defaultValue: 'Cloud Sync' })}
-          </span>
-        </span>
-      );
-    }
-
-    if (status.conflictCount > 0) {
-      return (
-        <span className="sync-pill-inner is-conflict">
-          <AlertTriangle size={14} />
-          <span className="sync-pill-label">
-            {t('settings.sync.conflicts_count', {
-              defaultValue: '{{count}} conflicts',
-              count: status.conflictCount,
-            })}
-          </span>
-        </span>
-      );
-    }
-
-    if (status.state === 'syncing') {
-      return (
-        <span className="sync-pill-inner is-syncing">
-          <RefreshCw size={14} className="queue-icon-spin" />
-          <span className="sync-pill-label">
-            {t('settings.sync.syncing_short', { defaultValue: 'Syncing...' })}
-          </span>
-        </span>
-      );
-    }
-
-    if (status.state === 'locked') {
-      return (
-        <span className="sync-pill-inner is-locked">
-          <Lock size={14} />
-          <span className="sync-pill-label">
-            {t('settings.sync.locked_short', { defaultValue: 'Locked' })}
-          </span>
-        </span>
-      );
-    }
-
-    if (status.state === 'paused') {
-      return (
-        <span className="sync-pill-inner is-paused">
-          <Pause size={14} />
-          <span className="sync-pill-label">
-            {t('settings.sync.paused_short', { defaultValue: 'Paused' })}
-          </span>
-        </span>
-      );
-    }
-
-    if (status.state === 'error') {
-      return (
-        <span className="sync-pill-inner is-error">
-          <AlertCircle size={14} />
-          <span className="sync-pill-label">
-            {t('settings.sync.error_short', { defaultValue: 'Sync error' })}
-          </span>
-        </span>
-      );
-    }
-
-    return (
-      <span className="sync-pill-inner is-idle">
-        <span className="sync-pill-dot" />
-        <Cloud size={14} />
-        <span className="sync-pill-label">
-          {formatRelativeTime(
-            status.lastSuccessAtMs,
-            t('settings.sync.idle_short', { defaultValue: 'Synced' }),
-            t,
-            i18n?.language
-          )}
-        </span>
-      </span>
-    );
-  };
+  const { dotClass, tooltipText } = getSyncStatusInfo(status, isLoaded, t, i18n?.language);
 
   if (!enableCloudSync) {
     return null;
@@ -208,12 +197,16 @@ export function SyncHeaderPill({
       <button
         ref={buttonRef}
         type="button"
-        className={`sync-header-pill-btn is-${status.state} ${status.conflictCount > 0 ? 'has-conflicts' : ''}`}
+        className="btn btn-icon sync-header-trigger"
         onClick={() => setIsOpen((prev) => !prev)}
-        aria-label={t('settings.sync.title', { defaultValue: 'Cloud Sync Status' })}
+        aria-label={tooltipText}
         aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        data-tooltip={isOpen ? undefined : tooltipText}
+        data-tooltip-pos="bottom-left"
       >
-        {renderPillContent()}
+        <Cloud size={18} />
+        <span className={`sync-status-dot ${dotClass}`} aria-hidden="true" />
       </button>
 
       {isOpen && (

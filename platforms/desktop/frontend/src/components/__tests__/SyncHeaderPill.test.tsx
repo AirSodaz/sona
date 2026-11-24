@@ -77,11 +77,17 @@ describe('SyncHeaderPill', () => {
 
   it('renders disabled state and opens popover with enable CTA when switch is on', () => {
     render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
-    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
-    expect(btn).toBeDefined();
+    const btn = screen.getByRole('button', { name: /Cloud Sync: Not configured/i });
+    expect(btn.classList.contains('btn')).toBe(true);
+    expect(btn.classList.contains('btn-icon')).toBe(true);
+    expect(btn.classList.contains('sync-header-trigger')).toBe(true);
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Not configured');
+    expect(btn.getAttribute('data-tooltip-pos')).toBe('bottom-left');
+    expect(btn.querySelector('.sync-status-dot.is-disabled')).not.toBeNull();
 
     // Click to open popover
     fireEvent.click(btn);
+    expect(btn.hasAttribute('data-tooltip')).toBe(false);
     expect(screen.getByText(/Multi-device sync is not configured yet/i)).toBeDefined();
 
     const cta = screen.getByRole('button', { name: /Enable Cloud Sync/i });
@@ -100,8 +106,10 @@ describe('SyncHeaderPill', () => {
 
     render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
     const btn = screen.getByRole('button', { name: /Cloud Sync/i });
-    fireEvent.click(btn);
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Synced (Just now)');
+    expect(btn.querySelector('.sync-status-dot.is-idle')).not.toBeNull();
 
+    fireEvent.click(btn);
     const syncNowBtn = screen.getByRole('button', { name: /Sync now/i });
     fireEvent.click(syncNowBtn);
     expect(testContext.runSyncNow).toHaveBeenCalled();
@@ -116,12 +124,53 @@ describe('SyncHeaderPill', () => {
     });
 
     render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
-    expect(screen.getByText(/2 conflicts/i)).toBeDefined();
+    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: 2 conflicts found');
+    expect(btn.querySelector('.sync-status-dot.is-conflict')).not.toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Cloud Sync/i }));
+    fireEvent.click(btn);
     const conflictBanner = screen.getByText(/2 content conflicts need review/i);
     fireEvent.click(conflictBanner);
     expect(onOpenSyncSettings).toHaveBeenCalled();
+  });
+
+  it('renders syncing state with pulsing dot and tooltip', () => {
+    setStatus({
+      state: 'syncing',
+      providerId: 'webdav',
+      vaultId: 'vault-123',
+    });
+
+    render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
+    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Syncing...');
+    expect(btn.querySelector('.sync-status-dot.is-syncing')).not.toBeNull();
+  });
+
+  it('renders error state with error dot and tooltip', () => {
+    setStatus({
+      state: 'error',
+      providerId: 'webdav',
+      vaultId: 'vault-123',
+    });
+
+    render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
+    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Sync error');
+    expect(btn.querySelector('.sync-status-dot.is-error')).not.toBeNull();
+  });
+
+  it('renders locked state with warning dot and tooltip', () => {
+    setStatus({
+      state: 'locked',
+      providerId: 'webdav',
+      vaultId: 'vault-123',
+    });
+
+    render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
+    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Locked');
+    expect(btn.querySelector('.sync-status-dot.is-locked')).not.toBeNull();
   });
 
   it('renders paused state and allows resume', () => {
@@ -137,7 +186,10 @@ describe('SyncHeaderPill', () => {
     });
 
     render(<SyncHeaderPill onOpenSyncSettings={onOpenSyncSettings} />);
-    fireEvent.click(screen.getByRole('button', { name: /Cloud Sync/i }));
+    const btn = screen.getByRole('button', { name: /Cloud Sync/i });
+    expect(btn.getAttribute('data-tooltip')).toBe('Cloud Sync: Paused');
+    expect(btn.querySelector('.sync-status-dot.is-paused')).not.toBeNull();
+    fireEvent.click(btn);
 
     const resumeBtn = screen.getByRole('button', { name: /Resume/i });
     fireEvent.click(resumeBtn);
