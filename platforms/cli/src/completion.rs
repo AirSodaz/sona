@@ -1,7 +1,10 @@
+#[cfg(windows)]
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 
 use clap_complete::Shell;
 

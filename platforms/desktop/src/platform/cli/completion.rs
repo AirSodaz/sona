@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;

@@ -527,14 +527,14 @@ mod unix_path {
     }
 }
 
-fn resolve_shim_or_symlink_target(dir: &Path, entry_binary: &Path) -> (PathBuf, bool) {
+fn resolve_shim_or_symlink_target(_dir: &Path, entry_binary: &Path) -> (PathBuf, bool) {
     #[cfg(windows)]
     {
-        if dir
+        if _dir
             .file_name()
             .and_then(|n| n.to_str())
             .is_some_and(|n| n.eq_ignore_ascii_case("bin"))
-            && let Some(parent) = dir.parent()
+            && let Some(parent) = _dir.parent()
         {
             let target = parent.join(cli_binary_name());
             if target.is_file() {
@@ -731,6 +731,7 @@ pub(crate) fn compute_path_state(entries: &[CliPathEntry]) -> (CliPathState, boo
     (state, blocked_by_system)
 }
 
+#[cfg(windows)]
 pub(crate) fn ensure_windows_shims_ready(bin: &Path) -> Result<(), String> {
     if !bin.exists() {
         std::fs::create_dir_all(bin)
