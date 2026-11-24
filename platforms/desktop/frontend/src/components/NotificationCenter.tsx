@@ -1,3 +1,4 @@
+import { Bell } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -5,7 +6,6 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import { getBadgeLabel, useNotificationEntries } from '../hooks/useNotificationEntries';
 import { useNotificationPanelStore } from '../stores/notificationPanelStore';
 import type { SettingsTab } from '../types/settings';
-import { BellIcon } from './Icons';
 import { NotificationPanel } from './NotificationPanel';
 
 interface NotificationCenterProps {
@@ -81,7 +81,7 @@ export function NotificationCenter({
         aria-expanded={isOpen}
         aria-controls={panelId}
       >
-        <BellIcon />
+        <Bell size={18} />
         {badgeCount > 0 ? (
           <span className="notification-center-trigger-badge" aria-hidden="true">
             {getBadgeLabel(badgeCount)}

@@ -897,8 +897,6 @@ export function BellIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Eleme
   return (
     <svg
       aria-hidden="true"
-      width="16"
-      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -907,8 +905,8 @@ export function BellIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Eleme
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-      <path d="M10 17a2 2 0 0 0 4 0" />
+      <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+      <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
     </svg>
   );
 }
