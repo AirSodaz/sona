@@ -15,6 +15,7 @@ import {
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
+import { ThemePreviewAuto, ThemePreviewDark, ThemePreviewLight } from './ThemePreview';
 
 interface SettingsGeneralTabProps {
   isVisible?: boolean;
@@ -92,55 +93,40 @@ export function SettingsGeneralTab({
         <SettingsItem id="settings-theme" title={t('settings.theme')} layout="vertical">
           <div className="theme-selector-container">
             <button
+              type="button"
               className={`theme-card ${theme === 'light' ? 'active' : ''}`}
               onClick={() => updateConfig({ theme: 'light' })}
               aria-label={t('settings.theme_light')}
               aria-pressed={theme === 'light'}
             >
               <div className="theme-preview light">
-                <div className="theme-preview-window">
-                  <div className="theme-preview-lines">
-                    <div className="line short"></div>
-                    <div className="line long"></div>
-                  </div>
-                  <div className="theme-preview-sidebar"></div>
-                </div>
+                <ThemePreviewLight />
               </div>
               <span className="theme-label">{t('settings.theme_light')}</span>
             </button>
 
             <button
+              type="button"
               className={`theme-card ${theme === 'dark' ? 'active' : ''}`}
               onClick={() => updateConfig({ theme: 'dark' })}
               aria-label={t('settings.theme_dark')}
               aria-pressed={theme === 'dark'}
             >
               <div className="theme-preview dark">
-                <div className="theme-preview-window">
-                  <div className="theme-preview-lines">
-                    <div className="line short"></div>
-                    <div className="line long"></div>
-                  </div>
-                  <div className="theme-preview-sidebar"></div>
-                </div>
+                <ThemePreviewDark />
               </div>
               <span className="theme-label">{t('settings.theme_dark')}</span>
             </button>
 
             <button
+              type="button"
               className={`theme-card ${theme === 'auto' ? 'active' : ''}`}
               onClick={() => updateConfig({ theme: 'auto' })}
               aria-label={t('common.auto')}
               aria-pressed={theme === 'auto'}
             >
               <div className="theme-preview auto">
-                <div className="theme-preview-window">
-                  <div className="theme-preview-lines">
-                    <div className="line short"></div>
-                    <div className="line long"></div>
-                  </div>
-                  <div className="theme-preview-sidebar"></div>
-                </div>
+                <ThemePreviewAuto />
               </div>
               <span className="theme-label">{t('common.auto')}</span>
             </button>
