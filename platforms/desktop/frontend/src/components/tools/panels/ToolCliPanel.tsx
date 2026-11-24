@@ -197,45 +197,30 @@ export function ToolCliPanel(): React.JSX.Element {
       id: 'transcribe',
       tag: 'batch',
       title: t('tools.cli.cmd_transcribe_title', { defaultValue: 'Batch Transcription' }),
-      desc: t('tools.cli.cmd_transcribe_desc', {
-        defaultValue: 'Transcribe audio/video files and export subtitles.',
-      }),
       cmd: 'sona-cli transcribe ./audio.wav -m whisper-turbo -o ./subtitle.srt',
     },
     {
       id: 'live',
       tag: 'realtime',
       title: t('tools.cli.cmd_live_title', { defaultValue: 'Live Microphone Recognition' }),
-      desc: t('tools.cli.cmd_live_desc', {
-        defaultValue: 'Stream real-time microphone transcription to console.',
-      }),
       cmd: 'sona-cli live -m sensevoice',
     },
     {
       id: 'pipe',
       tag: 'stream',
       title: t('tools.cli.cmd_pipe_title', { defaultValue: 'Audio Pipe Stream' }),
-      desc: t('tools.cli.cmd_pipe_desc', {
-        defaultValue: 'Pipe raw PCM audio into sona-cli via stdin.',
-      }),
       cmd: 'ffmpeg -i video.mp4 -f s16le -ac 1 -ar 16000 - | sona-cli live --input stdin',
     },
     {
       id: 'models',
       tag: 'manage',
       title: t('tools.cli.cmd_models_title', { defaultValue: 'Model Management' }),
-      desc: t('tools.cli.cmd_models_desc', {
-        defaultValue: 'Inspect installed models and download new ones.',
-      }),
       cmd: 'sona-cli models list',
     },
     {
       id: 'online',
       tag: 'cloud',
       title: t('tools.cli.cmd_online_title', { defaultValue: 'Cloud ASR Transcription' }),
-      desc: t('tools.cli.cmd_online_desc', {
-        defaultValue: 'Transcribe using cloud providers (e.g. Groq Whisper).',
-      }),
       cmd: 'sona-cli transcribe ./meeting.m4a --online-provider groq-whisper',
     },
   ];
@@ -526,21 +511,20 @@ export function ToolCliPanel(): React.JSX.Element {
                 <>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-secondary btn-sm tool-cli-btn-icon"
                     onClick={() => status.binDir && copyToClipboard(status.binDir, 'binDir')}
+                    aria-label={
+                      copiedKey === 'binDir'
+                        ? t('common.copied', { defaultValue: 'Copied' })
+                        : t('common.copy', { defaultValue: 'Copy' })
+                    }
                   >
                     {copiedKey === 'binDir' ? <Check size={13} /> : <Copy size={13} />}
-                    <span>
-                      {copiedKey === 'binDir'
-                        ? t('common.copied', { defaultValue: 'Copied' })
-                        : t('common.copy', { defaultValue: 'Copy' })}
-                    </span>
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm tool-cli-btn-icon"
                     onClick={() => status.binDir && openDirectory(status.binDir)}
-                    title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                     aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                   >
                     <FolderOpen size={13} />
@@ -909,7 +893,6 @@ export function ToolCliPanel(): React.JSX.Element {
                   <span className="tool-cli-cmd-pill">{item.tag}</span>
                 </span>
               }
-              hint={item.desc}
             >
               <div className="tool-cli-terminal-card snippet-compact">
                 <div className="tool-cli-terminal-body">
