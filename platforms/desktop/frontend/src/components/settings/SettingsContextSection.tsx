@@ -13,6 +13,7 @@ import {
 } from '../../utils/polishPresets';
 import { Dropdown } from '../Dropdown';
 import { FileTextIcon } from '../Icons';
+import { Button, IconButton } from '../ui/Button';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 export function SettingsContextSection(): React.JSX.Element {
   const { t } = useTranslation();
@@ -192,16 +193,15 @@ export function SettingsContextSection(): React.JSX.Element {
             style={{ minHeight: '96px', resize: 'vertical' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
+            <Button
+              tier="primary"
+              size="sm"
+              leftIcon={<Plus size={16} />}
               onClick={handleAddPreset}
               disabled={!newPresetName.trim() || !newPresetContext.trim()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
-              <Plus size={16} />
               {t('settings.add_context_preset', { defaultValue: 'Add Preset' })}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -239,17 +239,17 @@ export function SettingsContextSection(): React.JSX.Element {
                   })}
                   style={{ flex: 1 }}
                 />
-                <button
-                  type="button"
-                  className="btn btn-icon btn-danger-soft"
+                <IconButton
+                  tier="ghost"
+                  tone="danger"
+                  size="sm"
+                  icon={<Trash2 size={16} />}
                   onClick={() => void handleDeletePreset(preset.id)}
                   aria-label={t('common.delete_item', {
                     item: preset.name,
                     defaultValue: `Delete ${preset.name}`,
                   })}
-                >
-                  <Trash2 size={16} />
-                </button>
+                />
               </div>
               <textarea
                 className="settings-input"

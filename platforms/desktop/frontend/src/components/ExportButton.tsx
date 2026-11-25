@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { ExportModal } from './ExportModal';
 import { DownloadIcon } from './Icons';
+import { IconButton } from './ui/Button';
 
 /** Props for ExportButton. */
 interface ExportButtonProps {
@@ -35,17 +36,17 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
         data-tooltip-pos="bottom"
         style={{ display: 'inline-block' }}
       >
-        <button
+        <IconButton
           id="export-menu-button"
-          className="btn btn-icon"
+          tier="ghost"
+          size="md"
+          icon={<DownloadIcon />}
           onClick={() => setIsModalOpen(true)}
           disabled={segments.length === 0}
           aria-label={t('export.button')}
           data-tooltip={t('export.button')}
           data-tooltip-pos="bottom"
-        >
-          <DownloadIcon />
-        </button>
+        />
       </div>
 
       <ExportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />

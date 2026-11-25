@@ -31,6 +31,7 @@ import { RobotIcon } from '../Icons';
 import { ProviderLogo } from '../icons/ProviderLogos';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { Button } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
 import { FeatureCard } from './llm/FeatureCard';
 import {
@@ -443,10 +444,9 @@ export function SettingsLLMServiceTab({
           </div>
         )}
         <div id="settings-llm-custom-provider" className="custom-provider-actions">
-          <button type="button" className="btn btn-secondary" onClick={openAddProvider}>
-            <Plus size={16} />
-            <span>{t('settings.llm.add_custom_provider')}</span>
-          </button>
+          <Button tier="secondary" leftIcon={<Plus size={16} />} onClick={openAddProvider}>
+            {t('settings.llm.add_custom_provider')}
+          </Button>
         </div>
       </SettingsSection>
 
@@ -577,10 +577,10 @@ export function SettingsLLMServiceTab({
               'Manually evict all currently inactive local models from memory and GPU VRAM.',
           })}
         >
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={isPurging}
+          <Button
+            tier="secondary"
+            loading={isPurging}
+            feedback={purgeSuccess ? 'success' : 'idle'}
             onClick={handlePurgeCache}
           >
             {isPurging
@@ -588,7 +588,7 @@ export function SettingsLLMServiceTab({
               : purgeSuccess
                 ? t('settings.llm.purged_success', { defaultValue: 'Released!' })
                 : t('settings.llm.purge_now', { defaultValue: 'Purge Now' })}
-          </button>
+          </Button>
         </SettingsItem>
       </SettingsSection>
 
@@ -606,18 +606,16 @@ export function SettingsLLMServiceTab({
         className="add-provider-modal"
         footer={
           <>
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <Button
+              tier="secondary"
               onClick={() => (providerToAdd ? setProviderToAdd(null) : handleCloseAddProvider())}
             >
               {providerToAdd
                 ? t('common.back', { defaultValue: 'Back' })
                 : t('settings.llm.add_custom_provider_cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
+            </Button>
+            <Button
+              tier="primary"
               onClick={() => (providerToAdd ? handleAddProvider() : handleAddCustomProvider())}
               disabled={
                 providerToAdd
@@ -631,7 +629,7 @@ export function SettingsLLMServiceTab({
               {providerToAdd
                 ? t('settings.llm.save_provider', { defaultValue: 'Save provider' })
                 : t('settings.llm.add_custom_provider_confirm')}
-            </button>
+            </Button>
           </>
         }
       >
@@ -853,17 +851,16 @@ export function SettingsLLMServiceTab({
         initialFocusRef={editNameInputRef}
         footer={
           <>
-            <button type="button" className="btn btn-secondary" onClick={handleCloseEditProvider}>
+            <Button tier="secondary" onClick={handleCloseEditProvider}>
               {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
+            </Button>
+            <Button
+              tier="primary"
               onClick={handleSaveProviderEdit}
               disabled={!editProviderName.trim()}
             >
               {t('common.save')}
-            </button>
+            </Button>
           </>
         }
       >

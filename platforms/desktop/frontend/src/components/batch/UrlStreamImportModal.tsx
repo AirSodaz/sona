@@ -8,6 +8,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { Checkbox } from '../Checkbox';
 import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
 
 export interface UrlStreamImportModalProps {
   isOpen: boolean;
@@ -112,17 +113,17 @@ export function UrlStreamImportModal({
             width: '100%',
           }}
         >
-          <button type="button" className="btn btn-secondary-soft" onClick={handleModalClose}>
+          <Button tier="secondary" onClick={handleModalClose}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            tier="primary"
             form={`${textareaId}-form`}
-            className="btn btn-primary"
             disabled={urls.length === 0}
           >
             {t('batch.add_to_queue', { defaultValue: 'Add to Queue' })}
-          </button>
+          </Button>
         </div>
       }
     >

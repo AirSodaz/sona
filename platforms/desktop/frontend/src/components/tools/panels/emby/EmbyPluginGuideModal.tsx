@@ -3,6 +3,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '../../../../services/tauri/platform/opener';
 import { Modal } from '../../../Modal';
+import { Button } from '../../../ui/Button';
 export interface EmbyPluginGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,9 +25,9 @@ export function EmbyPluginGuideModal({
       size="md"
       footer={
         <div className="emby-modal-footer-actions">
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <Button tier="primary" onClick={onClose}>
             {t('common.close', { defaultValue: 'Close' })}
-          </button>
+          </Button>
         </div>
       }
     >
@@ -50,8 +51,11 @@ export function EmbyPluginGuideModal({
                 'Get the latest Emby.SubtitleManager.dll from the official GitHub Release:',
             })}
           </p>
-          <button
-            type="button"
+          <Button
+            tier="secondary"
+            size="sm"
+            className="emby-github-link"
+            leftIcon={<ExternalLink size={14} />}
             onClick={async () => {
               try {
                 await openUrl('https://github.com/Kectai/Emby.SubtitleManager/releases');
@@ -63,11 +67,9 @@ export function EmbyPluginGuideModal({
                 );
               }
             }}
-            className="btn btn-sm btn-secondary emby-github-link"
           >
-            <ExternalLink size={14} />
             <span>{t('emby.plugin_step1_btn', { defaultValue: 'Visit GitHub Releases' })}</span>
-          </button>
+          </Button>
         </div>
 
         <div className="emby-guide-step-card">

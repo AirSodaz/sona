@@ -11,7 +11,6 @@ import {
   KeyRound,
   Layers,
   Link2,
-  Loader2,
   Lock,
   Pause,
   Play,
@@ -34,6 +33,7 @@ import type {
   SyncUnlockRequest,
 } from '../../../types/sync';
 import { Modal } from '../../Modal';
+import { Button } from '../../ui/Button';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
 import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
@@ -411,24 +411,27 @@ export function SyncConnectedPanel({
             paddingTop: '8px',
           }}
         >
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            tone="danger"
+            size="sm"
+            leftIcon={<Unplug size={15} />}
             onClick={() => void onDisconnect()}
             disabled={isBusy}
-            style={{ color: 'var(--color-danger, #ef4444)' }}
           >
-            <Unplug size={15} />
-            <span>{t('settings.sync.disconnect_action', { defaultValue: 'Disconnect' })}</span>
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={isBusy || !canUnlock}>
-            <KeyRound size={16} />
-            <span>
-              {busyAction === 'unlock'
-                ? t('settings.sync.unlocking', { defaultValue: 'Unlocking...' })
-                : t('settings.sync.unlock_action', { defaultValue: 'Unlock' })}
-            </span>
-          </button>
+            {t('settings.sync.disconnect_action', { defaultValue: 'Disconnect' })}
+          </Button>
+          <Button
+            type="submit"
+            tier="primary"
+            loading={busyAction === 'unlock'}
+            leftIcon={<KeyRound size={16} />}
+            disabled={isBusy || !canUnlock}
+          >
+            {busyAction === 'unlock'
+              ? t('settings.sync.unlocking', { defaultValue: 'Unlocking...' })
+              : t('settings.sync.unlock_action', { defaultValue: 'Unlock' })}
+          </Button>
         </div>
       </form>
     );
@@ -476,60 +479,54 @@ export function SyncConnectedPanel({
           </div>
 
           <div className="sync-hero-actions">
-            <button
+            <Button
               id="settings-sync-pairing"
-              type="button"
-              className="btn btn-secondary btn-sm sync-pair-btn"
+              tier="secondary"
+              size="sm"
+              leftIcon={<QrCode size={14} />}
+              className="sync-pair-btn"
               onClick={() => setShowPairingModal(true)}
               disabled={isBusy}
             >
-              <QrCode size={14} />
-              <span>
-                {t('settings.sync.pair_device_action', { defaultValue: 'Pair new device' })}
-              </span>
-            </button>
+              {t('settings.sync.pair_device_action', { defaultValue: 'Pair new device' })}
+            </Button>
 
-            <button
-              type="button"
-              className="btn btn-primary btn-sm sync-run-btn"
+            <Button
+              tier="primary"
+              size="sm"
+              loading={status.state === 'syncing'}
+              leftIcon={<RefreshCw size={14} />}
+              className="sync-run-btn"
               onClick={() => void onRunNow()}
               disabled={isBusy || status.state === 'paused'}
             >
-              <RefreshCw
-                size={14}
-                className={status.state === 'syncing' ? 'queue-icon-spin' : undefined}
-              />
-              <span>
-                {status.state === 'syncing'
-                  ? t('settings.sync.syncing', { defaultValue: 'Syncing...' })
-                  : t('settings.sync.run_now', { defaultValue: 'Sync now' })}
-              </span>
-            </button>
+              {status.state === 'syncing'
+                ? t('settings.sync.syncing', { defaultValue: 'Syncing...' })
+                : t('settings.sync.run_now', { defaultValue: 'Sync now' })}
+            </Button>
 
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              leftIcon={status.state === 'paused' ? <Play size={14} /> : <Pause size={14} />}
               onClick={() => void onSetPaused(status.state !== 'paused')}
               disabled={isBusy}
             >
-              {status.state === 'paused' ? <Play size={14} /> : <Pause size={14} />}
-              <span>
-                {status.state === 'paused'
-                  ? t('settings.sync.resume', { defaultValue: 'Resume' })
-                  : t('settings.sync.pause', { defaultValue: 'Pause' })}
-              </span>
-            </button>
+              {status.state === 'paused'
+                ? t('settings.sync.resume', { defaultValue: 'Resume' })
+                : t('settings.sync.pause', { defaultValue: 'Pause' })}
+            </Button>
 
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              leftIcon={<Lock size={14} />}
               onClick={() => void onLock()}
               disabled={isBusy}
               title={t('settings.sync.lock_action', { defaultValue: 'Lock vault' })}
             >
-              <Lock size={14} />
-              <span>{t('settings.sync.lock_action', { defaultValue: 'Lock' })}</span>
-            </button>
+              {t('settings.sync.lock_action', { defaultValue: 'Lock' })}
+            </Button>
           </div>
         </div>
 
@@ -731,38 +728,28 @@ export function SyncConnectedPanel({
                       </div>
                     </div>
                     <div className="sync-preset-action-buttons">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
+                      <Button
+                        tier="secondary"
+                        size="sm"
                         onClick={() => setUserSelectedPreset(null)}
                         disabled={isBusy}
                       >
                         {t('common.cancel', { defaultValue: 'Cancel' })}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
+                      </Button>
+                      <Button
+                        tier="primary"
+                        size="sm"
+                        loading={busyAction === 'change_preset'}
+                        leftIcon={<Check size={14} />}
                         onClick={() => void handleApplyPreset()}
                         disabled={isBusy}
                       >
-                        {busyAction === 'change_preset' ? (
-                          <>
-                            <Loader2 size={14} className="spin" />
-                            <span>
-                              {t('settings.sync.updating_preset', { defaultValue: 'Updating...' })}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Check size={14} />
-                            <span>
-                              {t('settings.sync.apply_preset', {
-                                defaultValue: 'Apply preset change',
-                              })}
-                            </span>
-                          </>
-                        )}
-                      </button>
+                        {busyAction === 'change_preset'
+                          ? t('settings.sync.updating_preset', { defaultValue: 'Updating...' })
+                          : t('settings.sync.apply_preset', {
+                              defaultValue: 'Apply preset change',
+                            })}
+                      </Button>
                     </div>
                   </div>
                 );
@@ -804,33 +791,29 @@ export function SyncConnectedPanel({
               })}
             >
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  leftIcon={<Sparkles size={14} />}
                   onClick={() => void onGenerateRecoveryKey()}
                   disabled={isBusy}
                 >
-                  <Sparkles size={14} />
-                  <span>
-                    {t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' })}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
+                  {t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' })}
+                </Button>
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  leftIcon={<Lock size={14} />}
                   onClick={() => void onLock()}
                   disabled={isBusy}
                   title={t('settings.sync.lock_and_test_recovery_action', {
                     defaultValue: 'Lock & test recovery key',
                   })}
                 >
-                  <Lock size={14} />
-                  <span>
-                    {t('settings.sync.lock_and_test_recovery_action', {
-                      defaultValue: 'Lock & test recovery key',
-                    })}
-                  </span>
-                </button>
+                  {t('settings.sync.lock_and_test_recovery_action', {
+                    defaultValue: 'Lock & test recovery key',
+                  })}
+                </Button>
               </div>
             </SettingsItem>
 
@@ -857,9 +840,10 @@ export function SyncConnectedPanel({
                       : '••••••••••••••••••••••••'}
                   </code>
                   <div className="sync-recovery-actions">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
+                    <Button
+                      tier="secondary"
+                      size="sm"
+                      leftIcon={isKeyRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
                       onClick={() => setIsKeyRevealed((prev) => !prev)}
                       title={
                         isKeyRevealed
@@ -872,43 +856,39 @@ export function SyncConnectedPanel({
                           : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })
                       }
                     >
-                      {isKeyRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
-                      <span>
-                        {isKeyRevealed
-                          ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide' })
-                          : t('settings.sync.view_recovery_key', { defaultValue: 'View' })}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
+                      {isKeyRevealed
+                        ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide' })
+                        : t('settings.sync.view_recovery_key', { defaultValue: 'View' })}
+                    </Button>
+                    <Button
+                      tier="secondary"
+                      size="sm"
+                      feedback={copiedKey ? 'success' : 'idle'}
+                      leftIcon={copiedKey ? <Check size={14} /> : <Copy size={14} />}
                       onClick={handleCopyKeyWithFeedback}
                       title={t('common.copy', { defaultValue: 'Copy' })}
                     >
-                      {copiedKey ? <Check size={14} /> : <Copy size={14} />}
-                      <span>
-                        {copiedKey
-                          ? t('common.copied', { defaultValue: 'Copied' })
-                          : t('common.copy', { defaultValue: 'Copy' })}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
+                      {copiedKey
+                        ? t('common.copied', { defaultValue: 'Copied' })
+                        : t('common.copy', { defaultValue: 'Copy' })}
+                    </Button>
+                    <Button
+                      tier="secondary"
+                      size="sm"
+                      leftIcon={<Download size={14} />}
                       onClick={() => void onExportRecoveryKey()}
                       title={t('settings.sync.export_recovery_key', {
                         defaultValue: 'Export recovery key',
                       })}
                     >
-                      <Download size={14} />
-                      <span>
-                        {t('settings.sync.export_recovery_key', { defaultValue: 'Export' })}
-                      </span>
-                    </button>
+                      {t('settings.sync.export_recovery_key', { defaultValue: 'Export' })}
+                    </Button>
                     {onDeleteRecoveryKey && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
+                      <Button
+                        tier="secondary"
+                        tone="danger"
+                        size="sm"
+                        leftIcon={<Trash2 size={14} />}
                         onClick={() => void handleDeleteRecoveryKey()}
                         title={t('settings.sync.delete_recovery_key', {
                           defaultValue: 'Delete key',
@@ -917,9 +897,8 @@ export function SyncConnectedPanel({
                           defaultValue: 'Delete key',
                         })}
                       >
-                        <Trash2 size={14} />
-                        <span>{t('common.delete', { defaultValue: 'Delete' })}</span>
-                      </button>
+                        {t('common.delete', { defaultValue: 'Delete' })}
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1056,22 +1035,22 @@ export function SyncConnectedPanel({
               )}
 
               <div className="sync-change-password-actions">
-                <button
+                <Button
                   type="submit"
-                  className="btn btn-secondary btn-sm"
+                  tier="secondary"
+                  size="sm"
+                  loading={busyAction === 'change_master_password'}
+                  leftIcon={<KeyRound size={14} />}
                   disabled={isBusy || !currentPassword || !nextPassword || !confirmPassword}
                 >
-                  <KeyRound size={14} />
-                  <span>
-                    {busyAction === 'change_master_password'
-                      ? t('settings.sync.changing_password', {
-                          defaultValue: 'Updating password...',
-                        })
-                      : t('settings.sync.change_password_action', {
-                          defaultValue: 'Update password',
-                        })}
-                  </span>
-                </button>
+                  {busyAction === 'change_master_password'
+                    ? t('settings.sync.changing_password', {
+                        defaultValue: 'Updating password...',
+                      })
+                    : t('settings.sync.change_password_action', {
+                        defaultValue: 'Update password',
+                      })}
+                </Button>
               </div>
             </form>
           </div>
@@ -1091,16 +1070,16 @@ export function SyncConnectedPanel({
             defaultValue: 'Local data stays on this device. The remote vault is not deleted.',
           })}
         >
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            tone="danger"
+            size="sm"
+            leftIcon={<Unplug size={15} />}
             onClick={() => void onDisconnect()}
             disabled={isBusy}
-            style={{ color: 'var(--color-danger, #ef4444)' }}
           >
-            <Unplug size={15} />
-            <span>{t('settings.sync.disconnect', { defaultValue: 'Disconnect' })}</span>
-          </button>
+            {t('settings.sync.disconnect', { defaultValue: 'Disconnect' })}
+          </Button>
         </SettingsItem>
       </SettingsSection>
       {/* Pairing Modal */}
@@ -1111,21 +1090,19 @@ export function SyncConnectedPanel({
         size="md"
         footer={
           <>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setShowPairingModal(false)}
-            >
+            <Button tier="secondary" onClick={() => setShowPairingModal(false)}>
               {t('common.close', { defaultValue: 'Close' })}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={handleCopyPairingToken}>
-              {copiedToken ? <Check size={14} /> : <Copy size={14} />}
-              <span>
-                {copiedToken
-                  ? t('common.copied', { defaultValue: 'Copied' })
-                  : t('settings.sync.copy_pairing_token', { defaultValue: 'Copy pairing code' })}
-              </span>
-            </button>
+            </Button>
+            <Button
+              tier="primary"
+              feedback={copiedToken ? 'success' : 'idle'}
+              leftIcon={copiedToken ? <Check size={14} /> : <Copy size={14} />}
+              onClick={handleCopyPairingToken}
+            >
+              {copiedToken
+                ? t('common.copied', { defaultValue: 'Copied' })
+                : t('settings.sync.copy_pairing_token', { defaultValue: 'Copy pairing code' })}
+            </Button>
           </>
         }
       >
@@ -1160,22 +1137,18 @@ export function SyncConnectedPanel({
                 <Link2 size={13} />
                 {t('settings.sync.pairing_token_label', { defaultValue: 'Pairing code' })}
               </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm sync-token-copy-inline-btn"
+              <Button
+                tier="secondary"
+                size="sm"
+                feedback={copiedToken ? 'success' : 'idle'}
+                leftIcon={copiedToken ? <Check size={13} /> : <Copy size={13} />}
+                className="sync-token-copy-inline-btn"
                 onClick={handleCopyPairingToken}
               >
-                {copiedToken ? (
-                  <Check size={13} style={{ color: 'var(--color-success, #228b4e)' }} />
-                ) : (
-                  <Copy size={13} />
-                )}
-                <span>
-                  {copiedToken
-                    ? t('common.copied', { defaultValue: 'Copied' })
-                    : t('common.copy', { defaultValue: 'Copy' })}
-                </span>
-              </button>
+                {copiedToken
+                  ? t('common.copied', { defaultValue: 'Copied' })
+                  : t('common.copy', { defaultValue: 'Copy' })}
+              </Button>
             </div>
             <textarea
               readOnly

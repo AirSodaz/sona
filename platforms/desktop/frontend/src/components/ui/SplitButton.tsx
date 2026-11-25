@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import '../../styles/split-button.css';
 import { ChevronDownIcon } from '../Icons';
 import { ModalPortal } from '../ModalPortal';
+import type { ButtonSize } from './Button';
 
 export interface SplitButtonItem {
   key: string;
@@ -21,7 +22,9 @@ export interface SplitButtonProps {
   menuItems: SplitButtonItem[];
   disabled?: boolean;
   className?: string;
-  size?: 'sm' | 'md';
+  size?: ButtonSize;
+  tier?: 'primary' | 'secondary';
+  /** @deprecated Use `tier` instead. */
   variant?: 'primary' | 'secondary';
   ariaLabel?: string;
   toggleAriaLabel?: string;
@@ -37,6 +40,7 @@ export function SplitButton({
   disabled = false,
   className = '',
   size = 'sm',
+  tier,
   variant = 'primary',
   ariaLabel,
   toggleAriaLabel,
@@ -214,13 +218,14 @@ export function SplitButton({
     setIsOpen((prev) => !prev);
   };
 
-  const baseBtnClass = variant === 'primary' ? 'btn btn-primary' : 'btn btn-secondary-soft';
-  const sizeClass = size === 'sm' ? 'btn-sm' : '';
+  const resolvedTier = tier ?? variant;
+  const baseBtnClass = resolvedTier === 'primary' ? 'btn btn-primary' : 'btn btn-secondary';
+  const sizeClass = `btn-${size}`;
 
   return (
     <div
       ref={containerRef}
-      className={`split-button-container ${variant === 'secondary' ? 'is-secondary' : ''} ${className}`.trim()}
+      className={`split-button-container ${resolvedTier === 'secondary' ? 'is-secondary' : ''} ${className}`.trim()}
       onBlur={(e) => {
         if (!isMovingInside(e.relatedTarget as Node | null)) {
           setIsOpen(false);

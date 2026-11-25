@@ -28,6 +28,7 @@ import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import { normalizeError } from '../../../utils/errorUtils';
 import { logger } from '../../../utils/logger';
+import { Button, IconButton } from '../../ui/Button';
 import { SegmentedSubTabs } from '../SecondaryTabs';
 import { SettingsAccordion } from '../SettingsLayout';
 import {
@@ -593,32 +594,29 @@ export function LocalProviderAccordionItem({
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {activeSubTab === 'llm' && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
+              <Button
+                tier="secondary"
+                size="sm"
+                leftIcon={<Plus size={14} />}
                 onClick={handleImportCustomFile}
                 data-tooltip={t('settings.llm.import_custom_model_hint', {
                   defaultValue: 'Import existing local GGUF model files',
                 })}
                 data-tooltip-pos="top"
               >
-                <Plus size={14} />
-                <span>
-                  {t('settings.llm.import_custom_model', { defaultValue: 'Import Local GGUF' })}
-                </span>
-              </button>
+                {t('settings.llm.import_custom_model', { defaultValue: 'Import Local GGUF' })}
+              </Button>
             )}
-            <button
-              type="button"
-              className="btn btn-icon btn-secondary-soft btn-sm"
+            <IconButton
+              tier="secondary"
+              size="sm"
+              loading={isLoading}
+              icon={<RefreshCw size={14} />}
               onClick={fetchCards}
-              disabled={isLoading}
               data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
               data-tooltip-pos="top"
               aria-label={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
-            >
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            </button>
+            />
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

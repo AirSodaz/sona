@@ -1,5 +1,6 @@
 import { FolderOpen } from 'lucide-react';
 import type React from 'react';
+import { Button } from './ui/Button';
 
 export interface EmptyStateProps {
   title: string;
@@ -34,9 +35,9 @@ export function EmptyState({
       {/* Action button */}
       {actionLabel && onAction && (
         <div className="shared-empty-action">
-          <button type="button" className="btn btn-primary btn-sm" onClick={onAction}>
+          <Button tier="primary" size="sm" onClick={onAction}>
             {actionLabel}
-          </button>
+          </Button>
         </div>
       )}
     </div>

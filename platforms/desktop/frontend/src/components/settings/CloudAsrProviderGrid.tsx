@@ -5,7 +5,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  Loader2,
   Plus,
   Zap,
 } from 'lucide-react';
@@ -30,6 +29,7 @@ import { Dropdown } from '../Dropdown';
 import { CheckIcon, TrashIcon } from '../Icons';
 import { ModelBrandLogo } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
+import { IconButton } from '../ui/Button';
 import { SettingsItem } from './SettingsLayout';
 
 interface InlineApiKeyInputProps {
@@ -600,44 +600,52 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
 
                               <div className="model-card-side">
                                 {/* Test button: icon-only placed to the left of Add/Delete button */}
-                                <button
-                                  type="button"
-                                  className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
+                                <IconButton
+                                  tier="ghost"
+                                  size="sm"
+                                  loading={isTesting}
+                                  feedback={
+                                    testState?.status === 'success'
+                                      ? 'success'
+                                      : testState?.status === 'error'
+                                        ? 'error'
+                                        : 'idle'
+                                  }
+                                  icon={
+                                    testState?.status === 'success' ? (
+                                      <Check size={15} />
+                                    ) : testState?.status === 'error' ? (
+                                      <AlertCircle size={15} />
+                                    ) : (
+                                      <Zap size={15} />
+                                    )
+                                  }
                                   onClick={() => handleTestModel(provider, model.id)}
-                                  disabled={isTesting || !hasApiKey}
+                                  disabled={!hasApiKey}
                                   aria-label={`${t('settings.asr.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
                                   data-tooltip={testTooltip}
                                   data-tooltip-pos="top"
-                                >
-                                  {isTesting ? (
-                                    <Loader2 size={15} className="spin" />
-                                  ) : testState?.status === 'success' ? (
-                                    <Check size={15} />
-                                  ) : testState?.status === 'error' ? (
-                                    <AlertCircle size={15} />
-                                  ) : (
-                                    <Zap size={15} />
-                                  )}
-                                </button>
+                                />
 
                                 {/* Add / Delete button */}
                                 {isAdded ? (
-                                  <button
-                                    type="button"
-                                    className="model-action-icon model-action-delete"
+                                  <IconButton
+                                    tier="ghost"
+                                    tone="danger"
+                                    size="sm"
+                                    icon={<TrashIcon />}
                                     onClick={() => handleRemoveModel(provider, model.id)}
                                     aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
                                     data-tooltip={t('settings.asr.delete_model', {
                                       defaultValue: 'Delete Model',
                                     })}
                                     data-tooltip-pos="top"
-                                  >
-                                    <TrashIcon />
-                                  </button>
+                                  />
                                 ) : (
-                                  <button
-                                    type="button"
-                                    className="model-action-icon model-action-add"
+                                  <IconButton
+                                    tier="ghost"
+                                    size="sm"
+                                    icon={<Plus size={16} />}
                                     onClick={() => handleAddModel(provider, model.id)}
                                     disabled={!hasApiKey}
                                     aria-label={`${t('common.add', { defaultValue: 'Add' })} ${model.name}`}
@@ -651,9 +659,7 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                           })
                                     }
                                     data-tooltip-pos="top"
-                                  >
-                                    <Plus size={16} />
-                                  </button>
+                                  />
                                 )}
                               </div>
                             </div>

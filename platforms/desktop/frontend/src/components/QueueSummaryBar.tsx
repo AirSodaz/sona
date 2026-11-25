@@ -5,6 +5,7 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { CompleteIcon, ErrorIcon, PauseIcon, PlayIcon, ProcessingIcon, UploadIcon } from './Icons';
 import { QueueClearMenu } from './QueueClearMenu';
+import { Button } from './ui/Button';
 import { SplitButton } from './ui/SplitButton';
 export interface QueueSummaryBarProps {
   onAddFiles: () => void;
@@ -133,37 +134,43 @@ export function QueueSummaryBar({
         <div className="queue-summary-toolbar-left">
           {/* Start / Pause / Resume control */}
           {isProcessing ? (
-            <button
-              className="btn btn-secondary-soft btn-sm queue-btn-action"
+            <Button
+              tier="secondary"
+              size="sm"
+              className="queue-btn-action"
+              leftIcon={<PauseIcon width={13} height={13} />}
               onClick={pauseQueue}
               aria-label={t('batch.pause_queue')}
             >
-              <PauseIcon width={13} height={13} />
               <span>{t('batch.pause_queue')}</span>
-            </button>
+            </Button>
           ) : isPaused ? (
-            <button
-              className="btn btn-primary btn-sm queue-btn-action"
+            <Button
+              tier="primary"
+              size="sm"
+              className="queue-btn-action"
+              leftIcon={<PlayIcon width={13} height={13} />}
               onClick={resumeQueue}
               aria-label={t('batch.resume_queue')}
             >
-              <PlayIcon width={13} height={13} />
               <span>{t('batch.resume_queue')}</span>
-            </button>
+            </Button>
           ) : hasPendingItems && !isProcessing ? (
-            <button
-              className="btn btn-primary btn-sm queue-btn-action"
+            <Button
+              tier="primary"
+              size="sm"
+              className="queue-btn-action"
+              leftIcon={<PlayIcon width={13} height={13} />}
               onClick={() => void processQueue()}
               aria-label={t('batch.start_queue')}
             >
-              <PlayIcon width={13} height={13} />
               <span>{t('batch.start_queue')}</span>
-            </button>
+            </Button>
           ) : null}
 
           {/* Add more files / stream split button */}
           <SplitButton
-            variant="secondary"
+            tier="secondary"
             size="sm"
             primaryLabel={t('batch.add_more', { defaultValue: 'Add More' })}
             primaryIcon={<UploadIcon width={13} height={13} />}

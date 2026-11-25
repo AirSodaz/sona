@@ -14,6 +14,7 @@ import {
   HeartIcon,
   ProcessingIcon,
 } from '../Icons';
+import { Button } from '../ui/Button';
 
 /**
  * Redesigned About page with centered card-based layout.
@@ -72,9 +73,9 @@ export function SettingsAboutTab(): JSX.Element {
     switch (status) {
       case 'idle':
         return (
-          <button className="btn btn-primary" onClick={() => checkUpdate(true)}>
+          <Button tier="primary" onClick={() => checkUpdate(true)}>
             {t('settings.about_check_updates')}
-          </button>
+          </Button>
         );
       case 'checking':
         return (
@@ -90,9 +91,9 @@ export function SettingsAboutTab(): JSX.Element {
               <DownloadIcon className="w-5 h-5 text-primary" />
               <span>{t('settings.update_available', { version: updateInfo?.version })}</span>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={installUpdate}>
+            <Button tier="primary" size="sm" onClick={installUpdate}>
               {t('settings.update_btn_install')}
-            </button>
+            </Button>
           </div>
         );
       case 'uptodate':
@@ -130,17 +131,17 @@ export function SettingsAboutTab(): JSX.Element {
               style={{ color: 'var(--color-success)' }}
             />
             <span>{t('settings.update_relaunch')}</span>
-            <button className="btn btn-primary btn-sm" onClick={relaunchToUpdate}>
+            <Button tier="primary" size="sm" onClick={relaunchToUpdate}>
               {t('settings.update_btn_relaunch')}
-            </button>
+            </Button>
           </div>
         );
       case 'error':
       default:
         return (
-          <button className="btn btn-primary" onClick={() => checkUpdate(true)}>
+          <Button tier="primary" onClick={() => checkUpdate(true)}>
             {t('settings.about_check_updates')}
-          </button>
+          </Button>
         );
     }
   };

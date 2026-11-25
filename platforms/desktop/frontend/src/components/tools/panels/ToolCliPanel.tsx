@@ -25,6 +25,7 @@ import {
   SettingsSection,
   SettingsTabContainer,
 } from '../../settings/SettingsLayout';
+import { Button, IconButton } from '../../ui/Button';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 import './ToolCliPanel.css';
 
@@ -301,17 +302,17 @@ export function ToolCliPanel(): React.JSX.Element {
           defaultValue: 'Toggle Sona CLI in PATH',
         })}
         actions={
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            size="sm"
+            leftIcon={<RefreshCw size={13} className={isLoading ? 'spin' : ''} />}
             onClick={() => void fetchStatus()}
             disabled={isLoading}
             title={t('common.refresh', { defaultValue: 'Refresh' })}
             aria-label={t('common.refresh', { defaultValue: 'Refresh' })}
           >
-            <RefreshCw size={13} className={isLoading ? 'spin' : ''} />
             <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
-          </button>
+          </Button>
         }
       />
 
@@ -330,14 +331,13 @@ export function ToolCliPanel(): React.JSX.Element {
                 {error}
               </div>
             </div>
-            <button
-              type="button"
-              className="btn-icon-sm"
+            <IconButton
+              tier="ghost"
+              size="xs"
+              icon={<X size={14} />}
               onClick={resetError}
               aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-            >
-              <X size={14} />
-            </button>
+            />
           </div>
         )}
 
@@ -358,14 +358,13 @@ export function ToolCliPanel(): React.JSX.Element {
                 })}
               </div>
             </div>
-            <button
-              type="button"
-              className="btn-icon-sm"
+            <IconButton
+              tier="ghost"
+              size="xs"
+              icon={<X size={14} />}
               onClick={resetPathJustUpdated}
               aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-            >
-              <X size={14} />
-            </button>
+            />
           </div>
         )}
 
@@ -427,52 +426,40 @@ export function ToolCliPanel(): React.JSX.Element {
               </span>
               {status?.canModifyPath ? (
                 pathState === 'active_current' ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={isTogglingPath}
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    loading={isTogglingPath}
                     onClick={() => void setPathEnabled(false)}
                   >
-                    {isTogglingPath ? (
-                      <RefreshCw size={13} className="spin" />
-                    ) : (
-                      t('tools.cli.remove_from_path', { defaultValue: 'Remove from PATH' })
-                    )}
-                  </button>
+                    {t('tools.cli.remove_from_path', { defaultValue: 'Remove from PATH' })}
+                  </Button>
                 ) : isOtherActive ? (
                   status.blockedBySystemPath ? (
                     <span className="badge badge-subtle">
                       {t('tools.cli.system_managed_path', { defaultValue: 'System Managed' })}
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      disabled={isTogglingPath}
+                    <Button
+                      tier="primary"
+                      size="sm"
+                      loading={isTogglingPath}
                       onClick={() => void switchPathToCurrent()}
                     >
-                      {isTogglingPath ? (
-                        <RefreshCw size={13} className="spin" />
-                      ) : (
-                        t('tools.cli.switch_to_current', {
-                          defaultValue: 'Switch PATH to Current App',
-                        })
-                      )}
-                    </button>
+                      {t('tools.cli.switch_to_current', {
+                        defaultValue: 'Switch PATH to Current App',
+                      })}
+                    </Button>
                   )
                 ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={isTogglingPath}
+                  <Button
+                    tier="primary"
+                    size="sm"
+                    loading={isTogglingPath}
                     onClick={() => void setPathEnabled(true)}
                   >
-                    {isTogglingPath ? (
-                      <RefreshCw size={13} className="spin" />
-                    ) : (
-                      t('tools.cli.add_to_path', { defaultValue: 'Add to System PATH' })
-                    )}
-                  </button>
+                    {t('tools.cli.add_to_path', { defaultValue: 'Add to System PATH' })}
+                  </Button>
                 )
               ) : (
                 <span className="badge badge-subtle">
@@ -509,26 +496,27 @@ export function ToolCliPanel(): React.JSX.Element {
               </div>
               {status?.binDir && (
                 <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm tool-cli-btn-icon"
+                  <IconButton
+                    tier="secondary"
+                    size="sm"
+                    feedback={copiedKey === 'binDir' ? 'success' : 'idle'}
+                    className="tool-cli-btn-icon"
+                    icon={copiedKey === 'binDir' ? <Check size={13} /> : <Copy size={13} />}
                     onClick={() => status.binDir && copyToClipboard(status.binDir, 'binDir')}
                     aria-label={
                       copiedKey === 'binDir'
                         ? t('common.copied', { defaultValue: 'Copied' })
                         : t('common.copy', { defaultValue: 'Copy' })
                     }
-                  >
-                    {copiedKey === 'binDir' ? <Check size={13} /> : <Copy size={13} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm tool-cli-btn-icon"
+                  />
+                  <IconButton
+                    tier="secondary"
+                    size="sm"
+                    className="tool-cli-btn-icon"
+                    icon={<FolderOpen size={13} />}
                     onClick={() => status.binDir && openDirectory(status.binDir)}
                     aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
-                  >
-                    <FolderOpen size={13} />
-                  </button>
+                  />
                 </>
               )}
             </div>
@@ -595,30 +583,25 @@ export function ToolCliPanel(): React.JSX.Element {
                       )}
                     </div>
                     <div className="tool-cli-env-actions">
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-secondary-soft btn-sm"
+                      <IconButton
+                        tier="ghost"
+                        size="sm"
+                        icon={<FolderOpen size={13} />}
                         onClick={() => openDirectory(entry.pathDir)}
                         title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                         aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
-                      >
-                        <FolderOpen size={13} />
-                      </button>
+                      />
                       {entry.canRemove && (
-                        <button
-                          type="button"
-                          className="btn btn-icon btn-danger-soft btn-sm"
-                          disabled={removingPathDir === entry.pathDir}
+                        <IconButton
+                          tier="ghost"
+                          tone="danger"
+                          size="sm"
+                          loading={removingPathDir === entry.pathDir}
+                          icon={<Trash2 size={13} />}
                           onClick={() => void removePathEntry(entry.pathDir)}
                           title={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
                           aria-label={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
-                        >
-                          {removingPathDir === entry.pathDir ? (
-                            <RefreshCw size={13} className="spin" />
-                          ) : (
-                            <Trash2 size={13} />
-                          )}
-                        </button>
+                        />
                       )}
                     </div>
                   </div>
@@ -655,14 +638,13 @@ export function ToolCliPanel(): React.JSX.Element {
                   })}
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn-icon-sm"
+              <IconButton
+                tier="ghost"
+                size="xs"
+                icon={<X size={14} />}
                 onClick={resetCompletionNotice}
                 aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-              >
-                <X size={14} />
-              </button>
+              />
             </div>
           )}
 
@@ -718,33 +700,27 @@ export function ToolCliPanel(): React.JSX.Element {
                     )}
                   </div>
                   <div className="tool-cli-actions-row">
-                    <button
-                      type="button"
-                      className={`btn ${
-                        completionState === 'installed' ? 'btn-secondary' : 'btn-primary'
-                      } btn-sm`}
-                      disabled={isCompletionBusy}
+                    <Button
+                      tier={completionState === 'installed' ? 'secondary' : 'primary'}
+                      size="sm"
+                      loading={isCompletionBusy}
+                      leftIcon={<Download size={13} />}
                       onClick={() => void installCompletion(selectedShell)}
                     >
-                      {isCompletionBusy ? (
-                        <RefreshCw size={13} className="spin" />
-                      ) : (
-                        <Download size={13} />
-                      )}
                       <span>{completionActionLabel}</span>
-                    </button>
+                    </Button>
                     {completionState !== 'not_installed' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
+                      <Button
+                        tier="secondary"
+                        size="sm"
+                        leftIcon={<Trash2 size={13} />}
                         disabled={isCompletionBusy}
                         onClick={() => void uninstallCompletion(selectedShell)}
                       >
-                        <Trash2 size={13} />
                         <span>
                           {t('tools.cli.completion_uninstall', { defaultValue: 'Uninstall' })}
                         </span>
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -759,22 +735,31 @@ export function ToolCliPanel(): React.JSX.Element {
                       </span>
                       <div className="tool-cli-meta-value">
                         <code className="settings-code-inline">{currentCompletion.scriptPath}</code>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
+                        <IconButton
+                          tier="secondary"
+                          size="sm"
+                          feedback={
+                            copiedKey === `script_path_${selectedShell}` ? 'success' : 'idle'
+                          }
+                          icon={
+                            copiedKey === `script_path_${selectedShell}` ? (
+                              <Check size={13} />
+                            ) : (
+                              <Copy size={13} />
+                            )
+                          }
+                          aria-label={
+                            copiedKey === `script_path_${selectedShell}`
+                              ? t('common.copied', { defaultValue: 'Copied' })
+                              : t('common.copy', { defaultValue: 'Copy' })
+                          }
                           onClick={() =>
                             copyToClipboard(
                               currentCompletion.scriptPath,
                               `script_path_${selectedShell}`
                             )
                           }
-                        >
-                          {copiedKey === `script_path_${selectedShell}` ? (
-                            <Check size={13} />
-                          ) : (
-                            <Copy size={13} />
-                          )}
-                        </button>
+                        />
                       </div>
                     </div>
 
@@ -814,22 +799,25 @@ export function ToolCliPanel(): React.JSX.Element {
                     {selectedShell === 'powershell' ? 'PS >' : '$'}
                   </span>
                   <code className="tool-cli-command">{manualScriptCmd}</code>
-                  <button
-                    type="button"
-                    className="btn btn-icon btn-sm tool-cli-profile-copy"
+                  <IconButton
+                    tier="ghost"
+                    size="sm"
+                    feedback={copiedKey === `shell_${selectedShell}` ? 'success' : 'idle'}
+                    className="tool-cli-profile-copy"
+                    icon={
+                      copiedKey === `shell_${selectedShell}` ? (
+                        <Check size={14} />
+                      ) : (
+                        <Copy size={14} />
+                      )
+                    }
                     onClick={() => copyToClipboard(manualScriptCmd, `shell_${selectedShell}`)}
                     aria-label={
                       copiedKey === `shell_${selectedShell}`
                         ? t('common.copied', { defaultValue: 'Copied' })
                         : t('common.copy', { defaultValue: 'Copy' })
                     }
-                  >
-                    {copiedKey === `shell_${selectedShell}` ? (
-                      <Check size={14} />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                  </button>
+                  />
                 </div>
               </div>
 
@@ -846,9 +834,20 @@ export function ToolCliPanel(): React.JSX.Element {
                         {selectedShell === 'powershell' ? 'PS >' : '$'}
                       </span>
                       <code className="tool-cli-command">{manualProfileLine}</code>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-sm tool-cli-profile-copy"
+                      <IconButton
+                        tier="ghost"
+                        size="sm"
+                        feedback={
+                          copiedKey === `profile_line_${selectedShell}` ? 'success' : 'idle'
+                        }
+                        className="tool-cli-profile-copy"
+                        icon={
+                          copiedKey === `profile_line_${selectedShell}` ? (
+                            <Check size={14} />
+                          ) : (
+                            <Copy size={14} />
+                          )
+                        }
                         onClick={() =>
                           copyToClipboard(manualProfileLine, `profile_line_${selectedShell}`)
                         }
@@ -857,13 +856,7 @@ export function ToolCliPanel(): React.JSX.Element {
                             ? t('common.copied', { defaultValue: 'Copied' })
                             : t('common.copy', { defaultValue: 'Copy' })
                         }
-                      >
-                        {copiedKey === `profile_line_${selectedShell}` ? (
-                          <Check size={14} />
-                        ) : (
-                          <Copy size={14} />
-                        )}
-                      </button>
+                      />
                     </div>
                   </div>
                 </>
@@ -900,18 +893,19 @@ export function ToolCliPanel(): React.JSX.Element {
                     $
                   </span>
                   <code className="tool-cli-command">{item.cmd}</code>
-                  <button
-                    type="button"
-                    className="btn btn-icon btn-sm tool-cli-terminal-copy"
+                  <IconButton
+                    tier="ghost"
+                    size="sm"
+                    feedback={copiedKey === item.id ? 'success' : 'idle'}
+                    className="tool-cli-terminal-copy"
+                    icon={copiedKey === item.id ? <Check size={14} /> : <Copy size={14} />}
                     onClick={() => copyToClipboard(item.cmd, item.id)}
                     aria-label={
                       copiedKey === item.id
                         ? t('common.copied', { defaultValue: 'Copied' })
                         : t('common.copy', { defaultValue: 'Copy' })
                     }
-                  >
-                    {copiedKey === item.id ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
+                  />
                 </div>
               </div>
             </SettingsItem>

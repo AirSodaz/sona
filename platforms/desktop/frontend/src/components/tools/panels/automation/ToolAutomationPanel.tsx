@@ -6,6 +6,7 @@ import { useAutomationStore } from '../../../../stores/automationStore';
 import { useDialogStore } from '../../../../stores/dialogStore';
 import type { AutomationRule } from '../../../../types/automation';
 import { SettingsTabContainer } from '../../../settings/SettingsLayout';
+import { Button } from '../../../ui/Button';
 import { ToolHeroHeader } from '../../ToolHeroHeader';
 import { AutomationRuleCard } from './AutomationRuleCard';
 import { AutomationRuleModal } from './AutomationRuleModal';
@@ -127,29 +128,24 @@ export function ToolAutomationPanel(): React.JSX.Element {
         statusTone={summary.tone}
         hideSwitch
         actions={
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setEditing(null)}
-            disabled={!isLoaded}
-          >
+          <Button tier="primary" size="sm" onClick={() => setEditing(null)} disabled={!isLoaded}>
             {t('automation.new_rule', { defaultValue: '+ New Rule' })}
-          </button>
+          </Button>
         }
       />
       {!isLoaded && error ? (
         <div className="automation-empty">
           <p>{error}</p>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            tier="secondary"
+            size="sm"
             onClick={() => {
               // The store records the failure and rethrows; the panel shows it from state.
               void loadAndStart().catch(() => undefined);
             }}
           >
             {t('common.retry', { defaultValue: 'Retry' })}
-          </button>
+          </Button>
         </div>
       ) : !isLoaded ? (
         <p className="automation-empty">{t('common.loading', { defaultValue: 'Loading...' })}</p>

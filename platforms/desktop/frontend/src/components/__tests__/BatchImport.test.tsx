@@ -161,10 +161,10 @@ describe('BatchImport Integration', () => {
     render(<BatchImport />);
 
     const selectFileBtn = screen.getByRole('button', { name: 'batch.select_file' });
-    expect(selectFileBtn.classList.contains('btn-select-file-primary')).toBe(true);
+    expect(selectFileBtn.classList.contains('btn-primary')).toBe(true);
 
     const streamBtn = screen.getByRole('button', { name: 'batch.import_stream' });
-    expect(streamBtn.classList.contains('btn-select-stream-secondary')).toBe(true);
+    expect(streamBtn.classList.contains('btn-secondary')).toBe(true);
 
     fireEvent.click(selectFileBtn);
     await waitFor(() => {

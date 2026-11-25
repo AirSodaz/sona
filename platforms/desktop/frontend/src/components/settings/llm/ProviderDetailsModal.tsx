@@ -5,7 +5,6 @@ import {
   FileJson2,
   ImageIcon,
   LibraryBig,
-  Loader2,
   Pencil,
   PlugZap,
   RefreshCw,
@@ -37,6 +36,7 @@ import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmModelEntry, LlmProvider } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
 import { PanelModal } from '../../PanelModal';
+import { Button, IconButton } from '../../ui/Button';
 import { getCurrentLlmSettings } from './helpers';
 import { ModelMetadataEditor } from './ModelMetadataEditor';
 
@@ -323,29 +323,26 @@ export function ProviderDetailsModal({
               onChange={(event) => setDraftModelName(event.target.value)}
               placeholder={t('settings.llm.model_name')}
             />
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <Button
+              tier="secondary"
+              size="sm"
               onClick={handleAddModel}
               disabled={!draftModelName.trim()}
             >
               {t('common.add')}
-            </button>
+            </Button>
           </div>
           {definition.supportsModelListing ? (
-            <button
-              type="button"
-              className="btn btn-secondary provider-details-refresh"
+            <Button
+              tier="secondary"
+              size="sm"
+              loading={refreshState === 'loading'}
+              leftIcon={<RefreshCw size={16} />}
+              className="provider-details-refresh"
               onClick={handleRefresh}
-              disabled={refreshState === 'loading'}
             >
-              {refreshState === 'loading' ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-              <span>{t('settings.llm.refresh_models')}</span>
-            </button>
+              {t('settings.llm.refresh_models')}
+            </Button>
           ) : null}
         </div>
       }
@@ -441,44 +438,48 @@ export function ProviderDetailsModal({
                   </div>
                 </div>
                 <div className="provider-model-actions">
-                  <button
-                    type="button"
-                    className="btn btn-icon provider-model-edit"
+                  <IconButton
+                    tier="ghost"
+                    size="sm"
+                    icon={<Pencil size={16} />}
+                    className="provider-model-edit"
                     aria-label={`${t('settings.llm.edit_model_metadata')} ${entry.model}`}
                     data-tooltip={t('settings.llm.edit_model_metadata')}
                     data-tooltip-pos="top"
                     onClick={() => handleEditMetadata(entry)}
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon provider-model-test"
+                  />
+                  <IconButton
+                    tier="ghost"
+                    size="sm"
+                    loading={testState.status === 'loading'}
+                    feedback={
+                      testState.status === 'success'
+                        ? 'success'
+                        : testState.status === 'error'
+                          ? 'error'
+                          : 'idle'
+                    }
+                    icon={
+                      testState.status === 'success' ? <Check size={16} /> : <PlugZap size={16} />
+                    }
+                    className="provider-model-test"
                     aria-label={`${t('settings.llm.test_connection')} ${entry.model}`}
                     data-tooltip={t('settings.llm.test_connection')}
                     data-tooltip-pos="top"
                     onClick={() => void handleTestModel(entry)}
-                    disabled={testState.status === 'loading'}
-                  >
-                    {testState.status === 'loading' ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : testState.status === 'success' ? (
-                      <Check size={16} />
-                    ) : (
-                      <PlugZap size={16} />
-                    )}
-                  </button>
+                  />
                   {entry.source === 'manual' ? (
-                    <button
-                      type="button"
-                      className="btn btn-icon provider-model-delete"
+                    <IconButton
+                      tier="ghost"
+                      tone="danger"
+                      size="sm"
+                      icon={<Trash2 size={16} />}
+                      className="provider-model-delete"
                       aria-label={`${t('common.delete')} ${entry.model}`}
                       data-tooltip={t('common.delete')}
                       data-tooltip-pos="top"
                       onClick={() => handleDeleteModel(entry)}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    />
                   ) : null}
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Loader2, Mic, Plus, User } from 'lucide-react';
+import { AlertTriangle, Clock, Mic, Plus, User } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { formatDisplayTime } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { FormField } from '../FormField';
 import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
 import './EnrollSpeakerSampleModal.css';
 
 export interface EnrollSpeakerSampleModalProps {
@@ -213,25 +214,20 @@ export function EnrollSpeakerSampleModal({
       }
       footer={
         <>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
+          <Button tier="secondary" onClick={onClose} disabled={isSubmitting}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
+          </Button>
+          <Button
+            tier="primary"
+            loading={isSubmitting}
+            leftIcon={<Mic size={14} />}
             onClick={() => void handleSubmit()}
-            disabled={isSubmitting || !audioPath}
+            disabled={!audioPath}
           >
-            {isSubmitting ? <Loader2 size={14} className="queue-icon-spin" /> : <Mic size={14} />}
             <span>
               {t('editor.enroll_speaker_submit', { defaultValue: 'Enroll Voice Sample' })}
             </span>
-          </button>
+          </Button>
         </>
       }
     >

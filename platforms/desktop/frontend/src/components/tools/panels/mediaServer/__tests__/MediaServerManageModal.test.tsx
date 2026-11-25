@@ -167,20 +167,20 @@ describe('MediaServerManageModal', () => {
     const editBtn = screen.getAllByRole('button', { name: /Edit/i })[0];
     const deleteBtn = screen.getAllByRole('button', { name: /Delete/i })[0];
 
-    expect(testBtn.className).toContain('model-action-icon');
-    expect(testBtn.className).toContain('model-action-test');
+    expect(testBtn.className).toContain('btn-icon');
+    expect(testBtn.className).toContain('btn-ghost');
     expect(testBtn.getAttribute('data-tooltip')).toBe('Test Connection');
     expect(testBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(testBtn.getAttribute('title')).toBeNull();
 
-    expect(editBtn.className).toContain('model-action-icon');
-    expect(editBtn.className).toContain('model-action-edit');
+    expect(editBtn.className).toContain('btn-icon');
+    expect(editBtn.className).toContain('btn-ghost');
     expect(editBtn.getAttribute('data-tooltip')).toBe('Edit');
     expect(editBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(editBtn.getAttribute('title')).toBeNull();
 
-    expect(deleteBtn.className).toContain('model-action-icon');
-    expect(deleteBtn.className).toContain('model-action-delete');
+    expect(deleteBtn.className).toContain('btn-icon');
+    expect(deleteBtn.className).toContain('btn-danger');
     expect(deleteBtn.getAttribute('data-tooltip')).toBe('Delete');
     expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(deleteBtn.getAttribute('title')).toBeNull();

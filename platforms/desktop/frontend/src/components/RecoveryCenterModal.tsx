@@ -1,21 +1,14 @@
-import {
-  AlertTriangle,
-  Clock3,
-  FileStack,
-  Loader2,
-  RefreshCw,
-  Trash2,
-  Workflow,
-} from 'lucide-react';
+import { AlertTriangle, Clock3, FileStack, RefreshCw, Trash2, Workflow } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../stores/projectStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import type { RecoveredQueueItem, RecoveryItemStage, RecoverySource } from '../types/recovery';
-import { PanelModal } from './PanelModal';
-import './RecoveryCenterModal.css';
 import { logger } from '../utils/logger';
+import { PanelModal } from './PanelModal';
+import { Button } from './ui/Button';
+import './RecoveryCenterModal.css';
 
 interface RecoveryCenterModalProps {
   isOpen: boolean;
@@ -184,24 +177,26 @@ export function RecoveryCenterModal({
       description={t('recovery.description')}
       headerActions={
         <>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            tier="primary"
+            size="sm"
+            loading={isBusy}
+            leftIcon={<RefreshCw size={14} />}
             onClick={() => void handleResumeAll()}
-            disabled={isBusy || items.length === 0 || hasMissingSources}
+            disabled={items.length === 0 || hasMissingSources}
           >
-            {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
             {t('recovery.actions.resume_all')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          </Button>
+          <Button
+            tier="secondary"
+            tone="danger"
+            size="sm"
+            leftIcon={<Trash2 size={14} />}
             onClick={() => void handleDiscardAll()}
             disabled={isBusy || items.length === 0}
           >
-            <Trash2 size={14} />
             {t('recovery.actions.discard_all')}
-          </button>
+          </Button>
         </>
       }
       meta={
@@ -294,32 +289,28 @@ export function RecoveryCenterModal({
                       </div>
                     </div>
                     <div className="recovery-item-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                      <Button
+                        tier="secondary"
+                        size="sm"
+                        loading={isBusy}
+                        leftIcon={<RefreshCw size={14} />}
+                        className="panel-modal-inline-action recovery-inline-action"
                         onClick={() => void handleResumeItem(item.id)}
-                        disabled={isBusy || !item.canResume}
+                        disabled={!item.canResume}
                       >
-                        {isBusy ? (
-                          <Loader2 size={14} className="queue-icon-spin" />
-                        ) : (
-                          <RefreshCw size={14} />
-                        )}
                         {t('common.resume', { defaultValue: 'Resume' })}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                      </Button>
+                      <Button
+                        tier="ghost"
+                        tone="danger"
+                        size="sm"
+                        loading={isBusy}
+                        leftIcon={<Trash2 size={14} />}
+                        className="panel-modal-inline-action recovery-inline-action"
                         onClick={() => void handleDiscardItem(item.id)}
-                        disabled={isBusy}
                       >
-                        {isBusy ? (
-                          <Loader2 size={14} className="queue-icon-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
                         {t('recovery.actions.discard')}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );

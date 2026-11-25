@@ -2,6 +2,7 @@ import { ExternalLink, FolderOpen, RotateCcw } from 'lucide-react';
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '../ui/Button';
 import './SettingsShared.css';
 
 export interface SettingsLocationCardProps {
@@ -146,43 +147,43 @@ export function SettingsLocationCard({
 
       <div className="settings-storage-location-actions">
         {onChangePath && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            size="sm"
+            leftIcon={<FolderOpen size={14} />}
             onClick={() => {
               void onChangePath();
             }}
             disabled={isBusy}
           >
-            <FolderOpen size={14} aria-hidden="true" />
             {resolvedChangeLabel}
-          </button>
+          </Button>
         )}
         {onOpenFolder && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
+          <Button
+            tier="ghost"
+            size="sm"
+            leftIcon={<ExternalLink size={14} />}
             onClick={() => {
               void onOpenFolder();
             }}
             disabled={!path || isBusy}
           >
-            <ExternalLink size={14} aria-hidden="true" />
             {resolvedOpenFolderLabel}
-          </button>
+          </Button>
         )}
         {isCustom && onRestoreDefault && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
+          <Button
+            tier="ghost"
+            size="sm"
+            leftIcon={<RotateCcw size={14} />}
             onClick={() => {
               void onRestoreDefault();
             }}
             disabled={isBusy}
           >
-            <RotateCcw size={14} aria-hidden="true" />
             {resolvedRestoreDefaultLabel}
-          </button>
+          </Button>
         )}
         {extraActions}
       </div>

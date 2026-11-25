@@ -252,17 +252,6 @@ html[data-theme="dark"] .mcp-client-logo-monochrome {
   white-space: nowrap;
 }
 
-.btn-icon-only {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  padding: 0;
-  flex-shrink: 0;
-}
-
 /* Code container within stage */
 .mcp-code-container {
   width: 100%;

@@ -21,6 +21,7 @@ import {
   UnderlineIcon,
   UndoIcon,
 } from './Icons';
+import { IconButton } from './ui/Button';
 
 const SAVED_STATUS_VISIBLE_MS = 1500;
 
@@ -149,92 +150,100 @@ export function EditorToolbar(): React.JSX.Element | null {
 
       {isEditing && (
         <div className="editor-toolbar">
-          <button
-            className="btn-icon toolbar-btn"
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<UndoIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('undo')}
             data-tooltip={t('editor.undo', 'Undo')}
             data-tooltip-pos="top"
             aria-label={t('editor.undo', 'Undo')}
-          >
-            <UndoIcon />
-          </button>
-          <button
-            className="btn-icon toolbar-btn"
+          />
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<RedoIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('redo')}
             data-tooltip={t('editor.redo', 'Redo')}
             data-tooltip-pos="top"
             aria-label={t('editor.redo', 'Redo')}
-          >
-            <RedoIcon />
-          </button>
+          />
 
           <div className="toolbar-divider" />
 
-          <button
-            className="btn-icon toolbar-btn"
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<BoldIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('bold')}
             data-tooltip={t('editor.bold', 'Bold')}
             data-tooltip-pos="top"
             aria-label={t('editor.bold', 'Bold')}
-          >
-            <BoldIcon />
-          </button>
-          <button
-            className="btn-icon toolbar-btn"
+          />
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<ItalicIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('italic')}
             data-tooltip={t('editor.italic', 'Italic')}
             data-tooltip-pos="top"
             aria-label={t('editor.italic', 'Italic')}
-          >
-            <ItalicIcon />
-          </button>
-          <button
-            className="btn-icon toolbar-btn"
+          />
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<UnderlineIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('underline')}
             data-tooltip={t('editor.underline', 'Underline')}
             data-tooltip-pos="top"
             aria-label={t('editor.underline', 'Underline')}
-          >
-            <UnderlineIcon />
-          </button>
-          <button
-            className="btn-icon toolbar-btn"
+          />
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<StrikethroughIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('strikethrough')}
             data-tooltip={t('editor.strikethrough', 'Strikethrough')}
             data-tooltip-pos="top"
             aria-label={t('editor.strikethrough', 'Strikethrough')}
-          >
-            <StrikethroughIcon />
-          </button>
-          <button
-            className="btn-icon toolbar-btn"
+          />
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<CodeIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('code')}
             data-tooltip={t('editor.code', 'Code')}
             data-tooltip-pos="top"
             aria-label={t('editor.code', 'Code')}
-          >
-            <CodeIcon />
-          </button>
+          />
 
           <div className="toolbar-divider" />
 
-          <button
-            className="btn-icon toolbar-btn"
+          <IconButton
+            tier="ghost"
+            size="sm"
+            className="toolbar-btn"
+            icon={<ReturnIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('insertLineBreak')}
             data-tooltip={t('editor.split_segment', 'Split segment')}
             data-tooltip-pos="top"
             aria-label={t('editor.split_segment', 'Split segment')}
-          >
-            <ReturnIcon />
-          </button>
+          />
         </div>
       )}
     </>

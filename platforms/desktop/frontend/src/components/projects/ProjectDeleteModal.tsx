@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectRecord } from '../../types/project';
 import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
 
 interface ProjectDeleteModalProps {
   isOpen: boolean;
@@ -58,24 +59,19 @@ export function ProjectDeleteModal({
             width: '100%',
           }}
         >
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={isDeleting}
-          >
+          <Button tier="secondary" onClick={onClose} disabled={isDeleting}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
+          </Button>
+          <Button
+            tier="primary"
+            tone="danger"
+            loading={isDeleting}
             onClick={() => void handleDelete()}
-            disabled={isDeleting}
           >
             {isDeleting
               ? t('common.deleting', { defaultValue: 'Deleting...' })
               : t('common.delete', { defaultValue: 'Delete' })}
-          </button>
+          </Button>
         </div>
       }
     >

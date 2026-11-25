@@ -17,6 +17,7 @@ import {
 import { Dropdown } from '../Dropdown';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
 import { SettingsSection } from './SettingsLayout';
 import './vocabulary/vocabulary.css';
@@ -396,21 +397,15 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
               aria-label={t('settings.dict_target_scope', { defaultValue: 'Target Scope' })}
             />
           </div>
-          <button
-            className="btn btn-primary"
+          <Button
+            tier="primary"
+            size="md"
+            leftIcon={<Plus size={18} />}
             onClick={handleAddProfile}
             disabled={!newProfileName.trim()}
-            style={{
-              height: '38px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '0 20px',
-            }}
           >
-            <Plus size={18} />
             {t('settings.add_speaker_profile', { defaultValue: 'Add Profile' })}
-          </button>
+          </Button>
         </div>
 
         <div
@@ -575,8 +570,11 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                         }
                       />
 
-                      <button
-                        className="btn btn-icon btn-danger-soft"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="sm"
+                        icon={<Trash2 size={18} />}
                         onClick={() => void handleDeleteProfile(profile)}
                         data-tooltip={t('settings.delete_speaker_profile', {
                           name: profile.name,
@@ -587,9 +585,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                           name: profile.name,
                           defaultValue: 'Delete {{name}}',
                         })}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      />
                     </div>
                   </div>
 
@@ -630,14 +626,14 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                             defaultValue: `${readiness.usableSampleCount} usable samples · ${formatSampleDuration(readiness.usableDurationSeconds)}`,
                           })}
                         </div>
-                        <button
-                          className="btn btn-secondary-soft"
+                        <Button
+                          tier="secondary"
+                          size="sm"
+                          leftIcon={<Upload size={16} />}
                           onClick={() => void handleImportSamples(profile)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                         >
-                          <Upload size={16} />
                           {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
-                        </button>
+                        </Button>
                       </div>
 
                       {profile.samples.length === 0 ? (
@@ -666,15 +662,16 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                               </div>
                             </div>
 
-                            <button
-                              className="btn btn-icon btn-danger-soft"
+                            <IconButton
+                              tier="ghost"
+                              tone="danger"
+                              size="sm"
+                              icon={<Trash2 size={14} />}
                               onClick={() => void handleDeleteSample(profile.id, sample.id)}
                               aria-label={t('common.delete')}
                               data-tooltip={t('common.delete')}
                               data-tooltip-pos="top"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            />
                           </div>
                         ))
                       )}
@@ -801,16 +798,12 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
             <div
               style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}
             >
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setEditingScopeProfile(null)}
-              >
+              <Button tier="secondary" onClick={() => setEditingScopeProfile(null)}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleSaveScopeModal}>
+              </Button>
+              <Button tier="primary" onClick={handleSaveScopeModal}>
                 {t('common.save', { defaultValue: 'Save' })}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

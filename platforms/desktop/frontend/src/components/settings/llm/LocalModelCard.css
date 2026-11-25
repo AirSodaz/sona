@@ -223,8 +223,8 @@
   user-select: none;
 }
 
-.local-model-footer .model-action-icon[data-tooltip]:hover,
-.local-model-footer .model-action-icon[data-tooltip]:focus-visible {
+.local-model-footer .btn-icon[data-tooltip]:hover,
+.local-model-footer .btn-icon[data-tooltip]:focus-visible {
   position: relative;
   z-index: 10;
 }

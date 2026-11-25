@@ -1235,75 +1235,6 @@
   color: var(--color-success);
 }
 
-/* Ghost icon button for card actions: borderless, quiet, 28×28 square.
-   Download/cancel use the neutral hover; delete adds the danger variant. */
-.model-action-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background var(--transition-fast, 0.15s) ease,
-    color var(--transition-fast, 0.15s) ease;
-}
-
-.model-action-icon:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-}
-
-.model-action-icon:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.model-action-icon:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-}
-
-.model-action-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* Delete only signals danger on hover, staying quiet the rest of the time. */
-.model-action-delete:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error) 10%, transparent);
-  color: var(--color-error);
-}
-
-.model-action-cancel:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, transparent);
-  color: var(--color-warning, #d97706);
-}
-
-.model-action-add:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
-  color: var(--color-accent-primary);
-}
-
-.model-action-test:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
-  color: var(--color-accent-primary);
-}
-
-.model-action-test.success {
-  color: var(--color-success, #4ea067);
-}
-
-.model-action-test.error {
-  color: var(--color-danger, #e05252);
-}
-
 .model-description-subtle {
   font-size: 0.76rem;
   color: var(--color-text-muted);
@@ -2220,14 +2151,14 @@
   z-index: 2;
 }
 
-.cloud-provider-models-card .model-action-icon[data-tooltip]:hover,
-.cloud-provider-models-card .model-action-icon[data-tooltip]:focus-visible {
+.cloud-provider-models-card .btn-icon[data-tooltip]:hover,
+.cloud-provider-models-card .btn-icon[data-tooltip]:focus-visible {
   position: relative;
   z-index: 10;
 }
 
 /* Tooltip positioning for model action buttons: centered over button */
-.cloud-provider-models-card .model-action-icon[data-tooltip]::after {
+.cloud-provider-models-card .btn-icon[data-tooltip]::after {
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -2237,8 +2168,8 @@
   text-align: center;
 }
 
-.cloud-provider-models-card .model-action-icon[data-tooltip]:hover::after,
-.cloud-provider-models-card .model-action-icon[data-tooltip]:focus-visible::after {
+.cloud-provider-models-card .btn-icon[data-tooltip]:hover::after,
+.cloud-provider-models-card .btn-icon[data-tooltip]:focus-visible::after {
   transform: translateX(-50%) translateY(-4px);
 }
 

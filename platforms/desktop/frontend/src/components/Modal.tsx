@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { ModalPortal } from './ModalPortal';
+import { IconButton } from './ui/Button';
 
 function joinClassNames(...parts: Array<string | undefined | false | null>): string {
   return parts.filter(Boolean).join(' ');
@@ -279,16 +280,16 @@ export function Modal({
                 </div>
               ))}
             {!hideCloseButton && (
-              <button
-                type="button"
-                className="btn btn-icon shared-modal-close-btn"
+              <IconButton
+                tier="ghost"
+                size="md"
+                className="shared-modal-close-btn"
+                icon={<X size={18} />}
                 onClick={onClose}
                 aria-label={t('common.close', { defaultValue: 'Close' })}
                 data-tooltip={t('common.close', { defaultValue: 'Close' })}
                 data-tooltip-pos="bottom-left"
-              >
-                <X size={18} />
-              </button>
+              />
             )}
           </div>
 

@@ -9,6 +9,7 @@ import { useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
 import type { HostPlatform, VoiceTypingContextRule } from '../../types/config';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 
 const PRESET_ICONS = ['💻', '💬', '📄', '🎓', '📧', '✍️', '⚡', '🛠️', '🎨', '🌐', '📊', '🔍'];
 
@@ -232,20 +233,19 @@ export function SettingsContextRulesSection(): React.JSX.Element {
             })}
           </p>
         </div>
-        <button
+        <Button
           type="button"
           data-testid="add-context-rule-btn"
-          className="btn btn-secondary btn-sm"
+          tier="secondary"
+          size="sm"
+          leftIcon={<span>+</span>}
           onClick={openAddRule}
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+          style={{ flexShrink: 0 }}
         >
-          <span>+</span>
-          <span>
-            {t('settings.voice_typing_add_rule_button', {
-              defaultValue: 'Add Situation',
-            })}
-          </span>
-        </button>
+          {t('settings.voice_typing_add_rule_button', {
+            defaultValue: 'Add Situation',
+          })}
+        </Button>
       </div>
 
       <div
@@ -377,34 +377,34 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                   checked={rule.enabled}
                   onChange={(checked) => handleToggleRule(rule.id, checked)}
                 />
-                <button
-                  type="button"
+                <Button
                   data-testid={`rule-edit-btn-${rule.id}`}
-                  className="btn btn-secondary btn-sm"
+                  tier="secondary"
+                  size="sm"
                   onClick={() => openEditRule(rule)}
                 >
                   {t('common.edit', { defaultValue: 'Edit' })}
-                </button>
+                </Button>
                 {rule.isBuiltin ? (
-                  <button
-                    type="button"
+                  <Button
                     data-testid={`rule-reset-btn-${rule.id}`}
-                    className="btn btn-secondary btn-sm"
+                    tier="secondary"
+                    size="sm"
                     onClick={() => handleResetRule(rule.id)}
                   >
                     {t('common.reset', { defaultValue: 'Reset' })}
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    type="button"
+                  <Button
                     data-testid={`rule-delete-btn-${rule.id}`}
-                    className="btn btn-secondary btn-sm"
+                    tier="ghost"
+                    tone="danger"
+                    size="sm"
                     title={t('common.delete', { defaultValue: 'Delete' })}
                     onClick={() => handleDeleteRule(rule.id)}
-                    style={{ color: 'var(--color-danger, #ef4444)' }}
                   >
                     {t('common.delete', { defaultValue: 'Delete' })}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -429,17 +429,12 @@ export function SettingsContextRulesSection(): React.JSX.Element {
           size="md"
           footer={
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button type="button" className="btn btn-secondary" onClick={closeModal}>
+              <Button tier="secondary" onClick={closeModal}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSaveDraft}
-                disabled={!draft.name.trim()}
-              >
+              </Button>
+              <Button tier="primary" onClick={handleSaveDraft} disabled={!draft.name.trim()}>
                 {t('common.save', { defaultValue: 'Save' })}
-              </button>
+              </Button>
             </div>
           }
         >
@@ -596,24 +591,15 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       }}
                     >
                       <span>{app}</span>
-                      <button
-                        type="button"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="xs"
+                        icon={<span aria-hidden="true">×</span>}
                         onClick={() => handleRemoveApp(app)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--color-text-muted)',
-                          cursor: 'pointer',
-                          padding: '0 2px',
-                          fontSize: '14px',
-                          lineHeight: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
+                        aria-label={t('common.remove', { defaultValue: 'Remove' })}
                         title={t('common.remove', { defaultValue: 'Remove' })}
-                      >
-                        ×
-                      </button>
+                      />
                     </span>
                   ))
                 )}
@@ -642,15 +628,15 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     }
                   }}
                 />
-                <button
-                  type="button"
+                <Button
                   data-testid="add-app-btn"
-                  className="btn btn-secondary btn-sm"
+                  tier="secondary"
+                  size="sm"
                   onClick={handleAddApp}
                   disabled={!appInput.trim()}
                 >
                   {t('common.add', { defaultValue: 'Add' })}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -710,24 +696,15 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       }}
                     >
                       <span>{pattern}</span>
-                      <button
-                        type="button"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="xs"
+                        icon={<span aria-hidden="true">×</span>}
                         onClick={() => handleRemoveTitlePattern(pattern)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--color-text-muted)',
-                          cursor: 'pointer',
-                          padding: '0 2px',
-                          fontSize: '14px',
-                          lineHeight: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
+                        aria-label={t('common.remove', { defaultValue: 'Remove' })}
                         title={t('common.remove', { defaultValue: 'Remove' })}
-                      >
-                        ×
-                      </button>
+                      />
                     </span>
                   ))
                 )}
@@ -750,15 +727,15 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     }
                   }}
                 />
-                <button
-                  type="button"
+                <Button
                   data-testid="add-title-pattern-btn"
-                  className="btn btn-secondary btn-sm"
+                  tier="secondary"
+                  size="sm"
                   onClick={handleAddTitlePattern}
                   disabled={!titleInput.trim()}
                 >
                   {t('common.add', { defaultValue: 'Add' })}
-                </button>
+                </Button>
               </div>
             </div>
 

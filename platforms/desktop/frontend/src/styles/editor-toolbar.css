@@ -150,13 +150,20 @@
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: 11px;
   cursor: pointer;
   transition:
     background var(--transition-fast),
     box-shadow var(--transition-fast),
     color var(--transition-fast),
     transform var(--transition-fast);
+}
+
+@supports (corner-shape: squircle) {
+  .toolbar-btn {
+    corner-shape: squircle;
+    border-radius: 14px;
+  }
 }
 
 .toolbar-btn:hover {
@@ -176,8 +183,6 @@
   height: 18px;
 }
 
-.btn:disabled,
-.btn-icon:disabled,
 .btn-parameter-settings:disabled,
 .toolbar-btn:disabled,
 .settings-tab-btn:disabled,

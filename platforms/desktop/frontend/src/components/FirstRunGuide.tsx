@@ -5,6 +5,7 @@ import type { OnboardingStep } from '../types/onboarding';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, DownloadIcon } from './Icons';
 import { LanguageBadges } from './LanguageBadges';
+import { Button } from './ui/Button';
 
 type OnboardingTranslate = (key: string) => string;
 
@@ -298,25 +299,21 @@ export function FirstRunGuide(): React.JSX.Element | null {
 
         {/* Footer actions */}
         <div className="welcome-footer">
-          <button
-            className="btn btn-secondary"
+          <Button
+            tier="ghost"
             style={{ marginInlineEnd: 'auto' }}
             onClick={defer}
             disabled={areSecondaryActionsDisabled}
           >
             {t('first_run.actions.later')}
-          </button>
+          </Button>
           {currentStep === 'microphone' && (
-            <button
-              className="btn btn-secondary"
-              onClick={handleBack}
-              disabled={areSecondaryActionsDisabled}
-            >
+            <Button tier="secondary" onClick={handleBack} disabled={areSecondaryActionsDisabled}>
               {t('first_run.actions.back')}
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-primary"
+          <Button
+            tier="primary"
             onClick={
               currentStep === 'models'
                 ? hasModelsConfigured || modelStepStatus === 'downloading'
@@ -337,7 +334,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
               : permissionState === 'denied'
                 ? t('first_run.actions.retry_permission')
                 : t('first_run.actions.finish')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

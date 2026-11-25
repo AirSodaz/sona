@@ -28,6 +28,7 @@ import { Dropdown, type DropdownOption } from '../../../Dropdown';
 import { FormField } from '../../../FormField';
 import { Modal } from '../../../Modal';
 import { Switch } from '../../../Switch';
+import { Button } from '../../../ui/Button';
 
 export interface EmbyProcessingSettingsModalProps {
   isOpen: boolean;
@@ -424,16 +425,16 @@ export function EmbyProcessingSettingsModal({
           className="emby-modal-footer-actions"
           style={{ justifyContent: 'space-between', width: '100%' }}
         >
-          <button type="button" className="btn btn-secondary" onClick={handleResetDefaults}>
+          <Button tier="ghost" onClick={handleResetDefaults}>
             {t('common.restore_default', { defaultValue: 'Restore Default' })}
-          </button>
+          </Button>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <Button tier="secondary" onClick={onClose}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={handleSave}>
+            </Button>
+            <Button tier="primary" onClick={handleSave}>
               {t('common.save', { defaultValue: 'Save' })}
-            </button>
+            </Button>
           </div>
         </div>
       }

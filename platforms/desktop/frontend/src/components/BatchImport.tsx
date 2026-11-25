@@ -23,6 +23,7 @@ import { UrlStreamImportModal } from './batch/UrlStreamImportModal';
 import { UploadIcon } from './Icons';
 import { QueueGroupedList } from './QueueGroupedList';
 import { QueueSummaryBar } from './QueueSummaryBar';
+import { Button } from './ui/Button';
 
 /** Props for BatchImport. */
 interface BatchImportProps {
@@ -313,24 +314,24 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            className="btn-select-file-primary"
+          <Button
+            tier="primary"
+            size="md"
+            leftIcon={<UploadIcon width={14} height={14} />}
             onClick={handleClick}
             aria-label={t('batch.select_file', { defaultValue: 'Select File' })}
           >
-            <UploadIcon width={14} height={14} />
             <span>{t('batch.select_file', { defaultValue: 'Select File' })}</span>
-          </button>
-          <button
-            type="button"
-            className="btn-select-stream-secondary"
+          </Button>
+          <Button
+            tier="secondary"
+            size="md"
+            leftIcon={<Globe size={14} />}
             onClick={() => setIsStreamModalOpen(true)}
             aria-label={t('batch.import_stream', { defaultValue: 'Import Network Stream...' })}
           >
-            <Globe size={14} />
             <span>{t('batch.import_stream', { defaultValue: 'Import Network Stream...' })}</span>
-          </button>
+          </Button>
         </div>
 
         <p className="supported-formats" style={{ marginTop: '8px' }}>

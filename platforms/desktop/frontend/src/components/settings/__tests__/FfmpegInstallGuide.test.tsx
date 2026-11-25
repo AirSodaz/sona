@@ -79,7 +79,7 @@ describe('FfmpegInstallGuide', () => {
 
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('winget install Gyan.FFmpeg');
-      expect(copyButtons[0].classList.contains('btn-copied')).toBe(true);
+      expect(copyButtons[0].classList.contains('btn-feedback-success')).toBe(true);
     });
   });
 

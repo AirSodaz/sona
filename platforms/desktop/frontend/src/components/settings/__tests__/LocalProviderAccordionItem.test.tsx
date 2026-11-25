@@ -534,7 +534,7 @@ describe('LocalProviderAccordionItem', () => {
       const updatedBtn = screen.getByRole('button', {
         name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
       });
-      expect(updatedBtn.classList.contains('error')).toBe(true);
+      expect(updatedBtn.classList.contains('btn-feedback-error')).toBe(true);
       expect(updatedBtn.getAttribute('data-tooltip')).toBe('✕ GPU out of memory');
     });
 
@@ -575,7 +575,7 @@ describe('LocalProviderAccordionItem', () => {
 
     await vi.waitFor(() => {
       const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-      expect(btn.classList.contains('success')).toBe(true);
+      expect(btn.classList.contains('btn-feedback-success')).toBe(true);
     });
 
     // Advance timer past 3500ms
@@ -585,7 +585,7 @@ describe('LocalProviderAccordionItem', () => {
 
     await vi.waitFor(() => {
       const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-      expect(btn.classList.contains('success')).toBe(false);
+      expect(btn.classList.contains('btn-feedback-success')).toBe(false);
       expect(screen.getByTestId('local-model-speed-qwen3.5-4b')).toBeTruthy();
     });
 

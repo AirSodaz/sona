@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckIcon, ChevronDownIcon, TrashIcon } from './Icons';
+import { Button } from './ui/Button';
 
 export type QueueClearScope = 'completed' | 'all';
 
@@ -75,10 +76,21 @@ export function QueueClearMenu({
 
   return (
     <div className={`queue-clear-menu ${className}`} ref={menuRef}>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
-        className={`btn btn-secondary-soft btn-sm queue-clear-trigger${isOpen ? ' is-open' : ''}`}
+        tier="secondary"
+        size="sm"
+        active={isOpen}
+        leftIcon={<TrashIcon width={13} height={13} />}
+        rightIcon={
+          <ChevronDownIcon
+            className={`queue-clear-chevron${isOpen ? ' is-open' : ''}`}
+            width={11}
+            height={11}
+            aria-hidden="true"
+          />
+        }
+        className={`queue-clear-trigger${isOpen ? ' is-open' : ''}`}
         onClick={() => setIsOpen((open) => !open)}
         disabled={isTriggerDisabled}
         aria-haspopup="menu"
@@ -90,15 +102,7 @@ export function QueueClearMenu({
         }
         data-tooltip-pos="left"
         data-testid="queue-clear-trigger"
-      >
-        <TrashIcon width={13} height={13} />
-        <ChevronDownIcon
-          className={`queue-clear-chevron${isOpen ? ' is-open' : ''}`}
-          width={11}
-          height={11}
-          aria-hidden="true"
-        />
-      </button>
+      />
 
       {isOpen ? (
         <div

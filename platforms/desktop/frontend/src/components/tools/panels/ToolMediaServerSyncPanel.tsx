@@ -11,6 +11,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown, type DropdownOption } from '../../Dropdown';
 import { SettingsTabContainer } from '../../settings/SettingsLayout';
+import { Button } from '../../ui/Button';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 import { EmbyLibraryToolbar } from './emby/EmbyLibraryToolbar';
 import { EmbyMediaRow } from './emby/EmbyMediaRow';
@@ -160,29 +161,30 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
                 </div>
               )}
               {isConnected && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary"
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  leftIcon={<RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />}
                   onClick={fetchItems}
                   disabled={isLoadingItems || isConnecting}
                 >
-                  <RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />
                   <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
+              <Button
+                tier="secondary"
+                size="sm"
+                leftIcon={<SlidersHorizontal size={14} />}
                 onClick={() => setIsProcessingSettingsModalOpen(true)}
               >
-                <SlidersHorizontal size={14} style={{ marginRight: 6 }} />
                 <span>
                   {t('emby.processing_settings', { defaultValue: 'Media Processing Settings' })}
                 </span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
+              </Button>
+              <Button
+                tier="secondary"
+                size="sm"
+                leftIcon={<Settings size={14} />}
                 onClick={() => {
                   if (profiles.length > 0) {
                     setIsManageModalOpen(true);
@@ -191,13 +193,12 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
                   }
                 }}
               >
-                <Settings size={14} style={{ marginRight: 6 }} />
                 <span>
                   {isConnected
                     ? t('emby.server_settings', { defaultValue: 'Server Settings' })
                     : t('emby.connect_server', { defaultValue: 'Connect Server' })}
                 </span>
-              </button>
+              </Button>
             </div>
           }
         />
@@ -214,13 +215,9 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
                 })}
               </span>
             </div>
-            <button
-              type="button"
-              className="btn btn-xs btn-secondary"
-              onClick={() => setIsPluginModalOpen(true)}
-            >
+            <Button tier="secondary" size="xs" onClick={() => setIsPluginModalOpen(true)}>
               {t('emby.get_plugin', { defaultValue: 'Plugin Guide' })}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -283,14 +280,13 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
                     'Connect to your Emby media server with an administrator account to browse libraries, select movies or TV series, transcribe audio offline with Sona, and sync subtitles directly back.',
                 })}
               </p>
-              <button
-                type="button"
-                className="btn btn-primary"
+              <Button
+                tier="primary"
+                leftIcon={<Settings size={15} />}
                 onClick={() => setIsConfigModalOpen(true)}
               >
-                <Settings size={15} style={{ marginRight: 6 }} />
                 <span>{t('emby.configure_now', { defaultValue: 'Configure Server' })}</span>
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -328,15 +324,15 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
                     <p style={{ color: 'var(--color-error, #e03e3e)', marginBottom: 12 }}>
                       {connectionError}
                     </p>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-secondary"
+                    <Button
+                      tier="secondary"
+                      size="sm"
+                      leftIcon={<RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />}
                       onClick={fetchItems}
                       disabled={isLoadingItems || isConnecting}
                     >
-                      <RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />
                       <span>{t('common.retry', { defaultValue: 'Retry' })}</span>
-                    </button>
+                    </Button>
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div className="emby-empty-media-card">

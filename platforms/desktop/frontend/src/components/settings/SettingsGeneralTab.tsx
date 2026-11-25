@@ -9,6 +9,7 @@ import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
 import { GeneralIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { Button } from '../ui/Button';
 import {
   SettingsItem,
   SettingsPageHeader,
@@ -260,14 +261,9 @@ export function SettingsGeneralTab({
               'Review the current local setup and jump straight to the clearest fix when something is off.',
           })}
         >
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onOpenDiagnostics}
-            disabled={!onOpenDiagnostics}
-          >
+          <Button tier="secondary" onClick={onOpenDiagnostics} disabled={!onOpenDiagnostics}>
             {t('settings.diagnostics.open_button', { defaultValue: 'Open Diagnostics' })}
-          </button>
+          </Button>
         </SettingsItem>
       </SettingsSection>
     </SettingsTabContainer>

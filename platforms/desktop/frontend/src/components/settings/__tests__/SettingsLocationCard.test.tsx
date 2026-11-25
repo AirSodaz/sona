@@ -109,7 +109,7 @@ describe('SettingsLocationCard', () => {
       <SettingsLocationCard title="Storage Location" path="" onOpenFolder={onOpenFolder} />
     );
 
-    const openBtn = screen.getByText('Open Folder') as HTMLButtonElement;
+    const openBtn = screen.getByRole('button', { name: 'Open Folder' }) as HTMLButtonElement;
     expect(openBtn.disabled).toBe(true);
 
     rerender(
@@ -121,7 +121,7 @@ describe('SettingsLocationCard', () => {
       />
     );
 
-    const busyOpenBtn = screen.getByText('Open Folder') as HTMLButtonElement;
+    const busyOpenBtn = screen.getByRole('button', { name: 'Open Folder' }) as HTMLButtonElement;
     expect(busyOpenBtn.disabled).toBe(true);
   });
 

@@ -102,27 +102,6 @@
   border-color: var(--color-error);
 }
 
-.btn-loading-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-text-hidden {
-  visibility: hidden;
-}
-
-.btn-spinner-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* ===========================
    Welcome Screen (First Run)
    =========================== */

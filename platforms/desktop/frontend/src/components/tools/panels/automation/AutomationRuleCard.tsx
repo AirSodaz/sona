@@ -1,4 +1,4 @@
-import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../../../../stores/batchQueueStore';
@@ -10,6 +10,7 @@ import type {
   AutomationRuntimeState,
 } from '../../../../types/automation';
 import { Switch } from '../../../Switch';
+import { Button } from '../../../ui/Button';
 
 interface AutomationRuleCardProps {
   rule: AutomationRule;
@@ -120,35 +121,33 @@ export function AutomationRuleCard({
         <span>{destination}</span>
       </p>
       <div className="automation-rule-actions">
-        <button
-          type="button"
-          className="btn btn-sm btn-secondary"
-          disabled={isScanning}
+        <Button
+          tier="secondary"
+          size="sm"
+          loading={isScanning}
+          leftIcon={<RefreshCw size={13} />}
           onClick={() => void onScan(rule.id)}
         >
-          {isScanning ? (
-            <Loader2 size={13} className="automation-icon-spin" />
-          ) : (
-            <RefreshCw size={13} />
-          )}
           <span>
             {isScanning
               ? t('automation.status.scanning', { defaultValue: 'Scanning...' })
               : t('automation.scan_now', { defaultValue: 'Scan Now' })}
           </span>
-        </button>
+        </Button>
         <div className="automation-rule-actions-group">
-          <button
-            type="button"
-            className="btn btn-sm btn-secondary-soft"
+          <Button
+            tier="secondary"
+            size="sm"
+            leftIcon={<Pencil size={13} />}
             onClick={() => onEdit(rule)}
           >
-            <Pencil size={13} />
             <span>{t('common.edit', { defaultValue: 'Edit' })}</span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-danger-soft"
+          </Button>
+          <Button
+            tier="secondary"
+            tone="danger"
+            size="sm"
+            leftIcon={<Trash2 size={13} />}
             onClick={() => {
               void confirm(
                 t('automation.delete_confirm', {
@@ -167,9 +166,8 @@ export function AutomationRuleCard({
               });
             }}
           >
-            <Trash2 size={13} />
             <span>{t('common.delete', { defaultValue: 'Delete' })}</span>
-          </button>
+          </Button>
         </div>
       </div>
       {failedEntries.length > 0 || blocked || runtimeError ? (
@@ -189,23 +187,19 @@ export function AutomationRuleCard({
                 <strong>{fileName(entry.filePath)}</strong>
                 <span>{entry.errorMessage}</span>
               </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <Button
+                tier="secondary"
+                size="sm"
                 onClick={() => void onRetryFile(rule.id, entry.filePath)}
               >
                 {t('automation.retry', { defaultValue: 'Retry' })}
-              </button>
+              </Button>
             </div>
           ))}
           {failedEntries.length > 0 ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void onRetryFailed(rule.id)}
-            >
+            <Button tier="secondary" size="sm" onClick={() => void onRetryFailed(rule.id)}>
               {t('automation.retry_all', { defaultValue: 'Retry All' })}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

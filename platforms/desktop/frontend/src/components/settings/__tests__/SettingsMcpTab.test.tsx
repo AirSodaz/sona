@@ -198,12 +198,12 @@ describe('SettingsMcpTab', () => {
     expect(pathRow).toBeDefined();
     const copyPathBtn = pathRow?.querySelector('button') as HTMLButtonElement;
     expect(copyPathBtn).toBeDefined();
-    expect(copyPathBtn.className).toContain('btn-icon-only');
+    expect(copyPathBtn.className).toContain('btn-icon');
     expect(copyPathBtn.getAttribute('aria-label')).toBe('Copy');
     expect(copyPathBtn.getAttribute('data-tooltip')).toBe('Copy');
 
     const copyConfigBtn = screen.getByRole('button', { name: 'Copy Configuration' });
-    expect(copyConfigBtn.className).toContain('btn-icon-only');
+    expect(copyConfigBtn.className).toContain('btn-icon');
     expect(copyConfigBtn.getAttribute('data-tooltip')).toBe('Copy Configuration');
 
     // Copy path

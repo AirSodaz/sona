@@ -21,6 +21,7 @@ import {
   TrashIcon,
 } from '../Icons';
 import { ProjectBadge } from '../projects/ProjectVisual';
+import { IconButton } from '../ui/Button';
 
 interface HistoryItemProps {
   item: HistoryItemType;
@@ -315,9 +316,11 @@ export function HistoryItem({
       {!isSelectionMode && (
         <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
           {onRename && item.deletedAt == null && (
-            <button
-              type="button"
-              className="btn btn-icon history-item-rename"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              className="history-item-rename"
+              icon={<EditIcon />}
               onClick={(event) => {
                 event.stopPropagation();
                 onRename(item.id);
@@ -329,13 +332,14 @@ export function HistoryItem({
               data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
               data-tooltip-pos="left"
               disabled={isRenameDisabled}
-            >
-              <EditIcon />
-            </button>
+            />
           )}
-          <button
-            type="button"
-            className="btn btn-icon delete-btn history-item-delete"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            className="history-item-delete"
+            icon={<TrashIcon />}
             onClick={(event) => {
               event.stopPropagation();
               onDelete(item.id);
@@ -347,9 +351,7 @@ export function HistoryItem({
             data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
             data-tooltip-pos="left"
             disabled={isDeleteDisabled}
-          >
-            <TrashIcon />
-          </button>
+          />
         </div>
       )}
     </div>

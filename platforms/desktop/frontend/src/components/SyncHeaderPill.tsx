@@ -18,6 +18,7 @@ import { runSyncNow, setSyncPaused } from '../services/tauri/sync';
 import { useUIConfig } from '../stores/configStore';
 import { useSyncStatusStore } from '../stores/syncStatusStore';
 import '../styles/sync-header-pill.css';
+import { Button } from './ui/Button';
 
 interface SyncHeaderPillProps {
   onOpenSyncSettings: () => void;
@@ -237,17 +238,18 @@ export function SyncHeaderPill({
                       'Multi-device sync is not configured yet. Set up WebDAV cloud sync to keep your transcripts safe and in sync across devices.',
                   })}
                 </p>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm sync-popover-cta"
+                <Button
+                  tier="primary"
+                  size="sm"
+                  className="sync-popover-cta"
+                  leftIcon={<ShieldCheck size={14} />}
                   onClick={() => {
                     setIsOpen(false);
                     onOpenSyncSettings();
                   }}
                 >
-                  <ShieldCheck size={14} />
                   <span>{t('settings.sync.setup_cta', { defaultValue: 'Enable Cloud Sync' })}</span>
-                </button>
+                </Button>
               </div>
             ) : (
               <>
@@ -302,50 +304,52 @@ export function SyncHeaderPill({
                 </div>
 
                 <div className="sync-popover-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
+                  <Button
+                    tier="primary"
+                    size="sm"
+                    leftIcon={
+                      <RefreshCw
+                        size={13}
+                        className={status.state === 'syncing' ? 'queue-icon-spin' : undefined}
+                      />
+                    }
                     onClick={() => void handleRunNow()}
                     disabled={
                       isActionBusy || status.state === 'paused' || status.state === 'locked'
                     }
                   >
-                    <RefreshCw
-                      size={13}
-                      className={status.state === 'syncing' ? 'queue-icon-spin' : undefined}
-                    />
                     <span>
                       {status.state === 'syncing'
                         ? t('settings.sync.syncing', { defaultValue: 'Syncing...' })
                         : t('settings.sync.run_now', { defaultValue: 'Sync now' })}
                     </span>
-                  </button>
+                  </Button>
 
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    leftIcon={status.state === 'paused' ? <Play size={13} /> : <Pause size={13} />}
                     onClick={() => void handleTogglePause()}
                     disabled={isActionBusy || status.state === 'locked'}
                   >
-                    {status.state === 'paused' ? <Play size={13} /> : <Pause size={13} />}
                     <span>
                       {status.state === 'paused'
                         ? t('settings.sync.resume', { defaultValue: 'Resume' })
                         : t('settings.sync.pause', { defaultValue: 'Pause' })}
                     </span>
-                  </button>
+                  </Button>
 
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    leftIcon={<Settings size={13} />}
                     onClick={() => {
                       setIsOpen(false);
                       onOpenSyncSettings();
                     }}
                   >
-                    <Settings size={13} />
                     <span>{t('settings.sync.manage', { defaultValue: 'Manage' })}</span>
-                  </button>
+                  </Button>
                 </div>
               </>
             )}

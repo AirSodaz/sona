@@ -349,11 +349,6 @@
   margin: 0 4px;
 }
 
-.btn-icon-sm svg {
-  width: 16px;
-  height: 16px;
-}
-
 @keyframes search-slide-up {
   from {
     opacity: 0;

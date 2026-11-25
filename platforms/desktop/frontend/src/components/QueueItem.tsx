@@ -17,6 +17,7 @@ import {
   RestoreIcon,
   XIcon,
 } from './Icons';
+import { IconButton } from './ui/Button';
 
 /** Returns the icon corresponding to a queue item's status. */
 export const getQueueStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
@@ -305,9 +306,11 @@ export const QueueItem = memo(function QueueItem({
 
       <div className="queue-item-actions">
         {item.sourceType === 'url_stream' && !mediaContext && item.status === 'processing' && (
-          <button
-            type="button"
-            className="btn btn-icon queue-item-finish-save"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            className="queue-item-finish-save"
+            icon={<CompleteIcon width={13} height={13} />}
             disabled={!item.activeInstanceId || isFinishing}
             onClick={async (e) => {
               e.stopPropagation();
@@ -324,13 +327,14 @@ export const QueueItem = memo(function QueueItem({
             data-tooltip={t('batch.finish_and_save', { defaultValue: 'Finish and Save' })}
             data-tooltip-pos="left"
             style={{ color: 'var(--color-success, #22c55e)' }}
-          >
-            <CompleteIcon width={13} height={13} />
-          </button>
+          />
         )}
         {(item.status === 'error' || item.status === 'cancelled') && (
-          <button
-            className="btn btn-icon queue-item-retry"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            className="queue-item-retry"
+            icon={<RestoreIcon width={13} height={13} />}
             onClick={(e) => {
               e.stopPropagation();
               onRetry?.(item.id);
@@ -338,20 +342,20 @@ export const QueueItem = memo(function QueueItem({
             aria-label={retryLabel}
             data-tooltip={retryLabel}
             data-tooltip-pos="left"
-          >
-            <RestoreIcon width={13} height={13} />
-          </button>
+          />
         )}
 
-        <button
-          className="btn btn-icon queue-item-remove"
+        <IconButton
+          tier="ghost"
+          tone="danger"
+          size="xs"
+          className="queue-item-remove"
+          icon={<XIcon width={12} height={12} />}
           onClick={handleRemove}
           aria-label={t('common.delete_item', { item: item.filename })}
           data-tooltip={t('common.delete')}
           data-tooltip-pos="left"
-        >
-          <XIcon width={12} height={12} />
-        </button>
+        />
       </div>
     </div>
   );

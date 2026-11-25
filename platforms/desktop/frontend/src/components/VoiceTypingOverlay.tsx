@@ -22,6 +22,7 @@ import {
 import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { logger } from '../utils/logger';
+import { IconButton } from './ui/Button';
 
 const WAVEFORM_WEIGHTS = [0.45, 0.75, 1.0, 0.75, 0.45] as const;
 const WAVEFORM_BAR_IDS = WAVEFORM_WEIGHTS.map((_, i) => `waveform-bar-${i}`);
@@ -503,27 +504,16 @@ export function VoiceTypingOverlay() {
                 })}
               </span>
             </div>
-            <button
-              type="button"
+            <IconButton
+              tier="ghost"
+              size="xs"
+              pill
+              icon={<X size={12} />}
               data-testid="voice-typing-recall-close-btn"
               aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
               title={t('common.cancel', { defaultValue: 'Cancel' })}
               onClick={handleCancel}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '18px',
-                height: '18px',
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--color-text-muted)',
-                cursor: 'pointer',
-              }}
-            >
-              <X size={12} />
-            </button>
+            />
           </div>
 
           {(() => {
@@ -611,26 +601,17 @@ export function VoiceTypingOverlay() {
                         {item.injectedText}
                       </span>
                     </div>
-                    <button
-                      type="button"
+                    <IconButton
+                      tier="ghost"
+                      size="xs"
+                      icon={<Copy size={11} />}
+                      aria-label={t('common.copy', { defaultValue: 'Copy' })}
                       title={t('common.copy', { defaultValue: 'Copy' })}
                       onClick={(e) => {
                         e.stopPropagation();
                         void navigator.clipboard.writeText(item.injectedText);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '2px',
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--color-text-muted)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Copy size={11} />
-                    </button>
+                    />
                   </div>
                 ))}
               </div>
@@ -769,40 +750,20 @@ export function VoiceTypingOverlay() {
             )}
           </div>
           {/* Quick cancel button */}
-          <button
-            type="button"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            pill
+            icon={<X size={12} />}
             data-testid="voice-typing-cancel-btn"
             aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
             title={t('common.cancel', { defaultValue: 'Cancel' })}
             onClick={handleCancel}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '18px',
-              height: '18px',
-              padding: 0,
               marginLeft: '2px',
-              border: 'none',
-              background: 'transparent',
-              color: isError ? '#fca5a5' : 'var(--color-text-muted)',
-              borderRadius: '999px',
-              cursor: 'pointer',
-              opacity: 0.6,
-              flexShrink: 0,
-              transition: 'opacity 120ms ease, background 120ms ease',
+              color: isError ? '#fca5a5' : undefined,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = '1';
-              e.currentTarget.style.background = 'var(--color-bg-hover)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = '0.6';
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <X size={12} />
-          </button>
+          />
         </div>
       )}
     </div>

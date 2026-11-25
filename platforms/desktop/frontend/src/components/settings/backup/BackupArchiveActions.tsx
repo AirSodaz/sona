@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '../../ui/Button';
 import { SettingsItem } from '../SettingsLayout';
 import type { BackupBusyAction } from './useBackupSettingsController';
 
@@ -31,16 +32,16 @@ export function BackupArchiveActions({
             'Create one .tar.bz2 archive containing config, workspace, light history transcripts, summaries, automation state, and dashboard LLM usage. Audio files, onboarding, current project, and recovery state are excluded.',
         })}
       >
-        <button
-          type="button"
-          className="btn btn-secondary"
+        <Button
+          tier="secondary"
+          loading={busyAction === 'export'}
           onClick={onExport}
           disabled={isActionDisabled}
         >
           {busyAction === 'export'
             ? t('settings.backup.export_busy', { defaultValue: 'Exporting...' })
             : t('settings.backup.export_button', { defaultValue: 'Export Backup' })}
-        </button>
+        </Button>
       </SettingsItem>
 
       <SettingsItem
@@ -50,16 +51,16 @@ export function BackupArchiveActions({
             'Replace the current config, workspace, light history, automation state, and dashboard LLM usage from a backup archive. Imported light history does not restore audio playback files.',
         })}
       >
-        <button
-          type="button"
-          className="btn btn-secondary"
+        <Button
+          tier="secondary"
+          loading={busyAction === 'import'}
           onClick={onImport}
           disabled={isActionDisabled}
         >
           {busyAction === 'import'
             ? t('settings.backup.import_busy', { defaultValue: 'Importing...' })
             : t('settings.backup.import_button', { defaultValue: 'Import Backup' })}
-        </button>
+        </Button>
       </SettingsItem>
     </>
   );

@@ -5,6 +5,7 @@ import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../t
 import { CheckIcon, DownloadIcon, StopIcon, TrashIcon } from '../Icons';
 import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
+import { IconButton } from '../ui/Button';
 
 const ENGINE_LABEL: Record<ModelInfo['engine'], string> = {
   'sherpa-onnx': 'ONNX',
@@ -230,30 +231,30 @@ function ModelCardActions({
 
   if (isInstalled) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-delete"
+      <IconButton
+        tier="ghost"
+        tone="danger"
+        size="sm"
+        icon={<TrashIcon />}
         onClick={() => onDelete(model)}
         disabled={disabled}
         aria-label={`${t('common.delete')} ${model.name}`}
         data-tooltip={t('common.delete')}
-      >
-        <TrashIcon />
-      </button>
+      />
     );
   }
 
   if (isDownloading) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-cancel"
+      <IconButton
+        tier="ghost"
+        tone="danger"
+        size="sm"
+        icon={<StopIcon />}
         onClick={onCancelDownload}
         aria-label={t('common.cancel')}
         data-tooltip={t('common.cancel')}
-      >
-        <StopIcon />
-      </button>
+      />
     );
   }
 
@@ -272,20 +273,21 @@ function ModelCardActions({
 
     return (
       <>
-        <button
-          type="button"
-          className="model-action-icon"
+        <IconButton
+          tier="ghost"
+          size="sm"
+          icon={<DownloadIcon />}
           onClick={() => onDownload(model)}
           disabled={disabled}
           aria-label={downloadAriaLabel}
           data-tooltip={downloadTooltip}
-        >
-          <DownloadIcon />
-        </button>
+        />
         {onDiscardDownload && (
-          <button
-            type="button"
-            className="model-action-icon model-action-delete"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            icon={<TrashIcon />}
             onClick={() => onDiscardDownload(model)}
             disabled={disabled}
             aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
@@ -293,25 +295,22 @@ function ModelCardActions({
               size: downloadedFormatted,
               defaultValue: `Discard incomplete download (${downloadedFormatted})`,
             })}
-          >
-            <TrashIcon />
-          </button>
+          />
         )}
       </>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="model-action-icon"
+    <IconButton
+      tier="ghost"
+      size="sm"
+      icon={<DownloadIcon />}
       onClick={() => onDownload(model)}
       disabled={disabled}
       aria-label={`${t('common.download')} ${model.name}`}
       data-tooltip={t('common.download')}
-    >
-      <DownloadIcon />
-    </button>
+    />
   );
 }
 

@@ -29,6 +29,7 @@ import {
   createPointerContextMenuRequest,
   isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
+import { IconButton } from '../ui/Button';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
@@ -141,9 +142,11 @@ function SortableProjectItem({
           <span className="projects-rail-count">{projectCount}</span>
         </div>
       </button>
-      <button
-        type="button"
+      <IconButton
+        tier="ghost"
+        size="xs"
         className="projects-rail-menu-btn"
+        icon={<MoreHorizontal size={14} />}
         aria-label={t('common.more_options', { defaultValue: 'More options' })}
         aria-haspopup="menu"
         aria-expanded={isContextMenuOpen}
@@ -173,9 +176,7 @@ function SortableProjectItem({
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
-      >
-        <MoreHorizontal size={14} />
-      </button>
+      />
     </div>
   );
 }
@@ -311,16 +312,16 @@ export function ProjectsRail({
           <span className="projects-rail-section-title">
             {t('projects.projects_group_title', { defaultValue: 'Projects' })}
           </span>
-          <button
-            type="button"
+          <IconButton
+            tier="ghost"
+            size="xs"
             className="projects-rail-create"
+            icon={<Plus size={14} />}
             onClick={onOpenCreateModal}
             aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
             data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
             data-tooltip-pos="bottom"
-          >
-            <Plus size={14} />
-          </button>
+          />
         </div>
         <div
           className="projects-rail-list"
@@ -372,9 +373,11 @@ export function ProjectsRail({
                 <span className="projects-rail-count">{inboxCount}</span>
               </div>
             </button>
-            <button
-              type="button"
+            <IconButton
+              tier="ghost"
+              size="xs"
               className="projects-rail-menu-btn"
+              icon={<MoreHorizontal size={14} />}
               aria-label={t('common.more_options', { defaultValue: 'More options' })}
               aria-haspopup="menu"
               aria-expanded={isInboxContextMenuOpen}
@@ -405,9 +408,7 @@ export function ProjectsRail({
                   );
                 }
               }}
-            >
-              <MoreHorizontal size={14} />
-            </button>
+            />
           </div>
 
           {projects.length === 0 && (

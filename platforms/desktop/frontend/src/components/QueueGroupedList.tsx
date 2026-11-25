@@ -6,6 +6,7 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { RestoreIcon } from './Icons';
 import { QueueGroup } from './QueueGroup';
 import { QueueItemContainer } from './QueueItem';
+import { Button } from './ui/Button';
 
 const STATUS_PRIORITY: Record<string, number> = {
   processing: 0,
@@ -153,14 +154,16 @@ export function QueueGroupedList({
           statusVariant="failed"
           defaultExpanded={true}
           action={
-            <button
-              className="btn btn-secondary-soft btn-xs queue-group-retry-all-btn"
+            <Button
+              tier="secondary"
+              size="xs"
+              className="queue-group-retry-all-btn"
+              leftIcon={<RestoreIcon width={11} height={11} />}
               onClick={retryAllFailed}
               aria-label={t('batch.retry_all')}
             >
-              <RestoreIcon width={11} height={11} />
               <span>{t('batch.retry_all')}</span>
-            </button>
+            </Button>
           }
         >
           {failedIds.map((id) => (

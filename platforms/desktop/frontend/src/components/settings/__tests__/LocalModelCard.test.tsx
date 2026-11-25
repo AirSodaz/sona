@@ -96,8 +96,8 @@ describe('LocalModelCard', () => {
     expect(cancelBtn).toBeTruthy();
     expect(cancelBtn.getAttribute('data-tooltip')).toMatch(/Cancel|取消/);
     expect(cancelBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(cancelBtn.className).toContain('model-action-cancel');
-    expect(cancelBtn.className).not.toContain('model-action-delete');
+    expect(cancelBtn.className).toContain('btn-icon');
+    expect(cancelBtn.className).toContain('btn-danger');
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith('qwen3.5-4b');
   });
@@ -158,7 +158,8 @@ describe('LocalModelCard', () => {
     expect(deleteBtn).toBeTruthy();
     expect(deleteBtn.getAttribute('data-tooltip')).toMatch(/Delete|删除/);
     expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(deleteBtn.className).toContain('model-action-delete');
+    expect(deleteBtn.className).toContain('btn-icon');
+    expect(deleteBtn.className).toContain('btn-danger');
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith(installedCard);
   });
@@ -368,7 +369,7 @@ describe('LocalModelCard', () => {
       name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(true);
-    expect(testBtn.classList.contains('loading')).toBe(true);
+    expect(testBtn.classList.contains('is-loading')).toBe(true);
     expect(testBtn.getAttribute('data-tooltip')).toMatch(/Generating\.\.\.|正在生成\.\.\./);
   });
 
@@ -394,7 +395,7 @@ describe('LocalModelCard', () => {
     expect(speedBadge.textContent).toBe('28.5 t/s');
 
     const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-    expect(testBtn.classList.contains('success')).toBe(true);
+    expect(testBtn.classList.contains('btn-feedback-success')).toBe(true);
     expect(testBtn.getAttribute('data-tooltip')).toMatch(
       /✓ (Inference successful|推理成功) \(28\.5 t\/s\)/
     );
@@ -420,7 +421,7 @@ describe('LocalModelCard', () => {
 
     expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
     const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-    expect(testBtn.classList.contains('error')).toBe(true);
+    expect(testBtn.classList.contains('btn-feedback-error')).toBe(true);
     expect(testBtn.getAttribute('data-tooltip')).toBe('✕ llama.cpp out of memory');
   });
 

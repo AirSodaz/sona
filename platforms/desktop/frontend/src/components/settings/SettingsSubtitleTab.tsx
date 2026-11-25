@@ -43,6 +43,7 @@ import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
 import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
@@ -645,15 +646,16 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
             })}
           </span>
           {historyItems.length > 0 && (
-            <button
-              type="button"
+            <Button
+              tier="secondary"
+              tone="danger"
+              size="sm"
+              leftIcon={<Trash2 size={14} />}
               onClick={clearHistory}
-              className="btn btn-secondary btn-sm"
               style={{ flexShrink: 0 }}
             >
-              <Trash2 size={14} />
-              <span>{t('common.clear', { defaultValue: 'Clear' })}</span>
-            </button>
+              {t('common.clear', { defaultValue: 'Clear' })}
+            </Button>
           )}
         </div>
 
@@ -813,49 +815,38 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    feedback={copiedId === item.id ? 'success' : 'idle'}
+                    leftIcon={copiedId === item.id ? <Check size={14} /> : <Copy size={14} />}
                     onClick={() => void handleCopy(item.id, item.injectedText)}
                   >
-                    {copiedId === item.id ? (
-                      <Check size={14} color="#22c55e" />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                    <span>
-                      {copiedId === item.id
-                        ? t('common.copied', { defaultValue: 'Copied' })
-                        : t('common.copy', { defaultValue: 'Copy' })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                    {copiedId === item.id
+                      ? t('common.copied', { defaultValue: 'Copied' })
+                      : t('common.copy', { defaultValue: 'Copy' })}
+                  </Button>
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    feedback={addedHotwordId === item.id ? 'success' : 'idle'}
+                    leftIcon={addedHotwordId === item.id ? <Check size={14} /> : <Plus size={14} />}
                     onClick={() => handleAddToHotwords(item.id, item.injectedText)}
                   >
-                    {addedHotwordId === item.id ? (
-                      <Check size={14} color="#22c55e" />
-                    ) : (
-                      <Plus size={14} />
-                    )}
-                    <span>
-                      {addedHotwordId === item.id
-                        ? t('settings.voice_typing_hotword_added', { defaultValue: 'Added' })
-                        : t('settings.voice_typing_add_hotword', {
-                            defaultValue: 'Add to Hotwords',
-                          })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon btn-sm"
+                    {addedHotwordId === item.id
+                      ? t('settings.voice_typing_hotword_added', { defaultValue: 'Added' })
+                      : t('settings.voice_typing_add_hotword', {
+                          defaultValue: 'Add to Hotwords',
+                        })}
+                  </Button>
+                  <IconButton
+                    tier="ghost"
+                    tone="danger"
+                    size="sm"
+                    icon={<Trash2 size={14} />}
                     aria-label={t('common.delete', { defaultValue: 'Delete' })}
                     onClick={() => removeItem(item.id)}
-                    style={{ color: 'var(--color-text-muted)' }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  />
                 </div>
               </div>
             ))}
@@ -1104,15 +1095,15 @@ export function SettingsSubtitleTab({
                   'Reset the caption floating window to the default bottom-center position.',
               })}
             >
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <Button
+                tier="secondary"
+                size="sm"
                 onClick={() => void captionWindowService.resetPosition()}
               >
                 {t('settings.caption_reset_position', {
                   defaultValue: 'Reset Window Position',
                 })}
-              </button>
+              </Button>
             </SettingsItem>
           </SettingsSection>
 
@@ -1163,26 +1154,19 @@ export function SettingsSubtitleTab({
                       onChange={handleSourceLanguageChange}
                       style={{ width: '150px' }}
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      tier="secondary"
+                      size="sm"
                       id="swap-translation-languages"
+                      icon={<ArrowLeftRight size={14} />}
                       aria-label={t('settings.swap_translation_languages', {
                         defaultValue: 'Swap languages',
                       })}
-                      className="btn btn-secondary"
                       onClick={handleSwapLanguages}
                       title={t('settings.swap_translation_languages', {
                         defaultValue: 'Swap languages',
                       })}
-                      style={{
-                        padding: '6px 10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <ArrowLeftRight size={14} />
-                    </button>
+                    />
                     <Dropdown
                       id="translation-target-language"
                       aria-label={t('settings.translation_target_language', {

@@ -29,6 +29,7 @@ import {
   SettingsTabContainer,
 } from '../../settings/SettingsLayout';
 import { SettingsShortcutInput } from '../../settings/SettingsShortcutInput';
+import { Button, IconButton } from '../../ui/Button';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 
 const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4ade80', '#f87171'];
@@ -328,15 +329,15 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 'Reset the caption floating window to the default bottom-center position.',
             })}
           >
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <Button
+              tier="secondary"
+              size="sm"
               onClick={() => void captionWindowService.resetPosition()}
             >
               {t('settings.caption_reset_position', {
                 defaultValue: 'Reset Window Position',
               })}
-            </button>
+            </Button>
           </SettingsItem>
         </SettingsSection>
         <SettingsSection
@@ -388,9 +389,10 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                     onChange={handleSourceLanguageChange}
                     style={{ width: '150px' }}
                   />
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
+                  <IconButton
+                    tier="secondary"
+                    size="sm"
+                    icon={<ArrowLeftRight size={14} />}
                     onClick={handleSwapLanguages}
                     title={t('settings.swap_translation_languages', {
                       defaultValue: 'Swap languages',
@@ -398,15 +400,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                     aria-label={t('settings.swap_translation_languages', {
                       defaultValue: 'Swap languages',
                     })}
-                    style={{
-                      padding: '6px 10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <ArrowLeftRight size={14} />
-                  </button>
+                  />
                   <Dropdown
                     id="tools-subtitle-target-lang"
                     aria-label={t('settings.translation_target_language', {

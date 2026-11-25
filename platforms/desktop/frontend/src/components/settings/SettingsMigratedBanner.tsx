@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { ToolId } from '../../types/tools';
+import { Button } from '../ui/Button';
 import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
 
 export interface SettingsMigratedBannerProps {
@@ -180,21 +181,14 @@ export function SettingsMigratedBanner({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' }}>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            tier="primary"
+            leftIcon={<Wrench size={16} />}
+            rightIcon={<ArrowRight size={16} />}
             onClick={handleGoToTools}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 20px',
-            }}
           >
-            <Wrench size={16} aria-hidden="true" />
             <span>{t('tools.go_to_tools', { defaultValue: 'Go to Tools' })}</span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </div>
     </SettingsTabContainer>

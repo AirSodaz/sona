@@ -60,7 +60,7 @@
   min-height: 30px;
   padding: 0;
   border: 0;
-  border-radius: calc(var(--radius-md) - 4px);
+  border-radius: 10px;
   background: transparent;
   box-shadow: none;
   color: var(--color-text-secondary);
@@ -73,6 +73,13 @@
     color var(--transition-fast),
     transform var(--transition-fast),
     box-shadow var(--transition-fast);
+}
+
+@supports (corner-shape: squircle) {
+  .projects-fab-actions .projects-toolbar-icon {
+    corner-shape: squircle;
+    border-radius: 13px;
+  }
 }
 
 .projects-fab-actions .projects-toolbar-icon svg {

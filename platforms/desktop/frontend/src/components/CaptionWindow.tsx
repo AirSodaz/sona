@@ -16,6 +16,7 @@ import type { TranscriptSegment } from '../types/transcript';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
+import { IconButton } from './ui/Button';
 
 export function computeCaptionTextStyle(
   style: CaptionWindowStyle,
@@ -333,28 +334,28 @@ export function CaptionWindow() {
       <div className="caption-drag-handle" data-tauri-drag-region onMouseDown={startDragging}>
         <div className="drag-indicator" />
         <div className="caption-handle-actions" data-tauri-drag-region="false">
-          <button
-            type="button"
+          <IconButton
+            tier="ghost"
+            size="xs"
             className="caption-action-btn"
+            icon={<Copy size={14} />}
             data-tauri-drag-region="false"
             title={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
             aria-label={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            type="button"
+          />
+          <IconButton
+            tier="ghost"
+            size="xs"
             className="caption-action-btn"
+            icon={<Lock size={14} />}
             data-tauri-drag-region="false"
             title={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
             aria-label={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
             onClick={handleLock}
             onMouseDown={(e) => e.stopPropagation()}
-          >
-            <Lock size={14} />
-          </button>
+          />
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { ModalPortal } from './ModalPortal';
+import { IconButton } from './ui/Button';
 
 import './PanelModal.css';
 
@@ -116,16 +117,16 @@ export function PanelModal({
                 <div className="panel-modal-top-leading">
                   <div className="panel-modal-header-leading">
                     {origin === 'settings' && onBack ? (
-                      <button
-                        type="button"
-                        className="btn btn-icon panel-modal-back"
+                      <IconButton
+                        tier="ghost"
+                        size="md"
+                        className="panel-modal-back"
+                        icon={<ArrowLeft size={16} />}
                         onClick={onBack}
                         aria-label={resolvedBackLabel}
                         data-tooltip={resolvedBackLabel}
                         data-tooltip-pos="bottom"
-                      >
-                        <ArrowLeft size={16} />
-                      </button>
+                      />
                     ) : null}
                     {headerLeading}
                   </div>
@@ -146,16 +147,16 @@ export function PanelModal({
                 </div>
                 {!hideCloseButton && (
                   <div className="panel-modal-close-slot">
-                    <button
-                      type="button"
-                      className="btn btn-icon panel-modal-close"
+                    <IconButton
+                      tier="ghost"
+                      size="md"
+                      className="panel-modal-close"
+                      icon={<X size={18} />}
                       onClick={onClose}
                       aria-label={resolvedCloseLabel}
                       data-tooltip={resolvedCloseLabel}
                       data-tooltip-pos="bottom-left"
-                    >
-                      <X size={18} />
-                    </button>
+                    />
                   </div>
                 )}
               </div>

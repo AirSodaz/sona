@@ -3,6 +3,7 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ScrollDetachMode } from '../../hooks/useTranscriptScrollFollow';
+import { IconButton } from '../ui/Button';
 
 export interface TranscriptScrollFollowBadgeProps {
   detachMode: ScrollDetachMode;
@@ -65,9 +66,18 @@ export function TranscriptScrollFollowBadge({
     >
       <div className={`scroll-badge-action-slot ${isDetached ? 'is-visible' : ''}`}>
         {shouldRenderButton && (
-          <button
-            type="button"
+          <IconButton
+            tier="secondary"
+            size="xs"
+            pill
             className="scroll-badge-action-btn"
+            icon={
+              displayMode === 'playback' ? (
+                <LocateFixed size={13} aria-hidden="true" />
+              ) : (
+                <ArrowDown size={13} aria-hidden="true" />
+              )
+            }
             onClick={onResume}
             data-tooltip={tooltipText}
             data-tooltip-pos="top"
@@ -76,13 +86,7 @@ export function TranscriptScrollFollowBadge({
             tabIndex={isDetached ? 0 : -1}
             aria-hidden={!isDetached}
             style={isDetached ? undefined : { pointerEvents: 'none' }}
-          >
-            {displayMode === 'playback' ? (
-              <LocateFixed size={13} aria-hidden="true" />
-            ) : (
-              <ArrowDown size={13} aria-hidden="true" />
-            )}
-          </button>
+          />
         )}
       </div>
       <span className="scroll-badge-word-count">{wordCountText}</span>

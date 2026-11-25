@@ -20,6 +20,7 @@ import type { TranscriptSegment } from '../../types/transcript';
 import { needsWordBoundarySpace } from '../../utils/cjkTypography';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { CheckIcon, CloseIcon, EditIcon, MergeIcon, TrashIcon } from '../Icons';
+import { IconButton } from '../ui/Button';
 import { SegmentEditor } from './SegmentEditor';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
@@ -589,9 +590,11 @@ export function SegmentItem({
                   })}
                 />
                 <div className="segment-translation-actions">
-                  <button
-                    type="button"
+                  <IconButton
+                    tier="ghost"
+                    size="xs"
                     className="segment-translation-save-btn"
+                    icon={<CheckIcon width={14} height={14} />}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       isTranslationActionClickedRef.current = true;
@@ -603,12 +606,12 @@ export function SegmentItem({
                     }}
                     title={t('common.save', { defaultValue: 'Save' })}
                     aria-label={t('common.save', { defaultValue: 'Save' })}
-                  >
-                    <CheckIcon width={14} height={14} />
-                  </button>
-                  <button
-                    type="button"
+                  />
+                  <IconButton
+                    tier="ghost"
+                    size="xs"
                     className="segment-translation-cancel-btn"
+                    icon={<CloseIcon width={14} height={14} />}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       isTranslationActionClickedRef.current = true;
@@ -620,9 +623,7 @@ export function SegmentItem({
                     }}
                     title={t('common.cancel', { defaultValue: 'Cancel' })}
                     aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-                  >
-                    <CloseIcon width={14} height={14} />
-                  </button>
+                  />
                 </div>
               </div>
             ) : (
@@ -647,9 +648,11 @@ export function SegmentItem({
                   </>
                 )}
                 {!isLocked && (
-                  <button
-                    type="button"
+                  <IconButton
+                    tier="ghost"
+                    size="xs"
                     className="segment-translation-edit-btn"
+                    icon={<EditIcon width={12} height={12} />}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleStartTranslationEdit();
@@ -658,17 +661,17 @@ export function SegmentItem({
                     aria-label={t('editor.edit_translation', {
                       defaultValue: 'Edit translation',
                     })}
-                  >
-                    <EditIcon width={12} height={12} />
-                  </button>
+                  />
                 )}
               </div>
             ))}
         </div>
 
         <div className="segment-actions">
-          <button
-            className="btn btn-icon"
+          <IconButton
+            tier="ghost"
+            size="sm"
+            icon={<EditIcon />}
             onClick={(e) => {
               e.stopPropagation();
               onEdit(segment.id);
@@ -682,12 +685,12 @@ export function SegmentItem({
                   : t('editor.edit_tooltip')
             }
             aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
-          >
-            <EditIcon />
-          </button>
+          />
           {hasNext && (
-            <button
-              className="btn btn-icon"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              icon={<MergeIcon />}
               onClick={(e) => {
                 e.stopPropagation();
                 onMergeWithNext(segment.id);
@@ -703,14 +706,13 @@ export function SegmentItem({
                       : t('editor.merge_tooltip')
               }
               aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
-            >
-              <MergeIcon />
-            </button>
+            />
           )}
           {showEnrollAction && (
-            <button
-              type="button"
-              className="btn btn-icon"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              icon={<Mic size={14} />}
               onClick={(e) => {
                 e.stopPropagation();
                 onEnrollSample?.(segment);
@@ -722,12 +724,13 @@ export function SegmentItem({
               aria-label={t('editor.enroll_speaker_sample', {
                 defaultValue: 'Enroll as Voice Sample',
               })}
-            >
-              <Mic size={14} />
-            </button>
+            />
           )}
-          <button
-            className="btn btn-icon"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            icon={<TrashIcon />}
             onClick={(e) => {
               e.stopPropagation();
               onDelete(segment.id);
@@ -741,9 +744,7 @@ export function SegmentItem({
                   : t('editor.delete_tooltip')
             }
             aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
-          >
-            <TrashIcon />
-          </button>
+          />
         </div>
       </div>
     </div>

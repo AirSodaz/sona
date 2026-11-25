@@ -25,6 +25,7 @@ import type {
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { Button, IconButton } from '../ui/Button';
 import { SettingsItem, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 
 export function SettingsApiServerTab(): React.JSX.Element {
@@ -466,20 +467,18 @@ export function SettingsApiServerTab(): React.JSX.Element {
         })}
         actions={
           isEnabled ? (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              feedback={copiedEndpoint ? 'success' : 'idle'}
+              leftIcon={copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
               onClick={handleCopyEndpoint}
               title={t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              {copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
-              <span>
-                {copiedEndpoint
-                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
-                  : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
-              </span>
-            </button>
+              {copiedEndpoint
+                ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
+                : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
+            </Button>
           ) : undefined
         }
       />
@@ -666,17 +665,20 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 defaultValue: 'Optional bearer token',
               })}
             />
-            <button
-              className="btn btn-icon"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              icon={<RefreshCw size={14} />}
               onClick={handleGenerateKey}
               data-tooltip={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
               data-tooltip-pos="top"
               aria-label={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              className="btn btn-icon"
+            />
+            <IconButton
+              tier="ghost"
+              size="sm"
+              feedback={copied ? 'success' : 'idle'}
+              icon={copied ? <Check size={14} /> : <Copy size={14} />}
               onClick={handleCopyKey}
               data-tooltip={
                 copied
@@ -689,9 +691,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                   ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
                   : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
               }
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-            </button>
+            />
           </div>
         </SettingsItem>
 

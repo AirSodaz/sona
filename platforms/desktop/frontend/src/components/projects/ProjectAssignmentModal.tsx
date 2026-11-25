@@ -6,6 +6,7 @@ import type { ProjectRecord } from '../../types/project';
 import { Dropdown, type DropdownOption } from '../Dropdown';
 import { InboxIcon } from '../Icons';
 import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
 import { ProjectVisual } from './ProjectVisual';
 
 interface ProjectAssignmentModalProps {
@@ -92,17 +93,12 @@ function OpenProjectAssignmentModal({
       size="sm"
       footer={
         <>
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>
+          <Button tier="secondary" onClick={onClose} disabled={isSaving}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void handleApply()}
-            disabled={isSaving}
-          >
+          </Button>
+          <Button tier="primary" loading={isSaving} onClick={() => void handleApply()}>
             {t('common.save', { defaultValue: 'Save' })}
-          </button>
+          </Button>
         </>
       }
     >
