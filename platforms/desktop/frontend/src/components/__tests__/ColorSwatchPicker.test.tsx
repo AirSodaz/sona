@@ -11,20 +11,20 @@ vi.mock('react-i18next', () => ({
 describe('ColorSwatchPicker', () => {
   it('renders default preset swatches, divider, and custom color button', () => {
     const onChange = vi.fn();
-    const { container } = render(<ColorSwatchPicker value="#6366F1" onChange={onChange} />);
+    const { container } = render(<ColorSwatchPicker value="#5B82E8" onChange={onChange} />);
 
     const swatchesContainer = container.querySelector('.project-color-swatches');
     expect(swatchesContainer).not.toBeNull();
 
     // The active preset swatch should have the 'active' class
-    const indigoSwatch = screen.getByRole('button', { name: '#6366F1' });
-    expect(indigoSwatch.classList.contains('active')).toBe(true);
+    const cobaltSwatch = screen.getByRole('button', { name: '#5B82E8' });
+    expect(cobaltSwatch.classList.contains('active')).toBe(true);
 
     // Other presets should not have 'active'
-    const emeraldSwatch = screen.getByRole('button', { name: '#10B981' });
-    expect(emeraldSwatch.classList.contains('active')).toBe(false);
+    const mintSwatch = screen.getByRole('button', { name: '#4EC39D' });
+    expect(mintSwatch.classList.contains('active')).toBe(false);
 
-    // Custom button should not be active since #6366F1 is a preset
+    // Custom button should not be active since #5B82E8 is a preset
     const customColorBtn = screen.getByRole('button', { name: 'Custom color' });
     expect(customColorBtn.classList.contains('active')).toBe(false);
   });
@@ -43,15 +43,15 @@ describe('ColorSwatchPicker', () => {
     const onChange = vi.fn();
     render(<ColorSwatchPicker value="#FFFFFF" onChange={onChange} />);
 
-    const emeraldSwatch = screen.getByRole('button', { name: '#10B981' });
-    fireEvent.click(emeraldSwatch);
+    const mintSwatch = screen.getByRole('button', { name: '#4EC39D' });
+    fireEvent.click(mintSwatch);
 
-    expect(onChange).toHaveBeenCalledWith('#10B981');
+    expect(onChange).toHaveBeenCalledWith('#4EC39D');
   });
 
   it('toggles ColorPicker popover when clicking custom color button', () => {
     const onChange = vi.fn();
-    render(<ColorSwatchPicker value="#6366F1" onChange={onChange} />);
+    render(<ColorSwatchPicker value="#5B82E8" onChange={onChange} />);
 
     const customColorBtn = screen.getByRole('button', { name: 'Custom color' });
     expect(document.querySelector('.sona-color-picker-popover')).toBeNull();
@@ -67,7 +67,7 @@ describe('ColorSwatchPicker', () => {
 
   it('allows changing color inside ColorPicker and calls onChange', () => {
     const onChange = vi.fn();
-    render(<ColorSwatchPicker value="#6366F1" onChange={onChange} />);
+    render(<ColorSwatchPicker value="#5B82E8" onChange={onChange} />);
 
     const customColorBtn = screen.getByRole('button', { name: 'Custom color' });
     fireEvent.click(customColorBtn);
@@ -75,7 +75,7 @@ describe('ColorSwatchPicker', () => {
     const toggleBtn = screen.getByLabelText('Toggle RGB / HEX');
     fireEvent.click(toggleBtn);
 
-    const hexInput = screen.getByDisplayValue('#6366F1');
+    const hexInput = screen.getByDisplayValue('#5B82E8');
     fireEvent.change(hexInput, { target: { value: '#123456' } });
 
     expect(onChange).toHaveBeenCalledWith('#123456');
@@ -89,7 +89,7 @@ describe('ColorSwatchPicker', () => {
     expect(screen.getByRole('button', { name: '#FF0000' })).toBeDefined();
     expect(screen.getByRole('button', { name: '#00FF00' })).toBeDefined();
     expect(screen.getByRole('button', { name: '#0000FF' })).toBeDefined();
-    expect(screen.queryByRole('button', { name: '#10B981' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '#4EC39D' })).toBeNull();
   });
 
   describe('getContrastTextColor', () => {

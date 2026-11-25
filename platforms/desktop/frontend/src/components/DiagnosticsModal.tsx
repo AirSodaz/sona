@@ -264,16 +264,16 @@ export function DiagnosticsModal({
         <>
           <Button
             tier="secondary"
-            size="sm"
+            size="md"
             loading={isLoading}
-            leftIcon={<RefreshCw size={14} />}
+            leftIcon={<RefreshCw size={16} />}
             onClick={() => void loadSnapshot()}
           >
             {t('settings.diagnostics.refresh', { defaultValue: 'Refresh' })}
           </Button>
           <Button
             tier="secondary"
-            size="sm"
+            size="md"
             onClick={() =>
               void handleAction({
                 kind: 'open_log_folder',

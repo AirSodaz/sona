@@ -1,6 +1,7 @@
 import { Copy, Lock } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_CAPTION_COLORS } from '../constants/colors';
 import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
 import { useAuxWindowLogLevel } from '../hooks/useAuxWindowLogLevel';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
@@ -25,7 +26,7 @@ export function computeCaptionTextStyle(
 ): React.CSSProperties {
   const strokeEnabled = Boolean(style.textStroke) && (style.strokeWidth ?? 0) > 0;
   const strokeWidth = style.strokeWidth ?? 0;
-  const strokeColor = style.strokeColor ?? '#000000';
+  const strokeColor = style.strokeColor ?? DEFAULT_CAPTION_COLORS.stroke;
   const shadowEnabled = style.textShadow !== false;
 
   const shadows: string[] = [];
@@ -260,7 +261,8 @@ export function CaptionWindow() {
           : 'original_main');
 
   const textAlign = captionState.style.textAlign ?? 'center';
-  const translationColor = captionState.style.translationColor ?? '#6ee7b7';
+  const translationColor =
+    captionState.style.translationColor ?? DEFAULT_CAPTION_COLORS.translationFont;
   const primaryFontSize = captionState.style.fontSize;
   const secondaryFontSize =
     captionState.style.translationFontSize ??

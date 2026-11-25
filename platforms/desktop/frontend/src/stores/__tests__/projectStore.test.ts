@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PROJECT_COLOR } from '../../constants/colors';
 import { historyService } from '../../services/historyService';
 import { projectService } from '../../services/projectService';
 import { useConfigStore } from '../configStore';
@@ -78,6 +79,12 @@ describe('projectStore', () => {
     const project = await useProjectStore.getState().createProject({ name: 'Alpha' });
 
     expect(project?.name).toBe('Alpha');
+    expect(projectService.create).toHaveBeenCalledWith({
+      name: 'Alpha',
+      description: '',
+      icon: '',
+      color: DEFAULT_PROJECT_COLOR,
+    });
     expect(useProjectStore.getState().projects).toHaveLength(1);
   });
 

@@ -100,6 +100,7 @@ function ZapIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
   );
 }
 
+import { DEFAULT_PROJECT_COLOR } from '../constants/colors';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
@@ -128,7 +129,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
-  const [createColor, setCreateColor] = useState('#64748b');
+  const [createColor, setCreateColor] = useState<string>(DEFAULT_PROJECT_COLOR);
   const [createIcon, setCreateIcon] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
@@ -269,6 +270,8 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
                   setQuery('');
                   setCreateName('');
                   setCreateDescription('');
+                  setCreateColor(DEFAULT_PROJECT_COLOR);
+                  setCreateIcon('');
                   setCreateOpen(true);
                 }}
               >
@@ -313,6 +316,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
           if (project) {
             await setActiveProjectId(project.id);
           }
+          setCreateColor(DEFAULT_PROJECT_COLOR);
           setCreateIcon('');
           setCreateOpen(false);
         }}

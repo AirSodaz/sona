@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { DEFAULT_CAPTION_COLORS } from '../constants/colors';
 import { useCaptionConfig } from '../stores/configStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { hexToRgba } from '../utils/colorUtils';
@@ -28,7 +29,10 @@ export function LiveCaptionOverlay({
   const visibleSegments = useTranscriptSessionStore(
     useShallow((state) => state.segments.slice(-maxLines))
   );
-  const { captionBackgroundOpacity = 0.6, captionBackgroundColor = '#000000' } = useCaptionConfig();
+  const {
+    captionBackgroundOpacity = 0.6,
+    captionBackgroundColor = DEFAULT_CAPTION_COLORS.background,
+  } = useCaptionConfig();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new segments arrive

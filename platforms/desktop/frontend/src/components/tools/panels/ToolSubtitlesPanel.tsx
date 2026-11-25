@@ -9,6 +9,7 @@ import {
 import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_CAPTION_COLORS } from '../../../constants/colors';
 import { useRealtimeTranslationConfig } from '../../../hooks/useRealtimeTranslationConfig';
 import {
   isAsrRequestConfigured,
@@ -32,8 +33,6 @@ import { SettingsShortcutInput } from '../../settings/SettingsShortcutInput';
 import { Button, IconButton } from '../../ui/Button';
 import { Slider } from '../../ui/Slider';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
-
-const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4ade80', '#f87171'];
 
 export function ToolSubtitlesPanel(): React.JSX.Element {
   const { t } = useTranslation();
@@ -61,10 +60,11 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const startOnLaunch = config.startOnLaunch ?? false;
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 22;
-  const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionFontColor = config.captionFontColor || DEFAULT_CAPTION_COLORS.font;
   const captionTranslationFontSize = config.captionTranslationFontSize ?? 16;
-  const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
-  const captionBackgroundColor = config.captionBackgroundColor || '#17171a';
+  const captionTranslationFontColor =
+    config.captionTranslationFontColor || DEFAULT_CAPTION_COLORS.translationFont;
+  const captionBackgroundColor = config.captionBackgroundColor || DEFAULT_CAPTION_COLORS.background;
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.72;
   const {
     realtimeTranslationEnabled,
@@ -82,7 +82,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
 
   const captionTextStroke = config.captionTextStroke ?? false;
   const captionStrokeWidth = config.captionStrokeWidth ?? 2;
-  const captionStrokeColor = config.captionStrokeColor || '#000000';
+  const captionStrokeColor = config.captionStrokeColor || DEFAULT_CAPTION_COLORS.stroke;
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
   const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
@@ -526,7 +526,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <ColorSwatchPicker
               value={captionFontColor}
               onChange={(color) => updateConfig({ captionFontColor: color })}
-              presets={SUBTITLE_COLOR_PRESETS}
               aria-label={t('live.original_font_color', { defaultValue: 'Original Font Color' })}
             />
           </SettingsItem>
@@ -571,7 +570,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <ColorSwatchPicker
               value={captionTranslationFontColor}
               onChange={(color) => updateConfig({ captionTranslationFontColor: color })}
-              presets={SUBTITLE_COLOR_PRESETS}
               aria-label={t('live.translation_font_color', {
                 defaultValue: 'Translation Font Color',
               })}
@@ -582,7 +580,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <ColorSwatchPicker
               value={captionBackgroundColor}
               onChange={(color) => updateConfig({ captionBackgroundColor: color })}
-              presets={SUBTITLE_COLOR_PRESETS}
               aria-label={t('live.background_color', { defaultValue: 'Background Color' })}
             />
           </SettingsItem>
@@ -692,7 +689,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 <ColorSwatchPicker
                   value={captionStrokeColor}
                   onChange={(color) => updateConfig({ captionStrokeColor: color })}
-                  presets={SUBTITLE_COLOR_PRESETS}
                   aria-label={t('settings.caption_stroke_color', { defaultValue: 'Stroke Color' })}
                 />
               </SettingsItem>

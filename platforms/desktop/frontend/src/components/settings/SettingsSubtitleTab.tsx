@@ -17,6 +17,7 @@ import {
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_CAPTION_COLORS } from '../../constants/colors';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { useRealtimeTranslationConfig } from '../../hooks/useRealtimeTranslationConfig';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
@@ -885,14 +886,15 @@ export function SettingsSubtitleTab({
   const startOnLaunch = config.startOnLaunch ?? false;
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 22;
-  const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionFontColor = config.captionFontColor || DEFAULT_CAPTION_COLORS.font;
   const captionTranslationFontSize = config.captionTranslationFontSize ?? 16;
-  const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
-  const captionBackgroundColor = config.captionBackgroundColor || '#17171a';
+  const captionTranslationFontColor =
+    config.captionTranslationFontColor || DEFAULT_CAPTION_COLORS.translationFont;
+  const captionBackgroundColor = config.captionBackgroundColor || DEFAULT_CAPTION_COLORS.background;
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.72;
   const captionTextStroke = config.captionTextStroke ?? false;
   const captionStrokeWidth = config.captionStrokeWidth ?? 2;
-  const captionStrokeColor = config.captionStrokeColor || '#000000';
+  const captionStrokeColor = config.captionStrokeColor || DEFAULT_CAPTION_COLORS.stroke;
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
   const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;

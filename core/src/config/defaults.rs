@@ -12,6 +12,11 @@ pub const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z"
 pub const BUILTIN_POLISH_PRESET_IDS: [&str; 3] = ["clean", "verbatim", "formal"];
 pub const BUILTIN_SUMMARY_TEMPLATE_IDS: [&str; 3] = ["general", "meeting", "lecture"];
 
+pub const DEFAULT_CAPTION_FONT_COLOR: &str = "#F4F3EF";
+pub const DEFAULT_CAPTION_TRANSLATION_FONT_COLOR: &str = "#4EC39D";
+pub const DEFAULT_CAPTION_BACKGROUND_COLOR: &str = "#1E1E21";
+pub const DEFAULT_CAPTION_STROKE_COLOR: &str = "#1E1E21";
+
 pub fn default_config() -> Value {
     let mut config = Map::new();
     for (key, value) in [
@@ -51,17 +56,23 @@ pub fn default_config() -> Value {
         ("captionWindowX", Value::Null),
         ("captionWindowY", Value::Null),
         ("captionFontSize", json!(22)),
-        ("captionFontColor", json!("#ffffff")),
+        ("captionFontColor", json!(DEFAULT_CAPTION_FONT_COLOR)),
         ("captionTranslationFontSize", json!(16)),
-        ("captionTranslationFontColor", json!("#6ee7b7")),
-        ("captionBackgroundColor", json!("#17171a")),
+        (
+            "captionTranslationFontColor",
+            json!(DEFAULT_CAPTION_TRANSLATION_FONT_COLOR),
+        ),
+        (
+            "captionBackgroundColor",
+            json!(DEFAULT_CAPTION_BACKGROUND_COLOR),
+        ),
         ("captionBackgroundOpacity", json!(0.72)),
         ("captionDisplayMode", json!("bilingual")),
         ("captionBilingualOrder", json!("original_first")),
         ("captionDisplayPriority", json!("translation_main")),
         ("captionTextStroke", json!(false)),
         ("captionStrokeWidth", json!(2.0)),
-        ("captionStrokeColor", json!("#000000")),
+        ("captionStrokeColor", json!(DEFAULT_CAPTION_STROKE_COLOR)),
         ("captionTextShadow", json!(true)),
         ("captionTextAlign", json!("center")),
         ("captionDisappearDelay", json!(4.0)),
@@ -190,7 +201,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "developer",
             "name": "Developer",
             "icon": "💻",
-            "badgeColor": "#818cf8",
+            "badgeColor": "#5B82E8",
             "appsByPlatform": {
                 "windows": [
                     "code.exe", "cursor.exe", "idea64.exe", "devenv.exe", "clion64.exe",
@@ -226,7 +237,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "chat",
             "name": "Chat",
             "icon": "💬",
-            "badgeColor": "#34d399",
+            "badgeColor": "#4EC39D",
             "appsByPlatform": {
                 "windows": [
                     "wechat.exe", "qq.exe", "slack.exe", "discord.exe", "telegram.exe",
@@ -256,7 +267,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "formal",
             "name": "Formal",
             "icon": "📄",
-            "badgeColor": "#f59e0b",
+            "badgeColor": "#E2A03F",
             "appsByPlatform": {
                 "windows": [
                     "winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe",

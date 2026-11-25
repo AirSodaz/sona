@@ -195,13 +195,13 @@ export interface CaptionConfig {
   captionWindowY?: number | null;
   /** Font size of the caption text in pixels. Default: 22. */
   captionFontSize?: number;
-  /** Font color of the caption text (HEX). Default: '#ffffff'. */
+  /** Font color of the caption text (HEX). Default: '#F4F3EF'. */
   captionFontColor?: string;
   /** Font size of the translation text in pixels. Default: 16. */
   captionTranslationFontSize?: number;
-  /** Font color of the translation text (HEX). Default: '#6ee7b7'. */
+  /** Font color of the translation text (HEX). Default: '#4EC39D'. */
   captionTranslationFontColor?: string;
-  /** Background color of the caption window (HEX). Default: '#17171a'. */
+  /** Background color of the caption window (HEX). Default: '#1E1E21'. */
   captionBackgroundColor?: string;
   /** Background opacity of the caption window (0.0 to 1.0). Default: 0.72. */
   captionBackgroundOpacity?: number;
@@ -219,7 +219,7 @@ export interface CaptionConfig {
   captionTextStroke?: boolean;
   /** Stroke width in pixels (1 to 5). Default: 2. */
   captionStrokeWidth?: number;
-  /** Stroke color (HEX). Default: '#000000'. */
+  /** Stroke color (HEX). Default: '#1E1E21'. */
   captionStrokeColor?: string;
   /** Whether to enable text drop shadow. Default: true. */
   captionTextShadow?: boolean;

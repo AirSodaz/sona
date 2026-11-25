@@ -115,9 +115,9 @@ export function TranscriptVersionPanel({
         <>
           <Button
             tier="primary"
-            size="sm"
+            size="md"
             loading={isBusy}
-            leftIcon={<Undo2 size={14} />}
+            leftIcon={<Undo2 size={16} />}
             onClick={() => void handleRestoreSelected().then((success) => success && onClose())}
             disabled={isDocumentLocked || isDiffLoading || selectedRowIds.size === 0}
           >
@@ -125,8 +125,8 @@ export function TranscriptVersionPanel({
           </Button>
           <Button
             tier="secondary"
-            size="sm"
-            leftIcon={<RotateCcw size={14} />}
+            size="md"
+            leftIcon={<RotateCcw size={16} />}
             onClick={() => void handleRestoreAll().then((success) => success && onClose())}
             disabled={isBusy || isDocumentLocked || !selectedRecord}
           >

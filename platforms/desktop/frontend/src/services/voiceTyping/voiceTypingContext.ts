@@ -1,3 +1,4 @@
+import { DEFAULT_CONTEXT_BADGE_COLORS } from '../../constants/colors';
 import type {
   HostPlatform,
   VoiceTypingContextPreset,
@@ -17,7 +18,7 @@ export const DEFAULT_VOICE_TYPING_CONTEXT_RULES: VoiceTypingContextRule[] = [
     id: 'developer',
     name: 'Developer',
     icon: '💻',
-    badgeColor: '#818cf8',
+    badgeColor: DEFAULT_CONTEXT_BADGE_COLORS.developer,
     appsByPlatform: {
       windows: [
         'code.exe',
@@ -108,7 +109,7 @@ export const DEFAULT_VOICE_TYPING_CONTEXT_RULES: VoiceTypingContextRule[] = [
     id: 'chat',
     name: 'Chat',
     icon: '💬',
-    badgeColor: '#34d399',
+    badgeColor: DEFAULT_CONTEXT_BADGE_COLORS.chat,
     appsByPlatform: {
       windows: [
         'wechat.exe',
@@ -170,7 +171,7 @@ export const DEFAULT_VOICE_TYPING_CONTEXT_RULES: VoiceTypingContextRule[] = [
     id: 'formal',
     name: 'Formal',
     icon: '📄',
-    badgeColor: '#f59e0b',
+    badgeColor: DEFAULT_CONTEXT_BADGE_COLORS.formal,
     appsByPlatform: {
       windows: [
         'winword.exe',

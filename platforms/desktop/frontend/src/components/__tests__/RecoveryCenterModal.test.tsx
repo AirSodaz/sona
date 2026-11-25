@@ -149,7 +149,13 @@ describe('RecoveryCenterModal', () => {
     render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
 
     screen.getByText('Interrupted Batch Recovery');
-    screen.getByRole('button', { name: 'Close' });
+    expect(screen.getByRole('button', { name: 'Close' }).classList.contains('btn-md')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Resume All' }).classList.contains('btn-md')).toBe(
+      true
+    );
+    expect(screen.getByRole('button', { name: 'Discard All' }).classList.contains('btn-md')).toBe(
+      true
+    );
     expect(screen.getAllByText('Batch Import').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Automation').length).toBeGreaterThan(0);
     screen.getByText('meeting.wav');

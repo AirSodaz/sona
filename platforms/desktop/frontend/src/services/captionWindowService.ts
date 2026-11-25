@@ -1,3 +1,4 @@
+import { DEFAULT_CAPTION_COLORS } from '../constants/colors';
 import { useConfigStore } from '../stores/configStore';
 import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
@@ -70,14 +71,14 @@ export interface CaptionWindowState {
 const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
   width: 800,
   fontSize: 22,
-  color: '#ffffff',
-  backgroundColor: '#17171a',
+  color: DEFAULT_CAPTION_COLORS.font,
+  backgroundColor: DEFAULT_CAPTION_COLORS.background,
   backgroundOpacity: 0.72,
-  translationColor: '#6ee7b7',
+  translationColor: DEFAULT_CAPTION_COLORS.translationFont,
   translationFontSize: 16,
   textStroke: false,
   strokeWidth: 0,
-  strokeColor: '#000000',
+  strokeColor: DEFAULT_CAPTION_COLORS.stroke,
   textShadow: true,
   textAlign: 'center',
   disappearDelay: 4.0,

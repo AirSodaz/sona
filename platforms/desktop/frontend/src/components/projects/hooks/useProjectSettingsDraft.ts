@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DEFAULT_PROJECT_COLOR } from '../../../constants/colors';
 import type { useDialogStore } from '../../../stores/dialogStore';
 import {
   DEFAULT_PROJECT_PIPELINE,
@@ -24,7 +25,7 @@ export function useProjectSettingsDraft({
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
   const [draftIcon, setDraftIcon] = useState('');
-  const [draftColor, setDraftColor] = useState('#64748b');
+  const [draftColor, setDraftColor] = useState<string>(DEFAULT_PROJECT_COLOR);
   const [draftPipeline, setDraftPipeline] = useState<ProjectPipelineConfig | undefined>(undefined);
   const resetProjectSettingsDraft = useCallback(
     (project: ProjectRecord | null = browseProject) => {
@@ -32,7 +33,7 @@ export function useProjectSettingsDraft({
         setDraftName('');
         setDraftDescription('');
         setDraftIcon('');
-        setDraftColor('#64748b');
+        setDraftColor(DEFAULT_PROJECT_COLOR);
         setDraftPipeline(undefined);
         return;
       }
@@ -40,7 +41,7 @@ export function useProjectSettingsDraft({
       setDraftName(project.name);
       setDraftDescription(project.description || '');
       setDraftIcon(project.icon || '');
-      setDraftColor(project.color || '#64748b');
+      setDraftColor(project.color || DEFAULT_PROJECT_COLOR);
       setDraftPipeline(
         project.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...project.pipeline } : undefined
       );
@@ -69,14 +70,14 @@ export function useProjectSettingsDraft({
       name: draftName.trim() || browseProject.name,
       description: draftDescription,
       icon: draftIcon,
-      color: draftColor || '#64748b',
+      color: draftColor || DEFAULT_PROJECT_COLOR,
       pipeline: draftPipeline ?? undefined,
     };
     const savedProject = {
       name: browseProject.name,
       description: browseProject.description,
       icon: browseProject.icon || '',
-      color: browseProject.color || '#64748b',
+      color: browseProject.color || DEFAULT_PROJECT_COLOR,
       pipeline: browseProject.pipeline
         ? { ...DEFAULT_PROJECT_PIPELINE, ...browseProject.pipeline }
         : undefined,

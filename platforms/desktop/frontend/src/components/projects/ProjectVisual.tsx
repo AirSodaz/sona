@@ -1,8 +1,9 @@
 import type React from 'react';
+import { DEFAULT_PROJECT_COLOR } from '../../constants/colors';
 import { SYSTEM_ICONS } from '../IconPicker';
 import { FolderIcon } from '../Icons';
 
-export const DEFAULT_PROJECT_COLOR = '#64748B';
+export { DEFAULT_PROJECT_COLOR };
 
 export interface ProjectVisualProps {
   icon?: string | null;

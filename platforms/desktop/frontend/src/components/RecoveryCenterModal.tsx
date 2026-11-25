@@ -179,9 +179,9 @@ export function RecoveryCenterModal({
         <>
           <Button
             tier="primary"
-            size="sm"
+            size="md"
             loading={isBusy}
-            leftIcon={<RefreshCw size={14} />}
+            leftIcon={<RefreshCw size={16} />}
             onClick={() => void handleResumeAll()}
             disabled={items.length === 0 || hasMissingSources}
           >
@@ -190,8 +190,8 @@ export function RecoveryCenterModal({
           <Button
             tier="secondary"
             tone="danger"
-            size="sm"
-            leftIcon={<Trash2 size={14} />}
+            size="md"
+            leftIcon={<Trash2 size={16} />}
             onClick={() => void handleDiscardAll()}
             disabled={isBusy || items.length === 0}
           >

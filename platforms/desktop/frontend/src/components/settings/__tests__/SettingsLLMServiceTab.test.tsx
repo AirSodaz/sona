@@ -745,6 +745,17 @@ describe('SettingsLLMServiceTab', () => {
     expect(dialog.querySelector('.provider-details-actions')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-add-group')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-refresh')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'common.add' }).classList.contains('btn-md')).toBe(
+      true
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'settings.llm.refresh_models' })
+        .classList.contains('btn-md')
+    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'common.close' }).classList.contains('btn-md')).toBe(
+      true
+    );
     expect(
       dialog
         .querySelector('.provider-details-toolbar')

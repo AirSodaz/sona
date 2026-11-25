@@ -234,9 +234,9 @@ describe('ToolSubtitlesPanel', () => {
     const fontColorPicker = screen.getByLabelText('live.translation_font_color');
     expect(fontColorPicker).toBeDefined();
 
-    const yellowSwatch = screen.getAllByRole('button', { name: '#facc15' })[1];
-    fireEvent.click(yellowSwatch);
-    expect(useConfigStore.getState().config.captionTranslationFontColor).toBe('#facc15');
+    const amberSwatch = screen.getAllByRole('button', { name: '#E2A03F' })[1];
+    fireEvent.click(amberSwatch);
+    expect(useConfigStore.getState().config.captionTranslationFontColor).toBe('#E2A03F');
   });
 
   describe('preview stage reactivity', () => {
@@ -368,9 +368,9 @@ describe('ToolSubtitlesPanel', () => {
 
     // Stroke color swatch
     const strokeColorPicker = screen.getByLabelText('settings.caption_stroke_color');
-    const colorBtn = within(strokeColorPicker).getByRole('button', { name: '#facc15' });
+    const colorBtn = within(strokeColorPicker).getByRole('button', { name: '#E2A03F' });
     fireEvent.click(colorBtn);
-    expect(useConfigStore.getState().config.captionStrokeColor).toBe('#facc15');
+    expect(useConfigStore.getState().config.captionStrokeColor).toBe('#E2A03F');
   });
 
   it('toggles text shadow switch', () => {

@@ -62,6 +62,16 @@ describe('TranscriptVersionPanel', () => {
     await waitFor(() => {
       screen.getByText('versions.empty');
     });
+
+    expect(
+      screen.getByRole('button', { name: 'versions.restore_selected' }).classList.contains('btn-md')
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'versions.restore_all' }).classList.contains('btn-md')
+    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'common.close' }).classList.contains('btn-md')).toBe(
+      true
+    );
   });
 
   it('restores selected diff rows and snapshots current content first', async () => {

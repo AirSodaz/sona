@@ -204,12 +204,12 @@ describe('SettingsSubtitleTab', () => {
     expect(fontColorContainer.className).toContain('project-color-swatches');
 
     // Preset color swatches are rendered within font color picker
-    const emeraldSwatch = within(fontColorContainer).getByRole('button', { name: '#10B981' });
-    expect(emeraldSwatch).toBeDefined();
+    const mintSwatch = within(fontColorContainer).getByRole('button', { name: '#4EC39D' });
+    expect(mintSwatch).toBeDefined();
 
     // Clicking a preset color updates captionFontColor
-    fireEvent.click(emeraldSwatch);
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionFontColor: '#10B981' });
+    fireEvent.click(mintSwatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionFontColor: '#4EC39D' });
 
     // Custom color button is rendered with project-custom-color-swatch class
     const customColorBtn = within(fontColorContainer).getByRole('button', {
@@ -240,12 +240,12 @@ describe('SettingsSubtitleTab', () => {
     expect(bgColorContainer.className).toContain('project-color-swatches');
 
     // Preset color swatches are rendered within background color picker
-    const cyanSwatch = within(bgColorContainer).getByRole('button', { name: '#06B6D4' });
-    expect(cyanSwatch).toBeDefined();
+    const cobaltSwatch = within(bgColorContainer).getByRole('button', { name: '#5B82E8' });
+    expect(cobaltSwatch).toBeDefined();
 
     // Clicking a preset color updates captionBackgroundColor
-    fireEvent.click(cyanSwatch);
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#06B6D4' });
+    fireEvent.click(cobaltSwatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#5B82E8' });
 
     // Custom color button is rendered
     const customColorBtn = within(bgColorContainer).getByRole('button', {
@@ -293,9 +293,9 @@ describe('SettingsSubtitleTab', () => {
 
     // Stroke color swatch
     const strokeColorContainer = screen.getByLabelText('settings.caption_stroke_color');
-    const swatch = within(strokeColorContainer).getByRole('button', { name: '#10B981' });
+    const swatch = within(strokeColorContainer).getByRole('button', { name: '#C96F6B' });
     fireEvent.click(swatch);
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeColor: '#10B981' });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeColor: '#C96F6B' });
   });
 
   it('updates voice typing settings from the combined page', () => {

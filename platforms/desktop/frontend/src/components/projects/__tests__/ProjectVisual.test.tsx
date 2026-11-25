@@ -89,12 +89,12 @@ describe('ProjectCreateModal with unified identity selection', () => {
     fireEvent.click(iconButton);
 
     // Clicking a color swatch inside picker calls onColorChange
-    const emeraldSwatch = screen.getByLabelText('#10B981');
-    expect(emeraldSwatch.getAttribute('title')).toBeNull();
-    fireEvent.focus(emeraldSwatch);
-    expect(screen.getByRole('tooltip').textContent).toBe('#10B981');
-    fireEvent.click(emeraldSwatch);
-    expect(onColorChange).toHaveBeenCalledWith('#10B981');
+    const mintSwatch = screen.getByLabelText('#4EC39D');
+    expect(mintSwatch.getAttribute('title')).toBeNull();
+    fireEvent.focus(mintSwatch);
+    expect(screen.getByRole('tooltip').textContent).toBe('#4EC39D');
+    fireEvent.click(mintSwatch);
+    expect(onColorChange).toHaveBeenCalledWith('#4EC39D');
     // Selecting an emoji calls onIconChange
     const targetEmojiButton = screen.getByRole('button', { name: '🎯' });
     fireEvent.click(targetEmojiButton);

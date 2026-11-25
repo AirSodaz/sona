@@ -2,7 +2,7 @@ import { Pipette } from 'lucide-react';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PROJECT_COLOR_PRESETS } from '../constants/projects';
+import { COLOR_PRESETS, DEFAULT_PROJECT_COLOR } from '../constants/colors';
 import { ColorPicker } from './ColorPicker';
 import { Tooltip } from './ui/Tooltip';
 
@@ -21,7 +21,7 @@ export interface ColorSwatchPickerProps {
   value?: string;
   color?: string;
   onChange: (color: string) => void;
-  presets?: string[];
+  presets?: readonly string[];
   className?: string;
   style?: React.CSSProperties;
   'aria-label'?: string;
@@ -32,7 +32,7 @@ export function ColorSwatchPicker({
   value,
   color,
   onChange,
-  presets = PROJECT_COLOR_PRESETS,
+  presets = COLOR_PRESETS,
   className = '',
   style,
   'aria-label': ariaLabel,
@@ -43,7 +43,7 @@ export function ColorSwatchPicker({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const isPickingColorRef = useRef(false);
 
-  const currentColor = value ?? color ?? '#ffffff';
+  const currentColor = value ?? color ?? DEFAULT_PROJECT_COLOR;
   const isCustom = Boolean(
     currentColor && !presets.some((preset) => preset.toLowerCase() === currentColor.toLowerCase())
   );
@@ -89,7 +89,7 @@ export function ColorSwatchPicker({
           style={{
             background: isCustom
               ? currentColor
-              : 'conic-gradient(from 180deg at 50% 50%, #f43f5e 0deg, #ec4899 45deg, #8b5cf6 90deg, #6366f1 135deg, #06b6d4 180deg, #10b981 225deg, #f59e0b 270deg, #f43f5e 360deg)',
+              : 'conic-gradient(from 180deg at 50% 50%, #C96F6B 0deg, #E2A03F 72deg, #4EC39D 144deg, #5B82E8 216deg, #8C78B8 288deg, #C96F6B 360deg)',
           }}
         >
           <span className="project-custom-color-badge" aria-hidden="true">
@@ -106,7 +106,7 @@ export function ColorSwatchPicker({
       </Tooltip>
       <ColorPicker
         isOpen={isColorPickerOpen}
-        color={currentColor || '#6366F1'}
+        color={currentColor || DEFAULT_PROJECT_COLOR}
         onChange={(newColor) => onChange(newColor)}
         onClose={() => setIsColorPickerOpen(false)}
         onPickingChange={(isPicking) => {

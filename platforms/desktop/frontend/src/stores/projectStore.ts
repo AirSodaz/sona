@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_PROJECT_COLOR } from '../constants/colors';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
@@ -72,7 +73,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       name: input.name,
       description: input.description || '',
       icon: input.icon || '',
-      color: input.color || '#64748b',
+      color: input.color || DEFAULT_PROJECT_COLOR,
     });
 
     set((state) => ({
