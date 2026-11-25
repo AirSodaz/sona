@@ -113,8 +113,8 @@
   gap: 8px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, #2563eb 12%, transparent);
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.02em;

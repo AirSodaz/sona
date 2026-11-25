@@ -36,6 +36,7 @@ import {
 } from './settings/search/SettingsSearchSection';
 import type { SettingsSearchHit } from './settings/search/useSettingsSearch';
 import { SETTINGS_TAB_META } from './settings/settingsTabMeta';
+import { IconButton } from './ui/Button';
 
 type SettingsNavRequest = {
   requestId: number;
@@ -748,15 +749,14 @@ export function Settings({
       <div className="settings-content">
         {/* Header with close button */}
         <div className="settings-close-btn-container">
-          <button
-            className="btn btn-icon"
+          <IconButton
+            tier="ghost"
+            size="md"
+            icon={<XIcon />}
             onClick={onClose}
             aria-label={t('common.close')}
-            data-tooltip={t('common.close')}
-            data-tooltip-pos="bottom-left"
-          >
-            <XIcon />
-          </button>
+            tooltipPos="bottom-left"
+          />
         </div>
 
         {/* Scrollable Content Area */}

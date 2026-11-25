@@ -139,8 +139,8 @@
 }
 
 .diagnostics-status-badge.status-info {
-  background: color-mix(in srgb, #2563eb 12%, transparent);
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
 }
 
 @media (max-width: 980px) {

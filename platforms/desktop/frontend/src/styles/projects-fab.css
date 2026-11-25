@@ -57,22 +57,23 @@
 .projects-fab-actions .projects-toolbar-icon {
   width: 30px;
   height: 30px;
+  min-inline-size: 30px;
+  min-block-size: 30px;
   min-height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: calc(var(--radius-md) - 4px);
-  background: transparent;
-  box-shadow: none;
+  border-radius: 10px;
   color: var(--color-text-secondary);
-  cursor: default;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   transition:
     background var(--transition-fast),
     color var(--transition-fast),
     transform var(--transition-fast),
     box-shadow var(--transition-fast);
+}
+
+@supports (corner-shape: squircle) {
+  .projects-fab-actions .projects-toolbar-icon {
+    corner-shape: squircle;
+    border-radius: 13px;
+  }
 }
 
 .projects-fab-actions .projects-toolbar-icon svg {
@@ -97,12 +98,12 @@
   transform: scale(0.96);
 }
 
-.projects-fab-actions .projects-toolbar-icon.active:not(:disabled) {
+.projects-fab-actions .projects-toolbar-icon:is(.active, .is-active):not(:disabled) {
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
 }
 
-.projects-fab-actions .projects-toolbar-icon.active:hover:not(:disabled) {
+.projects-fab-actions .projects-toolbar-icon:is(.active, .is-active):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-primary) 18%, transparent);
   color: var(--color-primary);
 }

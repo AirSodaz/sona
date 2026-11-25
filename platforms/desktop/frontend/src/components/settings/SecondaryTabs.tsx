@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Tooltip } from '../ui/Tooltip';
 import { useTabKeyboardNavigation } from './useTabKeyboardNavigation';
 import './SettingsShared.css';
 
@@ -97,7 +98,9 @@ export function SecondaryTabs<T extends string = string>({
         (targetTab
           ? container?.querySelector<HTMLButtonElement>(`button[data-tab-value="${targetTab}"]`)
           : null) ??
-        container?.querySelector<HTMLButtonElement>('button[role="tab"][aria-selected="true"]') ??
+        container?.querySelector<HTMLButtonElement>(
+          'button[role="tab"][aria-selected="true"], button[role="radio"][aria-checked="true"]'
+        ) ??
         null;
       if (!container || !activeButton) {
         setHasMeasured(false);
@@ -185,7 +188,7 @@ export function SecondaryTabs<T extends string = string>({
   const hasActiveTab = items.some((tab) => tab.value === activeTab && !tab.disabled);
   const firstEnabledIndex = items.findIndex((tab) => !tab.disabled);
 
-  return (
+  const containerElement = (
     <div
       ref={containerRef}
       id={id}
@@ -194,10 +197,6 @@ export function SecondaryTabs<T extends string = string>({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       style={style}
-      data-tooltip={tooltip}
-      data-tooltip-pos={tooltip ? tooltipPos : undefined}
-      data-tooltip-multiline={tooltipMultiline ? true : undefined}
-      tabIndex={disabled && tooltip ? 0 : undefined}
     >
       {hasSlider && hasMeasured && (
         <div className="settings-subtab-slider" style={sliderStyle} aria-hidden="true" />
@@ -222,7 +221,7 @@ export function SecondaryTabs<T extends string = string>({
               .filter(Boolean)
               .join(' ');
 
-        return (
+        const tabButton = (
           <button
             key={tab.value}
             data-tab-value={tab.value}
@@ -234,8 +233,6 @@ export function SecondaryTabs<T extends string = string>({
             aria-checked={isRadioGroup ? isSelected : undefined}
             aria-controls={panelId}
             aria-label={ariaLabelText}
-            data-tooltip={tab.tooltip}
-            data-tooltip-pos={tab.tooltip ? tab.tooltipPos || 'top' : undefined}
             tabIndex={isFocusable ? 0 : -1}
             className={buttonClasses}
             onClick={() => onChange(tab.value)}
@@ -265,9 +262,39 @@ export function SecondaryTabs<T extends string = string>({
             )}
           </button>
         );
+
+        if (tab.tooltip) {
+          return (
+            <Tooltip
+              key={tab.value}
+              content={tab.tooltip}
+              placement={tab.tooltipPos || 'top'}
+              triggerDisabled={disabled || tab.disabled}
+            >
+              {tabButton}
+            </Tooltip>
+          );
+        }
+        return tabButton;
       })}
     </div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip
+        content={tooltip}
+        placement={tooltipPos}
+        multiline={tooltipMultiline}
+        triggerDisabled={disabled}
+        fullWidthWrapper={!isSegmented}
+      >
+        {containerElement}
+      </Tooltip>
+    );
+  }
+
+  return containerElement;
 }
 
 /** Card-style secondary tabs (e.g. scenario selection, feature models). */

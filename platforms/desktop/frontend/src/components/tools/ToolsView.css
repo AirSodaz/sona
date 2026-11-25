@@ -86,8 +86,9 @@
 }
 
 .tools-sidebar-item.active .tools-sidebar-item-icon {
-  background: var(--color-accent-subtle, rgba(59, 130, 246, 0.12));
-  color: var(--color-accent-blue, #3b82f6);
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-hover);
 }
 
 .tools-sidebar-item-content {

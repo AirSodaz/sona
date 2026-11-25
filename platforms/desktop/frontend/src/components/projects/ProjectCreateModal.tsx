@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { IconPicker } from '../IconPicker';
 import { FolderIcon } from '../Icons';
 import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
 
 interface ProjectCreateModalProps {
   isOpen: boolean;
@@ -62,17 +63,12 @@ export function ProjectCreateModal({
       size="md"
       footer={
         <>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <Button tier="secondary" onClick={onClose}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void onCreate()}
-            disabled={!name.trim()}
-          >
+          </Button>
+          <Button tier="primary" onClick={() => void onCreate()} disabled={!name.trim()}>
             {t('projects.create_tag_action', { defaultValue: 'Create Tag' })}
-          </button>
+          </Button>
         </>
       }
     >

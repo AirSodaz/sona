@@ -22,6 +22,7 @@ import {
 import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { logger } from '../utils/logger';
+import { IconButton } from './ui/Button';
 
 const WAVEFORM_WEIGHTS = [0.45, 0.75, 1.0, 0.75, 0.45] as const;
 const WAVEFORM_BAR_IDS = WAVEFORM_WEIGHTS.map((_, i) => `waveform-bar-${i}`);
@@ -402,10 +403,10 @@ export function VoiceTypingOverlay() {
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
       border: isTranslating
-        ? '1px solid rgba(59, 130, 246, 0.6)'
+        ? '1px solid color-mix(in srgb, var(--color-brand) 60%, transparent)'
         : '1px solid rgba(168, 85, 247, 0.6)',
       boxShadow: isTranslating
-        ? '0 8px 24px -4px rgba(59, 130, 246, 0.35), 0 2px 6px rgba(59, 130, 246, 0.2)'
+        ? '0 8px 24px -4px var(--color-brand-glow), 0 2px 6px var(--color-brand-light)'
         : '0 8px 24px -4px rgba(168, 85, 247, 0.35), 0 2px 6px rgba(168, 85, 247, 0.2)',
     };
   } else if (isSegment) {
@@ -496,34 +497,22 @@ export function VoiceTypingOverlay() {
                 fontSize: '12px',
               }}
             >
-              <History size={14} color="var(--color-accent-blue, #3b82f6)" />
+              <History size={14} color="var(--color-text-secondary)" />
               <span>
                 {t('voice_typing.quick_recall_title', {
                   defaultValue: 'Quick Recall (Keys 1-5)',
                 })}
               </span>
             </div>
-            <button
-              type="button"
+            <IconButton
+              tier="ghost"
+              size="xs"
+              pill
+              icon={<X size={12} />}
               data-testid="voice-typing-recall-close-btn"
               aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-              title={t('common.cancel', { defaultValue: 'Cancel' })}
               onClick={handleCancel}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '18px',
-                height: '18px',
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--color-text-muted)',
-                cursor: 'pointer',
-              }}
-            >
-              <X size={12} />
-            </button>
+            />
           </div>
 
           {(() => {
@@ -611,26 +600,16 @@ export function VoiceTypingOverlay() {
                         {item.injectedText}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      title={t('common.copy', { defaultValue: 'Copy' })}
+                    <IconButton
+                      tier="ghost"
+                      size="xs"
+                      icon={<Copy size={11} />}
+                      aria-label={t('common.copy', { defaultValue: 'Copy' })}
                       onClick={(e) => {
                         e.stopPropagation();
                         void navigator.clipboard.writeText(item.injectedText);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '2px',
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--color-text-muted)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Copy size={11} />
-                    </button>
+                    />
                   </div>
                 ))}
               </div>
@@ -663,7 +642,7 @@ export function VoiceTypingOverlay() {
                     : isPolishing
                       ? 'linear-gradient(180deg, #c084fc 0%, #9333ea 100%)'
                       : isTranslating
-                        ? 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)'
+                        ? 'linear-gradient(180deg, color-mix(in srgb, var(--color-brand) 72%, white) 0%, var(--color-brand) 100%)'
                         : isSegment
                           ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
                           : '#4ade80',
@@ -679,8 +658,8 @@ export function VoiceTypingOverlay() {
                 fontWeight: 600,
                 padding: '1px 6px',
                 borderRadius: '4px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: 'var(--color-accent-blue, #3b82f6)',
+                background: 'var(--color-brand-light)',
+                color: 'var(--color-brand)',
                 flexShrink: 0,
               }}
             >
@@ -723,7 +702,9 @@ export function VoiceTypingOverlay() {
             </span>
           ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
-          {isTranslating && <Sparkles size={14} color="#3b82f6" style={{ flexShrink: 0 }} />}
+          {isTranslating && (
+            <Sparkles size={14} color="var(--color-brand)" style={{ flexShrink: 0 }} />
+          )}
           <div
             style={{
               display: 'flex',
@@ -749,7 +730,7 @@ export function VoiceTypingOverlay() {
                 data-testid="voice-typing-realtime-translation"
                 style={{
                   fontSize: '12px',
-                  color: 'var(--color-primary, #3b82f6)',
+                  color: 'var(--color-info)',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -769,40 +750,19 @@ export function VoiceTypingOverlay() {
             )}
           </div>
           {/* Quick cancel button */}
-          <button
-            type="button"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            pill
+            icon={<X size={12} />}
             data-testid="voice-typing-cancel-btn"
             aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-            title={t('common.cancel', { defaultValue: 'Cancel' })}
             onClick={handleCancel}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '18px',
-              height: '18px',
-              padding: 0,
               marginLeft: '2px',
-              border: 'none',
-              background: 'transparent',
-              color: isError ? '#fca5a5' : 'var(--color-text-muted)',
-              borderRadius: '999px',
-              cursor: 'pointer',
-              opacity: 0.6,
-              flexShrink: 0,
-              transition: 'opacity 120ms ease, background 120ms ease',
+              color: isError ? '#fca5a5' : undefined,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = '1';
-              e.currentTarget.style.background = 'var(--color-bg-hover)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = '0.6';
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <X size={12} />
-          </button>
+          />
         </div>
       )}
     </div>

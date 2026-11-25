@@ -15,6 +15,7 @@ import { getSummaryTemplateOptions, resolveSummaryTemplate } from '../../utils/s
 import { Dropdown } from '../Dropdown';
 import { ProcessingIcon, SummaryIcon, XIcon } from '../Icons';
 import { ModalPortal } from '../ModalPortal';
+import { Button, IconButton } from '../ui/Button';
 
 interface TranscriptSummaryPanelProps {
   isOpen: boolean;
@@ -348,18 +349,17 @@ export function TranscriptSummaryPanel({
                 </span>
               )}
             </div>
-            <button
+            <IconButton
               ref={closeButtonRef}
-              className="btn btn-icon"
+              tier="ghost"
+              size="md"
+              icon={<XIcon />}
               onClick={() => {
                 void handleCloseRequest();
               }}
               aria-label={t('common.close')}
-              data-tooltip={t('common.close')}
-              data-tooltip-pos="bottom-left"
-            >
-              <XIcon />
-            </button>
+              tooltipPos="bottom-left"
+            />
           </div>
 
           <div
@@ -409,34 +409,33 @@ export function TranscriptSummaryPanel({
               className="transcript-summary-panel-actions"
               style={{ display: 'flex', gap: 'var(--spacing-sm)' }}
             >
-              <button
-                type="button"
-                className="btn transcript-summary-generate-button"
+              <Button
+                tier="primary"
+                size="sm"
+                className="transcript-summary-generate-button"
+                leftIcon={isGenerating ? <ProcessingIcon /> : <SummaryIcon />}
                 onClick={handleGenerate}
                 disabled={isGenerating || !summaryConfigComplete}
               >
-                {isGenerating ? (
-                  <>
-                    <ProcessingIcon />
-                    <span>{t('summary.generating_short')}</span>
-                  </>
-                ) : (
-                  <>
-                    <SummaryIcon />
-                    <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
-                  </>
-                )}
-              </button>
+                <span>
+                  {isGenerating
+                    ? t('summary.generating_short')
+                    : record
+                      ? t('summary.regenerate')
+                      : t('summary.generate')}
+                </span>
+              </Button>
 
-              <button
-                type="button"
-                className="btn btn-secondary transcript-summary-copy-button"
+              <Button
+                tier="secondary"
+                size="sm"
+                feedback={copied ? 'success' : 'idle'}
+                className="transcript-summary-copy-button"
                 onClick={handleCopy}
                 disabled={!editContent.trim()}
-                style={{ padding: '5px 12px', fontSize: '0.78rem' }}
               >
                 {copied ? t('summary.copied') : t('summary.copy')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -464,17 +463,14 @@ export function TranscriptSummaryPanel({
                     'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
                 })}
               </span>
-              <button
-                type="button"
-                className="btn-icon-sm"
+              <IconButton
+                tier="ghost"
+                size="xs"
+                icon={<XIcon width={14} height={14} />}
                 onClick={handleDismissManualHint}
                 aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-                data-tooltip={t('common.dismiss', { defaultValue: 'Dismiss' })}
-                data-tooltip-pos="left"
-                style={{ flexShrink: 0 }}
-              >
-                <XIcon width={14} height={14} />
-              </button>
+                tooltipPos="left"
+              />
             </div>
           )}
 

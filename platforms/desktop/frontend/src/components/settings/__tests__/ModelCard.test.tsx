@@ -194,7 +194,8 @@ describe('ModelCard interrupted download', () => {
     expect(chip?.textContent).toContain('50%');
 
     const downloadBtn = screen.getByRole('button', { name: /SenseVoice/i });
-    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+    fireEvent.focus(downloadBtn);
+    expect(screen.getByRole('tooltip').textContent).toContain('50%');
   });
 
   it('renders interrupted chip in version row for multi-version model', () => {
@@ -290,7 +291,7 @@ describe('ModelCard interrupted download', () => {
     expect(onDiscardDownload).toHaveBeenCalledWith(interruptedModel);
   });
 
-  it('renders cancel button with model-action-cancel and fires onCancelDownload on click', () => {
+  it('renders cancel button with danger ghost icon style and fires onCancelDownload on click', () => {
     const onCancelDownload = vi.fn();
     render(
       <ModelCard
@@ -305,8 +306,9 @@ describe('ModelCard interrupted download', () => {
 
     const cancelBtn = screen.getByRole('button', { name: /cancel/i });
     expect(cancelBtn).toBeTruthy();
-    expect(cancelBtn.classList.contains('model-action-cancel')).toBe(true);
-    expect(cancelBtn.classList.contains('model-action-delete')).toBe(false);
+    expect(cancelBtn.classList.contains('btn-icon')).toBe(true);
+    expect(cancelBtn.classList.contains('btn-ghost')).toBe(true);
+    expect(cancelBtn.classList.contains('btn-danger')).toBe(true);
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith(mockModel.id);
   });

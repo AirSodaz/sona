@@ -129,7 +129,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-accent-primary, #2f2f2f);
+  background: var(--color-brand);
   flex-shrink: 0;
 }
 
@@ -272,7 +272,7 @@
 }
 
 .live-caption-speaker {
-  color: var(--color-brand, #60a5fa);
+  color: var(--color-brand);
   font-weight: 600;
   margin-right: 6px;
 }
@@ -342,29 +342,30 @@
   gap: 6px;
 }
 
-.caption-action-btn {
+.btn.caption-action-btn {
   background: rgba(255, 255, 255, 0.12);
-  border: none;
   color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  padding: 3px 6px;
   border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
 }
 
-.caption-action-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+.btn.caption-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
 }
 
-.caption-action-btn svg {
-  width: 15px;
-  height: 15px;
+.btn.caption-action-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.btn.caption-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.btn.caption-action-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .caption-toast-banner {

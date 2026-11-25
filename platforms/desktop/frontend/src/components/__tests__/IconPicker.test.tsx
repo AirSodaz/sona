@@ -22,7 +22,7 @@ describe('IconPicker', () => {
   it('renders custom color rounded rectangle and custom tooltips without native titles', () => {
     const onColorChange = vi.fn();
     const onChange = vi.fn();
-    const { container } = render(
+    render(
       <IconPicker
         icon="system:folder"
         color="#6366F1"
@@ -32,17 +32,22 @@ describe('IconPicker', () => {
     );
 
     // Open picker
-    const triggerBtn = container.querySelector('[data-tooltip="Choose icon"]') as HTMLButtonElement;
+    const triggerBtn = screen.getByRole('button', { name: 'Choose icon' }) as HTMLButtonElement;
     expect(triggerBtn).toBeDefined();
     expect(triggerBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(triggerBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Choose icon');
+    fireEvent.blur(triggerBtn);
     fireEvent.click(triggerBtn);
 
     // Check custom color rounded rectangle
     const customColorBtn = screen.getByRole('button', { name: 'Custom color' });
     expect(customColorBtn).toBeDefined();
     expect(customColorBtn.className).toContain('project-custom-color-swatch');
-    expect(customColorBtn.getAttribute('data-tooltip')).toBe('Custom color');
     expect(customColorBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(customColorBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Custom color');
+    fireEvent.blur(customColorBtn);
 
     // Clicking custom color button opens custom ColorPicker and allows changing color
     fireEvent.click(customColorBtn);
@@ -53,18 +58,21 @@ describe('IconPicker', () => {
     expect(onColorChange).toHaveBeenCalledWith('#123456');
     // Check system icons have custom tooltips without native title
     const micBtn = screen.getByRole('button', { name: 'Microphone' });
-    expect(micBtn.getAttribute('data-tooltip')).toBe('Microphone');
     expect(micBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(micBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Microphone');
+    fireEvent.blur(micBtn);
 
     // Check preset colors have custom tooltips without native title
     const presetBtn = screen.getByRole('button', { name: '#10B981' });
-    expect(presetBtn.getAttribute('data-tooltip')).toBe('#10B981');
     expect(presetBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(presetBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('#10B981');
   });
   it('does not close IconPicker or ColorPicker when clicking pipette, inputs, or toggle button in ColorPicker', () => {
     const onColorChange = vi.fn();
     const onChange = vi.fn();
-    const { container } = render(
+    render(
       <IconPicker
         icon="system:folder"
         color="#6366F1"
@@ -74,7 +82,7 @@ describe('IconPicker', () => {
     );
 
     // Open IconPicker
-    const triggerBtn = container.querySelector('[data-tooltip="Choose icon"]') as HTMLButtonElement;
+    const triggerBtn = screen.getByRole('button', { name: 'Choose icon' }) as HTMLButtonElement;
     fireEvent.click(triggerBtn);
 
     // Open ColorPicker
@@ -114,10 +122,10 @@ describe('IconPicker', () => {
   });
   it('selects system icons on click', () => {
     const onChange = vi.fn();
-    const { container } = render(<IconPicker icon="system:folder" onChange={onChange} />);
+    render(<IconPicker icon="system:folder" onChange={onChange} />);
 
     // Open IconPicker
-    const triggerBtn = container.querySelector('[data-tooltip="Choose icon"]') as HTMLButtonElement;
+    const triggerBtn = screen.getByRole('button', { name: 'Choose icon' }) as HTMLButtonElement;
     fireEvent.click(triggerBtn);
 
     // Click on Microphone system icon

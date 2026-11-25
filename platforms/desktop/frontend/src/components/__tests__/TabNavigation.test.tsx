@@ -63,22 +63,24 @@ describe('TabNavigation', () => {
     // Check create tab
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(tabs[0].textContent).toContain('Create');
-    expect(tabs[0].hasAttribute('data-tooltip')).toBe(false);
+    fireEvent.focus(tabs[0]);
+    expect(screen.queryByRole('tooltip')).toBeNull();
     expect(tabs[0].querySelector('svg')).not.toBeNull();
 
     // Check workspace tab
     expect(tabs[1].getAttribute('aria-selected')).toBe('false');
     expect(tabs[1].textContent).toContain('Projects');
-    expect(tabs[1].hasAttribute('data-tooltip')).toBe(false);
+    fireEvent.focus(tabs[1]);
+    expect(screen.queryByRole('tooltip')).toBeNull();
 
     // Check tools tab
     expect(tabs[2].getAttribute('aria-selected')).toBe('false');
     expect(tabs[2].textContent).toContain('Tools');
-    expect(tabs[2].hasAttribute('data-tooltip')).toBe(false);
+    fireEvent.focus(tabs[2]);
+    expect(screen.queryByRole('tooltip')).toBeNull();
     expect(tabs[0].getAttribute('tabindex')).toBe('0');
     expect(tabs[1].getAttribute('tabindex')).toBe('-1');
     expect(tabs[2].getAttribute('tabindex')).toBe('-1');
-    expect(tabs[2].hasAttribute('data-tooltip')).toBe(false);
   });
 
   it('scrolls projects containers to top when active Projects tab is clicked', () => {

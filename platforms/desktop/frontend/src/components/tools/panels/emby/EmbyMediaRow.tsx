@@ -2,6 +2,7 @@ import { Clock, Film } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../../../../components/Dropdown';
+import { Tooltip } from '../../../../components/ui/Tooltip';
 import type { EmbyMediaItem } from '../../../../types/emby';
 import { findBestAudioStream, getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
 export function formatDurationTicks(ticks?: number): string {
@@ -66,9 +67,11 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
           </span>
         )}
         <div className="emby-item-title-meta">
-          <span className="emby-item-name" title={item.name}>
-            {item.episodeIndex != null ? `E${item.episodeIndex} - ${item.name}` : item.name}
-          </span>
+          <Tooltip content={item.name} placement="top" onlyWhenTruncated>
+            <span className="emby-item-name">
+              {item.episodeIndex != null ? `E${item.episodeIndex} - ${item.name}` : item.name}
+            </span>
+          </Tooltip>
           {duration && (
             <span className="emby-item-duration">
               <Clock size={11} aria-hidden="true" />

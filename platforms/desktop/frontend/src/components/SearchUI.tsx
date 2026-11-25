@@ -5,6 +5,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from './Icons';
+import { IconButton } from './ui/Button';
 import { SearchInput } from './ui/SearchInput';
 
 function getMatchCountText(matchCount: number, currentIndex: number, query: string): string {
@@ -100,33 +101,33 @@ export function SearchUI(): React.JSX.Element | null {
 
             <div className="search-divider" />
 
-            <button
-              className="btn-icon-sm"
+            <IconButton
+              tier="ghost"
+              size="xs"
+              icon={<ChevronUpIcon />}
               onClick={prevMatch}
-              data-tooltip={`${t('search.previous', 'Previous match')} (Shift+Enter)`}
-              data-tooltip-pos="top"
+              tooltip={`${t('search.previous', 'Previous match')} (Shift+Enter)`}
+              tooltipPos="top"
               aria-label={t('search.previous', 'Previous match')}
-            >
-              <ChevronUpIcon />
-            </button>
-            <button
-              className="btn-icon-sm"
+            />
+            <IconButton
+              tier="ghost"
+              size="xs"
+              icon={<ChevronDownIcon />}
               onClick={nextMatch}
-              data-tooltip={`${t('search.next', 'Next match')} (Enter)`}
-              data-tooltip-pos="top"
+              tooltip={`${t('search.next', 'Next match')} (Enter)`}
+              tooltipPos="top"
               aria-label={t('search.next', 'Next match')}
-            >
-              <ChevronDownIcon />
-            </button>
-            <button
-              className="btn-icon-sm"
+            />
+            <IconButton
+              tier="ghost"
+              size="xs"
+              icon={<CloseIcon />}
               onClick={close}
-              data-tooltip={`${t('search.close', 'Close')} (Esc)`}
-              data-tooltip-pos="top"
+              tooltip={`${t('search.close', 'Close')} (Esc)`}
+              tooltipPos="top"
               aria-label={t('search.close', 'Close')}
-            >
-              <CloseIcon />
-            </button>
+            />
           </div>
         }
       />

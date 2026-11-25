@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { LlmModality, LlmModelEntry, LlmModelMetadata } from '../../../types/transcript';
+import { Button } from '../../ui/Button';
 
 type ModelMetadataDraft = {
   displayName: string;
@@ -280,12 +281,12 @@ export function ModelMetadataEditor({ entry, onCancel, onSave, t }: ModelMetadat
         ))}
       </div>
       <div className="provider-model-editor-actions">
-        <button type="button" className="btn btn-primary" onClick={save}>
+        <Button tier="primary" onClick={save}>
           {t('settings.llm.save_model_metadata')}
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        </Button>
+        <Button tier="secondary" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   );

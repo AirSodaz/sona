@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as mediaServerService from '../../../../../services/mediaServer/mediaServerService';
@@ -151,7 +151,7 @@ describe('MediaServerManageModal', () => {
     expect(await screen.findByText(/Connected v4\.8\.8\.0/i)).toBeDefined();
   });
 
-  it('renders test, edit, and delete action buttons matching model-action-icon and data-tooltip styles', () => {
+  it('renders test, edit, and delete action buttons matching model-action-icon and unified Tooltip styles', () => {
     render(
       <MediaServerManageModal
         isOpen={true}
@@ -167,22 +167,64 @@ describe('MediaServerManageModal', () => {
     const editBtn = screen.getAllByRole('button', { name: /Edit/i })[0];
     const deleteBtn = screen.getAllByRole('button', { name: /Delete/i })[0];
 
-    expect(testBtn.className).toContain('model-action-icon');
-    expect(testBtn.className).toContain('model-action-test');
-    expect(testBtn.getAttribute('data-tooltip')).toBe('Test Connection');
-    expect(testBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(testBtn.className).toContain('btn-icon');
+    expect(testBtn.className).toContain('btn-ghost');
     expect(testBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(testBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Test Connection');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(testBtn);
 
-    expect(editBtn.className).toContain('model-action-icon');
-    expect(editBtn.className).toContain('model-action-edit');
-    expect(editBtn.getAttribute('data-tooltip')).toBe('Edit');
-    expect(editBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(editBtn.className).toContain('btn-icon');
+    expect(editBtn.className).toContain('btn-ghost');
     expect(editBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(editBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Edit');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(editBtn);
 
-    expect(deleteBtn.className).toContain('model-action-icon');
-    expect(deleteBtn.className).toContain('model-action-delete');
-    expect(deleteBtn.getAttribute('data-tooltip')).toBe('Delete');
-    expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(deleteBtn.className).toContain('btn-icon');
+    expect(deleteBtn.className).toContain('btn-danger');
     expect(deleteBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(deleteBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Delete');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(deleteBtn);
+  });
+
+  it('renders truncatable status text element and opens Portal Tooltip on truncated test error', async () => {
+    const longError =
+      'Connection refused after timeout while contacting remote media server endpoint';
+    vi.spyOn(mediaServerService, 'testMediaServerConnection').mockRejectedValue(
+      new Error(longError)
+    );
+
+    render(
+      <MediaServerManageModal
+        isOpen={true}
+        onClose={vi.fn()}
+        profiles={mockProfiles}
+        activeProfileId="emby-1"
+        onProfilesUpdated={vi.fn()}
+        onSelectActiveProfile={vi.fn()}
+      />
+    );
+
+    const testBtns = screen.getAllByRole('button', { name: /Test/i });
+    fireEvent.click(testBtns[0]);
+
+    const errorSpan = await screen.findByText(new RegExp(`Error: ${longError}`));
+    expect(errorSpan.className).toContain('media-server-status-text');
+
+    Object.defineProperty(errorSpan, 'clientWidth', { configurable: true, value: 180 });
+    Object.defineProperty(errorSpan, 'scrollWidth', { configurable: true, value: 420 });
+
+    fireEvent.mouseEnter(errorSpan);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 280));
+    });
+    const errorTooltip = screen.getAllByRole('tooltip').find((el) => el.textContent === longError);
+    expect(errorTooltip).toBeDefined();
+    expect(errorSpan.getAttribute('aria-describedby')).toBe(errorTooltip?.id);
   });
 });

@@ -696,25 +696,33 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
 
     const manageBtn = screen.getByRole('button', { name: 'Manage Voiceprints' });
-    expect(manageBtn.getAttribute('data-tooltip')).toBe('Manage Voiceprints');
-    expect(manageBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(manageBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(manageBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Manage Voiceprints');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(manageBtn);
 
     const permissiveBtn = screen.getByRole('radio', { name: 'Permissive' });
     const balancedBtn = screen.getByRole('radio', { name: 'Balanced' });
     const strictBtn = screen.getByRole('radio', { name: 'Strict' });
 
-    expect(permissiveBtn.getAttribute('data-tooltip')).toBe('Tends to merge similar voices');
-    expect(permissiveBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(permissiveBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(permissiveBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Tends to merge similar voices');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(permissiveBtn);
 
-    expect(balancedBtn.getAttribute('data-tooltip')).toBe('Recommended model baseline');
-    expect(balancedBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(balancedBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(balancedBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Recommended model baseline');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(balancedBtn);
 
-    expect(strictBtn.getAttribute('data-tooltip')).toBe('Differentiates close speakers');
-    expect(strictBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(strictBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(strictBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Differentiates close speakers');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(strictBtn);
 
     // Ensure the caption below is hidden/removed
     expect(document.querySelector('.settings-sensitivity-caption')).toBeNull();
@@ -742,10 +750,13 @@ describe('SettingsModelsTab speaker model selections', () => {
 
     const radioGroup = screen.getByRole('radiogroup');
     expect(radioGroup.classList.contains('is-disabled')).toBe(true);
-    expect(radioGroup.getAttribute('data-tooltip')).toBe(
+    const disabledWrapper = radioGroup.parentElement as HTMLElement;
+    fireEvent.focus(disabledWrapper);
+    expect(screen.getByRole('tooltip').textContent).toBe(
       'Select a speaker embedding model to enable'
     );
-    expect(radioGroup.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(disabledWrapper);
     const permissiveBtn = screen.getByRole('radio', {
       name: 'Permissive',
     });
@@ -758,9 +769,13 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect((permissiveBtn as HTMLButtonElement).disabled).toBe(true);
     expect((balancedBtn as HTMLButtonElement).disabled).toBe(true);
     expect((strictBtn as HTMLButtonElement).disabled).toBe(true);
-    expect(permissiveBtn.getAttribute('data-tooltip')).toBeNull();
-    expect(balancedBtn.getAttribute('data-tooltip')).toBeNull();
-    expect(strictBtn.getAttribute('data-tooltip')).toBeNull();
+    expect(permissiveBtn.getAttribute('title')).toBeNull();
+    expect(permissiveBtn.getAttribute('aria-describedby')).toBeNull();
+    expect(balancedBtn.getAttribute('title')).toBeNull();
+    expect(balancedBtn.getAttribute('aria-describedby')).toBeNull();
+    expect(strictBtn.getAttribute('title')).toBeNull();
+    expect(strictBtn.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
   it('toggles collapse/expand via master switch without clearing model paths in configStore', async () => {
     setTestConfig({

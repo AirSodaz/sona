@@ -3,6 +3,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown, type DropdownOption } from '../../../../components/Dropdown';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
+import { Button } from '../../../ui/Button';
 
 export interface EmbySubmitBarProps {
   selectedCount: number;
@@ -84,20 +85,21 @@ export function EmbySubmitBar({
         </div>
 
         <div className="emby-submit-action">
-          <button
-            type="button"
-            className="btn btn-primary emby-submit-btn"
+          <Button
+            tier="primary"
+            size="sm"
+            className="emby-submit-btn"
+            leftIcon={<Download size={14} />}
             disabled={selectedCount === 0 || isSubmitting}
             onClick={onSubmitBatch}
           >
-            <Download size={14} style={{ marginRight: 6 }} />
             <span>
               {t('emby.submit_btn_compact', {
                 count: selectedCount,
                 defaultValue: `Transcribe (${selectedCount})`,
               })}
             </span>
-          </button>
+          </Button>
         </div>
       </div>
     </div>

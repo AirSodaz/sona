@@ -30,6 +30,8 @@ import type {
   ReasoningEffortLevel,
 } from '../../../types/transcript';
 import { Dropdown } from '../../Dropdown';
+import { Button } from '../../ui/Button';
+import { Slider } from '../../ui/Slider';
 import {
   getCurrentLlmSettings,
   getModelPlaceholder,
@@ -1071,21 +1073,26 @@ export function FeatureCard({
               </div>
               <div className="feature-temperature-controls">
                 {Math.abs(temperature - 1.0) > 0.001 && (
-                  <button
-                    type="button"
+                  <Button
+                    tier="secondary"
+                    size="xs"
+                    leftIcon={<RotateCcw size={12} />}
                     className="feature-temperature-reset-btn"
                     onClick={() => handleTempChange(1.0)}
-                    data-tooltip="重置为默认 1.0"
-                    data-tooltip-pos="top"
-                    aria-label="Reset temperature to 1.0"
+                    tooltip={t('settings.llm.reset_temperature', {
+                      defaultValue: 'Reset to default 1.0',
+                    })}
+                    tooltipPos="top"
+                    aria-label={t('settings.llm.reset_temperature', {
+                      defaultValue: 'Reset to default 1.0',
+                    })}
                   >
-                    <RotateCcw size={12} />
-                    <span>1.0</span>
-                  </button>
+                    1.0
+                  </Button>
                 )}
-                <input
+                <Slider
                   id={`feature-temp-slider-${featureId}`}
-                  type="range"
+                  size="sm"
                   className="feature-temperature-slider"
                   min={0}
                   max={2}
@@ -1093,11 +1100,6 @@ export function FeatureCard({
                   value={temperature}
                   onChange={(e) => handleTempChange(parseFloat(e.target.value))}
                   aria-label={`${title} ${t('settings.llm.temperature')}`}
-                  style={
-                    {
-                      '--temperature-progress': `${(temperature / 2) * 100}%`,
-                    } as React.CSSProperties
-                  }
                 />
                 <input
                   id={`feature-temp-${featureId}`}

@@ -16,6 +16,7 @@ import { coercePolishPresetId, getPolishPresetOptions } from '../../../../utils/
 import { Dropdown } from '../../../Dropdown';
 import { Modal } from '../../../Modal';
 import { Switch } from '../../../Switch';
+import { Button, IconButton } from '../../../ui/Button';
 import './ToolAutomationPanel.css';
 
 interface AutomationRuleModalProps {
@@ -183,17 +184,12 @@ export function AutomationRuleModal({
       }
       footer={
         <div className="automation-modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+          <Button tier="secondary" onClick={onClose} disabled={saving}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void handleSave()}
-            disabled={saving}
-          >
+          </Button>
+          <Button tier="primary" loading={saving} onClick={() => void handleSave()}>
             {t('common.save', { defaultValue: 'Save' })}
-          </button>
+          </Button>
         </div>
       }
     >
@@ -220,14 +216,14 @@ export function AutomationRuleModal({
                 defaultValue: 'Choose a folder to monitor',
               })}
             />
-            <button
-              type="button"
-              className="btn btn-secondary automation-browse-btn"
+            <IconButton
+              tier="secondary"
+              size="md"
+              className="automation-browse-btn"
+              icon={<FolderOpen size={16} />}
               aria-label={t('automation.browse', { defaultValue: 'Browse' })}
               onClick={() => void browse(watchDirectory, setWatchDirectory)}
-            >
-              <FolderOpen size={16} />
-            </button>
+            />
           </div>
         </label>
         <div className="automation-switch-row">
@@ -306,14 +302,14 @@ export function AutomationRuleModal({
                     defaultValue: 'Choose an export directory',
                   })}
                 />
-                <button
-                  type="button"
-                  className="btn btn-secondary automation-browse-btn"
+                <IconButton
+                  tier="secondary"
+                  size="md"
+                  className="automation-browse-btn"
+                  icon={<FolderOpen size={16} />}
                   aria-label={t('automation.browse_output', { defaultValue: 'Browse output' })}
                   onClick={() => void browse(exportDirectory, setExportDirectory)}
-                >
-                  <FolderOpen size={16} />
-                </button>
+                />
               </div>
             </label>
             <label className="automation-field">

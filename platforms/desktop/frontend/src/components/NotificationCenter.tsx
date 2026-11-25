@@ -7,6 +7,7 @@ import { useNotificationPanelStore } from '../stores/notificationPanelStore';
 import type { SettingsTab } from '../types/settings';
 import { BellIcon } from './Icons';
 import { NotificationPanel } from './NotificationPanel';
+import { Button } from './ui/Button';
 
 interface NotificationCenterProps {
   onOpenRecoveryCenter: () => void;
@@ -70,12 +71,13 @@ export function NotificationCenter({
 
   return (
     <div className="notification-center" ref={containerRef}>
-      <button
-        type="button"
-        className="btn btn-icon notification-center-trigger"
+      <Button
+        tier="ghost"
+        size="md"
+        className="btn-icon notification-center-trigger"
         onClick={toggle}
-        data-tooltip={t('header.notifications')}
-        data-tooltip-pos="bottom-left"
+        tooltip={t('header.notifications')}
+        tooltipPos="bottom-left"
         aria-label={t('header.notifications')}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
@@ -87,7 +89,7 @@ export function NotificationCenter({
             {getBadgeLabel(badgeCount)}
           </span>
         ) : null}
-      </button>
+      </Button>
 
       {isOpen ? (
         <NotificationPanel

@@ -35,7 +35,8 @@ describe('ColorSwatchPicker', () => {
 
     const customColorBtn = screen.getByRole('button', { name: 'Custom color' });
     expect(customColorBtn.classList.contains('active')).toBe(true);
-    expect(customColorBtn.getAttribute('data-tooltip')).toBe('Custom color: #FFFFFF');
+    fireEvent.focus(customColorBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Custom color: #FFFFFF');
   });
 
   it('calls onChange when clicking a preset swatch', () => {

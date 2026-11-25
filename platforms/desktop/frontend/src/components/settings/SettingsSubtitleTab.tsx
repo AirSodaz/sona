@@ -43,7 +43,9 @@ import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
+import { Slider } from '../ui/Slider';
 import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
   ScenarioCardTabs,
@@ -645,15 +647,16 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
             })}
           </span>
           {historyItems.length > 0 && (
-            <button
-              type="button"
+            <Button
+              tier="secondary"
+              tone="danger"
+              size="sm"
+              leftIcon={<Trash2 size={14} />}
               onClick={clearHistory}
-              className="btn btn-secondary btn-sm"
               style={{ flexShrink: 0 }}
             >
-              <Trash2 size={14} />
-              <span>{t('common.clear', { defaultValue: 'Clear' })}</span>
-            </button>
+              {t('common.clear', { defaultValue: 'Clear' })}
+            </Button>
           )}
         </div>
 
@@ -756,15 +759,15 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
                         background:
                           item.mode === 'polish'
                             ? 'rgba(168, 85, 247, 0.12)'
-                            : 'rgba(59, 130, 246, 0.12)',
+                            : 'var(--color-brand-light)',
                         color:
                           item.mode === 'polish'
                             ? 'var(--color-accent-purple, #a855f7)'
-                            : 'var(--color-accent-blue, #3b82f6)',
+                            : 'var(--color-brand)',
                         border:
                           item.mode === 'polish'
                             ? '1px solid rgba(168, 85, 247, 0.25)'
-                            : '1px solid rgba(59, 130, 246, 0.25)',
+                            : '1px solid color-mix(in srgb, var(--color-brand) 25%, transparent)',
                       }}
                     >
                       {item.mode === 'polish'
@@ -813,49 +816,38 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    feedback={copiedId === item.id ? 'success' : 'idle'}
+                    leftIcon={copiedId === item.id ? <Check size={14} /> : <Copy size={14} />}
                     onClick={() => void handleCopy(item.id, item.injectedText)}
                   >
-                    {copiedId === item.id ? (
-                      <Check size={14} color="#22c55e" />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                    <span>
-                      {copiedId === item.id
-                        ? t('common.copied', { defaultValue: 'Copied' })
-                        : t('common.copy', { defaultValue: 'Copy' })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                    {copiedId === item.id
+                      ? t('common.copied', { defaultValue: 'Copied' })
+                      : t('common.copy', { defaultValue: 'Copy' })}
+                  </Button>
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    feedback={addedHotwordId === item.id ? 'success' : 'idle'}
+                    leftIcon={addedHotwordId === item.id ? <Check size={14} /> : <Plus size={14} />}
                     onClick={() => handleAddToHotwords(item.id, item.injectedText)}
                   >
-                    {addedHotwordId === item.id ? (
-                      <Check size={14} color="#22c55e" />
-                    ) : (
-                      <Plus size={14} />
-                    )}
-                    <span>
-                      {addedHotwordId === item.id
-                        ? t('settings.voice_typing_hotword_added', { defaultValue: 'Added' })
-                        : t('settings.voice_typing_add_hotword', {
-                            defaultValue: 'Add to Hotwords',
-                          })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon btn-sm"
+                    {addedHotwordId === item.id
+                      ? t('settings.voice_typing_hotword_added', { defaultValue: 'Added' })
+                      : t('settings.voice_typing_add_hotword', {
+                          defaultValue: 'Add to Hotwords',
+                        })}
+                  </Button>
+                  <IconButton
+                    tier="ghost"
+                    tone="danger"
+                    size="sm"
+                    icon={<Trash2 size={14} />}
                     aria-label={t('common.delete', { defaultValue: 'Delete' })}
                     onClick={() => removeItem(item.id)}
-                    style={{ color: 'var(--color-text-muted)' }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  />
                 </div>
               </div>
             ))}
@@ -1104,15 +1096,11 @@ export function SettingsSubtitleTab({
                   'Reset the caption floating window to the default bottom-center position.',
               })}
             >
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => void captionWindowService.resetPosition()}
-              >
+              <Button tier="secondary" onClick={() => void captionWindowService.resetPosition()}>
                 {t('settings.caption_reset_position', {
                   defaultValue: 'Reset Window Position',
                 })}
-              </button>
+              </Button>
             </SettingsItem>
           </SettingsSection>
 
@@ -1163,26 +1151,16 @@ export function SettingsSubtitleTab({
                       onChange={handleSourceLanguageChange}
                       style={{ width: '150px' }}
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      tier="secondary"
+                      size="md"
                       id="swap-translation-languages"
+                      icon={<ArrowLeftRight size={16} />}
                       aria-label={t('settings.swap_translation_languages', {
                         defaultValue: 'Swap languages',
                       })}
-                      className="btn btn-secondary"
                       onClick={handleSwapLanguages}
-                      title={t('settings.swap_translation_languages', {
-                        defaultValue: 'Swap languages',
-                      })}
-                      style={{
-                        padding: '6px 10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <ArrowLeftRight size={14} />
-                    </button>
+                    />
                     <Dropdown
                       id="translation-target-language"
                       aria-label={t('settings.translation_target_language', {
@@ -1319,8 +1297,7 @@ export function SettingsSubtitleTab({
 
             <SettingsItem title={t('live.background_opacity')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-                <input
-                  type="range"
+                <Slider
                   min="0"
                   max="100"
                   step="1"
@@ -1328,7 +1305,7 @@ export function SettingsSubtitleTab({
                   onChange={(e) =>
                     updateConfig({ captionBackgroundOpacity: Number(e.target.value) / 100 })
                   }
-                  className="settings-slider"
+                  aria-label={t('live.background_opacity')}
                   style={{ flex: 1 }}
                 />
                 <span
@@ -1392,14 +1369,15 @@ export function SettingsSubtitleTab({
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}
                   >
-                    <input
-                      type="range"
+                    <Slider
                       min="1"
                       max="5"
                       step="0.5"
                       value={captionStrokeWidth}
                       onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
-                      className="settings-slider"
+                      aria-label={t('settings.caption_stroke_width', {
+                        defaultValue: 'Stroke Width',
+                      })}
                       style={{ flex: 1 }}
                     />
                     <span
@@ -1448,14 +1426,15 @@ export function SettingsSubtitleTab({
               })}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-                <input
-                  type="range"
+                <Slider
                   min="1"
                   max="10"
                   step="0.5"
                   value={captionDisappearDelay}
                   onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
-                  className="settings-slider"
+                  aria-label={t('settings.caption_disappear_delay', {
+                    defaultValue: 'Disappear Delay',
+                  })}
                   style={{ flex: 1 }}
                 />
                 <span

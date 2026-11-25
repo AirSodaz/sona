@@ -25,6 +25,7 @@ import type {
 import type { SettingsTab } from '../types/settings';
 import { normalizeError } from '../utils/errorUtils';
 import { PanelModal } from './PanelModal';
+import { Button } from './ui/Button';
 import './DiagnosticsModal.css';
 
 interface DiagnosticsModalProps {
@@ -101,15 +102,15 @@ function DiagnosticCard({
       <div className="diagnostics-overview-title">{item.title}</div>
       <div className="diagnostics-overview-description">{item.description}</div>
       {action ? (
-        <button
-          type="button"
-          className="btn btn-secondary panel-modal-inline-action diagnostics-inline-action"
+        <Button
+          tier="secondary"
+          size="sm"
+          loading={busyAction === action.kind}
+          className="panel-modal-inline-action diagnostics-inline-action"
           onClick={() => void onAction(action)}
-          disabled={busyAction === action.kind}
         >
-          {busyAction === action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
           {action.label}
-        </button>
+        </Button>
       ) : null}
     </article>
   );
@@ -141,15 +142,15 @@ function DiagnosticCheckRow({
         {check.meta ? <div className="diagnostics-check-meta">{check.meta}</div> : null}
       </div>
       {action ? (
-        <button
-          type="button"
-          className="btn btn-secondary panel-modal-inline-action diagnostics-inline-action"
+        <Button
+          tier="secondary"
+          size="sm"
+          loading={busyAction === action.kind}
+          className="panel-modal-inline-action diagnostics-inline-action"
           onClick={() => void onAction(action)}
-          disabled={busyAction === action.kind}
         >
-          {busyAction === action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
           {action.label}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -261,22 +262,18 @@ export function DiagnosticsModal({
       })}
       headerActions={
         <>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            tier="secondary"
+            size="sm"
+            loading={isLoading}
+            leftIcon={<RefreshCw size={14} />}
             onClick={() => void loadSnapshot()}
-            disabled={isLoading}
           >
-            {isLoading ? (
-              <Loader2 size={14} className="queue-icon-spin" />
-            ) : (
-              <RefreshCw size={14} />
-            )}
             {t('settings.diagnostics.refresh', { defaultValue: 'Refresh' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          </Button>
+          <Button
+            tier="secondary"
+            size="sm"
             onClick={() =>
               void handleAction({
                 kind: 'open_log_folder',
@@ -285,7 +282,7 @@ export function DiagnosticsModal({
             }
           >
             {t('settings.about_open_logs', { defaultValue: 'Open Log Folder' })}
-          </button>
+          </Button>
         </>
       }
       meta={

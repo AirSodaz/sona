@@ -147,7 +147,7 @@ describe('SettingsApiServerTab', () => {
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
-  it('renders custom data-tooltips on action buttons', async () => {
+  it('renders custom Portal tooltips on action buttons', async () => {
     await act(async () => {
       render(<SettingsApiServerTab />);
     });
@@ -155,11 +155,14 @@ describe('SettingsApiServerTab', () => {
     const generateBtn = screen.getByRole('button', { name: 'Generate' });
     const copyBtn = screen.getByRole('button', { name: 'Copy' });
 
-    expect(generateBtn.getAttribute('data-tooltip')).toBe('Generate');
-    expect(generateBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(generateBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Generate');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(generateBtn);
 
-    expect(copyBtn.getAttribute('data-tooltip')).toBe('Copy');
-    expect(copyBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(copyBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Copy');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
   });
 
   it('updates dynamic Copy Key tooltip upon clicking copy', async () => {
@@ -184,7 +187,9 @@ describe('SettingsApiServerTab', () => {
 
     // Tooltip should switch to 'Copied!' reactively
     await waitFor(() => {
-      expect(copyBtn.getAttribute('data-tooltip')).toBe('Copied!');
+      const copiedBtn = screen.getByRole('button', { name: 'Copied!' });
+      fireEvent.focus(copiedBtn);
+      expect(screen.getByRole('tooltip').textContent).toBe('Copied!');
     });
   });
 

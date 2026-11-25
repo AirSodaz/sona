@@ -141,45 +141,27 @@
   user-select: text;
 }
 
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.btn.toolbar-btn {
   width: 32px;
   height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    box-shadow var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  border-radius: 11px;
 }
 
-.toolbar-btn:hover {
-  background: var(--color-bg-hover);
-  box-shadow: var(--apple-control-shadow-flat);
-  color: var(--color-text-primary);
+@supports (corner-shape: squircle) {
+  .btn.toolbar-btn {
+    corner-shape: squircle;
+    border-radius: 14px;
+  }
 }
 
-.toolbar-btn:active {
-  background: var(--color-bg-tertiary);
-  box-shadow: var(--apple-control-shadow-flat);
-  transform: scale(0.98);
-}
-
-.toolbar-btn svg {
+.btn.toolbar-btn svg {
   width: 18px;
   height: 18px;
 }
 
-.btn:disabled,
-.btn-icon:disabled,
 .btn-parameter-settings:disabled,
-.toolbar-btn:disabled,
 .settings-tab-btn:disabled,
 .accordion-header-btn:disabled,
 .dropdown-trigger:disabled,

@@ -39,9 +39,10 @@ describe('GlobalDialog', () => {
 
     const aiButton = screen.getByRole('button', { name: 'AI Auto-rename' });
 
-    expect(aiButton.getAttribute('data-tooltip')).toBe('AI Auto-rename');
-    expect(aiButton.getAttribute('data-tooltip-pos')).toBe('top');
     expect(aiButton.getAttribute('title')).toBeNull();
+    fireEvent.focus(aiButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('AI Auto-rename');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
   });
 
   it('renders checkbox and updates confirm button label and notice when toggled', () => {

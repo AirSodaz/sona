@@ -3,12 +3,10 @@ import type React from 'react';
 import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { joinClassNames } from '../utils/classNames';
 import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { ModalPortal } from './ModalPortal';
-
-function joinClassNames(...parts: Array<string | undefined | false | null>): string {
-  return parts.filter(Boolean).join(' ');
-}
+import { IconButton } from './ui/Button';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -149,10 +147,18 @@ export function Modal({
           }
 
           if (!modalRef.current) return;
-          const focusable = getFocusableElements(modalRef.current);
-          if (focusable.length > 0) {
-            focusable[0].focus();
+          if (
+            document.activeElement instanceof HTMLElement &&
+            modalRef.current.contains(document.activeElement) &&
+            document.activeElement !== modalRef.current
+          ) {
+            return;
           }
+          const focusable = getFocusableElements(modalRef.current);
+          const preferredTarget =
+            focusable.find((el) => !el.classList.contains('shared-modal-close-btn')) ??
+            modalRef.current;
+          preferredTarget.focus();
         }, 50);
       }
 
@@ -279,16 +285,15 @@ export function Modal({
                 </div>
               ))}
             {!hideCloseButton && (
-              <button
-                type="button"
-                className="btn btn-icon shared-modal-close-btn"
+              <IconButton
+                tier="ghost"
+                size="md"
+                className="shared-modal-close-btn"
+                icon={<X size={18} />}
                 onClick={onClose}
                 aria-label={t('common.close', { defaultValue: 'Close' })}
-                data-tooltip={t('common.close', { defaultValue: 'Close' })}
-                data-tooltip-pos="bottom-left"
-              >
-                <X size={18} />
-              </button>
+                tooltipPos="bottom-left"
+              />
             )}
           </div>
 

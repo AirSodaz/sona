@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import type React from 'react';
+import { IconButton } from '../ui/Button';
 import type { ProjectSummaryChip, TranslationFn } from './types';
 
 interface ProjectsHeaderProps {
@@ -39,17 +40,17 @@ export function ProjectsHeader({
         </div>
         {isTrashScope && onEmptyTrash && (
           <div className="projects-main-entry-actions" data-testid="projects-main-entry-actions">
-            <button
-              type="button"
-              className="btn btn-icon projects-header-icon btn-danger"
+            <IconButton
+              tier="ghost"
+              tone="danger"
+              size="md"
+              className="projects-header-icon"
+              icon={<Trash2 size={16} />}
               onClick={onEmptyTrash}
               disabled={trashItemCount === 0}
               aria-label={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
-              data-tooltip={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
-              data-tooltip-pos="bottom-left"
-            >
-              <Trash2 size={16} />
-            </button>
+              tooltipPos="bottom-left"
+            />
           </div>
         )}
       </div>

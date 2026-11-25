@@ -17,7 +17,9 @@ import {
 import { Dropdown } from '../Dropdown';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsSection } from './SettingsLayout';
 import './vocabulary/vocabulary.css';
 
@@ -396,21 +398,15 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
               aria-label={t('settings.dict_target_scope', { defaultValue: 'Target Scope' })}
             />
           </div>
-          <button
-            className="btn btn-primary"
+          <Button
+            tier="primary"
+            size="md"
+            leftIcon={<Plus size={18} />}
             onClick={handleAddProfile}
             disabled={!newProfileName.trim()}
-            style={{
-              height: '38px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '0 20px',
-            }}
           >
-            <Plus size={18} />
             {t('settings.add_speaker_profile', { defaultValue: 'Add Profile' })}
-          </button>
+          </Button>
         </div>
 
         <div
@@ -496,55 +492,62 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                           minWidth: '150px',
                         }}
                       />
-                      <button
-                        type="button"
-                        className="dict-scope-pill"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openScopeModal(profile);
-                        }}
-                        style={{
-                          height: '24px',
-                          padding: '0 8px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          border:
-                            profile.scope === 'project' &&
-                            (!profile.projectIds || profile.projectIds.length === 0)
-                              ? '1px dashed var(--color-warning)'
-                              : undefined,
-                        }}
-                        data-tooltip={t('settings.speaker_edit_scope', {
+                      <Tooltip
+                        content={t('settings.speaker_edit_scope', {
                           defaultValue: 'Click to edit target scope',
                         })}
-                        data-tooltip-pos="top"
+                        placement="top"
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {profile.scope === 'project' ? (
-                            <>
-                              <span
-                                style={{
-                                  width: '6px',
-                                  height: '6px',
-                                  borderRadius: '50%',
-                                  background:
-                                    profile.projectIds && profile.projectIds.length > 0
-                                      ? 'var(--color-accent-primary)'
-                                      : 'var(--color-warning)',
-                                }}
-                              />
-                              {getScopeBadgeText(profile)}
-                            </>
-                          ) : (
-                            <>
-                              <Globe size={11} style={{ opacity: 0.7 }} />
-                              <span>
-                                {t('settings.dict_scope_badge_global', { defaultValue: 'Global' })}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          className="dict-scope-pill"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openScopeModal(profile);
+                          }}
+                          style={{
+                            height: '24px',
+                            padding: '0 8px',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            border:
+                              profile.scope === 'project' &&
+                              (!profile.projectIds || profile.projectIds.length === 0)
+                                ? '1px dashed var(--color-warning)'
+                                : undefined,
+                          }}
+                        >
+                          <span
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            {profile.scope === 'project' ? (
+                              <>
+                                <span
+                                  style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    background:
+                                      profile.projectIds && profile.projectIds.length > 0
+                                        ? 'var(--color-brand)'
+                                        : 'var(--color-warning)',
+                                  }}
+                                />
+                                {getScopeBadgeText(profile)}
+                              </>
+                            ) : (
+                              <>
+                                <Globe size={11} style={{ opacity: 0.7 }} />
+                                <span>
+                                  {t('settings.dict_scope_badge_global', {
+                                    defaultValue: 'Global',
+                                  })}
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      </Tooltip>
 
                       <span
                         style={{
@@ -575,21 +578,18 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                         }
                       />
 
-                      <button
-                        className="btn btn-icon btn-danger-soft"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="sm"
+                        icon={<Trash2 size={18} />}
                         onClick={() => void handleDeleteProfile(profile)}
-                        data-tooltip={t('settings.delete_speaker_profile', {
-                          name: profile.name,
-                          defaultValue: 'Delete {{name}}',
-                        })}
-                        data-tooltip-pos="top"
+                        tooltipPos="top"
                         aria-label={t('settings.delete_speaker_profile', {
                           name: profile.name,
                           defaultValue: 'Delete {{name}}',
                         })}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      />
                     </div>
                   </div>
 
@@ -630,14 +630,14 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                             defaultValue: `${readiness.usableSampleCount} usable samples · ${formatSampleDuration(readiness.usableDurationSeconds)}`,
                           })}
                         </div>
-                        <button
-                          className="btn btn-secondary-soft"
+                        <Button
+                          tier="secondary"
+                          size="sm"
+                          leftIcon={<Upload size={16} />}
                           onClick={() => void handleImportSamples(profile)}
-                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                         >
-                          <Upload size={16} />
                           {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
-                        </button>
+                        </Button>
                       </div>
 
                       {profile.samples.length === 0 ? (
@@ -666,15 +666,15 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                               </div>
                             </div>
 
-                            <button
-                              className="btn btn-icon btn-danger-soft"
+                            <IconButton
+                              tier="ghost"
+                              tone="danger"
+                              size="sm"
+                              icon={<Trash2 size={14} />}
                               onClick={() => void handleDeleteSample(profile.id, sample.id)}
                               aria-label={t('common.delete')}
-                              data-tooltip={t('common.delete')}
-                              data-tooltip-pos="top"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                              tooltipPos="top"
+                            />
                           </div>
                         ))
                       )}
@@ -801,16 +801,12 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
             <div
               style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}
             >
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setEditingScopeProfile(null)}
-              >
+              <Button tier="secondary" onClick={() => setEditingScopeProfile(null)}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleSaveScopeModal}>
+              </Button>
+              <Button tier="primary" onClick={handleSaveScopeModal}>
                 {t('common.save', { defaultValue: 'Save' })}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

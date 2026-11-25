@@ -2838,6 +2838,7 @@
       "temperature_precise": "精確聚焦",
       "temperature_balanced": "平衡通用",
       "temperature_creative": "發散創意",
+      "reset_temperature": "重設為預設 1.0",
       "add_custom_provider": "新增模型供應商",
       "custom_provider_name": "供應商名稱",
       "custom_provider_api_mode": "API 模式",

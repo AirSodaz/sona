@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { useSpeakerReview } from '../../hooks/useSpeakerReview';
 import type { SpeakerReviewGroup } from '../../services/speakerReviewService';
 import { PanelModal } from '../PanelModal';
+import { Button } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import './TranscriptSpeakerReviewPanel.css';
 
 interface TranscriptSpeakerReviewPanelProps {
@@ -171,24 +173,21 @@ export function TranscriptSpeakerReviewPanel({
         </div>
 
         {batchEligibleCount > 0 && (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm transcript-speaker-review-batch-btn"
-            disabled={isBatchApplying}
+          <Button
+            tier="primary"
+            size="sm"
+            loading={isBatchApplying}
+            leftIcon={<UserCheck size={14} />}
+            className="transcript-speaker-review-batch-btn"
             onClick={() => void handleBatchApplyTopCandidates()}
           >
-            {isBatchApplying ? (
-              <Loader2 size={14} className="queue-icon-spin" />
-            ) : (
-              <UserCheck size={14} />
-            )}
             <span>
               {t('editor.speaker_review_batch_apply', {
                 count: batchEligibleCount,
                 defaultValue: `采纳全部推荐 (${batchEligibleCount})`,
               })}
             </span>
-          </button>
+          </Button>
         )}
       </div>
 
@@ -207,17 +206,21 @@ export function TranscriptSpeakerReviewPanel({
           </div>
           <div className="transcript-speaker-distribution-bar">
             {distribution.map((slice) => (
-              <div
+              <Tooltip
                 key={slice.groupId}
-                className="transcript-speaker-distribution-slice"
-                style={{
-                  flex: `${Math.max(slice.durationSeconds, 0.01)} 1 0`,
-                  minWidth: '4px',
-                  backgroundColor: slice.color,
-                }}
-                title={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}
-                onClick={() => setActiveGroupId(slice.groupId)}
-              />
+                content={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}
+                placement="top"
+              >
+                <div
+                  className="transcript-speaker-distribution-slice"
+                  style={{
+                    flex: `${Math.max(slice.durationSeconds, 0.01)} 1 0`,
+                    minWidth: '4px',
+                    backgroundColor: slice.color,
+                  }}
+                  onClick={() => setActiveGroupId(slice.groupId)}
+                />
+              </Tooltip>
             ))}
           </div>
           <div className="transcript-speaker-distribution-legend">
@@ -296,14 +299,14 @@ export function TranscriptSpeakerReviewPanel({
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    leftIcon={<MapPin size={14} />}
                     onClick={() => handleJumpToGroup(group)}
                   >
-                    <MapPin size={14} />
                     {t('editor.speaker_review_jump')}
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="transcript-speaker-review-preview">
@@ -348,43 +351,39 @@ export function TranscriptSpeakerReviewPanel({
                 </div>
 
                 <div className="transcript-speaker-review-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={isBusy}
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    loading={isBusy}
+                    leftIcon={<CheckCircle2 size={14} />}
                     onClick={() => void handleConfirmGroup(group.groupId)}
                   >
-                    {isBusy ? (
-                      <Loader2 size={14} className="queue-icon-spin" />
-                    ) : (
-                      <CheckCircle2 size={14} />
-                    )}
                     {t('editor.speaker_review_confirm')}
-                  </button>
+                  </Button>
                   {topCandidate ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
+                    <Button
+                      tier="primary"
+                      size="sm"
+                      leftIcon={<UserCheck size={14} />}
                       disabled={isBusy}
                       onClick={() =>
                         void handleAssignProfile(group.groupId, topCandidate.profileId)
                       }
                     >
-                      <UserCheck size={14} />
                       {t('editor.speaker_review_apply_top_candidate', {
                         candidate: topCandidate.profileName,
                       })}
-                    </button>
+                    </Button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
+                  <Button
+                    tier="ghost"
+                    size="sm"
+                    leftIcon={<RotateCcw size={14} />}
                     disabled={isBusy || !canReset}
                     onClick={() => void handleResetGroup(group.groupId)}
                   >
-                    <RotateCcw size={14} />
                     {t('editor.speaker_review_reset')}
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="transcript-speaker-review-profile-block">
@@ -393,41 +392,44 @@ export function TranscriptSpeakerReviewPanel({
                   </div>
                   <div className="transcript-speaker-review-profile-list">
                     {profileSections.primaryProfiles.map((profile) => (
-                      <button
+                      <Button
                         key={profile.id}
-                        type="button"
-                        className="btn btn-secondary-soft btn-sm"
+                        tier="secondary"
+                        size="sm"
                         disabled={isBusy}
                         onClick={() => void handleAssignProfile(group.groupId, profile.id)}
                       >
                         {profile.name}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                   {profileSections.secondaryProfiles.length > 0 ? (
                     <>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm transcript-speaker-review-expand"
+                      <Button
+                        tier="ghost"
+                        size="sm"
+                        className="transcript-speaker-review-expand"
+                        leftIcon={
+                          showAllProfiles ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                        }
                         onClick={() => toggleExpanded(group.groupId)}
                       >
-                        {showAllProfiles ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         {showAllProfiles
                           ? t('editor.speaker_correction_hide_more')
                           : t('editor.speaker_correction_show_more')}
-                      </button>
+                      </Button>
                       {showAllProfiles ? (
                         <div className="transcript-speaker-review-profile-list">
                           {profileSections.secondaryProfiles.map((profile) => (
-                            <button
+                            <Button
                               key={profile.id}
-                              type="button"
-                              className="btn btn-secondary-soft btn-sm"
+                              tier="secondary"
+                              size="sm"
                               disabled={isBusy}
                               onClick={() => void handleAssignProfile(group.groupId, profile.id)}
                             >
                               {profile.name}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       ) : null}

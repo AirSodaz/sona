@@ -38,6 +38,7 @@ import {
   ViewIcon,
   ViewOffIcon,
 } from './Icons';
+import { Button, IconButton } from './ui/Button';
 import { SearchInput } from './ui/SearchInput';
 
 function SwapIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
@@ -501,10 +502,12 @@ export function TranslateButton({
       onKeyDown={handleKeyDown}
       style={{ display: 'inline-block' }}
     >
-      <button
+      <Button
         ref={triggerRef}
         id="translate-menu-button"
-        className="btn btn-icon"
+        tier="ghost"
+        size="md"
+        className="export-menu-trigger"
         onClick={() => {
           if (isOpen) {
             closeMenu();
@@ -516,12 +519,12 @@ export function TranslateButton({
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls="translate-menu-dropdown"
-        data-tooltip={
+        tooltip={
           isTranslating
             ? t('translation.translating')
             : t('translation.translate_all', { defaultValue: 'Translate Transcript' })
         }
-        data-tooltip-pos="bottom"
+        tooltipPos="bottom"
         aria-label={
           isTranslating
             ? t('translation.translating')
@@ -536,8 +539,8 @@ export function TranslateButton({
         ) : (
           <LanguagesIcon />
         )}
-        <ChevronDownIcon />
-      </button>
+        <ChevronDownIcon className="export-menu-chevron" width={12} height={12} />
+      </Button>
 
       {isOpen && (
         <div
@@ -640,83 +643,45 @@ export function TranslateButton({
           <div
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px 6px 8px' }}
           >
-            <button
-              type="button"
+            <Button
+              tier="secondary"
+              size="sm"
+              active={selectingMode === 'source'}
               onClick={() => switchSelectingMode('source')}
               style={{
                 flex: 1,
-                padding: '6px 8px',
-                fontSize: '0.75rem',
                 fontWeight: selectingMode === 'source' ? 600 : 400,
-                background:
-                  selectingMode === 'source'
-                    ? 'var(--color-bg-hover)'
-                    : 'var(--color-bg-secondary)',
-                border:
-                  selectingMode === 'source'
-                    ? '1px solid var(--color-accent-primary)'
-                    : '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-                textAlign: 'center',
+                borderColor: selectingMode === 'source' ? 'var(--color-accent-primary)' : undefined,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
               }}
             >
               {effectiveSourceLang === 'auto'
                 ? t('translation.auto_detect', { defaultValue: 'Auto Detect' })
                 : getLocalizedLanguageName(effectiveSourceLang, i18n.language)}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <IconButton
+              tier="secondary"
+              size="sm"
+              icon={<SwapIcon />}
               aria-label={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
-              title={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
               onClick={handleSwapLanguages}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 28,
-                height: 28,
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-bg-secondary)',
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              <SwapIcon />
-            </button>
-            <button
-              type="button"
+            />
+            <Button
+              tier="secondary"
+              size="sm"
+              active={selectingMode === 'target'}
               onClick={() => switchSelectingMode('target')}
               style={{
                 flex: 1,
-                padding: '6px 8px',
-                fontSize: '0.75rem',
                 fontWeight: selectingMode === 'target' ? 600 : 400,
-                background:
-                  selectingMode === 'target'
-                    ? 'var(--color-bg-hover)'
-                    : 'var(--color-bg-secondary)',
-                border:
-                  selectingMode === 'target'
-                    ? '1px solid var(--color-accent-primary)'
-                    : '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-                textAlign: 'center',
+                borderColor: selectingMode === 'target' ? 'var(--color-accent-primary)' : undefined,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
               }}
             >
               {getLocalizedLanguageName(effectiveTargetLang, i18n.language)}
-            </button>
+            </Button>
           </div>
           {isLocalOnnx ? (
             <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 0' }}>
@@ -920,36 +885,22 @@ export function TranslateButton({
                     {commonLanguages.map((lang) => {
                       const isSelected = effectiveTargetLang === lang;
                       return (
-                        <button
+                        <Button
                           key={`common-${lang}`}
-                          type="button"
+                          tier="secondary"
+                          size="xs"
+                          active={isSelected}
                           data-candidate-lang="true"
                           onClick={() => void handleLanguageSelect(lang)}
                           style={{
-                            padding: '4px 6px',
-                            fontSize: '0.75rem',
-                            background: isSelected
-                              ? 'var(--color-bg-hover)'
-                              : 'var(--color-bg-secondary)',
-                            border: isSelected
-                              ? '1px solid var(--color-accent-primary)'
-                              : '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-sm)',
-                            color: isSelected
-                              ? 'var(--color-text-primary)'
-                              : 'var(--color-text-secondary)',
-                            cursor: 'pointer',
-                            textAlign: 'center',
+                            borderColor: isSelected ? 'var(--color-brand)' : undefined,
+                            fontWeight: isSelected ? 600 : 'normal',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            fontWeight: isSelected ? '600' : 'normal',
-                            transition: 'all 0.15s ease',
                           }}
-                          title={getLocalizedLanguageName(lang, i18n.language)}
                         >
                           {getLocalizedLanguageName(lang, i18n.language)}
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>

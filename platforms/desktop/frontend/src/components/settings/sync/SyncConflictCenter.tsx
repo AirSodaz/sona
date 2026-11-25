@@ -34,6 +34,7 @@ import type {
 } from '../../../types/sync';
 import type { TranscriptSegment } from '../../../types/transcript';
 import type { TranscriptDiffRow } from '../../../types/transcriptSnapshot';
+import { Button } from '../../ui/Button';
 import { SettingsAccordion } from '../SettingsLayout';
 import './SyncSettings.css';
 
@@ -388,42 +389,33 @@ export function SyncConflictCenter({
 
                   {/* Resolution Action Bar */}
                   <div className="sync-conflict-actions-bar">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
+                    <Button
+                      tier="primary"
+                      leftIcon={<Check size={16} />}
                       disabled={resolving}
                       onClick={() => void resolve('keep_current')}
                     >
-                      <Check size={16} />
-                      <span>
-                        {t('settings.sync.keep_current', { defaultValue: 'Keep current version' })}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
+                      {t('settings.sync.keep_current', { defaultValue: 'Keep current version' })}
+                    </Button>
+                    <Button
+                      tier="secondary"
+                      leftIcon={<HardDrive size={16} />}
                       disabled={resolving}
                       onClick={() => void resolve('use_conflicting')}
                     >
-                      <HardDrive size={16} />
-                      <span>
-                        {t('settings.sync.use_conflicting', { defaultValue: 'Use remote version' })}
-                      </span>
-                    </button>
+                      {t('settings.sync.use_conflicting', { defaultValue: 'Use remote version' })}
+                    </Button>
                     {detail.summary.entity.kind === 'history_transcript' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
+                      <Button
+                        tier="secondary"
+                        leftIcon={<Copy size={16} />}
                         disabled={resolving}
                         onClick={() => void resolve('keep_both')}
                       >
-                        <Copy size={16} />
-                        <span>
-                          {t('settings.sync.keep_both', {
-                            defaultValue: 'Keep both (create duplicate)',
-                          })}
-                        </span>
-                      </button>
+                        {t('settings.sync.keep_both', {
+                          defaultValue: 'Keep both (create duplicate)',
+                        })}
+                      </Button>
                     )}
                   </div>
                 </>

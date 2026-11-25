@@ -28,7 +28,9 @@ import type { AppConfig, McpPermissionMode } from '../../types/config';
 import { ClientLogo } from '../icons/ClientLogos';
 import { Switch } from '../Switch';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
+import { Tooltip } from '../ui/Tooltip';
 import {
   SegmentedSubTabs,
   SettingsAccordion,
@@ -239,25 +241,22 @@ export function SettingsMcpTab(): React.JSX.Element {
           defaultValue: 'Enable MCP Agent Service',
         })}
         actions={
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={!isEnabled || !status?.running || isPinging}
+          <Button
+            tier="secondary"
+            size="sm"
+            loading={isPinging}
+            disabled={!isEnabled || !status?.running}
+            leftIcon={<Zap size={13} />}
             onClick={() => void handlePing()}
-            title={t('settings.mcp.btn_ping', { defaultValue: 'Ping MCP Service' })}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            <Zap size={13} />
-            <span>
-              {isPinging
-                ? t('settings.mcp.pinging', { defaultValue: 'Pinging...' })
-                : pingLatency !== null
-                  ? pingLatency >= 0
-                    ? `${pingLatency}ms`
-                    : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })
-                  : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
-            </span>
-          </button>
+            {isPinging
+              ? t('settings.mcp.pinging', { defaultValue: 'Pinging...' })
+              : pingLatency !== null
+                ? pingLatency >= 0
+                  ? `${pingLatency}ms`
+                  : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })
+                : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
+          </Button>
         }
       />
 
@@ -293,26 +292,24 @@ export function SettingsMcpTab(): React.JSX.Element {
                 defaultValue: `${status?.activeConnections ?? 0} Agent connected`,
               })}
             </span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              leftIcon={<Power size={13} />}
               disabled={!status?.running || (status?.activeConnections ?? 0) === 0}
               onClick={() => void disconnectAll()}
-              title={t('settings.mcp.btn_disconnect_all', { defaultValue: 'Disconnect All' })}
             >
-              <Power size={13} />
               {t('settings.mcp.btn_disconnect_all', { defaultValue: 'Disconnect All' })}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            </Button>
+            <Button
+              tier="secondary"
+              size="sm"
+              leftIcon={<RefreshCw size={13} />}
               disabled={!isEnabled}
               onClick={() => void handleRestart()}
-              title={t('settings.mcp.btn_restart_service', { defaultValue: 'Restart Service' })}
             >
-              <RefreshCw size={13} />
               {t('settings.mcp.btn_restart_service', { defaultValue: 'Restart Service' })}
-            </button>
+            </Button>
           </div>
         </SettingsItem>
 
@@ -324,16 +321,17 @@ export function SettingsMcpTab(): React.JSX.Element {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <code className="settings-code-inline">{status?.endpoint || 'N/A'}</code>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              feedback={copiedKey === 'endpoint' ? 'success' : 'idle'}
+              leftIcon={copiedKey === 'endpoint' ? <Check size={13} /> : <Copy size={13} />}
               onClick={() => handleCopy(status?.endpoint || '', 'endpoint')}
             >
-              {copiedKey === 'endpoint' ? <Check size={13} /> : <Copy size={13} />}
               {copiedKey === 'endpoint'
                 ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
                 : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })}
-            </button>
+            </Button>
           </div>
         </SettingsItem>
 
@@ -658,41 +656,35 @@ export function SettingsMcpTab(): React.JSX.Element {
                         })}
                     :
                   </span>
-                  <code
-                    className="settings-code-inline mcp-guide-path-code"
-                    title={activeGuide.configPath}
-                  >
-                    {activeGuide.configPath}
-                  </code>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-xs btn-icon-only"
+                  <Tooltip content={activeGuide.configPath} placement="top" onlyWhenTruncated>
+                    <code className="settings-code-inline mcp-guide-path-code">
+                      {activeGuide.configPath}
+                    </code>
+                  </Tooltip>
+                  <IconButton
+                    tier="secondary"
+                    size="xs"
+                    feedback={copiedKey === 'guide-path' ? 'success' : 'idle'}
+                    icon={copiedKey === 'guide-path' ? <Check size={13} /> : <Copy size={13} />}
                     onClick={() => handleCopy(activeGuide.configPath, 'guide-path')}
                     aria-label={
                       copiedKey === 'guide-path'
                         ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
                         : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })
                     }
-                    data-tooltip={
-                      copiedKey === 'guide-path'
-                        ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                        : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })
-                    }
-                  >
-                    {copiedKey === 'guide-path' ? (
-                      <Check size={13} style={{ color: 'var(--color-success)' }} />
-                    ) : (
-                      <Copy size={13} />
-                    )}
-                  </button>
+                  />
                 </div>
 
                 <div className="mcp-code-container">
                   <div className="mcp-code-header">
                     <span className="mcp-code-lang">{activeGuide.format.toUpperCase()}</span>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-xs btn-icon-only"
+                    <IconButton
+                      tier="secondary"
+                      size="xs"
+                      feedback={copiedKey === 'guide-content' ? 'success' : 'idle'}
+                      icon={
+                        copiedKey === 'guide-content' ? <Check size={13} /> : <Copy size={13} />
+                      }
                       onClick={() => handleCopy(activeGuide.configContent, 'guide-content')}
                       aria-label={
                         copiedKey === 'guide-content'
@@ -701,20 +693,7 @@ export function SettingsMcpTab(): React.JSX.Element {
                               defaultValue: 'Copy Configuration',
                             })
                       }
-                      data-tooltip={
-                        copiedKey === 'guide-content'
-                          ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                          : t('settings.mcp.btn_copy_config', {
-                              defaultValue: 'Copy Configuration',
-                            })
-                      }
-                    >
-                      {copiedKey === 'guide-content' ? (
-                        <Check size={13} style={{ color: 'var(--color-success)' }} />
-                      ) : (
-                        <Copy size={13} />
-                      )}
-                    </button>
+                    />
                   </div>
                   <pre className="mcp-code-body">{activeGuide.configContent}</pre>
                 </div>
@@ -741,15 +720,15 @@ export function SettingsMcpTab(): React.JSX.Element {
         })}
         icon={<Activity size={18} />}
         actions={
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            size="sm"
+            leftIcon={<Trash2 size={13} />}
             disabled={(logs || []).length === 0}
             onClick={() => void clearLogs()}
           >
-            <Trash2 size={13} />
             {t('settings.mcp.btn_clear_logs', { defaultValue: 'Clear Logs' })}
-          </button>
+          </Button>
         }
       >
         <SettingsItem layout="vertical" title="">
@@ -800,18 +779,29 @@ export function SettingsMcpTab(): React.JSX.Element {
                       })}
                     </span>
                     {entry.paramsSummary && (
-                      <span className="mcp-log-summary-text" title={entry.paramsSummary}>
-                        {entry.paramsSummary}
-                      </span>
+                      <Tooltip
+                        content={entry.paramsSummary}
+                        placement="top"
+                        multiline
+                        onlyWhenTruncated
+                      >
+                        <span className="mcp-log-summary-text">{entry.paramsSummary}</span>
+                      </Tooltip>
                     )}
                     {entry.errorMessage && (
-                      <span
-                        className="mcp-log-summary-text"
-                        style={{ color: 'var(--color-error)' }}
-                        title={entry.errorMessage}
+                      <Tooltip
+                        content={entry.errorMessage}
+                        placement="top"
+                        multiline
+                        onlyWhenTruncated
                       >
-                        {entry.errorMessage}
-                      </span>
+                        <span
+                          className="mcp-log-summary-text"
+                          style={{ color: 'var(--color-error)' }}
+                        >
+                          {entry.errorMessage}
+                        </span>
+                      </Tooltip>
                     )}
                   </div>
 
@@ -866,18 +856,18 @@ export function SettingsMcpTab(): React.JSX.Element {
                   : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })}
               </span>
             )}
-            <button
-              type="button"
-              className="btn btn-secondary btn-xs"
+            <Button
+              tier="secondary"
+              size="xs"
+              leftIcon={<Zap size={12} />}
               disabled={!isEnabled || isPinging || !status?.running}
               onClick={(e) => {
                 e.stopPropagation();
                 void handlePing();
               }}
             >
-              <Zap size={12} />
               {t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
-            </button>
+            </Button>
           </div>
         }
       >

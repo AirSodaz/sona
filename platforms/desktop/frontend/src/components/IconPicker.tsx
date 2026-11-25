@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ColorSwatchPicker } from './ColorSwatchPicker';
 import { ChevronDownIcon, CodeIcon, FileTextIcon, FolderIcon, MicIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
+import { Button, IconButton } from './ui/Button';
 
 export const SYSTEM_ICONS = [
   {
@@ -165,19 +166,20 @@ export function IconPicker({
   }, [isPickerOpen]);
   return (
     <div style={{ position: 'relative' }}>
-      <button
+      <Button
         ref={buttonRef}
-        type="button"
-        className="btn btn-secondary"
-        data-tooltip={t('history.choose_icon', { defaultValue: 'Choose icon' })}
-        data-tooltip-pos="top"
+        tier="secondary"
+        aria-label={
+          icon && !icon.startsWith('system:')
+            ? undefined
+            : t('history.choose_icon', { defaultValue: 'Choose icon' })
+        }
+        tooltip={t('history.choose_icon', { defaultValue: 'Choose icon' })}
+        tooltipPos="top"
         style={{
-          display: 'flex',
-          alignItems: 'center',
           gap: 'var(--spacing-xs)',
           minWidth: '60px',
           height: '40px',
-          justifyContent: 'center',
           borderColor: color ? `color-mix(in srgb, ${color} 35%, var(--color-border))` : undefined,
           background: color
             ? `color-mix(in srgb, ${color} 8%, var(--color-bg-secondary))`
@@ -190,7 +192,7 @@ export function IconPicker({
       >
         {renderIcon(icon, defaultIcon, color)}
         <ChevronDownIcon style={{ width: '12px', height: '12px' }} />
-      </button>
+      </Button>
 
       {isPickerOpen && (
         <ModalPortal>
@@ -258,12 +260,13 @@ export function IconPicker({
                 {SYSTEM_ICONS.map((si) => {
                   const label = t(si.nameKey, { defaultValue: si.defaultName });
                   return (
-                    <button
+                    <IconButton
                       key={si.id}
-                      type="button"
-                      className={`btn btn-icon ${icon === si.id ? 'active' : ''}`}
+                      tier="ghost"
+                      size="md"
+                      active={icon === si.id}
+                      icon={si.icon}
                       style={{
-                        background: icon === si.id ? 'var(--color-bg-active)' : 'transparent',
                         color: color || 'inherit',
                       }}
                       onClick={(event) => {
@@ -271,12 +274,10 @@ export function IconPicker({
                         onChange(si.id);
                         setIsPickerOpen(false);
                       }}
-                      data-tooltip={label}
-                      data-tooltip-pos="top"
+                      tooltip={label}
+                      tooltipPos="top"
                       aria-label={label}
-                    >
-                      {si.icon}
-                    </button>
+                    />
                   );
                 })}
               </div>
@@ -303,23 +304,20 @@ export function IconPicker({
                 }}
               >
                 {RECOMMENDED_EMOJIS.map((e) => (
-                  <button
+                  <IconButton
                     key={e}
-                    type="button"
-                    className="btn btn-icon"
-                    style={{
-                      fontSize: '1.25rem',
-                      background: icon === e ? 'var(--color-bg-active)' : 'transparent',
-                    }}
+                    tier="ghost"
+                    size="md"
+                    active={icon === e}
+                    icon={e}
+                    style={{ fontSize: '1.25rem' }}
                     onClick={(event) => {
                       event.preventDefault();
                       onChange(e);
                       setIsPickerOpen(false);
                     }}
                     aria-label={e}
-                  >
-                    {e}
-                  </button>
+                  />
                 ))}
               </div>
             </div>
@@ -357,20 +355,20 @@ export function IconPicker({
                 }}
               />
             </div>
-            <button
-              type="button"
-              className="btn btn-text btn-sm"
-              style={{ width: '100%', justifyContent: 'center', fontSize: '0.75rem' }}
+            <Button
+              tier="ghost"
+              size="sm"
+              fullWidth
               onClick={(e) => {
                 e.preventDefault();
                 onChange('');
                 setIsPickerOpen(false);
               }}
-              data-tooltip={t('history.reset_icon', { defaultValue: 'Reset icon' })}
-              data-tooltip-pos="top"
+              tooltip={t('history.reset_icon', { defaultValue: 'Reset icon' })}
+              tooltipPos="top"
             >
               {t('common.reset', { defaultValue: 'Reset' })}
-            </button>
+            </Button>
           </div>
         </ModalPortal>
       )}

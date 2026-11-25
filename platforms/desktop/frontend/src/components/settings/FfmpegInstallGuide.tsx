@@ -14,6 +14,7 @@ import { openUrl } from '../../services/tauri/platform/opener';
 import { getCurrentPlatform } from '../../services/voiceTyping/voiceTypingContext';
 import type { HostPlatform } from '../../types/config';
 import { logger } from '../../utils/logger';
+import { Button, IconButton } from '../ui/Button';
 import './FfmpegInstallGuide.css';
 
 export interface FfmpegInstallGuideProps {
@@ -178,20 +179,15 @@ export function FfmpegInstallGuide({
                 <span className="ffmpeg-install-guide-command-label">{cmd.label}</span>
                 <div className="ffmpeg-install-guide-command-row">
                   <code className="ffmpeg-install-guide-code">{cmd.command}</code>
-                  <button
-                    type="button"
-                    className={`btn btn-secondary btn-sm ffmpeg-install-guide-copy-btn ${
-                      isCopied ? 'btn-copied' : ''
-                    }`}
+                  <IconButton
+                    tier="secondary"
+                    size="sm"
+                    feedback={isCopied ? 'success' : 'idle'}
+                    icon={isCopied ? <Check size={14} /> : <Copy size={14} />}
+                    className="ffmpeg-install-guide-copy-btn"
                     onClick={() => void handleCopy(cmd.id, cmd.command)}
                     aria-label={`${t('settings.ffmpeg_copy_command', '复制命令')}: ${cmd.command}`}
-                  >
-                    {isCopied ? (
-                      <Check size={14} aria-hidden="true" />
-                    ) : (
-                      <Copy size={14} aria-hidden="true" />
-                    )}
-                  </button>
+                  />
                 </div>
               </div>
             );
@@ -203,33 +199,28 @@ export function FfmpegInstallGuide({
             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
               {t('settings.ffmpeg_guide_or_manual', '或前往官网手动下载：')}
             </span>
-            <button
-              type="button"
+            <Button
+              tier="ghost"
+              size="xs"
+              rightIcon={<ExternalLink size={13} />}
               className="ffmpeg-install-guide-manual-link"
               onClick={() => void handleOpenDownloadLink()}
             >
-              <span>{t('settings.ffmpeg_guide_official_download', 'FFmpeg 官方下载页面')}</span>
-              <ExternalLink size={13} aria-hidden="true" />
-            </button>
+              {t('settings.ffmpeg_guide_official_download', 'FFmpeg 官方下载页面')}
+            </Button>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            size="sm"
+            loading={isRechecking}
+            leftIcon={<RefreshCw size={13} />}
             onClick={(e) => void handleManualRecheck(e)}
-            disabled={isRechecking}
           >
-            <RefreshCw
-              size={13}
-              className={isRechecking ? 'spin-icon' : undefined}
-              aria-hidden="true"
-            />
-            <span>
-              {isRechecking
-                ? t('settings.ffmpeg_guide_rechecking', '检测中...')
-                : t('settings.ffmpeg_guide_recheck', '重新检测')}
-            </span>
-          </button>
+            {isRechecking
+              ? t('settings.ffmpeg_guide_rechecking', '检测中...')
+              : t('settings.ffmpeg_guide_recheck', '重新检测')}
+          </Button>
         </div>
 
         {recheckStatus === 'success' && (

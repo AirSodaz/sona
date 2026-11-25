@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatLanguagesTooltip, VISIBLE_LANGUAGE_TAGS } from '../utils/languages';
+import { Tooltip } from './ui/Tooltip';
 
 interface LanguageBadgesProps {
   languages: string[] | undefined;
@@ -24,22 +25,21 @@ export function LanguageBadges({ languages }: LanguageBadgesProps): React.JSX.El
   const overflow = languages.length - visible.length;
 
   return (
-    <span
-      className="model-tags language-badges"
-      style={{ marginTop: '0' }}
-      data-tooltip={tooltipText}
-      data-tooltip-pos="top"
-      data-tooltip-multiline
-      tabIndex={0}
-      role="note"
-      aria-label={tooltipText}
-    >
-      {visible.map((code) => (
-        <span key={code} className="model-tag">
-          {code.toUpperCase()}
-        </span>
-      ))}
-      {overflow > 0 && <span className="model-tag model-tag-overflow">+{overflow}</span>}
-    </span>
+    <Tooltip content={tooltipText} placement="top" multiline>
+      <span
+        className="model-tags language-badges"
+        style={{ marginTop: '0' }}
+        tabIndex={0}
+        role="note"
+        aria-label={tooltipText}
+      >
+        {visible.map((code) => (
+          <span key={code} className="model-tag">
+            {code.toUpperCase()}
+          </span>
+        ))}
+        {overflow > 0 && <span className="model-tag model-tag-overflow">+{overflow}</span>}
+      </span>
+    </Tooltip>
   );
 }

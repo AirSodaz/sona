@@ -42,6 +42,8 @@ import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { Button } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
 import { LocalModelManagementSection } from './LocalModelManagementSection';
 import {
@@ -688,27 +690,27 @@ export function SettingsModelsTab({
                 </p>
               </div>
               {Boolean(navContext) && (
-                <button
-                  type="button"
+                <Button
+                  tier="secondary"
+                  size="xs"
+                  pill
+                  leftIcon={<UserCheck size={14} />}
+                  rightIcon={<ArrowRight size={13} />}
                   className="settings-speaker-profiles-btn"
                   onClick={() => navContext?.navigateToTab('vocabulary')}
-                  data-tooltip={t('settings.speaker_manage_profiles', {
+                  tooltip={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
-                  data-tooltip-pos="top"
+                  tooltipPos="top"
                   aria-label={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
                 >
-                  <UserCheck size={14} />
-                  <span>
-                    {t('settings.speaker_profiles_count_pill', {
-                      count: speakerProfiles?.length ?? 0,
-                      defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
-                    })}
-                  </span>
-                  <ArrowRight size={13} />
-                </button>
+                  {t('settings.speaker_profiles_count_pill', {
+                    count: speakerProfiles?.length ?? 0,
+                    defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
+                  })}
+                </Button>
               )}
             </div>
 
@@ -914,27 +916,27 @@ export function SettingsModelsTab({
                 </p>
               </div>
               {Boolean(navContext) && isCloudSpeakerEnabled && (
-                <button
-                  type="button"
+                <Button
+                  tier="secondary"
+                  size="xs"
+                  pill
+                  leftIcon={<UserCheck size={14} />}
+                  rightIcon={<ArrowRight size={13} />}
                   className="settings-speaker-profiles-btn"
                   onClick={() => navContext?.navigateToTab('vocabulary')}
-                  data-tooltip={t('settings.speaker_manage_profiles', {
+                  tooltip={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
-                  data-tooltip-pos="top"
+                  tooltipPos="top"
                   aria-label={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
                 >
-                  <UserCheck size={14} />
-                  <span>
-                    {t('settings.speaker_profiles_count_pill', {
-                      count: speakerProfiles?.length ?? 0,
-                      defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
-                    })}
-                  </span>
-                  <ArrowRight size={13} />
-                </button>
+                  {t('settings.speaker_profiles_count_pill', {
+                    count: speakerProfiles?.length ?? 0,
+                    defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
+                  })}
+                </Button>
               )}
             </div>
 
@@ -1398,22 +1400,20 @@ export function SettingsModelsTab({
                           (cudaStatus?.requiredVersion ?? '—'),
                       })}
                   {cudaStatusError && (
-                    <span
-                      title={cudaStatusError}
-                      style={{ display: 'block', color: 'var(--color-warning)' }}
-                    >
-                      {t('settings.cuda_addon_update_unavailable', {
-                        defaultValue: 'Unable to check compatible addon version.',
-                      })}
-                    </span>
+                    <Tooltip content={cudaStatusError} placement="top" multiline>
+                      <span style={{ display: 'block', color: 'var(--color-warning)' }}>
+                        {t('settings.cuda_addon_update_unavailable', {
+                          defaultValue: 'Unable to check compatible addon version.',
+                        })}
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
                 {cudaStatus?.updateAvailable && cudaStatus.downloadUrl && !isMac && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
+                  <Button
+                    tier="secondary"
                     style={{ marginTop: '6px' }}
-                    disabled={cudaDownloading}
+                    loading={cudaDownloading}
                     onClick={async () => {
                       try {
                         await installCudaAddon(cudaStatus, gpuAcceleration === 'cuda');
@@ -1433,7 +1433,7 @@ export function SettingsModelsTab({
                         defaultValue: cudaStatus.isInstalled ? 'Update' : 'Download',
                       }
                     )}
-                  </button>
+                  </Button>
                 )}
                 {cudaDownloading && (
                   <div
@@ -1476,15 +1476,15 @@ export function SettingsModelsTab({
       </SettingsSection>
 
       <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
-        <button
-          className="btn btn-restore-defaults"
+        <Button
+          tier="secondary"
+          leftIcon={<RestoreIcon />}
           onClick={restoreDefaultModelSettings}
           disabled={localModelActionsDisabled}
           aria-label={t('settings.restore_defaults')}
         >
-          <RestoreIcon />
           {t('settings.restore_defaults')}
-        </button>
+        </Button>
       </div>
     </SettingsTabContainer>
   );

@@ -163,4 +163,22 @@ describe('ProjectSelectorDropdown', () => {
     expect(onOpenProjectsMock).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('listbox')).toBeNull();
   });
+
+  it('toggles chevron rotation state when opening and closing the dropdown', () => {
+    render(<ProjectSelectorDropdown onOpenProjects={vi.fn()} />);
+
+    const trigger = screen.getByRole('button');
+    const chevron = trigger.querySelector('.project-selector-chevron');
+    expect(chevron).not.toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(chevron?.classList.contains('is-open')).toBe(false);
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(chevron?.classList.contains('is-open')).toBe(true);
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(chevron?.classList.contains('is-open')).toBe(false);
+  });
 });

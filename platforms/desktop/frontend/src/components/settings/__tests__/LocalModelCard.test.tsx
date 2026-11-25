@@ -63,8 +63,10 @@ describe('LocalModelCard', () => {
     expect(screen.getByText('Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
     const downloadBtn = screen.getByRole('button', { name: /Download|下载/i });
     expect(downloadBtn).toBeTruthy();
-    expect(downloadBtn.getAttribute('data-tooltip')).toMatch(/Download|下载/);
-    expect(downloadBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(downloadBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/Download|下载/);
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(downloadBtn);
     fireEvent.click(downloadBtn);
     expect(onDownload).toHaveBeenCalledWith(mockCard);
   });
@@ -94,10 +96,12 @@ describe('LocalModelCard', () => {
     expect(screen.getByText('Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
     const cancelBtn = screen.getByRole('button', { name: /Cancel|取消/i });
     expect(cancelBtn).toBeTruthy();
-    expect(cancelBtn.getAttribute('data-tooltip')).toMatch(/Cancel|取消/);
-    expect(cancelBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(cancelBtn.className).toContain('model-action-cancel');
-    expect(cancelBtn.className).not.toContain('model-action-delete');
+    fireEvent.focus(cancelBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/Cancel|取消/);
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(cancelBtn);
+    expect(cancelBtn.className).toContain('btn-icon');
+    expect(cancelBtn.className).toContain('btn-danger');
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith('qwen3.5-4b');
   });
@@ -156,9 +160,12 @@ describe('LocalModelCard', () => {
 
     const deleteBtn = screen.getByRole('button', { name: /Delete|删除/i });
     expect(deleteBtn).toBeTruthy();
-    expect(deleteBtn.getAttribute('data-tooltip')).toMatch(/Delete|删除/);
-    expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(deleteBtn.className).toContain('model-action-delete');
+    fireEvent.focus(deleteBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/Delete|删除/);
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(deleteBtn);
+    expect(deleteBtn.className).toContain('btn-icon');
+    expect(deleteBtn.className).toContain('btn-danger');
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith(installedCard);
   });
@@ -312,9 +319,14 @@ describe('LocalModelCard', () => {
       name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(true);
-    expect(testBtn.getAttribute('data-tooltip')).toMatch(
-      /Download and install model first to test|需先下载安装模型后方可测试/
-    );
+    expect(testBtn.parentElement).not.toBeNull();
+    if (testBtn.parentElement) {
+      fireEvent.focus(testBtn.parentElement);
+      expect(screen.getByRole('tooltip').textContent).toMatch(
+        /Download and install model first to test|需先下载安装模型后方可测试/
+      );
+      fireEvent.blur(testBtn.parentElement);
+    }
     fireEvent.click(testBtn);
     expect(onTest).not.toHaveBeenCalled();
   });
@@ -341,7 +353,9 @@ describe('LocalModelCard', () => {
       name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(false);
-    expect(testBtn.getAttribute('data-tooltip')).toMatch(/Test Connection|测试连接/);
+    fireEvent.focus(testBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/Test Connection|测试连接/);
+    fireEvent.blur(testBtn);
     fireEvent.click(testBtn);
     expect(onTest).toHaveBeenCalledWith(installedCard);
   });
@@ -368,8 +382,13 @@ describe('LocalModelCard', () => {
       name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(true);
-    expect(testBtn.classList.contains('loading')).toBe(true);
-    expect(testBtn.getAttribute('data-tooltip')).toMatch(/Generating\.\.\.|正在生成\.\.\./);
+    expect(testBtn.classList.contains('is-loading')).toBe(true);
+    expect(testBtn.parentElement).not.toBeNull();
+    if (testBtn.parentElement) {
+      fireEvent.focus(testBtn.parentElement);
+      expect(screen.getByRole('tooltip').textContent).toMatch(/Generating\.\.\.|正在生成\.\.\./);
+      fireEvent.blur(testBtn.parentElement);
+    }
   });
 
   it('renders speed badge and checkmark tooltip on test success', () => {
@@ -394,10 +413,12 @@ describe('LocalModelCard', () => {
     expect(speedBadge.textContent).toBe('28.5 t/s');
 
     const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-    expect(testBtn.classList.contains('success')).toBe(true);
-    expect(testBtn.getAttribute('data-tooltip')).toMatch(
+    expect(testBtn.classList.contains('btn-feedback-success')).toBe(true);
+    fireEvent.focus(testBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(
       /✓ (Inference successful|推理成功) \(28\.5 t\/s\)/
     );
+    fireEvent.blur(testBtn);
   });
 
   it('renders error state and error tooltip on test failure without speed badge', () => {
@@ -420,8 +441,10 @@ describe('LocalModelCard', () => {
 
     expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
     const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-    expect(testBtn.classList.contains('error')).toBe(true);
-    expect(testBtn.getAttribute('data-tooltip')).toBe('✕ llama.cpp out of memory');
+    expect(testBtn.classList.contains('btn-feedback-error')).toBe(true);
+    fireEvent.focus(testBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('✕ llama.cpp out of memory');
+    fireEvent.blur(testBtn);
   });
 
   it('disables test button when another model is testing', () => {
@@ -477,7 +500,9 @@ describe('LocalModelCard', () => {
 
     const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
     expect(downloadBtn).toBeTruthy();
-    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+    fireEvent.focus(downloadBtn);
+    expect(screen.getByRole('tooltip').textContent).toContain('50%');
+    fireEvent.blur(downloadBtn);
   });
 
   it('renders discard button and fires onDiscardDownload on click', () => {

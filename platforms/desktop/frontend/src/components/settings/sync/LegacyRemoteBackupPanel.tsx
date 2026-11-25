@@ -9,6 +9,7 @@ import {
 import { useDialogStore } from '../../../stores/dialogStore';
 import type { BackupWebDavConfig, PreparedBackupImport } from '../../../types/backup';
 import type { LegacyRemoteBackupEntry, WebDavObjectStoreConfig } from '../../../types/sync';
+import { Button } from '../../ui/Button';
 import { buildBackupImportDetails, runPreparedBackupImportFlow } from '../backup/backupImportFlow';
 import { preparedBackupImportActions } from '../backup/useBackupSettingsController';
 import { validateSyncServerUrl } from './syncUrl';
@@ -202,17 +203,17 @@ export function LegacyRemoteBackupPanel({
           />
         </label>
       </div>
-      <button
-        type="button"
-        className="btn btn-secondary"
+      <Button
+        tier="secondary"
+        loading={busy === 'list'}
+        leftIcon={<RefreshCw size={16} />}
         onClick={() => void refresh()}
         disabled={disabled || busy !== null || !isReady(config)}
       >
-        <RefreshCw size={16} className={busy === 'list' ? 'queue-icon-spin' : undefined} />
         {busy === 'list'
           ? t('settings.sync.legacy_loading', { defaultValue: 'Loading archives...' })
           : t('settings.sync.legacy_list', { defaultValue: 'List archives' })}
-      </button>
+      </Button>
       {loaded ? (
         entries.length === 0 ? (
           <div className="sync-empty-state">
@@ -231,16 +232,17 @@ export function LegacyRemoteBackupPanel({
                     · {formatSize(entry.size)}
                   </small>
                 </span>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  loading={busy === 'import'}
                   onClick={() => void restore(entry)}
                   disabled={disabled || busy !== null}
                 >
                   {busy === 'import'
                     ? t('settings.backup.cloud_restore_busy', { defaultValue: 'Preparing...' })
                     : t('settings.backup.cloud_restore_button', { defaultValue: 'Restore' })}
-                </button>
+                </Button>
               </div>
             ))}
           </div>

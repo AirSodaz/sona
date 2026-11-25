@@ -5,6 +5,8 @@ import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../t
 import { CheckIcon, DownloadIcon, StopIcon, TrashIcon } from '../Icons';
 import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
+import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 
 const ENGINE_LABEL: Record<ModelInfo['engine'], string> = {
   'sherpa-onnx': 'ONNX',
@@ -47,20 +49,16 @@ function RatingMeter({ label, value }: { label: string; value?: number }) {
   const tooltip = `${label} ${value}/5`;
   return (
     // role="img" gives the aria-label somewhere to attach; the dots are decorative.
-    <span
-      className="model-rating"
-      role="img"
-      aria-label={tooltip}
-      data-tooltip={tooltip}
-      data-tooltip-pos="top"
-    >
-      <span className="model-rating-label">{label}</span>
-      <span className="model-rating-dots" aria-hidden="true">
-        {[1, 2, 3, 4, 5].map((level) => (
-          <span key={level} className={`model-rating-dot${level <= value ? ' filled' : ''}`} />
-        ))}
+    <Tooltip content={tooltip} placement="top">
+      <span className="model-rating" role="img" aria-label={tooltip}>
+        <span className="model-rating-label">{label}</span>
+        <span className="model-rating-dots" aria-hidden="true">
+          {[1, 2, 3, 4, 5].map((level) => (
+            <span key={level} className={`model-rating-dot${level <= value ? ' filled' : ''}`} />
+          ))}
+        </span>
       </span>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -230,30 +228,30 @@ function ModelCardActions({
 
   if (isInstalled) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-delete"
+      <IconButton
+        tier="ghost"
+        tone="danger"
+        size="sm"
+        icon={<TrashIcon />}
         onClick={() => onDelete(model)}
         disabled={disabled}
         aria-label={`${t('common.delete')} ${model.name}`}
-        data-tooltip={t('common.delete')}
-      >
-        <TrashIcon />
-      </button>
+        tooltip={t('common.delete')}
+      />
     );
   }
 
   if (isDownloading) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-cancel"
+      <IconButton
+        tier="ghost"
+        tone="danger"
+        size="sm"
+        icon={<StopIcon />}
         onClick={onCancelDownload}
         aria-label={t('common.cancel')}
-        data-tooltip={t('common.cancel')}
-      >
-        <StopIcon />
-      </button>
+        tooltip={t('common.cancel')}
+      />
     );
   }
 
@@ -272,46 +270,44 @@ function ModelCardActions({
 
     return (
       <>
-        <button
-          type="button"
-          className="model-action-icon"
+        <IconButton
+          tier="ghost"
+          size="sm"
+          icon={<DownloadIcon />}
           onClick={() => onDownload(model)}
           disabled={disabled}
           aria-label={downloadAriaLabel}
-          data-tooltip={downloadTooltip}
-        >
-          <DownloadIcon />
-        </button>
+          tooltip={downloadTooltip}
+        />
         {onDiscardDownload && (
-          <button
-            type="button"
-            className="model-action-icon model-action-delete"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            icon={<TrashIcon />}
             onClick={() => onDiscardDownload(model)}
             disabled={disabled}
             aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
-            data-tooltip={t('settings.discard_download_tooltip', {
+            tooltip={t('settings.discard_download_tooltip', {
               size: downloadedFormatted,
               defaultValue: `Discard incomplete download (${downloadedFormatted})`,
             })}
-          >
-            <TrashIcon />
-          </button>
+          />
         )}
       </>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="model-action-icon"
+    <IconButton
+      tier="ghost"
+      size="sm"
+      icon={<DownloadIcon />}
       onClick={() => onDownload(model)}
       disabled={disabled}
       aria-label={`${t('common.download')} ${model.name}`}
-      data-tooltip={t('common.download')}
-    >
-      <DownloadIcon />
-    </button>
+      tooltip={t('common.download')}
+    />
   );
 }
 

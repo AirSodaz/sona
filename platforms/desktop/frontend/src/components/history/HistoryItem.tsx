@@ -21,6 +21,8 @@ import {
   TrashIcon,
 } from '../Icons';
 import { ProjectBadge } from '../projects/ProjectVisual';
+import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 
 interface HistoryItemProps {
   item: HistoryItemType;
@@ -258,9 +260,9 @@ export function HistoryItem({
       >
         <div className="history-item-header">
           <div className="history-item-title-row">
-            <span className="history-item-type-icon" title={itemTypeLabel}>
-              {renderIcon(item.icon, item.type)}
-            </span>
+            <Tooltip content={itemTypeLabel} placement="top">
+              <span className="history-item-type-icon">{renderIcon(item.icon, item.type)}</span>
+            </Tooltip>
             <span className="history-item-title">
               {highlightRange(item.title, searchTitleMatch)}
             </span>
@@ -315,9 +317,11 @@ export function HistoryItem({
       {!isSelectionMode && (
         <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
           {onRename && item.deletedAt == null && (
-            <button
-              type="button"
-              className="btn btn-icon history-item-rename"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              className="history-item-rename"
+              icon={<EditIcon />}
               onClick={(event) => {
                 event.stopPropagation();
                 onRename(item.id);
@@ -326,16 +330,17 @@ export function HistoryItem({
                 item: item.title,
                 defaultValue: `Rename ${item.title}`,
               })}
-              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
-              data-tooltip-pos="left"
+              tooltip={t('common.rename', { defaultValue: 'Rename' })}
+              tooltipPos="left"
               disabled={isRenameDisabled}
-            >
-              <EditIcon />
-            </button>
+            />
           )}
-          <button
-            type="button"
-            className="btn btn-icon delete-btn history-item-delete"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            className="history-item-delete"
+            icon={<TrashIcon />}
             onClick={(event) => {
               event.stopPropagation();
               onDelete(item.id);
@@ -344,12 +349,10 @@ export function HistoryItem({
               item: item.title,
               defaultValue: `Delete ${item.title}`,
             })}
-            data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-            data-tooltip-pos="left"
+            tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+            tooltipPos="left"
             disabled={isDeleteDisabled}
-          >
-            <TrashIcon />
-          </button>
+          />
         </div>
       )}
     </div>

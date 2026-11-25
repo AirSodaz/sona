@@ -153,7 +153,8 @@ describe('QueueItem', () => {
       />
     );
     const retryBtn = screen.getByRole('button', { name: 'batch.retry' });
-    expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry');
+    fireEvent.focus(retryBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('batch.retry');
     expect(retryBtn.querySelector('.queue-item-retry-text')).toBeNull();
     fireEvent.click(retryBtn);
     expect(onRetry).toHaveBeenCalledWith('item-1');
@@ -178,14 +179,17 @@ describe('QueueItem', () => {
     );
 
     expect(screen.getByText('batch.transcode_failed')).toBeDefined();
-    const errorEl = screen.getByText('batch.transcode_failed').closest('.queue-item-error');
-    expect(errorEl?.getAttribute('data-tooltip')).toBe(rawError);
-    expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
-    expect(errorEl?.getAttribute('tabindex')).toBe('0');
-    expect(errorEl?.getAttribute('role')).toBe('note');
-    expect(errorEl?.getAttribute('aria-label')).toBe(rawError);
-    expect(errorEl?.getAttribute('title')).toBeNull();
-    expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
+    const errorEl = screen
+      .getByText('batch.transcode_failed')
+      .closest('.queue-item-error') as HTMLElement;
+    expect(errorEl).not.toBeNull();
+    expect(errorEl.getAttribute('tabindex')).toBe('0');
+    expect(errorEl.getAttribute('role')).toBe('note');
+    expect(errorEl.getAttribute('aria-label')).toBe(rawError);
+    expect(errorEl.getAttribute('title')).toBeNull();
+    fireEvent.focus(errorEl);
+    expect(screen.getByRole('tooltip').textContent).toBe(rawError);
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
   });
   it('renders raw error and project-unified tooltip when failed item has a decode/transcode error', () => {
@@ -208,10 +212,10 @@ describe('QueueItem', () => {
     expect(screen.getByText('Audio decode error: corrupted stream')).toBeDefined();
     const errorEl = screen
       .getByText('Audio decode error: corrupted stream')
-      .closest('.queue-item-error');
-    expect(errorEl?.getAttribute('data-tooltip')).toBe('Audio decode error: corrupted stream');
-    expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
-    expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
+      .closest('.queue-item-error') as HTMLElement;
+    fireEvent.focus(errorEl);
+    expect(screen.getByRole('tooltip').textContent).toBe('Audio decode error: corrupted stream');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
   });
   it('renders raw error and project-unified tooltip when error is unrelated', () => {
@@ -232,10 +236,10 @@ describe('QueueItem', () => {
     );
 
     expect(screen.getByText('Network timeout')).toBeDefined();
-    const errorEl = screen.getByText('Network timeout').closest('.queue-item-error');
-    expect(errorEl?.getAttribute('data-tooltip')).toBe('Network timeout');
-    expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
-    expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
+    const errorEl = screen.getByText('Network timeout').closest('.queue-item-error') as HTMLElement;
+    fireEvent.focus(errorEl);
+    expect(screen.getByRole('tooltip').textContent).toBe('Network timeout');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
   });
 
@@ -356,7 +360,8 @@ describe('QueueItem', () => {
 
     expect(screen.getByText('batch.media_server_upload_failed')).toBeDefined();
     const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
-    expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry_upload_only');
+    fireEvent.focus(retryBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('batch.retry_upload_only');
   });
 
   it('calls onRetry with item id when clicking retry_upload_only button on item with upload errorStage', () => {
@@ -427,8 +432,13 @@ describe('QueueItem', () => {
 
     const streamBadge = document.querySelector('.queue-item-stream-badge');
     expect(streamBadge).not.toBeNull();
-    expect(streamBadge?.getAttribute('title')).toBe(
-      'http://localhost:8096/Videos/item-1/stream.mkv?api_key=***'
-    );
+    expect(streamBadge?.getAttribute('title')).toBeNull();
+    if (streamBadge) {
+      fireEvent.focus(streamBadge);
+      expect(screen.getByRole('tooltip').textContent).toBe(
+        'http://localhost:8096/Videos/item-1/stream.mkv?api_key=***'
+      );
+      fireEvent.blur(streamBadge);
+    }
   });
 });

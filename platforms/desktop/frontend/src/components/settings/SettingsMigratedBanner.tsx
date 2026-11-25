@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { ToolId } from '../../types/tools';
+import { Button } from '../ui/Button';
 import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
 
 export interface SettingsMigratedBannerProps {
@@ -114,8 +115,9 @@ export function SettingsMigratedBanner({
               width: '44px',
               height: '44px',
               borderRadius: 'var(--radius-md, 8px)',
-              background: 'var(--color-primary-subtle, rgba(59, 130, 246, 0.12))',
-              color: 'var(--color-primary)',
+              background: 'var(--color-bg-hover)',
+              color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-border)',
               flexShrink: 0,
             }}
           >
@@ -140,8 +142,9 @@ export function SettingsMigratedBanner({
                   fontWeight: 500,
                   padding: '2px 8px',
                   borderRadius: '9999px',
-                  background: 'var(--color-primary-subtle, rgba(59, 130, 246, 0.12))',
-                  color: 'var(--color-primary)',
+                  background: 'var(--color-bg-hover)',
+                  color: 'var(--color-text-primary)',
+                  border: '1px solid var(--color-border)',
                 }}
               >
                 {t('tools.migrated_badge', { defaultValue: 'Moved to Tools' })}
@@ -180,21 +183,14 @@ export function SettingsMigratedBanner({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' }}>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            tier="primary"
+            leftIcon={<Wrench size={16} />}
+            rightIcon={<ArrowRight size={16} />}
             onClick={handleGoToTools}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 20px',
-            }}
           >
-            <Wrench size={16} aria-hidden="true" />
             <span>{t('tools.go_to_tools', { defaultValue: 'Go to Tools' })}</span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </div>
     </SettingsTabContainer>

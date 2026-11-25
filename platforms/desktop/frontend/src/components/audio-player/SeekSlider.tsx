@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { transcriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
+import { Slider, syncSliderProgress } from '../ui/Slider';
 
 /** Props for the SeekSlider component. */
 export interface SeekSliderProps {
@@ -27,6 +28,7 @@ export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): Re
       inputRef.current.value = String(currentTime);
       inputRef.current.setAttribute('aria-valuenow', String(currentTime));
       inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
+      syncSliderProgress(inputRef.current);
     }
 
     const unsubscribe = transcriptPlaybackStore.subscribe((state, prevState) => {
@@ -41,6 +43,7 @@ export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): Re
           inputRef.current.value = String(time);
           inputRef.current.setAttribute('aria-valuenow', String(time));
           inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(time));
+          syncSliderProgress(inputRef.current);
         }
       }
     });
@@ -61,10 +64,10 @@ export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): Re
   };
 
   return (
-    <input
+    <Slider
       ref={inputRef}
-      type="range"
-      className="audio-slider"
+      size="sm"
+      className="audio-timeline-slider"
       min={0}
       max={duration || 0}
       step={0.1}

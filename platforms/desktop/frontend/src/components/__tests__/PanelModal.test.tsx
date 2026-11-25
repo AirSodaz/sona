@@ -85,8 +85,10 @@ describe('PanelModal', () => {
     expect(overlay?.classList.contains('panel-modal-origin-settings')).toBe(true);
     expect(overlay?.classList.contains('settings-overlay')).toBe(false);
     expect(backButton.hasAttribute('title')).toBe(false);
-    expect(backButton.getAttribute('data-tooltip')).toBe('Back');
-    expect(backButton.getAttribute('data-tooltip-pos')).toBe('bottom');
+    fireEvent.focus(backButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('Back');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
+    fireEvent.blur(backButton);
     expect(screen.queryByText('Back')).toBeNull();
     expect(screen.getByText('Badge')).toBeDefined();
     expect(screen.getByText('Test Title')).toBeDefined();
@@ -98,8 +100,9 @@ describe('PanelModal', () => {
     expect(screen.getByText('Body')).toBeDefined();
     expect(closeButton.getAttribute('aria-label')).toBe('Close');
     expect(closeButton.hasAttribute('title')).toBe(false);
-    expect(closeButton.getAttribute('data-tooltip')).toBe('Close');
-    expect(closeButton.getAttribute('data-tooltip-pos')).toBe('bottom-left');
+    fireEvent.focus(closeButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('Close');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom-left');
   });
 
   it('closes on overlay click but not on shell click', () => {
@@ -157,8 +160,9 @@ describe('PanelModal', () => {
 
     const backButton = screen.getByRole('button', { name: 'Go Back' });
     expect(backButton.hasAttribute('title')).toBe(false);
-    expect(backButton.getAttribute('data-tooltip')).toBe('Go Back');
-    expect(backButton.getAttribute('data-tooltip-pos')).toBe('bottom');
+    fireEvent.focus(backButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('Go Back');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
 
     fireEvent.click(backButton);
     expect(onBack).toHaveBeenCalledTimes(1);
@@ -193,8 +197,9 @@ describe('PanelModal', () => {
 
     const closeButton = screen.getByRole('button', { name: 'Dismiss panel' });
     expect(closeButton.hasAttribute('title')).toBe(false);
-    expect(closeButton.getAttribute('data-tooltip')).toBe('Dismiss panel');
-    expect(closeButton.getAttribute('data-tooltip-pos')).toBe('bottom-left');
+    fireEvent.focus(closeButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('Dismiss panel');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom-left');
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   });
 });

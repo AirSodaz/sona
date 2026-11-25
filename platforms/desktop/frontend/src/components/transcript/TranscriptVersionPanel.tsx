@@ -10,6 +10,7 @@ import {
 import type { TranscriptSegment } from '../../types/transcript';
 import type { TranscriptDiffRow, TranscriptSnapshotReason } from '../../types/transcriptSnapshot';
 import { PanelModal } from '../PanelModal';
+import { Button, IconButton } from '../ui/Button';
 import './TranscriptVersionPanel.css';
 
 interface TranscriptVersionPanelProps {
@@ -112,24 +113,25 @@ export function TranscriptVersionPanel({
       description={t('versions.description')}
       headerActions={
         <>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            tier="primary"
+            size="sm"
+            loading={isBusy}
+            leftIcon={<Undo2 size={14} />}
             onClick={() => void handleRestoreSelected().then((success) => success && onClose())}
-            disabled={isBusy || isDocumentLocked || isDiffLoading || selectedRowIds.size === 0}
+            disabled={isDocumentLocked || isDiffLoading || selectedRowIds.size === 0}
           >
-            {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Undo2 size={14} />}
             {t('versions.restore_selected')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
+          </Button>
+          <Button
+            tier="secondary"
+            size="sm"
+            leftIcon={<RotateCcw size={14} />}
             onClick={() => void handleRestoreAll().then((success) => success && onClose())}
             disabled={isBusy || isDocumentLocked || !selectedRecord}
           >
-            <RotateCcw size={14} />
             {t('versions.restore_all')}
-          </button>
+          </Button>
         </>
       }
       meta={
@@ -197,17 +199,19 @@ export function TranscriptVersionPanel({
           ) : (
             <>
               <div className="transcript-version-diff-toolbar">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
+                <Button
+                  tier="secondary"
+                  size="sm"
+                  leftIcon={
+                    allChangedRowsSelected ? <CheckSquare size={14} /> : <Square size={14} />
+                  }
                   onClick={handleToggleAll}
                   disabled={isBusy || isDiffLoading || changedRows.length === 0}
                 >
-                  {allChangedRowsSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                   {allChangedRowsSelected
                     ? t('versions.clear_selection')
                     : t('versions.select_all_changes')}
-                </button>
+                </Button>
                 <span>{t('versions.selected_count', { count: selectedRowIds.size })}</span>
               </div>
 
@@ -221,15 +225,15 @@ export function TranscriptVersionPanel({
                       className={`transcript-version-diff-row is-${row.status}`}
                     >
                       <div className="transcript-version-diff-row-head">
-                        <button
-                          type="button"
-                          className="btn btn-icon btn-sm transcript-version-check"
+                        <IconButton
+                          tier="ghost"
+                          size="sm"
+                          className="transcript-version-check"
+                          icon={checked ? <CheckSquare size={15} /> : <Square size={15} />}
                           onClick={() => toggleRow(row.id)}
                           disabled={!isChanged || isBusy}
                           aria-label={getStatusLabel(row.status, t)}
-                        >
-                          {checked ? <CheckSquare size={15} /> : <Square size={15} />}
-                        </button>
+                        />
                         <span className="transcript-version-status">
                           {getStatusLabel(row.status, t)}
                         </span>

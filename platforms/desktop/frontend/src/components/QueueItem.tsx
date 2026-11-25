@@ -17,6 +17,8 @@ import {
   RestoreIcon,
   XIcon,
 } from './Icons';
+import { IconButton } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
 
 /** Returns the icon corresponding to a queue item's status. */
 export const getQueueStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
@@ -169,9 +171,9 @@ export const QueueItem = memo(function QueueItem({
 
       <div className="queue-item-content">
         <div className="queue-item-header">
-          <div className="queue-item-filename" title={item.filename}>
-            {item.filename}
-          </div>
+          <Tooltip content={item.filename} placement="top" onlyWhenTruncated>
+            <div className="queue-item-filename">{item.filename}</div>
+          </Tooltip>
           {item.status === 'processing' &&
             (mediaContext && !item.streamUrl && !item.filePath ? (
               <span
@@ -181,7 +183,7 @@ export const QueueItem = memo(function QueueItem({
                   alignItems: 'center',
                   gap: '4px',
                   fontSize: '11px',
-                  color: 'var(--color-primary, #3b82f6)',
+                  color: 'var(--color-info)',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
@@ -210,56 +212,63 @@ export const QueueItem = memo(function QueueItem({
 
         <div className="queue-item-meta">
           {mediaContext && (
-            <span
-              className="queue-item-media-server-badge"
-              title={mediaContext.itemName}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '11px',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-                color:
-                  mediaContext.serverType === 'jellyfin'
-                    ? '#a855f7'
-                    : 'var(--color-success, #22c55e)',
-                backgroundColor:
-                  mediaContext.serverType === 'jellyfin'
-                    ? 'rgba(168, 85, 247, 0.1)'
-                    : 'rgba(34, 197, 94, 0.1)',
-                padding: '1px 6px',
-                borderRadius: '4px',
-              }}
-            >
-              <Tv size={11} strokeWidth={2} />
-              <span>{mediaContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
-            </span>
+            <Tooltip content={mediaContext.itemName} placement="bottom">
+              <span
+                className="queue-item-media-server-badge"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  color:
+                    mediaContext.serverType === 'jellyfin'
+                      ? '#a855f7'
+                      : 'var(--color-success, #22c55e)',
+                  backgroundColor:
+                    mediaContext.serverType === 'jellyfin'
+                      ? 'rgba(168, 85, 247, 0.1)'
+                      : 'rgba(34, 197, 94, 0.1)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+              >
+                <Tv size={11} strokeWidth={2} />
+                <span>{mediaContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
+              </span>
+            </Tooltip>
           )}
           {item.sourceType === 'url_stream' && (
-            <span
-              className="queue-item-stream-badge"
-              title={
+            <Tooltip
+              content={
                 item.streamUrl
                   ? item.streamUrl.replace(/([?&]api_key=)[^&#]+/gi, '$1***')
                   : item.filePath
               }
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '11px',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-                color: 'var(--color-primary, #3b82f6)',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                padding: '1px 6px',
-                borderRadius: '4px',
-              }}
+              placement="bottom"
+              multiline
             >
-              <Globe size={11} strokeWidth={2} />
-              <span>{t('batch.stream_badge', { defaultValue: 'Network Stream' })}</span>
-            </span>
+              <span
+                className="queue-item-stream-badge"
+                tabIndex={0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  color: 'var(--color-info)',
+                  backgroundColor: 'color-mix(in srgb, var(--color-info) 12%, transparent)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+              >
+                <Globe size={11} strokeWidth={2} />
+                <span>{t('batch.stream_badge', { defaultValue: 'Network Stream' })}</span>
+              </span>
+            </Tooltip>
           )}
           {project && (
             <span className="queue-item-project-badge">
@@ -272,29 +281,31 @@ export const QueueItem = memo(function QueueItem({
             </span>
           )}
           {item.origin === 'automation' && (
-            <span
-              className="queue-item-automation"
-              title={
+            <Tooltip
+              content={
                 item.automationRuleName || t('automation.automated', { defaultValue: 'Automated' })
               }
+              placement="bottom"
+              onlyWhenTruncated
             >
-              {t('automation.automated', { defaultValue: 'Automated' })}
-              {item.automationRuleName ? ` · ${item.automationRuleName}` : ''}
-            </span>
+              <span className="queue-item-automation">
+                {t('automation.automated', { defaultValue: 'Automated' })}
+                {item.automationRuleName ? ` · ${item.automationRuleName}` : ''}
+              </span>
+            </Tooltip>
           )}
 
           {item.status === 'error' && (
-            <span
-              className="queue-item-error"
-              tabIndex={0}
-              role="note"
-              aria-label={rawErrorMessage}
-              data-tooltip={rawErrorMessage}
-              data-tooltip-pos="bottom"
-              data-tooltip-multiline
-            >
-              <span className="queue-item-error-msg">{displayErrorMessage}</span>
-            </span>
+            <Tooltip content={rawErrorMessage} placement="bottom" multiline>
+              <span
+                className="queue-item-error"
+                tabIndex={0}
+                role="note"
+                aria-label={rawErrorMessage}
+              >
+                <span className="queue-item-error-msg">{displayErrorMessage}</span>
+              </span>
+            </Tooltip>
           )}
 
           {item.status === 'cancelled' && (
@@ -305,9 +316,11 @@ export const QueueItem = memo(function QueueItem({
 
       <div className="queue-item-actions">
         {item.sourceType === 'url_stream' && !mediaContext && item.status === 'processing' && (
-          <button
-            type="button"
-            className="btn btn-icon queue-item-finish-save"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            className="queue-item-finish-save"
+            icon={<CompleteIcon width={13} height={13} />}
             disabled={!item.activeInstanceId || isFinishing}
             onClick={async (e) => {
               e.stopPropagation();
@@ -321,37 +334,36 @@ export const QueueItem = memo(function QueueItem({
               }
             }}
             aria-label={t('batch.finish_and_save', { defaultValue: 'Finish and Save' })}
-            data-tooltip={t('batch.finish_and_save', { defaultValue: 'Finish and Save' })}
-            data-tooltip-pos="left"
+            tooltipPos="left"
             style={{ color: 'var(--color-success, #22c55e)' }}
-          >
-            <CompleteIcon width={13} height={13} />
-          </button>
+          />
         )}
         {(item.status === 'error' || item.status === 'cancelled') && (
-          <button
-            className="btn btn-icon queue-item-retry"
+          <IconButton
+            tier="ghost"
+            size="xs"
+            className="queue-item-retry"
+            icon={<RestoreIcon width={13} height={13} />}
             onClick={(e) => {
               e.stopPropagation();
               onRetry?.(item.id);
             }}
             aria-label={retryLabel}
-            data-tooltip={retryLabel}
-            data-tooltip-pos="left"
-          >
-            <RestoreIcon width={13} height={13} />
-          </button>
+            tooltipPos="left"
+          />
         )}
 
-        <button
-          className="btn btn-icon queue-item-remove"
+        <IconButton
+          tier="ghost"
+          tone="danger"
+          size="xs"
+          className="queue-item-remove"
+          icon={<XIcon width={12} height={12} />}
           onClick={handleRemove}
           aria-label={t('common.delete_item', { item: item.filename })}
-          data-tooltip={t('common.delete')}
-          data-tooltip-pos="left"
-        >
-          <XIcon width={12} height={12} />
-        </button>
+          tooltip={t('common.delete')}
+          tooltipPos="left"
+        />
       </div>
     </div>
   );

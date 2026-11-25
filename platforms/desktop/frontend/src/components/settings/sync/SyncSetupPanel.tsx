@@ -8,7 +8,6 @@ import {
   KeyRound,
   Layers,
   Link2,
-  RefreshCw,
   Server,
   ShieldCheck,
   Sparkles,
@@ -32,6 +31,8 @@ import type {
 import { Dropdown, type DropdownOption } from '../../Dropdown';
 import { Modal } from '../../Modal';
 import { Switch } from '../../Switch';
+import { Button } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   ScenarioCardTabs,
   SettingsAccordion,
@@ -505,14 +506,14 @@ export function SyncSetupPanel({
               })}
             </span>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            tier="secondary"
+            size="sm"
             onClick={() => setShowPairingModal(true)}
             disabled={isBusy}
           >
             {t('settings.sync.import_pairing_token', { defaultValue: 'Import pairing code' })}
-          </button>
+          </Button>
         </div>
 
         <SettingsItem
@@ -692,26 +693,19 @@ export function SyncSetupPanel({
                     disabled={isBusy}
                     style={{ flex: 1 }}
                   />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    loading={isTesting}
+                    feedback={testSuccess ? 'success' : 'idle'}
+                    leftIcon={testSuccess ? <CheckCircle2 size={16} /> : <Server size={16} />}
                     onClick={handleTestConnection}
-                    disabled={isBusy || isTesting}
+                    disabled={isBusy}
                     style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
                   >
-                    {isTesting ? (
-                      <RefreshCw size={14} className="queue-icon-spin" />
-                    ) : testSuccess ? (
-                      <CheckCircle2 size={14} style={{ color: 'var(--color-success, #228b4e)' }} />
-                    ) : (
-                      <Server size={14} />
-                    )}
-                    <span>
-                      {testSuccess
-                        ? t('common.connected', { defaultValue: 'Connected' })
-                        : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
-                    </span>
-                  </button>
+                    {testSuccess
+                      ? t('common.connected', { defaultValue: 'Connected' })
+                      : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
+                  </Button>
                 </div>
                 {testError && (
                   <div
@@ -815,26 +809,19 @@ export function SyncSetupPanel({
                     disabled={isBusy}
                     style={{ flex: 1 }}
                   />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    tier="secondary"
+                    loading={isTesting}
+                    feedback={testSuccess ? 'success' : 'idle'}
+                    leftIcon={testSuccess ? <CheckCircle2 size={16} /> : <Server size={16} />}
                     onClick={handleTestConnection}
-                    disabled={isBusy || isTesting}
+                    disabled={isBusy}
                     style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
                   >
-                    {isTesting ? (
-                      <RefreshCw size={14} className="queue-icon-spin" />
-                    ) : testSuccess ? (
-                      <CheckCircle2 size={14} style={{ color: 'var(--color-success, #228b4e)' }} />
-                    ) : (
-                      <Server size={14} />
-                    )}
-                    <span>
-                      {testSuccess
-                        ? t('common.connected', { defaultValue: 'Connected' })
-                        : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
-                    </span>
-                  </button>
+                    {testSuccess
+                      ? t('common.connected', { defaultValue: 'Connected' })
+                      : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
+                  </Button>
                 </div>
                 {testError && (
                   <div
@@ -1134,30 +1121,20 @@ export function SyncSetupPanel({
           </div>
         )}
 
-        <button
-          type="button"
-          className="btn btn-primary sync-save-btn"
+        <Button
+          tier="primary"
+          loading={isConnecting}
+          leftIcon={<CheckCircle2 size={16} />}
+          className="sync-save-btn"
           onClick={handleSaveAndSync}
           disabled={isBusy}
         >
-          {isConnecting ? (
-            <>
-              <RefreshCw size={16} className="queue-icon-spin" />
-              <span>
-                {t('settings.sync.connecting_and_detecting', {
-                  defaultValue: 'Connecting and detecting storage...',
-                })}
-              </span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 size={16} />
-              <span>
-                {t('settings.sync.save_and_enable', { defaultValue: 'Save & Enable Sync' })}
-              </span>
-            </>
-          )}
-        </button>
+          {isConnecting
+            ? t('settings.sync.connecting_and_detecting', {
+                defaultValue: 'Connecting and detecting storage...',
+              })
+            : t('settings.sync.save_and_enable', { defaultValue: 'Save & Enable Sync' })}
+        </Button>
       </div>
 
       {/* Pairing Code Import Modal */}
@@ -1171,25 +1148,23 @@ export function SyncSetupPanel({
         size="md"
         footer={
           <>
-            <button
-              type="button"
-              className="btn btn-secondary"
+            <Button
+              tier="secondary"
               onClick={() => {
                 setShowPairingModal(false);
                 setPairingTokenError(null);
               }}
             >
               {t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
+            </Button>
+            <Button
+              tier="primary"
+              leftIcon={<CheckCircle2 size={15} />}
               onClick={handleApplyPairingToken}
               disabled={!pairingTokenInput.trim()}
             >
-              <CheckCircle2 size={15} />
-              <span>{t('common.import', { defaultValue: 'Import' })}</span>
-            </button>
+              {t('common.import', { defaultValue: 'Import' })}
+            </Button>
           </>
         }
       >
@@ -1207,9 +1182,10 @@ export function SyncSetupPanel({
                 <Link2 size={13} />
                 {t('settings.sync.pairing_token_label', { defaultValue: 'Pairing code' })}
               </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
+              <Button
+                tier="secondary"
+                size="sm"
+                leftIcon={<ClipboardPaste size={13} />}
                 onClick={async () => {
                   try {
                     const text = await navigator.clipboard.readText();
@@ -1222,9 +1198,8 @@ export function SyncSetupPanel({
                   }
                 }}
               >
-                <ClipboardPaste size={13} />
-                <span>{t('common.paste', { defaultValue: 'Paste' })}</span>
-              </button>
+                {t('common.paste', { defaultValue: 'Paste' })}
+              </Button>
             </div>
             <textarea
               autoFocus
@@ -1268,31 +1243,19 @@ export function SyncSetupPanel({
         size="md"
         footer={
           <>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setDiscoveredVaults(null)}
-            >
+            <Button tier="secondary" onClick={() => setDiscoveredVaults(null)}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
+            </Button>
+            <Button
+              tier="primary"
+              loading={isConnecting}
+              leftIcon={<Check size={15} />}
               onClick={handleConfirmMultiVaultSelection}
-              disabled={isConnecting}
             >
-              {isConnecting ? (
-                <>
-                  <RefreshCw size={15} className="queue-icon-spin" />
-                  <span>{t('common.connecting', { defaultValue: 'Connecting...' })}</span>
-                </>
-              ) : (
-                <>
-                  <Check size={15} />
-                  <span>{t('common.confirm', { defaultValue: 'Confirm' })}</span>
-                </>
-              )}
-            </button>
+              {isConnecting
+                ? t('common.connecting', { defaultValue: 'Connecting...' })
+                : t('common.confirm', { defaultValue: 'Confirm' })}
+            </Button>
           </>
         }
       >
@@ -1329,9 +1292,9 @@ export function SyncSetupPanel({
                     icon: <DatabaseZap size={18} />,
                     label: (
                       <span className="sync-multivault-label-row">
-                        <strong className="sync-multivault-id" title={v.vaultId}>
-                          {v.vaultId}
-                        </strong>
+                        <Tooltip content={v.vaultId} placement="top" onlyWhenTruncated>
+                          <strong className="sync-multivault-id">{v.vaultId}</strong>
+                        </Tooltip>
                         <span className="sync-scope-tag is-badge">
                           {t(`settings.sync.preset_${v.preset}`, { defaultValue: v.preset })}
                         </span>

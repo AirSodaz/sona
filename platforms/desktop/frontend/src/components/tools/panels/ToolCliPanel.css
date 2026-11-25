@@ -19,12 +19,12 @@
 }
 
 .tool-cli-alert-banner.alert-info {
-  background: color-mix(in srgb, var(--color-info, #3b82f6) 10%, var(--color-bg-elevated));
-  border-color: color-mix(in srgb, var(--color-info, #3b82f6) 24%, transparent);
+  background: color-mix(in srgb, var(--color-info) 10%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-info) 24%, transparent);
 }
 
 .tool-cli-alert-banner.alert-info .tool-cli-alert-icon {
-  color: var(--color-info, #3b82f6);
+  color: var(--color-info);
 }
 
 .tool-cli-alert-content {
@@ -161,14 +161,6 @@
 .tool-cli-path-code {
   direction: rtl;
   text-align: left;
-}
-
-.tool-cli-btn-icon {
-  padding: 6px 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {

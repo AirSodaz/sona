@@ -3,6 +3,7 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyMediaItem } from '../../../../types/emby';
+import { Button } from '../../../ui/Button';
 import { EmbyMediaRow } from './EmbyMediaRow';
 import { hasTargetSubtitle } from './embyLanguageUtils';
 
@@ -89,16 +90,16 @@ export function EmbySeasonGroup({
         </div>
 
         <div className="emby-season-actions">
-          <button
-            type="button"
-            className="btn btn-xs btn-secondary"
+          <Button
+            tier="secondary"
+            size="xs"
             onClick={() => onSelectAllMissingInSeason(seasonItems)}
             disabled={selectableMissingCount === 0}
           >
             {t('emby.select_season_missing', {
               defaultValue: 'Select Missing Episodes in Season',
             })}
-          </button>
+          </Button>
         </div>
       </div>
 

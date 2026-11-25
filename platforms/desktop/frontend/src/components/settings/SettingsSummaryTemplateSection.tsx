@@ -12,6 +12,7 @@ import {
 } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
 import { SummaryIcon } from '../Icons';
+import { Button, IconButton } from '../ui/Button';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 export function SettingsSummaryTemplateSection(): React.JSX.Element {
   const { t } = useTranslation();
@@ -199,16 +200,14 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
             style={{ minHeight: '96px', resize: 'vertical' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
+            <Button
+              tier="primary"
+              leftIcon={<Plus size={16} />}
               onClick={handleAddTemplate}
               disabled={!newTemplateName.trim() || !newTemplateInstructions.trim()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
-              <Plus size={16} />
               {t('settings.add_summary_template', { defaultValue: 'Add Template' })}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -250,17 +249,17 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
                   })}
                   style={{ flex: 1 }}
                 />
-                <button
-                  type="button"
-                  className="btn btn-icon btn-danger-soft"
+                <IconButton
+                  tier="ghost"
+                  tone="danger"
+                  size="md"
+                  icon={<Trash2 size={16} />}
                   onClick={() => void handleDeleteTemplate(template.id)}
                   aria-label={t('common.delete_item', {
                     item: template.name,
                     defaultValue: `Delete ${template.name}`,
                   })}
-                >
-                  <Trash2 size={16} />
-                </button>
+                />
               </div>
               <textarea
                 className="settings-input"

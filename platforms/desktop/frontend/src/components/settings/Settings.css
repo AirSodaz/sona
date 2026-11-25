@@ -439,22 +439,9 @@
 }
 
 .language-badges:focus-visible {
-  outline: 2px solid var(--color-primary, #6366f1);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
   border-radius: var(--radius-sm);
-}
-
-.language-badges[data-tooltip]::after {
-  max-width: min(340px, 80vw);
-  width: max-content;
-  white-space: normal;
-  line-height: 1.5;
-  text-align: left;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  font-weight: normal;
-  letter-spacing: normal;
 }
 
 /* ===========================
@@ -463,7 +450,8 @@
 
 .settings-input {
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-block-size: 36px;
+  padding: 6px var(--spacing-md);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -479,6 +467,10 @@
   outline: none;
   -webkit-appearance: none;
   appearance: none;
+}
+
+textarea.settings-input {
+  padding: var(--spacing-sm) var(--spacing-md);
 }
 
 .settings-input:focus {

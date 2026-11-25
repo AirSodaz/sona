@@ -305,7 +305,7 @@
   outline-offset: 1px;
   border-color: var(--color-primary);
   background: var(--color-bg-hover);
-  box-shadow: var(--apple-control-focus-ring, 0 0 0 2px rgba(59, 130, 246, 0.5));
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .provider-picker-meta {
@@ -782,8 +782,8 @@ html[data-theme="dark"] .provider-mode-option.selected {
 }
 
 .provider-mode-radio-dot.is-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
+  border-color: var(--color-switch-checked);
+  background: var(--color-switch-checked);
 }
 
 .provider-mode-radio-dot.is-active::after {
@@ -791,7 +791,7 @@ html[data-theme="dark"] .provider-mode-option.selected {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-bg-elevated, #fff);
+  background: #ffffff;
 }
 
 @media (max-width: 520px) {
@@ -893,133 +893,12 @@ html[data-theme="dark"] .provider-mode-option.selected {
 }
 
 .feature-temperature-reset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 0.75rem;
-  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast, 0.15s) ease;
-  flex-shrink: 0;
-}
-
-.feature-temperature-reset-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-  border-color: var(--color-border-hover);
 }
 
 .feature-temperature-slider {
-  --temperature-track: color-mix(in srgb, var(--color-text-muted) 24%, var(--color-bg-secondary));
-  --temperature-fill: color-mix(
-    in srgb,
-    var(--color-text-primary) 84%,
-    var(--color-text-secondary)
-  );
-  --temperature-thumb: color-mix(
-    in srgb,
-    var(--color-text-primary) 90%,
-    var(--color-text-secondary)
-  );
-  --temperature-thumb-hover: color-mix(
-    in srgb,
-    var(--color-text-primary) 82%,
-    var(--color-text-secondary)
-  );
-  --temperature-focus-ring: color-mix(in srgb, var(--color-border-hover) 72%, transparent);
-  --temperature-progress: 50%;
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 18px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background:
-    radial-gradient(circle closest-side, var(--temperature-fill) 96%, transparent)
-    var(--temperature-progress) center / 12px 12px no-repeat,
-    linear-gradient(var(--temperature-fill), var(--temperature-fill)) left center /
-    var(--temperature-progress) 5px no-repeat,
-    linear-gradient(to right, var(--temperature-track) 0 100%) center / 100% 5px no-repeat;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.feature-temperature-slider:focus {
-  outline: none;
-}
-
-.feature-temperature-slider:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-  border-radius: var(--radius-full);
-}
-
-.feature-temperature-slider::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: transparent;
-}
-
-.feature-temperature-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -3.5px;
-  border: none;
-  border-radius: 50%;
-  background: var(--temperature-thumb);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  transition:
-    transform var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.feature-temperature-slider:hover::-webkit-slider-thumb {
-  transform: scale(1.08);
-  background: var(--temperature-thumb-hover);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
-}
-
-.feature-temperature-slider::-moz-range-track {
-  height: 5px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--temperature-track);
-}
-
-.feature-temperature-slider::-moz-range-progress {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: var(--temperature-fill);
-}
-
-.feature-temperature-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: none;
-  border-radius: 50%;
-  background: var(--temperature-thumb);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  transition:
-    transform var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.feature-temperature-slider:hover::-moz-range-thumb {
-  transform: scale(1.08);
-  background: var(--temperature-thumb-hover);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
+  width: 136px;
+  flex-shrink: 0;
 }
 
 .feature-temperature-number {
@@ -1033,45 +912,17 @@ html[data-theme="dark"] .provider-mode-option.selected {
   position: relative;
 }
 
-/* Connection Feedback Integrated */
-.btn-success-flash {
-  background-color: rgba(34, 197, 94, 0.1);
-  color: #16a34a;
-  border-color: #16a34a;
-}
-
-.btn-error-flash {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
 .connection-error-detail {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  color: #dc2626;
+  color: var(--color-error);
   font-size: 0.8rem;
   padding: 4px 8px;
-  background: rgba(239, 68, 68, 0.05);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
   border-radius: var(--radius-sm);
-  border-left: 2px solid #dc2626;
+  border-left: 2px solid var(--color-error);
   line-height: 1.4;
-}
-
-@media (prefers-color-scheme: dark) {
-  .btn-success-flash {
-    background-color: rgba(74, 222, 128, 0.15);
-    color: #4ade80;
-  }
-  .btn-error-flash {
-    background-color: rgba(248, 113, 113, 0.15);
-    color: #f87171;
-  }
-  .connection-error-detail {
-    color: #f87171;
-    border-left-color: #f87171;
-  }
 }
 
 /* Reasoning Mode styling */

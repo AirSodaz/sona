@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { AlertCircle, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { Checkbox } from './Checkbox';
 import { SparklesIcon } from './Icons';
 import { Modal } from './Modal';
+import { Button, IconButton } from './ui/Button';
 
 /**
  * Renders the appropriate icon based on dialog variant.
@@ -166,6 +167,7 @@ export function GlobalDialog(): React.JSX.Element | null {
       overlayStyle={{ zIndex: 2200 }}
       shellStyle={{ overflow: 'visible' }}
       bodyStyle={{ overflow: 'visible' }}
+      autoFocus={false}
       role="alertdialog"
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
@@ -176,13 +178,14 @@ export function GlobalDialog(): React.JSX.Element | null {
       footer={
         <>
           {(type === 'confirm' || type === 'prompt') && (
-            <button ref={cancelButtonRef} className="btn btn-secondary" onClick={handleCancel}>
+            <Button ref={cancelButtonRef} tier="secondary" onClick={handleCancel}>
               {cancelLabel || t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             ref={confirmButtonRef}
-            className={`btn ${variant === 'error' ? 'btn-danger' : 'btn-primary'}`}
+            tier="primary"
+            tone={variant === 'error' ? 'danger' : 'neutral'}
             onClick={handleConfirm}
           >
             {(checkboxChecked && options.checkbox?.checkedConfirmLabel) ||
@@ -190,7 +193,7 @@ export function GlobalDialog(): React.JSX.Element | null {
               (type === 'confirm' || type === 'prompt'
                 ? t('common.confirm', { defaultValue: 'Confirm' })
                 : t('common.ok', { defaultValue: 'OK' }))}
-          </button>
+          </Button>
         </>
       }
     >
@@ -274,39 +277,27 @@ export function GlobalDialog(): React.JSX.Element | null {
               }}
             />
             {onAiAction && (
-              <button
-                type="button"
-                className="btn btn-icon btn-sm"
-                onClick={handleAiClick}
-                disabled={isAiLoading}
-                data-tooltip={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
-                data-tooltip-pos="top"
-                aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+              <div
                 style={{
                   position: 'absolute',
                   right: '4px',
                   top: 0,
                   bottom: 0,
-                  marginTop: 'auto',
-                  marginBottom: 'auto',
-                  width: '28px',
-                  height: '28px',
-                  padding: 0,
-                  color: 'var(--color-info)',
-                  background: 'transparent',
-                  border: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: isAiLoading ? 'default' : 'pointer',
                 }}
               >
-                {isAiLoading ? (
-                  <Loader2 className="animate-spin" width={16} height={16} />
-                ) : (
-                  <SparklesIcon width={16} height={16} />
-                )}
-              </button>
+                <IconButton
+                  tier="ghost"
+                  size="sm"
+                  loading={isAiLoading}
+                  icon={<SparklesIcon width={16} height={16} />}
+                  onClick={handleAiClick}
+                  tooltipPos="top"
+                  aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                  style={{ color: 'var(--color-info)' }}
+                />
+              </div>
             )}
           </div>
         )}

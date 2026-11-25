@@ -2966,9 +2966,12 @@ describe('ProjectsView', () => {
         (screen.getByRole('button', { name: 'Delete Project' }) as HTMLButtonElement).disabled
       ).toBe(true);
     });
-    expect(
-      screen.getByRole('button', { name: 'Delete Project' }).getAttribute('data-tooltip')
-    ).toBe('Cannot delete project while tasks in this project are active or queued');
+    const disabledDeleteWrap = screen.getByRole('button', { name: 'Delete Project' })
+      .parentElement as HTMLElement;
+    fireEvent.focus(disabledDeleteWrap);
+    expect(screen.getByRole('tooltip').textContent).toBe(
+      'Cannot delete project while tasks in this project are active or queued'
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.contextMenu(getButtonByContent('Beta'), { clientX: 80, clientY: 160 });

@@ -31,6 +31,7 @@ import type {
 import { logger } from '../../utils/logger';
 import type { DropdownOption } from '../Dropdown';
 import { Dropdown } from '../Dropdown';
+import { Button } from '../ui/Button';
 import {
   SettingsItem,
   SettingsLocationCard,
@@ -894,19 +895,19 @@ export function SettingsStorageTab(): React.JSX.Element {
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              className="btn btn-secondary settings-storage-refresh-button"
+            <Button
+              tier="secondary"
+              loading={isUsageLoading}
+              leftIcon={<RefreshCw size={16} />}
+              className="settings-storage-refresh-button"
               onClick={() => {
                 void loadUsageSnapshot();
               }}
-              disabled={isUsageLoading}
             >
-              <RefreshCw size={16} aria-hidden="true" />
               {isUsageLoading
                 ? t('settings.storage.refreshing', { defaultValue: 'Refreshing...' })
                 : t('settings.storage.refresh', { defaultValue: 'Refresh' })}
-            </button>
+            </Button>
           </div>
 
           {usageError && (
@@ -1069,19 +1070,20 @@ export function SettingsStorageTab(): React.JSX.Element {
                     'Clears WebView cache and browsing data through Tauri. Some space may only be released after restarting Sona.',
                 })}
               </p>
-              <button
-                type="button"
-                className="btn btn-secondary settings-storage-clean-button"
+              <Button
+                tier="secondary"
+                loading={isClearingWebview}
+                disabled={webviewClearDisabled}
+                leftIcon={<Trash2 size={16} />}
+                className="settings-storage-clean-button"
                 onClick={() => {
                   void handleClearWebviewData();
                 }}
-                disabled={webviewClearDisabled}
               >
-                <Trash2 size={16} aria-hidden="true" />
                 {isClearingWebview
                   ? t('settings.storage.clearing_webview', { defaultValue: 'Clearing...' })
                   : t('settings.storage.clear_webview', { defaultValue: 'Clear WebView Data' })}
-              </button>
+              </Button>
               {webviewResultMessage && (
                 <div
                   className="settings-storage-webview-result"
@@ -1137,19 +1139,20 @@ export function SettingsStorageTab(): React.JSX.Element {
                 })
           }
         >
-          <button
-            type="button"
-            className="btn btn-secondary settings-storage-clean-button"
+          <Button
+            tier="secondary"
+            loading={isCleaning}
+            disabled={manualCleanupDisabled}
+            leftIcon={<Trash2 size={16} />}
+            className="settings-storage-clean-button"
             onClick={() => {
               void handleCleanNow();
             }}
-            disabled={manualCleanupDisabled}
           >
-            <Trash2 size={16} aria-hidden="true" />
             {isCleaning
               ? t('settings.storage.cleaning', { defaultValue: 'Cleaning...' })
               : t('settings.storage.clean_now', { defaultValue: 'Clean Now' })}
-          </button>
+          </Button>
         </SettingsItem>
 
         {resultMessage && (

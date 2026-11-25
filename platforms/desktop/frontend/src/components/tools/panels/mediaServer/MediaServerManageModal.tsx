@@ -29,6 +29,8 @@ import type {
   MediaServerType,
 } from '../../../../types/mediaServer';
 import { Modal } from '../../../Modal';
+import { Button, IconButton } from '../../../ui/Button';
+import { Tooltip } from '../../../ui/Tooltip';
 import './MediaServerManageModal.css';
 
 export interface MediaServerManageModalProps {
@@ -299,17 +301,17 @@ export function MediaServerManageModal({
 
   const modalTitle = isEditing ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <button
-        type="button"
-        className="btn btn-xs btn-secondary"
+      <Button
+        tier="secondary"
+        size="xs"
+        leftIcon={<ArrowLeft size={13} />}
         onClick={() => {
           setIsEditing(false);
           setEditingId(null);
         }}
       >
-        <ArrowLeft size={13} style={{ marginRight: 4 }} />
         <span>{t('common.back', { defaultValue: 'Back' })}</span>
-      </button>
+      </Button>
       <span>
         {editingId
           ? t('media_server.edit_server', { defaultValue: 'Edit Media Server' })
@@ -338,41 +340,35 @@ export function MediaServerManageModal({
         >
           {isEditing ? (
             <>
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <Button
+                tier="secondary"
                 onClick={() => {
                   setIsEditing(false);
                   setEditingId(null);
                 }}
               >
                 {t('common.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={isTesting || !serverUrl.trim() || !apiKey.trim()}
+              </Button>
+              <Button
+                tier="secondary"
+                loading={isTesting}
+                disabled={!serverUrl.trim() || !apiKey.trim()}
                 onClick={handleTestFormConnection}
               >
-                {isTesting ? (
-                  <>
-                    <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />
-                    <span>{t('media_server.testing', { defaultValue: 'Testing...' })}</span>
-                  </>
-                ) : (
-                  <span>
-                    {t('media_server.test_connection', { defaultValue: 'Test Connection' })}
-                  </span>
-                )}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleSaveProfile}>
+                <span>
+                  {isTesting
+                    ? t('media_server.testing', { defaultValue: 'Testing...' })
+                    : t('media_server.test_connection', { defaultValue: 'Test Connection' })}
+                </span>
+              </Button>
+              <Button tier="primary" onClick={handleSaveProfile}>
                 {t('common.save', { defaultValue: 'Save Server' })}
-              </button>
+              </Button>
             </>
           ) : (
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <Button tier="secondary" onClick={onClose}>
               {t('common.close', { defaultValue: 'Close' })}
-            </button>
+            </Button>
           )}
         </div>
       }
@@ -387,10 +383,14 @@ export function MediaServerManageModal({
                     'Connect and manage multiple Emby and Jellyfin servers. Switch servers easily or queue jobs across different instances.',
                 })}
               </p>
-              <button type="button" className="btn btn-sm btn-primary" onClick={startAddServer}>
-                <Plus size={14} style={{ marginRight: 4 }} />
+              <Button
+                tier="primary"
+                size="sm"
+                leftIcon={<Plus size={14} />}
+                onClick={startAddServer}
+              >
                 <span>{t('media_server.add_server', { defaultValue: 'Add Server' })}</span>
-              </button>
+              </Button>
             </div>
 
             {profiles.length === 0 ? (
@@ -411,10 +411,14 @@ export function MediaServerManageModal({
                     })}
                   </p>
                 </div>
-                <button type="button" className="btn btn-sm btn-primary" onClick={startAddServer}>
-                  <Plus size={14} style={{ marginRight: 4 }} />
+                <Button
+                  tier="primary"
+                  size="sm"
+                  leftIcon={<Plus size={14} />}
+                  onClick={startAddServer}
+                >
                   <span>{t('media_server.add_server', { defaultValue: 'Add Server' })}</span>
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="media-server-cards-list">
@@ -445,10 +449,12 @@ export function MediaServerManageModal({
                           </div>
 
                           <div className="media-server-card-meta">
-                            <span className="media-server-meta-item" title={profile.serverUrl}>
-                              <Globe size={11} style={{ opacity: 0.7 }} />
-                              <span>{profile.serverUrl}</span>
-                            </span>
+                            <Tooltip content={profile.serverUrl} placement="top" onlyWhenTruncated>
+                              <span className="media-server-meta-item">
+                                <Globe size={11} style={{ opacity: 0.7 }} />
+                                <span>{profile.serverUrl}</span>
+                              </span>
+                            </Tooltip>
                             {profile.username && (
                               <span className="media-server-meta-item">
                                 <User size={11} style={{ opacity: 0.7 }} />
@@ -485,9 +491,17 @@ export function MediaServerManageModal({
                               ) : (
                                 <>
                                   <span className="media-server-status-dot" />
-                                  <span title={status.message}>
-                                    {t('common.error', { defaultValue: 'Error' })}: {status.message}
-                                  </span>
+                                  <Tooltip
+                                    content={status.message}
+                                    placement="top"
+                                    multiline
+                                    onlyWhenTruncated
+                                  >
+                                    <span className="media-server-status-text">
+                                      {t('common.error', { defaultValue: 'Error' })}:{' '}
+                                      {status.message}
+                                    </span>
+                                  </Tooltip>
                                 </>
                               )}
                             </div>
@@ -497,24 +511,30 @@ export function MediaServerManageModal({
 
                       <div className="media-server-card-actions">
                         {!isActive && (
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-secondary"
+                          <Button
+                            tier="secondary"
+                            size="xs"
                             onClick={() => void onSelectActiveProfile(profile.id)}
                             aria-label={t('media_server.set_active', { defaultValue: 'Select' })}
-                            data-tooltip={t('media_server.set_active', { defaultValue: 'Select' })}
-                            data-tooltip-pos="top"
                           >
                             {t('media_server.set_active', { defaultValue: 'Select' })}
-                          </button>
+                          </Button>
                         )}
-                        <button
-                          type="button"
-                          className={`model-action-icon model-action-test${status?.status ? ` ${status.status}` : ''}`}
+                        <IconButton
+                          tier="ghost"
+                          size="sm"
+                          loading={status?.status === 'testing'}
+                          feedback={
+                            status?.status === 'ok'
+                              ? 'success'
+                              : status?.status === 'error'
+                                ? 'error'
+                                : 'idle'
+                          }
+                          icon={<RefreshCw size={14} />}
                           onClick={() => void handleTestInList(profile)}
-                          disabled={status?.status === 'testing'}
                           aria-label={`${t('media_server.test', { defaultValue: 'Test' })} ${profile.name}`}
-                          data-tooltip={
+                          tooltip={
                             status?.status === 'testing'
                               ? t('media_server.testing', { defaultValue: 'Testing...' })
                               : status?.status === 'ok'
@@ -523,33 +543,27 @@ export function MediaServerManageModal({
                                   ? `✕ ${status.message || t('common.error', { defaultValue: 'Error' })}`
                                   : t('media_server.test', { defaultValue: 'Test Connection' })
                           }
-                          data-tooltip-pos="top"
-                        >
-                          <RefreshCw
-                            size={14}
-                            className={status?.status === 'testing' ? 'spin' : ''}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="model-action-icon model-action-edit"
+                          tooltipPos="top"
+                        />
+                        <IconButton
+                          tier="ghost"
+                          size="sm"
+                          icon={<Edit2 size={14} />}
                           onClick={() => startEditServer(profile)}
                           aria-label={`${t('common.edit', { defaultValue: 'Edit' })} ${profile.name}`}
-                          data-tooltip={t('common.edit', { defaultValue: 'Edit' })}
-                          data-tooltip-pos="top"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="model-action-icon model-action-delete"
+                          tooltip={t('common.edit', { defaultValue: 'Edit' })}
+                          tooltipPos="top"
+                        />
+                        <IconButton
+                          tier="ghost"
+                          tone="danger"
+                          size="sm"
+                          icon={<Trash2 size={14} />}
                           onClick={() => void handleDelete(profile.id)}
                           aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${profile.name}`}
-                          data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-                          data-tooltip-pos="top"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                          tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                          tooltipPos="top"
+                        />
                       </div>
                     </div>
                   );
@@ -737,27 +751,21 @@ export function MediaServerManageModal({
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    disabled={isLoggingIn || !serverUrl.trim() || !username.trim()}
+                  <Button
+                    tier="secondary"
+                    size="sm"
+                    loading={isLoggingIn}
+                    disabled={!serverUrl.trim() || !username.trim()}
                     onClick={handleLoginAndFetchToken}
                   >
-                    {isLoggingIn ? (
-                      <>
-                        <RefreshCw size={13} className="spin" style={{ marginRight: 5 }} />
-                        <span>
-                          {t('media_server.logging_in', { defaultValue: 'Logging in...' })}
-                        </span>
-                      </>
-                    ) : (
-                      <span>
-                        {t('media_server.login_and_fetch_token', {
-                          defaultValue: 'Login & Obtain Token',
-                        })}
-                      </span>
-                    )}
-                  </button>
+                    <span>
+                      {isLoggingIn
+                        ? t('media_server.logging_in', { defaultValue: 'Logging in...' })
+                        : t('media_server.login_and_fetch_token', {
+                            defaultValue: 'Login & Obtain Token',
+                          })}
+                    </span>
+                  </Button>
                 </div>
               </div>
             ) : (

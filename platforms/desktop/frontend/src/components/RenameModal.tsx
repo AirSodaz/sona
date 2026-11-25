@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +5,7 @@ import { FormField } from './FormField';
 import { IconPicker } from './IconPicker';
 import { FileTextIcon, MicIcon, SparklesIcon } from './Icons';
 import { Modal } from './Modal';
+import { Button, IconButton } from './ui/Button';
 
 interface RenameModalProps {
   isOpen: boolean;
@@ -85,17 +85,12 @@ export function RenameModal({
       bodyStyle={{ overflow: 'visible' }}
       footer={
         <>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <Button tier="secondary" onClick={onClose}>
             {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={!title.trim()}
-          >
+          </Button>
+          <Button tier="primary" onClick={handleSave} disabled={!title.trim()}>
             {t('common.save', { defaultValue: 'Save' })}
-          </button>
+          </Button>
         </>
       }
     >
@@ -123,38 +118,27 @@ export function RenameModal({
               placeholder={t('common.rename_prompt')}
             />
             {onAiAction && (
-              <button
-                type="button"
-                className="btn btn-icon btn-sm"
-                onClick={handleAiRename}
-                disabled={isAiLoading}
-                data-tooltip={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
-                data-tooltip-pos="top"
-                aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+              <div
                 style={{
                   position: 'absolute',
                   right: '4px',
                   top: 0,
                   bottom: 0,
-                  marginTop: 'auto',
-                  marginBottom: 'auto',
-                  width: '28px',
-                  height: '28px',
-                  padding: 0,
-                  color: 'var(--color-info)',
-                  background: 'transparent',
-                  border: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
                 }}
               >
-                {isAiLoading ? (
-                  <Loader2 className="animate-spin" width={16} height={16} />
-                ) : (
-                  <SparklesIcon width={16} height={16} />
-                )}
-              </button>
+                <IconButton
+                  tier="ghost"
+                  size="sm"
+                  loading={isAiLoading}
+                  icon={<SparklesIcon width={16} height={16} />}
+                  onClick={handleAiRename}
+                  tooltipPos="top"
+                  aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                  style={{ color: 'var(--color-info)' }}
+                />
+              </div>
             )}
           </div>
         </div>

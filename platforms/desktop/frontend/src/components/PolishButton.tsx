@@ -27,6 +27,7 @@ import {
   RestoreIcon,
   SparklesIcon,
 } from './Icons';
+import { Button } from './ui/Button';
 
 /** Props for PolishButton. */
 interface PolishButtonProps {
@@ -222,19 +223,21 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
       ref={dropdownRef}
       onKeyDown={handleKeyDown}
       onBlur={handleBlur}
-      style={{ display: 'inline-block', marginRight: '8px' }}
+      style={{ display: 'inline-block' }}
     >
-      <button
+      <Button
         ref={triggerRef}
         id="polish-menu-button"
-        className="btn btn-icon"
+        tier="ghost"
+        size="md"
+        className="export-menu-trigger"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isRetranscribing}
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls="polish-menu-dropdown"
-        data-tooltip={tooltipText}
-        data-tooltip-pos="bottom"
+        tooltip={tooltipText}
+        tooltipPos="bottom"
         aria-label={tooltipText}
       >
         {(() => {
@@ -258,8 +261,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
           }
           return <SparklesIcon />;
         })()}
-        <ChevronDownIcon />
-      </button>
+        <ChevronDownIcon className="export-menu-chevron" width={12} height={12} />
+      </Button>
 
       {isOpen && (
         <div

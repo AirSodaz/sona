@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDialogStore } from '../../stores/dialogStore';
 import { GlobalDialog } from '../GlobalDialog';
@@ -125,6 +125,49 @@ describe('Modal', () => {
       expect(modalOverlay?.classList.contains('shared-modal-nested')).toBe(true);
     } finally {
       parentOverlay.remove();
+    }
+  });
+
+  it('does not focus the close button or open its tooltip when opening a modal', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <Modal isOpen onClose={vi.fn()} title="Settings Modal">
+          <button type="button">Primary body action</button>
+        </Modal>
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(60);
+      });
+
+      const bodyAction = screen.getByRole('button', { name: 'Primary body action' });
+      const closeButton = screen.getByRole('button', { name: 'Close' });
+      expect(document.activeElement).toBe(bodyAction);
+      expect(document.activeElement).not.toBe(closeButton);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves React autoFocus on a child input instead of stealing focus', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <Modal isOpen onClose={vi.fn()} title="Input Modal">
+          <input aria-label="Name input" autoFocus />
+        </Modal>
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(60);
+      });
+
+      expect(document.activeElement).toBe(screen.getByLabelText('Name input'));
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

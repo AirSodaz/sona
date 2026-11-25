@@ -1,9 +1,10 @@
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyConnectionConfig, EmbyLoginPayload } from '../../../../types/emby';
 import { Modal } from '../../../Modal';
+import { Button } from '../../../ui/Button';
 
 export interface EmbyServerConfigModalProps {
   isOpen: boolean;
@@ -105,34 +106,19 @@ export function EmbyServerConfigModal({
       hideCloseButton={isConnecting}
       footer={
         <div className="emby-modal-footer-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={isConnecting}
-          >
+          <Button tier="secondary" onClick={onClose} disabled={isConnecting}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
+          </Button>
+          <Button
+            tier="primary"
+            loading={isConnecting}
             disabled={isSubmitDisabled}
             onClick={handleSubmit}
           >
-            {isConnecting ? (
-              <>
-                <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />
-                {t('common.connecting', { defaultValue: 'Connecting...' })}
-              </>
-            ) : !config.apiKey ||
-              password ||
-              cleanUser !== (config.username || '') ||
-              isUrlChanged ? (
-              t('emby.login_and_connect', { defaultValue: 'Login & Connect' })
-            ) : (
-              t('emby.test_connection', { defaultValue: 'Test & Connect' })
-            )}
-          </button>
+            {!config.apiKey || password || cleanUser !== (config.username || '') || isUrlChanged
+              ? t('emby.login_and_connect', { defaultValue: 'Login & Connect' })
+              : t('emby.test_connection', { defaultValue: 'Test & Connect' })}
+          </Button>
         </div>
       }
     >

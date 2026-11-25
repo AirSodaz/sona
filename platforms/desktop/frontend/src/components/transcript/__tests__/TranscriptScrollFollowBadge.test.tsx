@@ -32,7 +32,8 @@ describe('TranscriptScrollFollowBadge', () => {
     expect(screen.getByText('350 words')).toBeDefined();
     const btn = screen.getByTestId('scroll-follow-resume-btn');
     expect(btn).toBeDefined();
-    expect(btn.getAttribute('data-tooltip')).toBe('Scroll to bottom and resume follow');
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Scroll to bottom and resume follow');
 
     fireEvent.click(btn);
     expect(onResume).toHaveBeenCalledTimes(1);
@@ -46,7 +47,8 @@ describe('TranscriptScrollFollowBadge', () => {
 
     const btn = screen.getByTestId('scroll-follow-resume-btn');
     expect(btn).toBeDefined();
-    expect(btn.getAttribute('data-tooltip')).toBe('Locate playing segment');
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Locate playing segment');
 
     fireEvent.click(btn);
     expect(onResume).toHaveBeenCalledTimes(1);

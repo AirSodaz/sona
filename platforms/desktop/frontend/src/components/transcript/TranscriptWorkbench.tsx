@@ -1,6 +1,5 @@
 import {
   Tv as EmbyIcon,
-  Loader2,
   Users as SpeakerReviewIcon,
   History as VersionHistoryIcon,
 } from 'lucide-react';
@@ -41,6 +40,8 @@ import {
 import { PolishButton } from '../PolishButton';
 import { RenameModal } from '../RenameModal';
 import { TranslateButton } from '../TranslateButton';
+import { Button, IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { TranscriptEditor } from './TranscriptEditor';
 import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
@@ -270,51 +271,57 @@ export function TranscriptWorkbench({
             >
               {renderHeaderIcon(storeIcon, displayIconType)}
             </div>
-            <h4
-              style={{
-                margin: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-              title={displayTitle}
-            >
-              {displayTitle}
-            </h4>
-            {embyContext && (
-              <span
+            <Tooltip content={displayTitle} placement="bottom" onlyWhenTruncated>
+              <h4
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background:
-                    embyContext.serverType === 'jellyfin'
-                      ? 'rgba(168, 85, 247, 0.12)'
-                      : 'rgba(82, 196, 26, 0.12)',
-                  color:
-                    embyContext.serverType === 'jellyfin'
-                      ? '#a855f7'
-                      : 'var(--color-success, #52c41a)',
-                  border:
-                    embyContext.serverType === 'jellyfin'
-                      ? '1px solid rgba(168, 85, 247, 0.25)'
-                      : '1px solid rgba(82, 196, 26, 0.25)',
+                  margin: 0,
                   whiteSpace: 'nowrap',
-                  marginLeft: '4px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
-                title={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
               >
-                <EmbyIcon size={12} />
-                <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
-              </span>
+                {displayTitle}
+              </h4>
+            </Tooltip>
+            {embyContext && (
+              <Tooltip
+                content={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
+                placement="bottom"
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    background:
+                      embyContext.serverType === 'jellyfin'
+                        ? 'rgba(168, 85, 247, 0.12)'
+                        : 'rgba(82, 196, 26, 0.12)',
+                    color:
+                      embyContext.serverType === 'jellyfin'
+                        ? '#a855f7'
+                        : 'var(--color-success, #52c41a)',
+                    border:
+                      embyContext.serverType === 'jellyfin'
+                        ? '1px solid rgba(168, 85, 247, 0.25)'
+                        : '1px solid rgba(82, 196, 26, 0.25)',
+                    whiteSpace: 'nowrap',
+                    marginLeft: '4px',
+                  }}
+                >
+                  <EmbyIcon size={12} />
+                  <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
+                </span>
+              </Tooltip>
             )}
-            <button
-              className="btn btn-icon btn-sm"
-              type="button"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              icon={<EditIcon />}
               onClick={() => {
                 if (isManualHeaderActionsDisabled) {
                   return;
@@ -323,64 +330,54 @@ export function TranscriptWorkbench({
               }}
               aria-label={t('common.rename', { defaultValue: 'Rename' })}
               disabled={isManualHeaderActionsDisabled}
-              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
-              data-tooltip-pos="bottom"
-            >
-              <EditIcon />
-            </button>
+              tooltipPos="bottom"
+            />
             {showSummaryButton && (
-              <button
-                className="btn btn-icon btn-sm"
+              <IconButton
+                tier="ghost"
+                size="sm"
+                icon={<SummaryIcon />}
                 onClick={() => setIsSummaryOpen(true)}
                 aria-label={t('summary.title')}
-                data-tooltip={t('summary.title')}
-                data-tooltip-pos="bottom"
-              >
-                <SummaryIcon />
-              </button>
+                tooltipPos="bottom"
+              />
             )}
             {hasSegments && (
-              <button
-                className="btn btn-icon btn-sm"
-                type="button"
+              <IconButton
+                tier="ghost"
+                size="sm"
+                icon={<SpeakerReviewIcon size={16} />}
                 onClick={() => setIsSpeakerReviewOpen(true)}
                 aria-label={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
-                data-tooltip={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
-                data-tooltip-pos="bottom"
-              >
-                <SpeakerReviewIcon size={16} />
-              </button>
+                tooltipPos="bottom"
+              />
             )}
             {showVersionButton && (
-              <button
-                className="btn btn-icon btn-sm"
-                type="button"
+              <IconButton
+                tier="ghost"
+                size="sm"
+                icon={<VersionHistoryIcon size={16} />}
                 onClick={() => setIsVersionPanelOpen(true)}
                 aria-label={t('versions.title', { defaultValue: 'Versions' })}
-                data-tooltip={t('versions.title', { defaultValue: 'Versions' })}
-                data-tooltip-pos="bottom"
-              >
-                <VersionHistoryIcon size={16} />
-              </button>
+                tooltipPos="bottom"
+              />
             )}
           </div>
           <div className="projects-detail-header-actions">
             {embyContext && (
-              <button
-                type="button"
-                className={`btn btn-sm ${embySyncSuccess ? 'btn-success' : 'btn-secondary'}`}
+              <Button
+                tier="secondary"
+                size="sm"
+                loading={isSyncingEmby}
+                feedback={embySyncSuccess ? 'success' : 'idle'}
+                leftIcon={<EmbyIcon size={14} />}
                 onClick={handleResyncEmby}
-                disabled={isSyncingEmby || isManualHeaderActionsDisabled || segments.length === 0}
-                data-tooltip={t('emby.resync_tooltip', {
+                disabled={isManualHeaderActionsDisabled || segments.length === 0}
+                tooltip={t('emby.resync_tooltip', {
                   defaultValue: 'Re-sync subtitles to Emby server',
                 })}
-                data-tooltip-pos="bottom"
+                tooltipPos="bottom"
               >
-                {isSyncingEmby ? (
-                  <Loader2 size={14} className="queue-icon-spin" />
-                ) : (
-                  <EmbyIcon size={14} />
-                )}
                 <span>
                   {isSyncingEmby
                     ? t('emby.syncing', { defaultValue: 'Syncing...' })
@@ -388,14 +385,15 @@ export function TranscriptWorkbench({
                       ? t('emby.synced', { defaultValue: 'Synced' })
                       : t('emby.resync', { defaultValue: 'Re-sync to Emby' })}
                 </span>
-              </button>
+              </Button>
             )}
             <PolishButton className="projects-detail-header-action" />
             <TranslateButton className="projects-detail-header-action" />
             <ExportButton className="projects-detail-header-action" />
-            <button
-              type="button"
-              className="btn btn-icon"
+            <IconButton
+              tier="ghost"
+              size="md"
+              icon={<CloseIcon />}
               onClick={() => {
                 if (isManualHeaderActionsDisabled) {
                   return;
@@ -403,12 +401,9 @@ export function TranscriptWorkbench({
                 onClose();
               }}
               aria-label={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip-pos="bottom-left"
+              tooltipPos="bottom-left"
               disabled={isManualHeaderActionsDisabled}
-            >
-              <CloseIcon />
-            </button>
+            />
           </div>
         </div>
       )}

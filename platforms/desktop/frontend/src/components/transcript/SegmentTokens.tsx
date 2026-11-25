@@ -1,10 +1,11 @@
 import type React from 'react';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Match } from '../../stores/searchStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import type { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { sanitizeTranscriptHtml } from '../../utils/transcriptTextUtils';
+import { useTooltipController } from '../ui/Tooltip';
 import { useReadonlySegmentContextMenu } from './context-menu/useReadonlySegmentContextMenu';
 
 /** Props for SegmentTokens component. */
@@ -125,74 +126,157 @@ function TokenList({
     });
   }, [alignedUnits]);
 
+  const [hoveredTokenTooltip, setHoveredTokenTooltip] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
+
+  const {
+    isOpen: isTooltipOpen,
+    tooltipId,
+    triggerRef: tooltipTriggerRef,
+    pointerDownRef,
+    openWithDelay,
+    openImmediatelyOnFocus,
+    hideTooltip,
+    reposition,
+    renderPortal,
+  } = useTooltipController({
+    placement: 'top',
+  });
+
+  useLayoutEffect(() => {
+    if (!isTooltipOpen || !hoveredTokenTooltip) return;
+    reposition();
+  }, [isTooltipOpen, hoveredTokenTooltip, reposition]);
+
+  const closeTokenTooltip = useCallback(() => {
+    setHoveredTokenTooltip(null);
+    hideTooltip();
+  }, [hideTooltip]);
+
+  const getTokenElement = (target: EventTarget | null): HTMLElement | null => {
+    if (!(target instanceof HTMLElement)) return null;
+    const tokenEl = target.closest<HTMLElement>('[data-token-time]');
+    if (!tokenEl || !rootRef.current?.contains(tokenEl)) {
+      return null;
+    }
+    return tokenEl;
+  };
+
   return (
-    <p
-      ref={rootRef}
-      className={`segment-text ${!isFinal ? 'partial' : ''}`}
-      style={{ whiteSpace: 'pre-wrap' }}
-      tabIndex={0}
-      aria-haspopup="menu"
-      onContextMenu={onContextMenu}
-      onKeyDown={onContextMenuKeyDown}
-    >
-      {tokensWithIndices ? (
-        tokensWithIndices.map((tokenObj) => {
-          const isTimeActive = tokenObj.start === activeUnitStart;
-
-          const { isMatch, isActiveMatch, matchIndex } = checkTokenMatch(
-            tokenObj.startIndex,
-            tokenObj.endIndex,
-            matches,
-            activeMatch
-          );
-
-          let searchClass = '';
-          if (isActiveMatch) {
-            searchClass = 'search-match-active';
-          } else if (isMatch) {
-            searchClass = 'search-match';
+    <>
+      <p
+        ref={rootRef}
+        className={`segment-text ${!isFinal ? 'partial' : ''}`}
+        style={{ whiteSpace: 'pre-wrap' }}
+        tabIndex={0}
+        aria-haspopup="menu"
+        onContextMenu={onContextMenu}
+        onKeyDown={onContextMenuKeyDown}
+        onMouseDown={() => {
+          pointerDownRef.current = true;
+        }}
+        onMouseUp={() => {
+          pointerDownRef.current = false;
+        }}
+        onMouseOver={(event) => {
+          const tokenEl = getTokenElement(event.target);
+          if (!tokenEl) {
+            closeTokenTooltip();
+            return;
           }
+          const key = tokenEl.dataset.tokenKey ?? '';
+          const label = tokenEl.dataset.tokenTime ?? '';
+          if (tooltipTriggerRef.current === tokenEl && hoveredTokenTooltip?.key === key) {
+            return;
+          }
+          hideTooltip();
+          setHoveredTokenTooltip({ key, label });
+          openWithDelay(tokenEl);
+        }}
+        onMouseLeave={closeTokenTooltip}
+        onFocus={(event) => {
+          const tokenEl = getTokenElement(event.target);
+          if (!tokenEl) {
+            closeTokenTooltip();
+            return;
+          }
+          const key = tokenEl.dataset.tokenKey ?? '';
+          const label = tokenEl.dataset.tokenTime ?? '';
+          setHoveredTokenTooltip({ key, label });
+          openImmediatelyOnFocus(tokenEl);
+        }}
+        onBlur={(event) => {
+          const nextToken = getTokenElement(event.relatedTarget);
+          if (!nextToken) {
+            closeTokenTooltip();
+          }
+        }}
+      >
+        {tokensWithIndices ? (
+          tokensWithIndices.map((tokenObj) => {
+            const isTimeActive = tokenObj.start === activeUnitStart;
 
-          const className = ['token-hover', isTimeActive ? 'active-token' : '', searchClass]
-            .filter(Boolean)
-            .join(' ');
+            const { isMatch, isActiveMatch, matchIndex } = checkTokenMatch(
+              tokenObj.startIndex,
+              tokenObj.endIndex,
+              matches,
+              activeMatch
+            );
 
-          return (
-            <span
-              key={`${tokenObj.startIndex}-${tokenObj.endIndex}`}
-              className={className}
-              data-tooltip={formatDisplayTime(tokenObj.start)}
-              data-tooltip-pos="top"
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSeek(tokenObj.start);
-                if (isMatch && matchIndex !== -1 && onMatchClick) {
-                  onMatchClick(matchIndex);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+            let searchClass = '';
+            if (isActiveMatch) {
+              searchClass = 'search-match-active';
+            } else if (isMatch) {
+              searchClass = 'search-match';
+            }
+
+            const className = ['token-hover', isTimeActive ? 'active-token' : '', searchClass]
+              .filter(Boolean)
+              .join(' ');
+            const tokenKey = `${tokenObj.startIndex}-${tokenObj.endIndex}`;
+            const isTooltipTarget = isTooltipOpen && hoveredTokenTooltip?.key === tokenKey;
+
+            return (
+              <span
+                key={tokenKey}
+                className={className}
+                role="button"
+                tabIndex={0}
+                data-token-key={tokenKey}
+                data-token-time={formatDisplayTime(tokenObj.start)}
+                aria-describedby={isTooltipTarget ? tooltipId : undefined}
+                onClick={(e) => {
                   e.stopPropagation();
                   onSeek(tokenObj.start);
                   if (isMatch && matchIndex !== -1 && onMatchClick) {
                     onMatchClick(matchIndex);
                   }
-                }
-              }}
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: tokenObj.text is sanitized via sanitizeTranscriptHtml
-              dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
-            />
-          );
-        })
-      ) : (
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: segmentText is sanitized via sanitizeTranscriptHtml
-        <span dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(segmentText) }} />
-      )}
-      {!isFinal && <span className="transcript-caret-pulse" aria-hidden="true" />}
-    </p>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSeek(tokenObj.start);
+                    if (isMatch && matchIndex !== -1 && onMatchClick) {
+                      onMatchClick(matchIndex);
+                    }
+                  }
+                }}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: tokenObj.text is sanitized via sanitizeTranscriptHtml
+                dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
+              />
+            );
+          })
+        ) : (
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: segmentText is sanitized via sanitizeTranscriptHtml
+          <span dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(segmentText) }} />
+        )}
+        {!isFinal && <span className="transcript-caret-pulse" aria-hidden="true" />}
+      </p>
+      {renderPortal(hoveredTokenTooltip?.label)}
+    </>
   );
 }
 

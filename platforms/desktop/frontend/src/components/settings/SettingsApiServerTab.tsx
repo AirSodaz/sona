@@ -25,6 +25,8 @@ import type {
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { Button, IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsItem, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 
 export function SettingsApiServerTab(): React.JSX.Element {
@@ -190,9 +192,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
       if ('Completed' in status) return <span className="badge badge-completed">Completed</span>;
       if ('Failed' in status)
         return (
-          <span className="badge badge-failed" title={status.Failed}>
-            Failed
-          </span>
+          <Tooltip content={status.Failed} placement="top" multiline>
+            <span className="badge badge-failed">Failed</span>
+          </Tooltip>
         );
     }
     return <span className="badge">Unknown</span>;
@@ -466,20 +468,17 @@ export function SettingsApiServerTab(): React.JSX.Element {
         })}
         actions={
           isEnabled ? (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              tier="secondary"
+              size="sm"
+              feedback={copiedEndpoint ? 'success' : 'idle'}
+              leftIcon={copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
               onClick={handleCopyEndpoint}
-              title={t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              {copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
-              <span>
-                {copiedEndpoint
-                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
-                  : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
-              </span>
-            </button>
+              {copiedEndpoint
+                ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
+                : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
+            </Button>
           ) : undefined
         }
       />
@@ -666,32 +665,27 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 defaultValue: 'Optional bearer token',
               })}
             />
-            <button
-              className="btn btn-icon"
+            <IconButton
+              tier="ghost"
+              size="md"
+              icon={<RefreshCw size={16} />}
               onClick={handleGenerateKey}
-              data-tooltip={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
-              data-tooltip-pos="top"
+              tooltipPos="top"
               aria-label={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              className="btn btn-icon"
+            />
+            <IconButton
+              tier="ghost"
+              size="md"
+              feedback={copied ? 'success' : 'idle'}
+              icon={copied ? <Check size={16} /> : <Copy size={16} />}
               onClick={handleCopyKey}
-              data-tooltip={
-                copied
-                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
-                  : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
-              }
-              data-tooltip-pos="top"
+              tooltipPos="top"
               aria-label={
                 copied
                   ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
                   : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
               }
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-            </button>
+            />
           </div>
         </SettingsItem>
 
@@ -806,8 +800,10 @@ export function SettingsApiServerTab(): React.JSX.Element {
                   <tbody>
                     {Object.entries(jobs || {}).map(([id, status]) => (
                       <tr key={id}>
-                        <td className="job-id-cell" title={id}>
-                          {id.slice(0, 8)}...
+                        <td className="job-id-cell">
+                          <Tooltip content={id} placement="top">
+                            <span>{id.slice(0, 8)}...</span>
+                          </Tooltip>
                         </td>
                         <td>{getStatusLabel(status)}</td>
                       </tr>

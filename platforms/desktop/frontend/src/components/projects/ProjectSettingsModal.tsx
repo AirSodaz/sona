@@ -16,6 +16,7 @@ import { IconPicker } from '../IconPicker';
 import { FolderIcon } from '../Icons';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+import { Button, IconButton } from '../ui/Button';
 
 const EXPORT_FORMAT_OPTIONS: DropdownOption[] = [
   { value: 'txt', label: 'TXT' },
@@ -152,16 +153,15 @@ export function ProjectSettingsModal({
             gap: '12px',
           }}
         >
-          <button
-            type="button"
-            className="btn btn-danger"
+          <Button
+            tier="secondary"
+            tone="danger"
             disabled={disableDelete}
-            data-tooltip={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
-            title={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
+            tooltip={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
             onClick={() => void onDelete()}
           >
             {t('projects.delete_project', { defaultValue: 'Delete Project' })}
-          </button>
+          </Button>
           <div
             style={{
               display: 'flex',
@@ -170,12 +170,12 @@ export function ProjectSettingsModal({
               justifyContent: 'flex-end',
             }}
           >
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <Button tier="secondary" onClick={onClose}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => void onSave()}>
+            </Button>
+            <Button tier="primary" onClick={() => void onSave()}>
               {t('common.save', { defaultValue: 'Save' })}
-            </button>
+            </Button>
           </div>
         </div>
       }
@@ -228,7 +228,7 @@ export function ProjectSettingsModal({
           <div className="project-pipeline-section">
             <div className="project-pipeline-toggle">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Zap size={15} style={{ color: 'var(--color-accent-primary, #64748b)' }} />
+                <Zap size={15} style={{ color: 'var(--color-brand)' }} />
                 {t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
               </span>
               <Switch
@@ -404,21 +404,13 @@ export function ProjectSettingsModal({
                           })}
                           style={{ flex: 1 }}
                         />
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
+                        <IconButton
+                          tier="secondary"
+                          size="sm"
+                          icon={<FolderOpen size={14} />}
                           onClick={() => void handleBrowseExportDir()}
-                          title={t('settings.browse', { defaultValue: 'Browse' })}
-                          style={{
-                            height: 32,
-                            padding: '0 10px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}
-                        >
-                          <FolderOpen size={14} />
-                        </button>
+                          aria-label={t('settings.browse', { defaultValue: 'Browse' })}
+                        />
                       </div>
                     </div>
                   )}

@@ -17,6 +17,8 @@ import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { DownloadIcon, StopIcon, TrashIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import { LanguageBadges } from '../../LanguageBadges';
+import { IconButton } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import './LocalModelCard.css';
 export interface LocalDownloadProgressState {
   progress: number;
@@ -338,61 +340,66 @@ export function LocalModelCard({
                         {mTestState.speed} t/s
                       </span>
                     )}
-                    <button
-                      type="button"
-                      className={`model-action-icon model-action-test${mTestState?.status ? ` ${mTestState.status}` : ''}`}
+                    <IconButton
+                      tier="ghost"
+                      size="sm"
+                      loading={isModelTesting}
+                      feedback={
+                        mTestState?.status === 'success'
+                          ? 'success'
+                          : mTestState?.status === 'error'
+                            ? 'error'
+                            : 'idle'
+                      }
+                      icon={
+                        mTestState?.status === 'success' ? (
+                          <Check size={15} />
+                        ) : mTestState?.status === 'error' ? (
+                          <AlertCircle size={15} />
+                        ) : (
+                          <Zap size={15} />
+                        )
+                      }
                       onClick={() => onTest?.(model)}
                       disabled={
-                        isModelTesting ||
-                        !isModelInstalled ||
-                        isModelDownloading ||
-                        (isAnyTesting && !isModelTesting)
+                        !isModelInstalled || isModelDownloading || (isAnyTesting && !isModelTesting)
                       }
                       aria-label={`${t('settings.llm.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
-                      data-tooltip={mTestTooltip}
-                      data-tooltip-pos="top"
-                    >
-                      {isModelTesting ? (
-                        <Loader2 size={15} className="animate-spin" />
-                      ) : mTestState?.status === 'success' ? (
-                        <Check size={15} />
-                      ) : mTestState?.status === 'error' ? (
-                        <AlertCircle size={15} />
-                      ) : (
-                        <Zap size={15} />
-                      )}
-                    </button>
+                      tooltip={mTestTooltip}
+                      tooltipPos="top"
+                    />
                     {isModelDownloading ? (
-                      <button
-                        type="button"
-                        className="model-action-icon model-action-cancel"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="sm"
+                        icon={<StopIcon />}
                         onClick={() => onCancelDownload(model.id)}
                         aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-                        data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
-                        data-tooltip-pos="top"
-                      >
-                        <StopIcon />
-                      </button>
+                        tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
+                        tooltipPos="top"
+                      />
                     ) : isModelInstalled ? (
-                      <button
-                        type="button"
-                        className="model-action-icon model-action-delete"
+                      <IconButton
+                        tier="ghost"
+                        tone="danger"
+                        size="sm"
+                        icon={<TrashIcon />}
                         onClick={() => onDelete(model)}
                         aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
-                        data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-                        data-tooltip-pos="top"
-                      >
-                        <TrashIcon />
-                      </button>
+                        tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                        tooltipPos="top"
+                      />
                     ) : model.interruptedDownload ? (
                       <>
-                        <button
-                          type="button"
-                          className="model-action-icon"
+                        <IconButton
+                          tier="ghost"
+                          size="sm"
+                          icon={<DownloadIcon />}
                           onClick={() => onDownload(model)}
                           disabled={disabled}
                           aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${model.name}`}
-                          data-tooltip={
+                          tooltip={
                             model.interruptedDownload.percentage != null
                               ? t('settings.resume_download_tooltip', {
                                   progress: Math.round(model.interruptedDownload.percentage),
@@ -400,40 +407,37 @@ export function LocalModelCard({
                                 })
                               : t('settings.resume_download', { defaultValue: 'Resume download' })
                           }
-                          data-tooltip-pos="top"
-                        >
-                          <DownloadIcon />
-                        </button>
+                          tooltipPos="top"
+                        />
                         {onDiscardDownload && (
-                          <button
-                            type="button"
-                            className="model-action-icon model-action-delete"
+                          <IconButton
+                            tier="ghost"
+                            tone="danger"
+                            size="sm"
+                            icon={<TrashIcon />}
                             onClick={() => onDiscardDownload(model)}
                             disabled={disabled}
                             aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
-                            data-tooltip={t('settings.discard_download_tooltip', {
+                            tooltip={t('settings.discard_download_tooltip', {
                               size:
                                 formatBytes(model.interruptedDownload.downloadedBytes) || '0 MB',
                               defaultValue: `Discard incomplete download (${formatBytes(model.interruptedDownload.downloadedBytes) || '0 MB'})`,
                             })}
-                            data-tooltip-pos="top"
-                          >
-                            <TrashIcon />
-                          </button>
+                            tooltipPos="top"
+                          />
                         )}
                       </>
                     ) : (
-                      <button
-                        type="button"
-                        className="model-action-icon"
+                      <IconButton
+                        tier="ghost"
+                        size="sm"
+                        icon={<DownloadIcon />}
                         onClick={() => onDownload(model)}
                         disabled={disabled}
                         aria-label={`${t('common.download', { defaultValue: 'Download' })} ${model.name}`}
-                        data-tooltip={t('common.download', { defaultValue: 'Download' })}
-                        data-tooltip-pos="top"
-                      >
-                        <DownloadIcon />
-                      </button>
+                        tooltip={t('common.download', { defaultValue: 'Download' })}
+                        tooltipPos="top"
+                      />
                     )}
                   </div>
                 </div>
@@ -549,15 +553,16 @@ export function LocalModelCard({
               {modalities.map((modality) => {
                 const config = MODALITY_CONFIG[modality];
                 return (
-                  <span
+                  <Tooltip
                     key={modality}
-                    className={`model-tag model-tag-modality model-tag-modality-${modality}`}
-                    data-tooltip={t(config.tooltipKey, { defaultValue: config.label })}
-                    data-tooltip-pos="top"
+                    content={t(config.tooltipKey, { defaultValue: config.label })}
+                    placement="top"
                   >
-                    {config.icon}
-                    <span>{t(config.labelKey, { defaultValue: config.label })}</span>
-                  </span>
+                    <span className={`model-tag model-tag-modality model-tag-modality-${modality}`}>
+                      {config.icon}
+                      <span>{t(config.labelKey, { defaultValue: config.label })}</span>
+                    </span>
+                  </Tooltip>
                 );
               })}
             </span>
@@ -695,56 +700,64 @@ export function LocalModelCard({
               {testState.speed} t/s
             </span>
           )}
-          <button
-            type="button"
-            className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
+          <IconButton
+            tier="ghost"
+            size="sm"
+            loading={isTesting}
+            feedback={
+              testState?.status === 'success'
+                ? 'success'
+                : testState?.status === 'error'
+                  ? 'error'
+                  : 'idle'
+            }
+            icon={
+              testState?.status === 'success' ? (
+                <Check size={15} />
+              ) : testState?.status === 'error' ? (
+                <AlertCircle size={15} />
+              ) : (
+                <Zap size={15} />
+              )
+            }
             onClick={() => onTest?.(card)}
-            disabled={isTesting || !isInstalled || isDownloading || (isAnyTesting && !isTesting)}
+            disabled={!isInstalled || isDownloading || (isAnyTesting && !isTesting)}
             aria-label={`${t('settings.llm.test_model', { defaultValue: 'Test Connection' })} ${card.name}`}
-            data-tooltip={testTooltip}
-            data-tooltip-pos="top"
-          >
-            {isTesting ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : testState?.status === 'success' ? (
-              <Check size={15} />
-            ) : testState?.status === 'error' ? (
-              <AlertCircle size={15} />
-            ) : (
-              <Zap size={15} />
-            )}
-          </button>
+            tooltip={testTooltip}
+            tooltipPos="top"
+          />
           {isDownloading ? (
-            <button
-              type="button"
-              className="model-action-icon model-action-cancel"
+            <IconButton
+              tier="ghost"
+              tone="danger"
+              size="sm"
+              icon={<StopIcon />}
               onClick={() => onCancelDownload(card.id)}
               aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-              data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
-              data-tooltip-pos="top"
-            >
-              <StopIcon />
-            </button>
+              tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
+              tooltipPos="top"
+            />
           ) : isInstalled ? (
-            <button
-              type="button"
-              className="model-action-icon model-action-delete"
+            <IconButton
+              tier="ghost"
+              tone="danger"
+              size="sm"
+              icon={<TrashIcon />}
               onClick={() => onDelete(card)}
               aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${card.name}`}
-              data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-              data-tooltip-pos="top"
-            >
-              <TrashIcon />
-            </button>
+              tooltip={t('common.delete', { defaultValue: 'Delete' })}
+              tooltipPos="top"
+            />
           ) : card.interruptedDownload ? (
             <>
-              <button
-                type="button"
-                className="model-action-icon"
+              <IconButton
+                tier="ghost"
+                size="sm"
+                icon={<DownloadIcon />}
                 onClick={() => onDownload(card)}
                 disabled={disabled}
                 aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${card.name}`}
-                data-tooltip={
+                tooltip={
                   card.interruptedDownload.percentage != null
                     ? t('settings.resume_download_tooltip', {
                         progress: Math.round(card.interruptedDownload.percentage),
@@ -752,39 +765,36 @@ export function LocalModelCard({
                       })
                     : t('settings.resume_download', { defaultValue: 'Resume download' })
                 }
-                data-tooltip-pos="top"
-              >
-                <DownloadIcon />
-              </button>
+                tooltipPos="top"
+              />
               {onDiscardDownload && (
-                <button
-                  type="button"
-                  className="model-action-icon model-action-delete"
+                <IconButton
+                  tier="ghost"
+                  tone="danger"
+                  size="sm"
+                  icon={<TrashIcon />}
                   onClick={() => onDiscardDownload(card)}
                   disabled={disabled}
                   aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${card.name}`}
-                  data-tooltip={t('settings.discard_download_tooltip', {
+                  tooltip={t('settings.discard_download_tooltip', {
                     size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
                     defaultValue: `Discard incomplete download (${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
                   })}
-                  data-tooltip-pos="top"
-                >
-                  <TrashIcon />
-                </button>
+                  tooltipPos="top"
+                />
               )}
             </>
           ) : (
-            <button
-              type="button"
-              className="model-action-icon"
+            <IconButton
+              tier="ghost"
+              size="sm"
+              icon={<DownloadIcon />}
               onClick={() => onDownload(card)}
               disabled={disabled}
               aria-label={`${t('common.download', { defaultValue: 'Download' })} ${card.name}`}
-              data-tooltip={t('common.download', { defaultValue: 'Download' })}
-              data-tooltip-pos="top"
-            >
-              <DownloadIcon />
-            </button>
+              tooltip={t('common.download', { defaultValue: 'Download' })}
+              tooltipPos="top"
+            />
           )}
         </div>
       </div>

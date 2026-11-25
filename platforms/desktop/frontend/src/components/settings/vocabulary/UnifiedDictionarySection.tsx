@@ -36,7 +36,9 @@ import {
 } from '../../../utils/yamlDictionaryParser';
 import { Dropdown } from '../../Dropdown';
 import { Modal } from '../../Modal';
+import { Button, IconButton } from '../../ui/Button';
 import { SearchInput } from '../../ui/SearchInput';
+import { Tooltip } from '../../ui/Tooltip';
 import { SegmentedSubTabs, SettingsSection } from '../SettingsLayout';
 import './vocabulary.css';
 
@@ -599,54 +601,46 @@ export function UnifiedDictionarySection({
 
         <div className="dict-toolbar-actions">
           {mode === 'visual' && (
-            <button type="button" className="btn btn-primary btn-xs" onClick={openNewModal}>
-              <Plus size={14} />
+            <Button tier="primary" size="xs" leftIcon={<Plus size={14} />} onClick={openNewModal}>
               {t('settings.dict_add_entry', { defaultValue: 'New Entry' })}
-            </button>
+            </Button>
           )}
 
-          <button
-            type="button"
-            className="btn btn-secondary btn-xs"
+          <Button
+            tier="secondary"
+            size="xs"
+            feedback={formatFeedback ? 'success' : 'idle'}
+            leftIcon={formatFeedback ? <Check size={13} /> : <Wand2 size={13} />}
             onClick={handleFormat}
-            data-tooltip={t('settings.dict_format_tooltip', {
+            tooltip={t('settings.dict_format_tooltip', {
               defaultValue: 'Format indentation, canonicalize arrows, and sync project links',
             })}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('settings.dict_format', { defaultValue: 'Format' })}
           >
-            {formatFeedback ? (
-              <Check size={13} style={{ color: 'var(--color-success)' }} />
-            ) : (
-              <Wand2 size={13} />
-            )}
             {formatFeedback
               ? t('common.formatted', { defaultValue: 'Formatted' })
               : t('settings.dict_format', { defaultValue: 'Format' })}
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary-soft btn-xs"
+          <IconButton
+            tier="secondary"
+            size="xs"
+            feedback={copyFeedback ? 'success' : 'idle'}
+            icon={copyFeedback ? <Check size={13} /> : <Copy size={13} />}
             onClick={handleCopyAll}
-            data-tooltip={
+            tooltip={
               copyFeedback
                 ? t('common.copied', { defaultValue: 'Copied' })
                 : t('settings.dict_copy_all_tooltip', {
                     defaultValue: 'Copy dictionary YAML to clipboard',
                   })
             }
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('settings.dict_copy_all_tooltip', {
               defaultValue: 'Copy dictionary YAML to clipboard',
             })}
-          >
-            {copyFeedback ? (
-              <Check size={13} style={{ color: 'var(--color-success)' }} />
-            ) : (
-              <Copy size={13} />
-            )}
-          </button>
+          />
         </div>
       </div>
 
@@ -692,15 +686,14 @@ export function UnifiedDictionarySection({
           )}
         </div>
 
-        <button
-          type="button"
-          className="btn btn-primary btn-xs"
+        <Button
+          tier="primary"
+          leftIcon={<Plus size={16} />}
           onClick={handleQuickAdd}
           disabled={!quickAddInput.trim()}
         >
-          <Plus size={14} />
           {t('common.add', { defaultValue: 'Add' })}
-        </button>
+        </Button>
       </div>
 
       {/* ── 3. Visual Mode ── */}
@@ -870,22 +863,23 @@ export function UnifiedDictionarySection({
                       </div>
                       <div className="dict-rule-actions">
                         <span className="dict-rule-scope">{item.scopeName}</span>
-                        <button
-                          type="button"
+                        <IconButton
+                          tier="ghost"
+                          size="xs"
+                          icon={<Pencil size={12} />}
                           className="dict-rule-action-btn"
                           onClick={() => openEditModal(item)}
                           aria-label={`${t('settings.dict_edit', { defaultValue: 'Edit' })} ${item.from}`}
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          className="dict-rule-action-btn danger"
+                        />
+                        <IconButton
+                          tier="ghost"
+                          tone="danger"
+                          size="xs"
+                          icon={<Trash2 size={12} />}
+                          className="dict-rule-action-btn"
                           onClick={() => handleDeleteTerm(item)}
                           aria-label={`${t('settings.dict_delete', { defaultValue: 'Delete' })} ${item.from}`}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        />
                       </div>
                     </div>
                   ))}
@@ -908,7 +902,7 @@ export function UnifiedDictionarySection({
                 placeholder={t('settings.dict_test_input_placeholder', {
                   defaultValue: 'Type or paste text to test replacement...',
                 })}
-                style={{ width: '100%', height: '30px', fontSize: '0.75rem' }}
+                style={{ width: '100%', height: '30px', minBlockSize: 0, fontSize: '0.75rem' }}
               />
               {testInput && (
                 <div className="dict-test-result">
@@ -1029,20 +1023,22 @@ export function UnifiedDictionarySection({
 
               <div className="dict-diagnostics-list">
                 {diagnostics.map((diag) => (
-                  <div
+                  <Tooltip
                     key={`${diag.line}-${diag.severity}-${diag.message}`}
-                    onClick={() => jumpToLine(diag.line)}
-                    title={t('settings.dict_click_to_jump', {
+                    content={t('settings.dict_click_to_jump', {
                       defaultValue: 'Click to jump to line',
                     })}
+                    placement="top"
                   >
-                    <span
-                      className={`dict-diagnostic-line ${diag.severity === 'error' ? 'error' : 'warning'}`}
-                    >
-                      Line {diag.line}:
-                    </span>
-                    <span className="dict-diagnostic-msg">{diag.message}</span>
-                  </div>
+                    <div onClick={() => jumpToLine(diag.line)}>
+                      <span
+                        className={`dict-diagnostic-line ${diag.severity === 'error' ? 'error' : 'warning'}`}
+                      >
+                        Line {diag.line}:
+                      </span>
+                      <span className="dict-diagnostic-msg">{diag.message}</span>
+                    </div>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -1178,26 +1174,24 @@ export function UnifiedDictionarySection({
           size="md"
           footer={
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
+              <Button
+                tier="secondary"
                 onClick={() => {
                   setIsAddModalOpen(false);
                   setEditingItem(null);
                 }}
               >
                 {t('common.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
+              </Button>
+              <Button
+                tier="primary"
                 onClick={() => handleModalSubmit()}
                 disabled={
                   formType === 'hotword' ? !formWord.trim() : !formFrom.trim() || !formTo.trim()
                 }
               >
                 {t('settings.dict_action_save', { defaultValue: 'Save Entry' })}
-              </button>
+              </Button>
             </div>
           }
         >

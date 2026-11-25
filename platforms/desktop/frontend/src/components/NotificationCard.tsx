@@ -3,16 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { NotificationAction, NotificationEntry } from '../types/notification';
 import { CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon } from './Icons';
+import { Button, type ButtonTier, IconButton } from './ui/Button';
 
-function getActionButtonClassName(action: NotificationAction): string {
-  const variantClassName =
-    action.variant === 'primary'
-      ? 'btn-primary'
-      : action.variant === 'secondary'
-        ? 'btn-secondary'
-        : 'btn-secondary-soft';
-
-  return `btn ${variantClassName} btn-sm notification-center-item-action`;
+function getActionButtonTier(action: NotificationAction): ButtonTier {
+  if (action.variant === 'primary') return 'primary';
+  if (action.variant === 'secondary') return 'secondary';
+  return 'ghost';
 }
 
 function renderActions(actions: NotificationAction[]): React.ReactNode {
@@ -21,10 +17,11 @@ function renderActions(actions: NotificationAction[]): React.ReactNode {
   }
 
   return actions.map((action) => (
-    <button
+    <Button
       key={action.id}
-      type="button"
-      className={getActionButtonClassName(action)}
+      tier={getActionButtonTier(action)}
+      size="sm"
+      className="notification-center-item-action"
       onClick={() => {
         if (!action.disabled) {
           void action.run();
@@ -33,7 +30,7 @@ function renderActions(actions: NotificationAction[]): React.ReactNode {
       disabled={action.disabled}
     >
       {action.label}
-    </button>
+    </Button>
   ));
 }
 
@@ -43,21 +40,20 @@ function renderCloseButton(action?: NotificationAction): React.ReactNode {
   }
 
   return (
-    <button
-      type="button"
-      className="btn btn-icon notification-center-item-close"
+    <IconButton
+      tier="ghost"
+      size="xs"
+      className="notification-center-item-close"
+      icon={<CloseIcon />}
       onClick={() => {
         if (!action.disabled) {
           void action.run();
         }
       }}
       aria-label={action.label}
-      data-tooltip={action.label}
-      data-tooltip-pos="left"
+      tooltipPos="left"
       disabled={action.disabled}
-    >
-      <CloseIcon />
-    </button>
+    />
   );
 }
 export function NotificationCard({ entry }: { entry: NotificationEntry }): React.JSX.Element {
@@ -130,9 +126,15 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
         {entry.body}
       </span>
       {isBodyCollapsible ? (
-        <button
-          type="button"
+        <Button
+          tier="ghost"
+          size="xs"
           className="notification-center-expand-btn"
+          rightIcon={
+            <ChevronDownIcon
+              className={`notification-center-expand-btn-icon${isBodyExpanded ? ' is-expanded' : ''}`}
+            />
+          }
           onClick={toggleBodyExpand}
           onKeyDown={(e) => {
             e.stopPropagation();
@@ -140,10 +142,7 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
           aria-expanded={isBodyExpanded}
         >
           <span>{isBodyExpanded ? t('task_center.collapse') : t('task_center.expand')}</span>
-          <ChevronDownIcon
-            className={`notification-center-expand-btn-icon${isBodyExpanded ? ' is-expanded' : ''}`}
-          />
-        </button>
+        </Button>
       ) : null}
     </div>
   ) : null;
@@ -242,9 +241,17 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
           {isDetailCollapsible || showDetailCopyButton ? (
             <div className="notification-center-detail-actions">
               {isDetailCollapsible ? (
-                <button
-                  type="button"
+                <Button
+                  tier="ghost"
+                  size="xs"
                   className="notification-center-expand-btn"
+                  rightIcon={
+                    <ChevronDownIcon
+                      className={`notification-center-expand-btn-icon${
+                        isDetailExpanded ? ' is-expanded' : ''
+                      }`}
+                    />
+                  }
                   onClick={toggleDetailExpand}
                   onKeyDown={(e) => {
                     e.stopPropagation();
@@ -256,30 +263,29 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
                       ? t('task_center.collapse_detail')
                       : t('task_center.expand_detail')}
                   </span>
-                  <ChevronDownIcon
-                    className={`notification-center-expand-btn-icon${
-                      isDetailExpanded ? ' is-expanded' : ''
-                    }`}
-                  />
-                </button>
+                </Button>
               ) : null}
               {showDetailCopyButton ? (
-                <button
-                  type="button"
+                <Button
+                  tier="ghost"
+                  size="xs"
+                  feedback={isCopied ? 'success' : 'idle'}
                   className="notification-center-detail-copy-btn"
+                  leftIcon={
+                    isCopied ? (
+                      <CheckIcon className="notification-center-copy-icon" />
+                    ) : (
+                      <CopyIcon className="notification-center-copy-icon" />
+                    )
+                  }
                   onClick={handleCopyDetail}
                   onKeyDown={(e) => {
                     e.stopPropagation();
                   }}
                   aria-label={t('task_center.copy_detail')}
                 >
-                  {isCopied ? (
-                    <CheckIcon className="notification-center-copy-icon" />
-                  ) : (
-                    <CopyIcon className="notification-center-copy-icon" />
-                  )}
                   <span>{isCopied ? t('task_center.copied') : t('task_center.copy_detail')}</span>
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}

@@ -195,12 +195,15 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
     expect(tab1.id).toBe('test-subtab-sub1');
     expect(tab1.classList.contains('settings-subtab-btn')).toBe(true);
     expect(tab1.classList.contains('active')).toBe(true);
-    expect(tab1.getAttribute('data-tooltip')).toBe('Tooltip for sub1');
-    expect(tab1.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(tab1);
+    expect(screen.getByRole('tooltip').textContent).toBe('Tooltip for sub1');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(tab1);
 
     const tab2 = screen.getByRole('tab', { name: 'Sub Tab 2' });
-    expect(tab2.getAttribute('data-tooltip')).toBe('Tooltip for sub2');
-    expect(tab2.getAttribute('data-tooltip-pos')).toBe('bottom');
+    fireEvent.focus(tab2);
+    expect(screen.getByRole('tooltip').textContent).toBe('Tooltip for sub2');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
 
     fireEvent.click(tab2);
     expect(onChange).toHaveBeenCalledWith('sub2');
@@ -303,6 +306,96 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
       expect(slider.style.width).toBe('80px');
       expect(slider.style.height).toBe('36px');
       expect(slider.style.opacity).toBe('1');
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = origGetBoundingClientRect;
+    }
+  });
+
+  it('exposes a single tab stop on the Tooltip wrapper when disabled with a container tooltip', () => {
+    const { container } = render(
+      <SegmentedSubTabs
+        ariaLabel="Disabled Tabs"
+        items={segmentedItems}
+        activeTab="sub1"
+        onChange={vi.fn()}
+        disabled
+        tooltip="Disabled reason"
+      />
+    );
+
+    const wrapper = container.querySelector('.tooltip-disabled-wrap') as HTMLElement | null;
+    const tablist = screen.getByRole('tablist', { name: 'Disabled Tabs' });
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.getAttribute('tabindex')).toBe('0');
+    expect(tablist.hasAttribute('tabindex')).toBe(false);
+
+    fireEvent.focus(wrapper!);
+    expect(screen.getByRole('tooltip').textContent).toBe('Disabled reason');
+  });
+
+  it('uses a full-width Tooltip wrapper for disabled ScenarioCardTabs', () => {
+    const { container } = render(
+      <ScenarioCardTabs
+        ariaLabel="Disabled Card Tabs"
+        items={segmentedItems}
+        activeTab="sub1"
+        onChange={vi.fn()}
+        disabled
+        tooltip="Disabled card reason"
+      />
+    );
+
+    const wrapper = container.querySelector('.tooltip-disabled-wrap') as HTMLElement | null;
+    expect(wrapper?.classList.contains('tooltip-disabled-wrap--full')).toBe(true);
+  });
+
+  it('supports role="radiogroup" with radio buttons and sliding indicator', () => {
+    const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains('settings-subtab-nav')) {
+        return {
+          left: 0,
+          top: 0,
+          width: 240,
+          height: 36,
+          right: 240,
+          bottom: 36,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        } as DOMRect;
+      }
+      return {
+        left: 4,
+        top: 4,
+        width: 100,
+        height: 28,
+        right: 104,
+        bottom: 32,
+        x: 4,
+        y: 4,
+        toJSON: () => {},
+      } as DOMRect;
+    };
+
+    try {
+      const { container } = render(
+        <SegmentedSubTabs
+          ariaLabel="Radio Mode"
+          role="radiogroup"
+          items={segmentedItems}
+          activeTab="sub1"
+          onChange={vi.fn()}
+        />
+      );
+
+      const group = screen.getByRole('radiogroup', { name: 'Radio Mode' });
+      expect(group).toBeDefined();
+
+      const radio1 = screen.getByRole('radio', { name: 'Sub Tab 1' });
+      expect(radio1.getAttribute('aria-checked')).toBe('true');
+      expect(radio1.classList.contains('is-active')).toBe(true);
+      expect(container.querySelector('.settings-subtab-slider')).not.toBeNull();
     } finally {
       HTMLElement.prototype.getBoundingClientRect = origGetBoundingClientRect;
     }

@@ -13,6 +13,7 @@ import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
 import type { ContextMenuOpenRequest } from '../context-menu/trigger';
 import { HistoryItem } from '../history/HistoryItem';
 import { PlusCircleIcon } from '../Icons';
+import { Button, IconButton } from '../ui/Button';
 import type { TranslationFn } from './types';
 
 interface ProjectsResultsProps {
@@ -121,20 +122,16 @@ function ProjectsVirtualFooter({
       )}
       {context?.loadMoreError && (
         <div className="projects-pagination-footer">
-          <button
-            type="button"
-            className="btn btn-icon btn-text"
+          <IconButton
+            tier="ghost"
+            size="md"
+            icon={<RefreshCw size={16} />}
             onClick={() => void context.onLoadMore()}
             aria-label={context.t('projects.retry_load_more', {
               defaultValue: 'Retry loading more items',
             })}
-            data-tooltip={context.t('projects.retry_load_more', {
-              defaultValue: 'Retry loading more items',
-            })}
-            data-tooltip-pos="top"
-          >
-            <RefreshCw size={16} />
-          </button>
+            tooltipPos="top"
+          />
         </div>
       )}
     </>
@@ -380,10 +377,13 @@ export function ProjectsResults({
                 defaultValue: 'Check the connection and try again.',
               })}
             </p>
-            <button type="button" className="btn btn-secondary" onClick={onRetryInitialLoad}>
-              <RefreshCw size={16} />
+            <Button
+              tier="secondary"
+              leftIcon={<RefreshCw size={16} />}
+              onClick={onRetryInitialLoad}
+            >
               {t('common.retry', { defaultValue: 'Retry' })}
-            </button>
+            </Button>
           </div>
         )}
       {!isLoading &&
@@ -412,9 +412,9 @@ export function ProjectsResults({
                 })}
               </p>
             </div>
-            <button type="button" className="btn btn-secondary" onClick={resetBrowseState}>
+            <Button tier="secondary" onClick={resetBrowseState}>
               {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
-            </button>
+            </Button>
           </div>
         )}
 

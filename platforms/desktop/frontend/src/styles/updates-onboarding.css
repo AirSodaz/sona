@@ -102,27 +102,6 @@
   border-color: var(--color-error);
 }
 
-.btn-loading-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-text-hidden {
-  visibility: hidden;
-}
-
-.btn-spinner-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* ===========================
    Welcome Screen (First Run)
    =========================== */
@@ -291,8 +270,9 @@
 
 .welcome-step-active .welcome-step-indicator,
 .welcome-step-complete .welcome-step-indicator {
-  background: var(--color-accent-primary);
-  color: var(--color-bg-elevated);
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-hover);
 }
 
 .welcome-step-label {
@@ -475,7 +455,7 @@
 .welcome-progress-fill {
   height: 100%;
   border-radius: 2px;
-  background: var(--color-accent-primary);
+  background: var(--color-brand);
   transition: width 0.3s ease-out;
 }
 

@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckIcon, ChevronDownIcon, TrashIcon } from './Icons';
+import { Button } from './ui/Button';
 
 export type ClearScope = 'succeeded' | 'all';
 
@@ -74,10 +75,18 @@ export function NotificationClearMenu({
 
   return (
     <div className="notification-clear-menu" ref={menuRef}>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
-        className={`btn btn-secondary-soft btn-sm notification-clear-trigger${isOpen ? ' is-open' : ''}`}
+        tier="secondary"
+        size="sm"
+        active={isOpen}
+        rightIcon={
+          <ChevronDownIcon
+            className={`notification-clear-chevron${isOpen ? ' is-open' : ''}`}
+            aria-hidden="true"
+          />
+        }
+        className={`notification-clear-trigger${isOpen ? ' is-open' : ''}`}
         onClick={() => setIsOpen((open) => !open)}
         disabled={isTriggerDisabled}
         aria-haspopup="menu"
@@ -86,12 +95,8 @@ export function NotificationClearMenu({
         aria-label={t('task_center.clear', { defaultValue: 'Clear' })}
         data-testid="notification-clear-trigger"
       >
-        <span>{t('task_center.clear', { defaultValue: 'Clear' })}</span>
-        <ChevronDownIcon
-          className={`notification-clear-chevron${isOpen ? ' is-open' : ''}`}
-          aria-hidden="true"
-        />
-      </button>
+        {t('task_center.clear', { defaultValue: 'Clear' })}
+      </Button>
 
       {isOpen ? (
         <div

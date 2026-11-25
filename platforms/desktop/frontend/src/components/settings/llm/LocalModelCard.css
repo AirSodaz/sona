@@ -77,8 +77,8 @@
 }
 
 .local-model-card .model-tag-modality-text {
-  background: color-mix(in srgb, var(--color-accent, #3b82f6) 8%, var(--color-bg-secondary));
-  border-color: color-mix(in srgb, var(--color-accent, #3b82f6) 24%, var(--color-border));
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border-hover);
   color: var(--color-text-primary);
 }
 
@@ -221,10 +221,4 @@
   color: var(--color-success, #4ea067);
   border: 1px solid color-mix(in srgb, var(--color-success, #4ea067) 30%, transparent);
   user-select: none;
-}
-
-.local-model-footer .model-action-icon[data-tooltip]:hover,
-.local-model-footer .model-action-icon[data-tooltip]:focus-visible {
-  position: relative;
-  z-index: 10;
 }

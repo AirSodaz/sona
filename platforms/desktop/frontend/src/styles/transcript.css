@@ -435,12 +435,12 @@
 
 .segment-translation-save-btn:hover {
   background: var(--color-bg-hover);
-  color: var(--color-accent-primary, #10b981);
+  color: var(--color-success);
 }
 
 .segment-translation-cancel-btn:hover {
   background: var(--color-bg-hover);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .segment-speaker-row {
@@ -565,7 +565,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--color-primary, #4a9eff);
+  background-color: var(--color-info);
   margin-left: 6px;
   vertical-align: middle;
   animation: alignPulse 1.2s ease-in-out infinite;

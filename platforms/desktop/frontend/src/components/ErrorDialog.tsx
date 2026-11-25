@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
+import { Button } from './ui/Button';
 
 /**
  * Dedicated modal dialog for user-visible errors.
@@ -175,21 +176,18 @@ export function ErrorDialog(): React.JSX.Element | null {
           }}
         >
           {options.hasPrimaryAction && (
-            <button
-              ref={cancelButtonRef}
-              className="btn btn-secondary"
-              onClick={() => close('dismiss')}
-            >
+            <Button ref={cancelButtonRef} tier="secondary" onClick={() => close('dismiss')}>
               {options.cancelLabel ?? t('common.cancel', { defaultValue: 'Cancel' })}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             ref={primaryButtonRef}
-            className={options.hasPrimaryAction ? 'btn btn-danger' : 'btn btn-primary'}
+            tier="primary"
+            tone={options.hasPrimaryAction ? 'danger' : 'neutral'}
             onClick={() => close(options.hasPrimaryAction ? 'primary' : 'dismiss')}
           >
             {options.primaryLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

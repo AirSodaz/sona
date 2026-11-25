@@ -10,7 +10,7 @@
 }
 
 .ffmpeg-install-guide.missing {
-  border-color: color-mix(in srgb, var(--color-primary, #6366f1) 40%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
 }
 
 .ffmpeg-install-guide-header {
@@ -124,21 +124,7 @@
 }
 
 .ffmpeg-install-guide-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
   flex-shrink: 0;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-}
-
-.ffmpeg-install-guide-copy-btn.btn-copied {
-  color: var(--color-success, #10b981);
-  border-color: var(--color-success-border, rgba(16, 185, 129, 0.3));
-  background: var(--color-success-bg, rgba(16, 185, 129, 0.1));
 }
 
 .ffmpeg-install-guide-footer {

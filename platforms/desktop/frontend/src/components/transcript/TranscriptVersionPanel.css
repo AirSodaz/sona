@@ -101,15 +101,15 @@
 }
 
 .transcript-version-diff-row.is-modified {
-  border-left-color: #2563eb;
+  border-left-color: var(--color-info);
 }
 
 .transcript-version-diff-row.is-added {
-  border-left-color: #16a34a;
+  border-left-color: var(--color-success);
 }
 
 .transcript-version-diff-row.is-removed {
-  border-left-color: #d97706;
+  border-left-color: var(--color-warning);
 }
 
 .transcript-version-diff-row.is-unchanged {

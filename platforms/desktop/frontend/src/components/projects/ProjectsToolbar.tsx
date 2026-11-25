@@ -2,6 +2,7 @@ import { CheckSquare, LayoutGrid, LayoutList, List, SlidersHorizontal } from 'lu
 import type React from 'react';
 import { Dropdown } from '../Dropdown';
 import { FolderIcon } from '../Icons';
+import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
 import type {
   ProjectDateFilter,
@@ -96,16 +97,18 @@ export function ProjectsToolbar({
         />
 
         <div className="projects-filter-menu" ref={filterMenuRef}>
-          <button
-            type="button"
-            className={`btn btn-icon projects-toolbar-icon projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
+          <Button
+            tier="secondary"
+            size="md"
+            active={isFilterMenuOpen}
+            className={`projects-filter-trigger ${hasActiveFilters ? 'has-active' : ''}`}
             onClick={() => onSetFilterMenuOpen((value) => !value)}
             aria-haspopup="dialog"
             aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
             aria-expanded={isFilterMenuOpen}
             aria-controls="projects-filter-panel"
-            data-tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
-            data-tooltip-pos="bottom"
+            tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
+            tooltipPos="bottom"
           >
             <SlidersHorizontal size={16} />
             {hasActiveFilters && (
@@ -113,7 +116,7 @@ export function ProjectsToolbar({
                 {activeFilterCount}
               </span>
             )}
-          </button>
+          </Button>
 
           {isFilterMenuOpen && (
             <div
@@ -141,14 +144,15 @@ export function ProjectsToolbar({
                   </div>
                   <span>{filterMenuHint}</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-text projects-filter-clear"
+                <Button
+                  tier="ghost"
+                  size="sm"
+                  className="projects-filter-clear"
                   onClick={onResetBrowseState}
                   disabled={!hasActiveFilters}
                 >
                   {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
-                </button>
+                </Button>
               </div>
 
               <div className="projects-filter-popover-body">
@@ -201,63 +205,62 @@ export function ProjectsToolbar({
             role="group"
             aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}
           >
-            <button
-              type="button"
-              className={`btn btn-icon projects-toolbar-icon ${viewMode === 'list' ? 'active' : ''}`}
+            <IconButton
+              tier="ghost"
+              size="md"
+              active={viewMode === 'list'}
+              className="projects-toolbar-icon"
+              icon={<List size={16} />}
               onClick={() => onSetViewMode('list')}
               aria-pressed={viewMode === 'list'}
               aria-label={t('projects.view_list', { defaultValue: 'List View' })}
-              data-tooltip={t('projects.view_list', { defaultValue: 'List View' })}
-              data-tooltip-pos="bottom"
-            >
-              <List size={16} />
-            </button>
-            <button
-              type="button"
-              className={`btn btn-icon projects-toolbar-icon ${viewMode === 'grid' ? 'active' : ''}`}
+              tooltipPos="bottom"
+            />
+            <IconButton
+              tier="ghost"
+              size="md"
+              active={viewMode === 'grid'}
+              className="projects-toolbar-icon"
+              icon={<LayoutGrid size={16} />}
               onClick={() => onSetViewMode('grid')}
               aria-pressed={viewMode === 'grid'}
               aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
-              data-tooltip={t('projects.view_grid', { defaultValue: 'Grid View' })}
-              data-tooltip-pos="bottom"
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              type="button"
-              className={`btn btn-icon projects-toolbar-icon ${viewMode === 'table' ? 'active' : ''}`}
+              tooltipPos="bottom"
+            />
+            <IconButton
+              tier="ghost"
+              size="md"
+              active={viewMode === 'table'}
+              className="projects-toolbar-icon"
+              icon={<LayoutList size={16} />}
               onClick={() => onSetViewMode('table')}
               aria-pressed={viewMode === 'table'}
               aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
-              data-tooltip={t('projects.view_table', { defaultValue: 'Table View' })}
-              data-tooltip-pos="bottom"
-            >
-              <LayoutList size={16} />
-            </button>
+              tooltipPos="bottom"
+            />
           </div>
 
           <div className="projects-toolbar-divider" />
 
-          <button
-            type="button"
-            className="btn btn-icon projects-toolbar-icon"
+          <IconButton
+            tier="ghost"
+            size="md"
+            className="projects-toolbar-icon"
+            icon={<FolderIcon width={16} height={16} />}
             onClick={onOpenHistoryFolder}
             aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-            data-tooltip={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-            data-tooltip-pos="bottom"
-          >
-            <FolderIcon width={16} height={16} />
-          </button>
-          <button
-            type="button"
-            className={`btn btn-icon projects-toolbar-icon ${isSelectionMode ? 'active' : ''}`}
+            tooltipPos="bottom"
+          />
+          <IconButton
+            tier="ghost"
+            size="md"
+            active={isSelectionMode}
+            className="projects-toolbar-icon"
+            icon={<CheckSquare size={16} />}
             onClick={onToggleSelectionMode}
             aria-label={t('common.select', { defaultValue: 'Select' })}
-            data-tooltip={t('common.select', { defaultValue: 'Select' })}
-            data-tooltip-pos="bottom"
-          >
-            <CheckSquare size={16} />
-          </button>
+            tooltipPos="bottom"
+          />
         </div>
       </div>
     </div>

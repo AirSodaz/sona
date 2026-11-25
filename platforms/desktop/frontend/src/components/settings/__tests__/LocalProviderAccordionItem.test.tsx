@@ -128,7 +128,7 @@ describe('LocalProviderAccordionItem', () => {
     vi.clearAllMocks();
     useModelDownloadStore.setState({ downloads: {} });
   });
-  it('renders import GGUF and refresh buttons with project unified data-tooltip instead of title', () => {
+  it('renders import GGUF and refresh buttons with project unified Tooltip instead of title', () => {
     render(
       <LocalProviderAccordionItem
         config={mockConfig}
@@ -141,17 +141,21 @@ describe('LocalProviderAccordionItem', () => {
 
     const importBtn = screen.getByRole('button', { name: /Import Local GGUF|导入本地 GGUF/i });
     expect(importBtn).toBeTruthy();
-    expect(importBtn.getAttribute('data-tooltip')).toMatch(
+    expect(importBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(importBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(
       /Import existing local GGUF model files|导入本地已有的 GGUF 格式模型文件/
     );
-    expect(importBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(importBtn.getAttribute('title')).toBeNull();
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(importBtn);
 
     const refreshBtn = screen.getByRole('button', { name: /Refresh|刷新/i });
     expect(refreshBtn).toBeTruthy();
-    expect(refreshBtn.getAttribute('data-tooltip')).toMatch(/Refresh|刷新/);
-    expect(refreshBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(refreshBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(refreshBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/Refresh|刷新/);
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(refreshBtn);
   });
 
   it('calls openDialog and importLocalLlmFile when importing custom GGUF', async () => {
@@ -493,9 +497,11 @@ describe('LocalProviderAccordionItem', () => {
     const updatedBtn = screen.getByRole('button', {
       name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
     });
-    expect(updatedBtn.getAttribute('data-tooltip')).toMatch(
+    fireEvent.focus(updatedBtn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(
       /✓ (Inference successful|推理成功) \(25 t\/s\)/
     );
+    fireEvent.blur(updatedBtn);
 
     perfNowSpy.mockRestore();
   });
@@ -534,8 +540,10 @@ describe('LocalProviderAccordionItem', () => {
       const updatedBtn = screen.getByRole('button', {
         name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
       });
-      expect(updatedBtn.classList.contains('error')).toBe(true);
-      expect(updatedBtn.getAttribute('data-tooltip')).toBe('✕ GPU out of memory');
+      expect(updatedBtn.classList.contains('btn-feedback-error')).toBe(true);
+      fireEvent.focus(updatedBtn);
+      expect(screen.getByRole('tooltip').textContent).toBe('✕ GPU out of memory');
+      fireEvent.blur(updatedBtn);
     });
 
     expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
@@ -575,7 +583,7 @@ describe('LocalProviderAccordionItem', () => {
 
     await vi.waitFor(() => {
       const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-      expect(btn.classList.contains('success')).toBe(true);
+      expect(btn.classList.contains('btn-feedback-success')).toBe(true);
     });
 
     // Advance timer past 3500ms
@@ -585,7 +593,7 @@ describe('LocalProviderAccordionItem', () => {
 
     await vi.waitFor(() => {
       const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
-      expect(btn.classList.contains('success')).toBe(false);
+      expect(btn.classList.contains('btn-feedback-success')).toBe(false);
       expect(screen.getByTestId('local-model-speed-qwen3.5-4b')).toBeTruthy();
     });
 

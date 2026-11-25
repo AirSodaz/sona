@@ -10,6 +10,7 @@ import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, CopyIcon, FolderIcon } from './Icons';
 import { Modal } from './Modal';
+import { Button } from './ui/Button';
 
 function decodeHtmlEntities(html: string): string {
   return html
@@ -150,14 +151,14 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: 'auto' }}>
-            <button
-              className="btn btn-secondary"
+            <Button
+              tier="secondary"
+              feedback={copied ? 'success' : 'idle'}
+              leftIcon={<CopyIcon width={16} height={16} />}
               onClick={handleCopy}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
             >
-              <CopyIcon width={16} height={16} />
               {t('export.copy_to_clipboard')}
-            </button>
+            </Button>
             {copied && (
               <CheckIcon
                 data-testid="copy-success-check"
@@ -168,12 +169,12 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-secondary" onClick={onClose} disabled={isExporting}>
+            <Button tier="secondary" onClick={onClose} disabled={isExporting}>
               {t('common.cancel')}
-            </button>
-            <button className="btn btn-primary" onClick={handleExport} disabled={isExporting}>
+            </Button>
+            <Button tier="primary" loading={isExporting} onClick={handleExport}>
               {isExporting ? t('export.exporting') : t('export.button')}
-            </button>
+            </Button>
           </div>
         </div>
       }
@@ -225,14 +226,13 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                 cursor: 'default',
               }}
             />
-            <button
-              className="btn"
+            <Button
+              tier="secondary"
+              leftIcon={<FolderIcon width={16} height={16} />}
               onClick={handleBrowse}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
             >
-              <FolderIcon width={16} height={16} />
               {t('settings.browse')}
-            </button>
+            </Button>
           </div>
         </div>
 

@@ -2838,6 +2838,7 @@
       "temperature_precise": "正確・フォーカス",
       "temperature_balanced": "バランス",
       "temperature_creative": "創造的",
+      "reset_temperature": "デフォルトの 1.0 にリセット",
       "add_custom_provider": "モデルプロバイダーの追加",
       "custom_provider_name": "プロバイダー名",
       "custom_provider_api_mode": "APIモード",

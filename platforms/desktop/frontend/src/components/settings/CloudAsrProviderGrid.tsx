@@ -5,7 +5,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  Loader2,
   Plus,
   Zap,
 } from 'lucide-react';
@@ -30,6 +29,8 @@ import { Dropdown } from '../Dropdown';
 import { CheckIcon, TrashIcon } from '../Icons';
 import { ModelBrandLogo } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
+import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsItem } from './SettingsLayout';
 
 interface InlineApiKeyInputProps {
@@ -72,10 +73,6 @@ function InlineApiKeyInput({
             rel="noreferrer"
             className="cloud-console-link"
             onClick={handleOpenConsole}
-            data-tooltip={t('settings.asr.get_api_key', {
-              defaultValue: 'Get API Key from Console',
-            })}
-            data-tooltip-pos="top"
           >
             <span>
               {t('settings.asr.get_api_key', { defaultValue: 'Get API Key from Console' })}
@@ -574,22 +571,24 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                           (tag) => !commonTagTokens.has(tag.toLowerCase())
                         );
 
+                        const modelDescription = model.descriptionKey
+                          ? t(model.descriptionKey)
+                          : model.description
+                            ? t(model.description)
+                            : undefined;
+
                         return (
                           <div key={model.id} className="model-version-row">
                             <div className="model-version-main">
                               <div className="model-version-info">
-                                <span
-                                  className="model-version-label"
-                                  title={
-                                    model.descriptionKey
-                                      ? t(model.descriptionKey)
-                                      : model.description
-                                        ? t(model.description)
-                                        : undefined
-                                  }
+                                <Tooltip
+                                  content={modelDescription}
+                                  placement="top"
+                                  multiline
+                                  disabled={!modelDescription}
                                 >
-                                  {model.name}
-                                </span>
+                                  <span className="model-version-label">{model.name}</span>
+                                </Tooltip>
                                 {displayTags.map((tag) => (
                                   <span key={tag} className="model-tag">
                                     {tag}
@@ -600,48 +599,56 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
 
                               <div className="model-card-side">
                                 {/* Test button: icon-only placed to the left of Add/Delete button */}
-                                <button
-                                  type="button"
-                                  className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
+                                <IconButton
+                                  tier="ghost"
+                                  size="sm"
+                                  loading={isTesting}
+                                  feedback={
+                                    testState?.status === 'success'
+                                      ? 'success'
+                                      : testState?.status === 'error'
+                                        ? 'error'
+                                        : 'idle'
+                                  }
+                                  icon={
+                                    testState?.status === 'success' ? (
+                                      <Check size={15} />
+                                    ) : testState?.status === 'error' ? (
+                                      <AlertCircle size={15} />
+                                    ) : (
+                                      <Zap size={15} />
+                                    )
+                                  }
                                   onClick={() => handleTestModel(provider, model.id)}
-                                  disabled={isTesting || !hasApiKey}
+                                  disabled={!hasApiKey}
                                   aria-label={`${t('settings.asr.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
-                                  data-tooltip={testTooltip}
-                                  data-tooltip-pos="top"
-                                >
-                                  {isTesting ? (
-                                    <Loader2 size={15} className="spin" />
-                                  ) : testState?.status === 'success' ? (
-                                    <Check size={15} />
-                                  ) : testState?.status === 'error' ? (
-                                    <AlertCircle size={15} />
-                                  ) : (
-                                    <Zap size={15} />
-                                  )}
-                                </button>
+                                  tooltip={testTooltip}
+                                  tooltipPos="top"
+                                />
 
                                 {/* Add / Delete button */}
                                 {isAdded ? (
-                                  <button
-                                    type="button"
-                                    className="model-action-icon model-action-delete"
+                                  <IconButton
+                                    tier="ghost"
+                                    tone="danger"
+                                    size="sm"
+                                    icon={<TrashIcon />}
                                     onClick={() => handleRemoveModel(provider, model.id)}
                                     aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
-                                    data-tooltip={t('settings.asr.delete_model', {
+                                    tooltip={t('settings.asr.delete_model', {
                                       defaultValue: 'Delete Model',
                                     })}
-                                    data-tooltip-pos="top"
-                                  >
-                                    <TrashIcon />
-                                  </button>
+                                    tooltipPos="top"
+                                  />
                                 ) : (
-                                  <button
-                                    type="button"
-                                    className="model-action-icon model-action-add"
+                                  <IconButton
+                                    tier="ghost"
+                                    size="sm"
+                                    icon={<Plus size={16} />}
                                     onClick={() => handleAddModel(provider, model.id)}
                                     disabled={!hasApiKey}
                                     aria-label={`${t('common.add', { defaultValue: 'Add' })} ${model.name}`}
-                                    data-tooltip={
+                                    tooltip={
                                       !hasApiKey
                                         ? t('settings.asr.api_key_required_to_add', {
                                             defaultValue: 'Configure API Key first',
@@ -650,10 +657,8 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                             defaultValue: 'Add Model',
                                           })
                                     }
-                                    data-tooltip-pos="top"
-                                  >
-                                    <Plus size={16} />
-                                  </button>
+                                    tooltipPos="top"
+                                  />
                                 )}
                               </div>
                             </div>

@@ -2,6 +2,7 @@ import { ChevronsUpDown, Pipette } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ModalPortal } from './ModalPortal';
+import { IconButton } from './ui/Button';
 
 export interface ColorPickerProps {
   isOpen: boolean;
@@ -440,34 +441,20 @@ export function ColorPicker({
 
         {/* 2. Middle Row: Eyedropper, Color Swatch, Hue Rainbow Slider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            className="btn btn-icon sona-color-picker-btn"
+          <IconButton
+            tier="secondary"
+            size="sm"
+            className="sona-color-picker-btn"
+            icon={<Pipette size={13} />}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={handleEyeDropper}
-            data-tooltip="Pick color"
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label="Pick color"
-            style={{
-              width: '26px',
-              height: '26px',
-              padding: 0,
-              borderRadius: '6px',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-text-secondary)',
-              flexShrink: 0,
-            }}
-          >
-            <Pipette size={13} />
-          </button>
+          />
           <div
             style={{
-              width: '26px',
-              height: '26px',
+              width: '28px',
+              height: '28px',
               borderRadius: '50%',
               backgroundColor: currentHex,
               border: '1px solid var(--color-border)',
@@ -536,6 +523,7 @@ export function ColorPicker({
                     style={{
                       width: '100%',
                       height: '28px',
+                      minBlockSize: 0,
                       textAlign: 'center',
                       borderRadius: '6px',
                       border: '1px solid var(--color-border)',
@@ -579,6 +567,7 @@ export function ColorPicker({
                 style={{
                   width: '100%',
                   height: '28px',
+                  minBlockSize: 0,
                   textAlign: 'center',
                   borderRadius: '6px',
                   border: '1px solid var(--color-border)',
@@ -603,30 +592,16 @@ export function ColorPicker({
               </span>
             </div>
           )}
-          <button
-            type="button"
-            className="btn btn-icon sona-color-picker-btn"
+          <IconButton
+            tier="secondary"
+            size="sm"
+            className="sona-color-picker-btn"
+            icon={<ChevronsUpDown size={14} />}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setFormat((prev) => (prev === 'rgb' ? 'hex' : 'rgb'))}
-            data-tooltip="Toggle RGB / HEX"
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label="Toggle RGB / HEX"
-            style={{
-              width: '28px',
-              height: '28px',
-              padding: 0,
-              borderRadius: '6px',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-text-muted)',
-              flexShrink: 0,
-            }}
-          >
-            <ChevronsUpDown size={14} />
-          </button>
+          />
         </div>
         {/* Hidden fallback color input */}
         <input

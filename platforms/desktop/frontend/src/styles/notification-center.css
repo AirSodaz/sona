@@ -35,7 +35,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-info) 24%, transparent);
 }
 
 .notification-center-panel {
@@ -235,7 +235,7 @@
 }
 
 .notification-center-item {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -279,7 +279,7 @@
 }
 
 .notification-center-item-tone-recovery {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
 }
 
 .notification-center-item-tone-automation-failure {
@@ -316,7 +316,7 @@
 }
 
 .notification-center-item-tone-accent {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
 }
 
 .notification-center-item-header {
@@ -426,7 +426,8 @@
   mask-image: none;
 }
 
-.notification-center-expand-btn {
+.btn.notification-center-expand-btn {
+  min-block-size: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -447,16 +448,22 @@
     background var(--transition-fast);
 }
 
-.notification-center-expand-btn:hover {
+.btn.notification-center-expand-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--notification-center-accent) 10%, transparent);
+  color: var(--notification-center-accent);
 }
 
-.notification-center-expand-btn:focus-visible {
+.btn.notification-center-expand-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--notification-center-accent) 16%, transparent);
+  color: var(--notification-center-accent);
+}
+
+.btn.notification-center-expand-btn:focus-visible {
   outline: none;
   box-shadow: var(--apple-control-focus-ring);
 }
 
-.notification-center-expand-btn-icon {
+.btn.notification-center-expand-btn .notification-center-expand-btn-icon {
   width: 12px;
   height: 12px;
   transition: transform var(--transition-fast);
@@ -464,10 +471,6 @@
 
 .notification-center-expand-btn-icon.is-expanded {
   transform: rotate(180deg);
-}
-
-.notification-center-item-action {
-  border-radius: var(--radius-sm);
 }
 
 .notification-center-item-footer {

@@ -2,6 +2,7 @@ import { FilePenLine } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, IconButton } from '../ui/Button';
 
 interface SettingsShortcutInputProps {
   value: string;
@@ -117,30 +118,27 @@ export function SettingsShortcutInput({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <button
-        type="button"
-        className={`btn ${isRecording ? 'btn-primary' : 'btn-secondary'}`}
-        style={{ minWidth: '120px', display: 'flex', justifyContent: 'center' }}
+      <Button
+        tier={isRecording ? 'primary' : 'secondary'}
+        style={{ minWidth: '120px' }}
         onClick={() => setIsRecording(true)}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onBlur={() => setIsRecording(false)}
       >
         {isRecording ? t('common.recording', { defaultValue: 'Recording...' }) : displayValue}
-      </button>
-      <button
-        type="button"
-        className="btn-icon-sm"
+      </Button>
+      <IconButton
+        tier="ghost"
+        size="md"
+        icon={<FilePenLine size={16} />}
         onClick={() => {
           setTempValue(value);
           setIsEditing(true);
         }}
         aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
-        data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
-        data-tooltip-pos="top"
-      >
-        <FilePenLine size={16} />
-      </button>
+        tooltipPos="top"
+      />
     </div>
   );
 }

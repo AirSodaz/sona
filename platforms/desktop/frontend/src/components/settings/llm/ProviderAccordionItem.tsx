@@ -1,4 +1,4 @@
-import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   buildLlmConfig,
@@ -11,6 +11,7 @@ import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
 import { ProviderLogo } from '../../icons/ProviderLogos';
+import { Button, IconButton } from '../../ui/Button';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 import {
   getCurrentLlmSettings,
@@ -100,24 +101,23 @@ export function ProviderAccordionItem({
     onEdit || onDelete ? (
       <div className="provider-header-actions" onClick={(e) => e.stopPropagation()}>
         {onEdit && (
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary-soft"
+          <IconButton
+            tier="ghost"
+            size="sm"
+            icon={<Pencil size={14} />}
             aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
             onClick={onEdit}
-          >
-            <Pencil size={14} />
-          </button>
+          />
         )}
         {onDelete && (
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary-soft"
+          <IconButton
+            tier="ghost"
+            tone="danger"
+            size="sm"
+            icon={<Trash2 size={14} />}
             aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })}
             onClick={onDelete}
-          >
-            <Trash2 size={14} />
-          </button>
+          />
         )}
       </div>
     ) : undefined;
@@ -237,25 +237,14 @@ export function ProviderAccordionItem({
                 defaultValue: 'Manage and test models for this provider',
               })}
             >
-              <button
-                type="button"
-                className="btn btn-secondary btn-loading-wrapper"
+              <Button
+                tier="secondary"
                 style={{ width: 'fit-content', minWidth: '120px' }}
                 onClick={onOpenDetails}
                 disabled={!onOpenDetails}
               >
-                <div
-                  className="btn-content-inner"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <span>{t('settings.llm.details')}</span>
-                </div>
-              </button>
+                {t('settings.llm.details')}
+              </Button>
             </SettingsItem>
           )}
 
@@ -272,44 +261,36 @@ export function ProviderAccordionItem({
                 }}
               >
                 {(() => {
-                  let testBtnClass = 'btn-secondary';
+                  const feedback =
+                    testStatus === 'success'
+                      ? 'success'
+                      : testStatus === 'error'
+                        ? 'error'
+                        : 'idle';
                   let icon = null;
                   let label = t('settings.llm.test_connection');
 
                   if (testStatus === 'loading') {
-                    icon = <Loader2 className="animate-spin" size={16} />;
                     label = t('settings.llm.testing');
                   } else if (testStatus === 'success') {
-                    testBtnClass = 'btn-success-flash';
                     icon = <Check size={16} />;
                     label = t('settings.llm.connection_success');
                   } else if (testStatus === 'error') {
-                    testBtnClass = 'btn-error-flash';
                     icon = <X size={16} />;
                     label = t('settings.llm.connection_failed');
                   }
 
                   return (
-                    <button
-                      type="button"
-                      className={`btn ${testBtnClass} btn-loading-wrapper`}
+                    <Button
+                      tier="secondary"
+                      loading={testStatus === 'loading'}
+                      feedback={feedback}
+                      leftIcon={icon ?? undefined}
                       style={{ width: 'fit-content', minWidth: '120px' }}
                       onClick={handleTestConnection}
-                      disabled={testStatus === 'loading'}
                     >
-                      <div
-                        className="btn-content-inner"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        {icon}
-                        <span>{label}</span>
-                      </div>
-                    </button>
+                      {label}
+                    </Button>
                   );
                 })()}
 

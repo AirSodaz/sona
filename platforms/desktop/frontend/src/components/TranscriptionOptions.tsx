@@ -12,6 +12,7 @@ import { languageDisplayName } from '../utils/languages';
 import { getScenarioLanguage } from '../utils/scenarioModels';
 import { ChevronUpIcon } from './Icons';
 import { ParameterSettingsPopover } from './ParameterSettingsPopover';
+import { Button } from './ui/Button';
 
 /** Props for TranscriptionOptions component. */
 interface TranscriptionOptionsProps {
@@ -129,10 +130,12 @@ export function TranscriptionOptions({
 
   return (
     <div className={`options-container ${className}`}>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
-        className={`btn btn-parameter-settings ${isExpanded ? 'active' : ''}`}
+        tier="secondary"
+        pill
+        active={isExpanded}
+        className={`btn-parameter-settings ${isExpanded ? 'active' : ''}`}
         onClick={() => !disabled && setIsExpanded((prev) => !prev)}
         disabled={disabled}
         aria-label={buttonAriaLabel}
@@ -155,7 +158,7 @@ export function TranscriptionOptions({
           height={14}
           aria-hidden="true"
         />
-      </button>
+      </Button>
 
       <ParameterSettingsPopover
         isOpen={isExpanded}

@@ -76,9 +76,15 @@ describe('SettingsSearchResults component', () => {
     const breadcrumbElements = container.querySelectorAll('.settings-search-result-breadcrumb');
     expect(breadcrumbElements).toHaveLength(2);
     expect(breadcrumbElements[0]?.getAttribute('title')).toBeNull();
-    expect(breadcrumbElements[0]?.getAttribute('data-tooltip')).toBeNull();
     expect(breadcrumbElements[1]?.getAttribute('title')).toBeNull();
-    expect(breadcrumbElements[1]?.getAttribute('data-tooltip')).toBeNull();
+    if (breadcrumbElements[0]) {
+      fireEvent.focus(breadcrumbElements[0]);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    }
+    if (breadcrumbElements[1]) {
+      fireEvent.focus(breadcrumbElements[1]);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    }
   });
 
   it('marks active item based on activeIndex prop', () => {

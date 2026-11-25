@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { dashboardService } from '../../services/dashboardService';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import { normalizeError } from '../../utils/errorUtils';
+import { Button } from '../ui/Button';
 import {
   ContentOverviewSection,
   LlmUsagePanel,
@@ -116,9 +117,9 @@ export function SettingsDashboardTab({
                 })}
             </div>
           </div>
-          <button className="btn" onClick={() => setReloadToken((value) => value + 1)}>
+          <Button tier="secondary" onClick={() => setReloadToken((value) => value + 1)}>
             {t('settings.dashboard.retry', { defaultValue: 'Retry' })}
-          </button>
+          </Button>
         </div>
       </SettingsTabContainer>
     );

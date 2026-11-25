@@ -15,6 +15,7 @@ import { TabNavigation } from './components/TabNavigation';
 import { TranscriptionOptions } from './components/TranscriptionOptions';
 import { ToolsView } from './components/tools/ToolsView';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
+import { IconButton } from './components/ui/Button';
 import { TranscriptSessionProvider } from './contexts/TranscriptSessionContext';
 import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -266,17 +267,16 @@ function App(): React.JSX.Element | null {
             onOpenAutomationSettings={openAutomationSettings}
             onOpenSettingsTab={openSettingsTab}
           />
-          <button
-            className="btn btn-icon"
+          <IconButton
+            tier="ghost"
+            size="md"
+            icon={<SettingsIcon />}
             onClick={openDefaultSettings}
             onPointerEnter={() => preloadSettings('general')}
             onFocus={() => preloadSettings('general')}
-            data-tooltip={t('header.settings')}
-            data-tooltip-pos="bottom-left"
+            tooltipPos="bottom-left"
             aria-label={t('header.settings')}
-          >
-            <SettingsIcon />
-          </button>
+          />
         </div>
       </header>
 
