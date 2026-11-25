@@ -332,4 +332,20 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
     fireEvent.focus(wrapper!);
     expect(screen.getByRole('tooltip').textContent).toBe('Disabled reason');
   });
+
+  it('uses a full-width Tooltip wrapper for disabled ScenarioCardTabs', () => {
+    const { container } = render(
+      <ScenarioCardTabs
+        ariaLabel="Disabled Card Tabs"
+        items={segmentedItems}
+        activeTab="sub1"
+        onChange={vi.fn()}
+        disabled
+        tooltip="Disabled card reason"
+      />
+    );
+
+    const wrapper = container.querySelector('.tooltip-disabled-wrap') as HTMLElement | null;
+    expect(wrapper?.classList.contains('tooltip-disabled-wrap--full')).toBe(true);
+  });
 });

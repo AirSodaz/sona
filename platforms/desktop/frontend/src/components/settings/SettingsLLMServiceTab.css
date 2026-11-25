@@ -893,26 +893,7 @@ html[data-theme="dark"] .provider-mode-option.selected {
 }
 
 .feature-temperature-reset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 0.75rem;
-  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast, 0.15s) ease;
-  flex-shrink: 0;
-}
-
-.feature-temperature-reset-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-  border-color: var(--color-border-hover);
 }
 
 .feature-temperature-slider {
@@ -935,20 +916,13 @@ html[data-theme="dark"] .provider-mode-option.selected {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  color: #dc2626;
+  color: var(--color-error);
   font-size: 0.8rem;
   padding: 4px 8px;
-  background: rgba(239, 68, 68, 0.05);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
   border-radius: var(--radius-sm);
-  border-left: 2px solid #dc2626;
+  border-left: 2px solid var(--color-error);
   line-height: 1.4;
-}
-
-@media (prefers-color-scheme: dark) {
-  .connection-error-detail {
-    color: #f87171;
-    border-left-color: #f87171;
-  }
 }
 
 /* Reasoning Mode styling */

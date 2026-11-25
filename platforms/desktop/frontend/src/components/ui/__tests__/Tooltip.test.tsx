@@ -230,4 +230,25 @@ describe('Tooltip', () => {
       rectSpy.mockRestore();
     }
   });
+
+  it('closes an already open tooltip when another tooltip opens', () => {
+    render(
+      <div>
+        <Tooltip content="First hint">
+          <button type="button">First</button>
+        </Tooltip>
+        <Tooltip content="Second hint">
+          <button type="button">Second</button>
+        </Tooltip>
+      </div>
+    );
+
+    fireEvent.focus(screen.getByRole('button', { name: 'First' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('First hint');
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Second' }));
+    const tooltips = screen.getAllByRole('tooltip');
+    expect(tooltips).toHaveLength(1);
+    expect(tooltips[0].textContent).toBe('Second hint');
+  });
 });

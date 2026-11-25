@@ -30,6 +30,10 @@
   gap: 6px;
 }
 
+.split-button-container.is-secondary .split-button-primary {
+  border-right-width: 0;
+}
+
 .split-button-container .split-button-toggle {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
@@ -41,13 +45,20 @@
   justify-content: center;
 }
 
+.split-button-container.is-secondary .split-button-toggle {
+  margin-left: 0;
+  border-left: 1px solid var(--button-secondary-border);
+}
+
+.split-button-container .btn:hover:not(:disabled),
+.split-button-container .btn:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
 /* Divider rules */
 .split-button-container:not(.is-secondary) .split-button-toggle {
   border-left: 1px solid color-mix(in srgb, var(--button-primary-text) 22%, transparent);
-}
-
-.split-button-container.is-secondary .split-button-toggle {
-  border-left: 1px solid var(--color-border);
 }
 
 /* ==========================================================================

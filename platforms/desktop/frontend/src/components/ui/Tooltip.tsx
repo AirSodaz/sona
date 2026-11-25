@@ -31,6 +31,30 @@ const TRIGGER_GAP = 6;
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
+let activeTooltipCloser: (() => void) | null = null;
+
+function claimActiveTooltip(closeSelf: () => void): void {
+  if (activeTooltipCloser && activeTooltipCloser !== closeSelf) {
+    activeTooltipCloser();
+  }
+  activeTooltipCloser = closeSelf;
+}
+
+function releaseActiveTooltip(closeSelf: () => void): void {
+  if (activeTooltipCloser === closeSelf) {
+    activeTooltipCloser = null;
+  }
+}
+
+export function isTooltipContentVisible(content: React.ReactNode | false | undefined): boolean {
+  return (
+    content !== false &&
+    content !== null &&
+    content !== undefined &&
+    (typeof content !== 'string' || content.trim().length > 0)
+  );
+}
+
 function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null): void {
   if (!ref) return;
   if (typeof ref === 'function') {
@@ -115,33 +139,49 @@ function computeTooltipCoordinates(
       break;
   }
 
-  if (viewportWidth > 0 && tooltipWidth > 0) {
-    left = Math.max(
-      VIEWPORT_MARGIN,
-      Math.min(left, viewportWidth - tooltipWidth - VIEWPORT_MARGIN)
-    );
+  if (viewportWidth > VIEWPORT_MARGIN * 2) {
+    const maxLeft = Math.max(VIEWPORT_MARGIN, viewportWidth - tooltipWidth - VIEWPORT_MARGIN);
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft));
   }
-  if (viewportHeight > 0 && tooltipHeight > 0) {
-    top = Math.max(
-      VIEWPORT_MARGIN,
-      Math.min(top, viewportHeight - tooltipHeight - VIEWPORT_MARGIN)
-    );
+  if (viewportHeight > VIEWPORT_MARGIN * 2) {
+    const maxTop = Math.max(VIEWPORT_MARGIN, viewportHeight - tooltipHeight - VIEWPORT_MARGIN);
+    top = Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop));
   }
 
   return { top, left, resolvedPlacement };
 }
 
-export function Tooltip({
-  content,
+export interface UseTooltipControllerOptions {
+  placement?: TooltipPlacement;
+  multiline?: boolean;
+  delayMs?: number;
+  disabled?: boolean;
+  onlyWhenTruncated?: boolean;
+}
+
+export interface TooltipController {
+  isOpen: boolean;
+  tooltipId: string;
+  triggerRef: React.RefObject<HTMLElement | null>;
+  pointerDownRef: React.MutableRefObject<boolean>;
+  openWithDelay: (triggerEl?: HTMLElement | null) => void;
+  openImmediatelyOnFocus: (triggerEl?: HTMLElement | null) => void;
+  hideTooltip: () => void;
+  reposition: () => void;
+  renderPortal: (content: React.ReactNode) => React.JSX.Element | null;
+}
+
+/**
+ * Shared portal tooltip controller for both single-trigger `<Tooltip>` wrappers and
+ * container-level delegated tooltips (e.g. dense token lists).
+ */
+export function useTooltipController({
   placement = 'top',
   multiline = false,
   delayMs = DEFAULT_DELAY_MS,
   disabled = false,
-  triggerDisabled = false,
   onlyWhenTruncated = false,
-  fullWidthWrapper = false,
-  children,
-}: TooltipProps): React.JSX.Element {
+}: UseTooltipControllerOptions = {}): TooltipController {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{
     top: number;
@@ -159,13 +199,6 @@ export function Tooltip({
   const pointerDownRef = useRef(false);
   const tooltipId = useId();
 
-  const hasContent =
-    !disabled &&
-    content !== false &&
-    content !== null &&
-    content !== undefined &&
-    (typeof content !== 'string' || content.trim().length > 0);
-
   const clearHoverTimer = useCallback(() => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
@@ -176,41 +209,60 @@ export function Tooltip({
   const hideTooltip = useCallback(() => {
     pointerDownRef.current = false;
     clearHoverTimer();
+    releaseActiveTooltip(hideTooltip);
     setIsOpen(false);
   }, [clearHoverTimer]);
 
-  const canOpen = useCallback(() => {
-    if (!hasContent) return false;
-    if (onlyWhenTruncated && !isElementTruncated(triggerRef.current)) {
-      return false;
-    }
-    return true;
-  }, [hasContent, onlyWhenTruncated]);
-
-  const openWithDelay = useCallback(() => {
-    if (!canOpen()) return;
-    clearHoverTimer();
-    if (delayMs <= 0) {
+  const showNow = useCallback(
+    (explicitTrigger?: HTMLElement | null) => {
+      if (explicitTrigger !== undefined) {
+        triggerRef.current = explicitTrigger;
+      }
+      if (disabled) return;
+      if (onlyWhenTruncated && !isElementTruncated(triggerRef.current)) {
+        return;
+      }
+      claimActiveTooltip(hideTooltip);
       setIsOpen(true);
-      return;
-    }
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      setIsOpen(true);
-    }, delayMs);
-  }, [canOpen, clearHoverTimer, delayMs]);
+    },
+    [disabled, hideTooltip, onlyWhenTruncated]
+  );
 
-  const openImmediatelyOnFocus = useCallback(() => {
-    if (pointerDownRef.current) {
-      pointerDownRef.current = false;
-      return;
-    }
-    if (!canOpen()) return;
-    clearHoverTimer();
-    setIsOpen(true);
-  }, [canOpen, clearHoverTimer]);
+  const openWithDelay = useCallback(
+    (explicitTrigger?: HTMLElement | null) => {
+      if (explicitTrigger !== undefined) {
+        triggerRef.current = explicitTrigger;
+      }
+      if (disabled) return;
+      if (onlyWhenTruncated && !isElementTruncated(triggerRef.current)) {
+        return;
+      }
+      clearHoverTimer();
+      if (delayMs <= 0) {
+        showNow();
+        return;
+      }
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        showNow();
+      }, delayMs);
+    },
+    [clearHoverTimer, delayMs, disabled, onlyWhenTruncated, showNow]
+  );
 
-  const updatePosition = useCallback(() => {
+  const openImmediatelyOnFocus = useCallback(
+    (explicitTrigger?: HTMLElement | null) => {
+      if (pointerDownRef.current) {
+        pointerDownRef.current = false;
+        return;
+      }
+      clearHoverTimer();
+      showNow(explicitTrigger);
+    },
+    [clearHoverTimer, showNow]
+  );
+
+  const reposition = useCallback(() => {
     const triggerEl = triggerRef.current;
     const tooltipEl = tooltipRef.current;
     if (!triggerEl || !tooltipEl) return;
@@ -233,15 +285,12 @@ export function Tooltip({
   }, [placement]);
 
   useIsomorphicLayoutEffect(() => {
-    if (!isOpen || !hasContent) return;
-    // Reposition whenever the tooltip opens or its rendered content/wrapping changes.
-    void content;
-    void multiline;
-    updatePosition();
-  }, [isOpen, hasContent, content, multiline, updatePosition]);
+    if (!isOpen || disabled) return;
+    reposition();
+  }, [isOpen, disabled, multiline, reposition]);
 
   useIsomorphicLayoutEffect(() => {
-    if (!isOpen || !hasContent) return undefined;
+    if (!isOpen || disabled) return undefined;
 
     const handleScrollOrResize = () => hideTooltip();
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -258,50 +307,104 @@ export function Tooltip({
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [hideTooltip, isOpen, hasContent]);
+  }, [hideTooltip, isOpen, disabled]);
 
   useEffect(() => {
-    if (!hasContent && isOpen) {
+    if (disabled && isOpen) {
       hideTooltip();
     }
-  }, [hasContent, hideTooltip, isOpen]);
+  }, [disabled, hideTooltip, isOpen]);
 
   useEffect(() => {
     return () => {
       clearHoverTimer();
+      releaseActiveTooltip(hideTooltip);
     };
-  }, [clearHoverTimer]);
+  }, [clearHoverTimer, hideTooltip]);
+
+  const renderPortal = (content: React.ReactNode): React.JSX.Element | null => {
+    if (!isOpen || disabled || !isTooltipContentVisible(content)) {
+      return null;
+    }
+    return (
+      <ModalPortal>
+        <div
+          ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
+          data-placement={coords.resolvedPlacement}
+          className={`tooltip-portal is-visible ${multiline ? 'tooltip-portal--multiline' : ''}`.trim()}
+          style={{
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+          }}
+        >
+          {content}
+        </div>
+      </ModalPortal>
+    );
+  };
+
+  return {
+    isOpen,
+    tooltipId,
+    triggerRef,
+    pointerDownRef,
+    openWithDelay,
+    openImmediatelyOnFocus,
+    hideTooltip,
+    reposition,
+    renderPortal,
+  };
+}
+
+export function Tooltip({
+  content,
+  placement = 'top',
+  multiline = false,
+  delayMs = DEFAULT_DELAY_MS,
+  disabled = false,
+  triggerDisabled = false,
+  onlyWhenTruncated = false,
+  fullWidthWrapper = false,
+  children,
+}: TooltipProps): React.JSX.Element {
+  const hasContent = !disabled && isTooltipContentVisible(content);
+  const {
+    isOpen,
+    tooltipId,
+    triggerRef,
+    pointerDownRef,
+    openWithDelay,
+    openImmediatelyOnFocus,
+    hideTooltip,
+    reposition,
+    renderPortal,
+  } = useTooltipController({
+    placement,
+    multiline,
+    delayMs,
+    disabled: !hasContent,
+    onlyWhenTruncated,
+  });
+
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen || !hasContent) return;
+    // Reposition whenever rendered tooltip text/wrapping changes while open.
+    void content;
+    void multiline;
+    reposition();
+  }, [isOpen, hasContent, content, multiline, reposition]);
 
   if (!isValidElement(children)) {
     return children;
   }
 
   if (!hasContent) {
-    return (
-      <>
-        {children}
-        {null}
-      </>
-    );
+    return children;
   }
 
-  const portalElement = isOpen ? (
-    <ModalPortal>
-      <div
-        ref={tooltipRef}
-        id={tooltipId}
-        role="tooltip"
-        data-placement={coords.resolvedPlacement}
-        className={`tooltip-portal is-visible ${multiline ? 'tooltip-portal--multiline' : ''}`.trim()}
-        style={{
-          top: `${coords.top}px`,
-          left: `${coords.left}px`,
-        }}
-      >
-        {content}
-      </div>
-    </ModalPortal>
-  ) : null;
+  const portalElement = renderPortal(content);
 
   if (triggerDisabled) {
     return (
@@ -319,9 +422,9 @@ export function Tooltip({
           onMouseUp={() => {
             pointerDownRef.current = false;
           }}
-          onMouseEnter={openWithDelay}
+          onMouseEnter={() => openWithDelay()}
           onMouseLeave={hideTooltip}
-          onFocus={openImmediatelyOnFocus}
+          onFocus={() => openImmediatelyOnFocus()}
           onBlur={hideTooltip}
         >
           {children}

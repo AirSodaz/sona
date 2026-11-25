@@ -285,6 +285,7 @@ export function SecondaryTabs<T extends string = string>({
         placement={tooltipPos}
         multiline={tooltipMultiline}
         triggerDisabled={disabled}
+        fullWidthWrapper={!isSegmented}
       >
         {containerElement}
       </Tooltip>

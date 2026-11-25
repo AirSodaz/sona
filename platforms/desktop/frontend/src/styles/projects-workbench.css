@@ -595,10 +595,10 @@
 }
 
 .projects-workbench .projects-toolbar-icon {
-  width: 32px;
-  height: 32px;
-  min-inline-size: 32px;
-  min-block-size: 32px;
+  width: 30px;
+  height: 30px;
+  min-inline-size: 30px;
+  min-block-size: 30px;
   padding: 0;
   border-radius: 9px;
   display: flex;

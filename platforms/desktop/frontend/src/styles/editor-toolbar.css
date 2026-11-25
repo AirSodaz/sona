@@ -147,6 +147,8 @@
   justify-content: center;
   width: 32px;
   height: 32px;
+  min-inline-size: 32px;
+  min-block-size: 32px;
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
@@ -166,15 +168,13 @@
   }
 }
 
-.toolbar-btn:hover {
+.toolbar-btn:hover:not(:disabled) {
   background: var(--color-bg-hover);
-  box-shadow: var(--apple-control-shadow-flat);
   color: var(--color-text-primary);
 }
 
-.toolbar-btn:active {
-  background: var(--color-bg-tertiary);
-  box-shadow: var(--apple-control-shadow-flat);
+.toolbar-btn:active:not(:disabled) {
+  background: var(--color-bg-active);
   transform: scale(0.98);
 }
 
@@ -184,7 +184,6 @@
 }
 
 .btn-parameter-settings:disabled,
-.toolbar-btn:disabled,
 .settings-tab-btn:disabled,
 .accordion-header-btn:disabled,
 .dropdown-trigger:disabled,

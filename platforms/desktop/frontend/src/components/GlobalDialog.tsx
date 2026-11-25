@@ -167,6 +167,7 @@ export function GlobalDialog(): React.JSX.Element | null {
       overlayStyle={{ zIndex: 2200 }}
       shellStyle={{ overflow: 'visible' }}
       bodyStyle={{ overflow: 'visible' }}
+      autoFocus={false}
       role="alertdialog"
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>

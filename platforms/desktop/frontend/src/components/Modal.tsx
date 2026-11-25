@@ -150,10 +150,18 @@ export function Modal({
           }
 
           if (!modalRef.current) return;
-          const focusable = getFocusableElements(modalRef.current);
-          if (focusable.length > 0) {
-            focusable[0].focus();
+          if (
+            document.activeElement instanceof HTMLElement &&
+            modalRef.current.contains(document.activeElement) &&
+            document.activeElement !== modalRef.current
+          ) {
+            return;
           }
+          const focusable = getFocusableElements(modalRef.current);
+          const preferredTarget =
+            focusable.find((el) => !el.classList.contains('shared-modal-close-btn')) ??
+            modalRef.current;
+          preferredTarget.focus();
         }, 50);
       }
 

@@ -539,7 +539,7 @@ export function TranslateButton({
         ) : (
           <LanguagesIcon />
         )}
-        <ChevronDownIcon />
+        <ChevronDownIcon className="export-menu-chevron" width={12} height={12} />
       </Button>
 
       {isOpen && (

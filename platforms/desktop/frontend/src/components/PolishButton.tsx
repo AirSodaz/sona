@@ -223,7 +223,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
       ref={dropdownRef}
       onKeyDown={handleKeyDown}
       onBlur={handleBlur}
-      style={{ display: 'inline-block', marginRight: '8px' }}
+      style={{ display: 'inline-block' }}
     >
       <Button
         ref={triggerRef}
@@ -261,7 +261,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
           }
           return <SparklesIcon />;
         })()}
-        <ChevronDownIcon />
+        <ChevronDownIcon className="export-menu-chevron" width={12} height={12} />
       </Button>
 
       {isOpen && (

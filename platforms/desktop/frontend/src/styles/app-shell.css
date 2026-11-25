@@ -443,6 +443,11 @@
   padding: 0 10px;
   border-radius: var(--radius-sm, 6px);
 }
+.project-pipeline-item-content .btn.btn-icon {
+  width: 32px;
+  min-inline-size: 32px;
+  padding: 0;
+}
 .project-selector-count {
   margin-left: auto;
   font-size: 11px;

@@ -199,6 +199,11 @@
   gap: var(--spacing-xs);
 }
 
+.btn.export-menu-trigger .export-menu-chevron {
+  width: 12px;
+  height: 12px;
+}
+
 .export-dropdown,
 .dropdown-menu {
   position: absolute;

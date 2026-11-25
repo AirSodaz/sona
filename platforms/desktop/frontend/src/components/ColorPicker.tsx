@@ -453,8 +453,8 @@ export function ColorPicker({
           />
           <div
             style={{
-              width: '26px',
-              height: '26px',
+              width: '28px',
+              height: '28px',
               borderRadius: '50%',
               backgroundColor: currentHex,
               border: '1px solid var(--color-border)',

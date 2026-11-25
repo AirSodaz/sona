@@ -1,4 +1,10 @@
-import { fireEvent, screen, render as testingLibraryRender, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  render as testingLibraryRender,
+  waitFor,
+} from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Match } from '../../../stores/searchStore';
@@ -123,14 +129,35 @@ describe('SegmentTokens', () => {
     expect(mockOnSeek).toHaveBeenCalledWith(0);
   });
 
-  it('uses the standard custom tooltip for timed tokens', () => {
-    render(<SegmentTokens segment={mockSegment} isActive={false} onSeek={mockOnSeek} />);
+  it('uses the standard custom tooltip for timed tokens on focus and hover', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <SegmentTokens segment={mockSegment} isActive={false} onSeek={mockOnSeek} />
+      );
 
-    const token = screen.getByText('Hello');
-    expect(token.getAttribute('title')).toBeNull();
-    fireEvent.focus(token);
-    expect(screen.getByRole('tooltip').textContent).toBe('Time: 0');
-    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+      const firstToken = screen.getByText('Hello');
+      const secondToken = screen.getByText('world');
+      expect(firstToken.getAttribute('title')).toBeNull();
+
+      fireEvent.focus(firstToken);
+      expect(screen.getByRole('tooltip').textContent).toBe('Time: 0');
+      expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+      fireEvent.blur(firstToken);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+
+      fireEvent.mouseOver(secondToken);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(screen.getByRole('tooltip').textContent).toBe('Time: 1');
+
+      fireEvent.mouseLeave(getSegmentRoot(container));
+      expect(screen.queryByRole('tooltip')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('highlights search matches correctly', () => {
