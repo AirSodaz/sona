@@ -91,7 +91,7 @@ export function SettingsAboutTab(): JSX.Element {
               <DownloadIcon className="w-5 h-5 text-primary" />
               <span>{t('settings.update_available', { version: updateInfo?.version })}</span>
             </div>
-            <Button tier="primary" size="sm" onClick={installUpdate}>
+            <Button tier="primary" onClick={installUpdate}>
               {t('settings.update_btn_install')}
             </Button>
           </div>
@@ -131,7 +131,7 @@ export function SettingsAboutTab(): JSX.Element {
               style={{ color: 'var(--color-success)' }}
             />
             <span>{t('settings.update_relaunch')}</span>
-            <Button tier="primary" size="sm" onClick={relaunchToUpdate}>
+            <Button tier="primary" onClick={relaunchToUpdate}>
               {t('settings.update_btn_relaunch')}
             </Button>
           </div>

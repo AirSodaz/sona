@@ -422,6 +422,19 @@ select,
   text-align: left;
 }
 
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+select,
+.dropdown-trigger {
+  min-block-size: 36px;
+  padding-block: 6px;
+}
+
 /* Suppress Edge / WebView2 native password reveal button */
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {

@@ -120,7 +120,6 @@ export function SettingsShortcutInput({
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <Button
         tier={isRecording ? 'primary' : 'secondary'}
-        size="sm"
         style={{ minWidth: '120px' }}
         onClick={() => setIsRecording(true)}
         onKeyDown={handleKeyDown}
@@ -131,7 +130,7 @@ export function SettingsShortcutInput({
       </Button>
       <IconButton
         tier="ghost"
-        size="xs"
+        size="md"
         icon={<FilePenLine size={16} />}
         onClick={() => {
           setTempValue(value);

@@ -688,8 +688,7 @@ export function UnifiedDictionarySection({
 
         <Button
           tier="primary"
-          size="xs"
-          leftIcon={<Plus size={14} />}
+          leftIcon={<Plus size={16} />}
           onClick={handleQuickAdd}
           disabled={!quickAddInput.trim()}
         >

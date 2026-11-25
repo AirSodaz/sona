@@ -202,7 +202,6 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               tier="primary"
-              size="sm"
               leftIcon={<Plus size={16} />}
               onClick={handleAddTemplate}
               disabled={!newTemplateName.trim() || !newTemplateInstructions.trim()}
@@ -253,7 +252,7 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
                 <IconButton
                   tier="ghost"
                   tone="danger"
-                  size="sm"
+                  size="md"
                   icon={<Trash2 size={16} />}
                   onClick={() => void handleDeleteTemplate(template.id)}
                   aria-label={t('common.delete_item', {

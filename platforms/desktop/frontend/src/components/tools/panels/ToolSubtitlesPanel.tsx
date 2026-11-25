@@ -329,11 +329,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 'Reset the caption floating window to the default bottom-center position.',
             })}
           >
-            <Button
-              tier="secondary"
-              size="sm"
-              onClick={() => void captionWindowService.resetPosition()}
-            >
+            <Button tier="secondary" onClick={() => void captionWindowService.resetPosition()}>
               {t('settings.caption_reset_position', {
                 defaultValue: 'Reset Window Position',
               })}
@@ -391,8 +387,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                   />
                   <IconButton
                     tier="secondary"
-                    size="sm"
-                    icon={<ArrowLeftRight size={14} />}
+                    size="md"
+                    icon={<ArrowLeftRight size={16} />}
                     onClick={handleSwapLanguages}
                     aria-label={t('settings.swap_translation_languages', {
                       defaultValue: 'Swap languages',

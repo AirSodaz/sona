@@ -667,17 +667,17 @@ export function SettingsApiServerTab(): React.JSX.Element {
             />
             <IconButton
               tier="ghost"
-              size="sm"
-              icon={<RefreshCw size={14} />}
+              size="md"
+              icon={<RefreshCw size={16} />}
               onClick={handleGenerateKey}
               tooltipPos="top"
               aria-label={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
             />
             <IconButton
               tier="ghost"
-              size="sm"
+              size="md"
               feedback={copied ? 'success' : 'idle'}
-              icon={copied ? <Check size={14} /> : <Copy size={14} />}
+              icon={copied ? <Check size={16} /> : <Copy size={16} />}
               onClick={handleCopyKey}
               tooltipPos="top"
               aria-label={

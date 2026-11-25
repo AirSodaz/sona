@@ -393,6 +393,7 @@
   min-width: 0;
 }
 .project-pipeline-item-content .dropdown-trigger {
+  min-block-size: 32px;
   min-height: 32px;
   height: 32px;
   font-size: 0.8125rem;
@@ -401,6 +402,7 @@
 }
 .project-pipeline-item-content input {
   flex: 1;
+  min-block-size: 32px;
   height: 32px;
   font-size: 0.8125rem;
   border-radius: var(--radius-sm, 6px);
@@ -411,6 +413,7 @@
 }
 .project-pipeline-item-content select {
   flex: 1;
+  min-block-size: 32px;
   height: 32px;
   font-size: 0.8125rem;
   border-radius: var(--radius-sm, 6px);
@@ -420,6 +423,7 @@
   padding: 0 10px;
 }
 .project-pipeline-item-content .btn {
+  min-block-size: 32px;
   height: 32px;
   font-size: 0.8125rem;
   padding: 0 10px;

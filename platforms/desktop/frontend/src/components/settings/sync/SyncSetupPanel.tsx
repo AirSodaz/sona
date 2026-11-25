@@ -695,10 +695,9 @@ export function SyncSetupPanel({
                   />
                   <Button
                     tier="secondary"
-                    size="sm"
                     loading={isTesting}
                     feedback={testSuccess ? 'success' : 'idle'}
-                    leftIcon={testSuccess ? <CheckCircle2 size={14} /> : <Server size={14} />}
+                    leftIcon={testSuccess ? <CheckCircle2 size={16} /> : <Server size={16} />}
                     onClick={handleTestConnection}
                     disabled={isBusy}
                     style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
@@ -812,10 +811,9 @@ export function SyncSetupPanel({
                   />
                   <Button
                     tier="secondary"
-                    size="sm"
                     loading={isTesting}
                     feedback={testSuccess ? 'success' : 'idle'}
-                    leftIcon={testSuccess ? <CheckCircle2 size={14} /> : <Server size={14} />}
+                    leftIcon={testSuccess ? <CheckCircle2 size={16} /> : <Server size={16} />}
                     onClick={handleTestConnection}
                     disabled={isBusy}
                     style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}

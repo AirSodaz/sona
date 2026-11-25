@@ -1412,7 +1412,6 @@ export function SettingsModelsTab({
                 {cudaStatus?.updateAvailable && cudaStatus.downloadUrl && !isMac && (
                   <Button
                     tier="secondary"
-                    size="sm"
                     style={{ marginTop: '6px' }}
                     loading={cudaDownloading}
                     onClick={async () => {
@@ -1479,7 +1478,6 @@ export function SettingsModelsTab({
       <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
         <Button
           tier="secondary"
-          size="sm"
           leftIcon={<RestoreIcon />}
           className="btn-restore-defaults"
           onClick={restoreDefaultModelSettings}

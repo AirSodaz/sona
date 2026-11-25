@@ -897,7 +897,6 @@ export function SettingsStorageTab(): React.JSX.Element {
             </div>
             <Button
               tier="secondary"
-              size="sm"
               loading={isUsageLoading}
               leftIcon={<RefreshCw size={16} />}
               className="settings-storage-refresh-button"
@@ -1073,7 +1072,6 @@ export function SettingsStorageTab(): React.JSX.Element {
               </p>
               <Button
                 tier="secondary"
-                size="sm"
                 loading={isClearingWebview}
                 disabled={webviewClearDisabled}
                 leftIcon={<Trash2 size={16} />}
@@ -1143,7 +1141,6 @@ export function SettingsStorageTab(): React.JSX.Element {
         >
           <Button
             tier="secondary"
-            size="sm"
             loading={isCleaning}
             disabled={manualCleanupDisabled}
             leftIcon={<Trash2 size={16} />}

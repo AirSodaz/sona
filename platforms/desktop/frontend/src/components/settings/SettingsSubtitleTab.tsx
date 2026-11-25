@@ -1095,11 +1095,7 @@ export function SettingsSubtitleTab({
                   'Reset the caption floating window to the default bottom-center position.',
               })}
             >
-              <Button
-                tier="secondary"
-                size="sm"
-                onClick={() => void captionWindowService.resetPosition()}
-              >
+              <Button tier="secondary" onClick={() => void captionWindowService.resetPosition()}>
                 {t('settings.caption_reset_position', {
                   defaultValue: 'Reset Window Position',
                 })}
@@ -1156,9 +1152,9 @@ export function SettingsSubtitleTab({
                     />
                     <IconButton
                       tier="secondary"
-                      size="sm"
+                      size="md"
                       id="swap-translation-languages"
-                      icon={<ArrowLeftRight size={14} />}
+                      icon={<ArrowLeftRight size={16} />}
                       aria-label={t('settings.swap_translation_languages', {
                         defaultValue: 'Swap languages',
                       })}
