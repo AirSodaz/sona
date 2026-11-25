@@ -507,7 +507,7 @@ export function TranslateButton({
         id="translate-menu-button"
         tier="ghost"
         size="md"
-        className="btn-icon"
+        className="export-menu-trigger"
         onClick={() => {
           if (isOpen) {
             closeMenu();

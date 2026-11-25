@@ -230,7 +230,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         id="polish-menu-button"
         tier="ghost"
         size="md"
-        className="btn-icon"
+        className="export-menu-trigger"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isRetranscribing}
         aria-haspopup="true"

@@ -194,6 +194,11 @@
   width: 100%;
 }
 
+.export-menu-trigger {
+  padding: 0 var(--spacing-sm);
+  gap: var(--spacing-xs);
+}
+
 .export-dropdown,
 .dropdown-menu {
   position: absolute;

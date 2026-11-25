@@ -104,12 +104,12 @@
   transform: scale(0.96);
 }
 
-.projects-fab-actions .projects-toolbar-icon.active:not(:disabled) {
+.projects-fab-actions .projects-toolbar-icon:is(.active, .is-active):not(:disabled) {
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
 }
 
-.projects-fab-actions .projects-toolbar-icon.active:hover:not(:disabled) {
+.projects-fab-actions .projects-toolbar-icon:is(.active, .is-active):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-primary) 18%, transparent);
   color: var(--color-primary);
 }

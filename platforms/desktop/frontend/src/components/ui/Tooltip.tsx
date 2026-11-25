@@ -223,12 +223,25 @@ export function Tooltip({
       tooltipRect.height || tooltipEl.offsetHeight || 0,
       placement
     );
-    setCoords(next);
+    setCoords((prev) =>
+      prev.top === next.top &&
+      prev.left === next.left &&
+      prev.resolvedPlacement === next.resolvedPlacement
+        ? prev
+        : next
+    );
   }, [placement]);
 
   useIsomorphicLayoutEffect(() => {
-    if (!isOpen || !hasContent) return undefined;
+    if (!isOpen || !hasContent) return;
+    // Reposition whenever the tooltip opens or its rendered content/wrapping changes.
+    void content;
+    void multiline;
     updatePosition();
+  }, [isOpen, hasContent, content, multiline, updatePosition]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen || !hasContent) return undefined;
 
     const handleScrollOrResize = () => hideTooltip();
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -245,7 +258,7 @@ export function Tooltip({
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [hideTooltip, isOpen, hasContent, updatePosition]);
+  }, [hideTooltip, isOpen, hasContent]);
 
   useEffect(() => {
     if (!hasContent && isOpen) {

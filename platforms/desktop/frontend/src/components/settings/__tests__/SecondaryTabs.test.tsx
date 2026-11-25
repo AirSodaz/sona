@@ -310,4 +310,26 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
       HTMLElement.prototype.getBoundingClientRect = origGetBoundingClientRect;
     }
   });
+
+  it('exposes a single tab stop on the Tooltip wrapper when disabled with a container tooltip', () => {
+    const { container } = render(
+      <SegmentedSubTabs
+        ariaLabel="Disabled Tabs"
+        items={segmentedItems}
+        activeTab="sub1"
+        onChange={vi.fn()}
+        disabled
+        tooltip="Disabled reason"
+      />
+    );
+
+    const wrapper = container.querySelector('.tooltip-disabled-wrap') as HTMLElement | null;
+    const tablist = screen.getByRole('tablist', { name: 'Disabled Tabs' });
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.getAttribute('tabindex')).toBe('0');
+    expect(tablist.hasAttribute('tabindex')).toBe(false);
+
+    fireEvent.focus(wrapper!);
+    expect(screen.getByRole('tooltip').textContent).toBe('Disabled reason');
+  });
 });

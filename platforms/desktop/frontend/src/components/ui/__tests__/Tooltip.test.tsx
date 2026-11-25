@@ -159,4 +159,75 @@ describe('Tooltip', () => {
     fireEvent.focus(target);
     expect(screen.getByRole('tooltip').textContent).toBe('Full file name.wav');
   });
+
+  it('recalculates coordinates when content changes while open', () => {
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(300);
+
+    const { rerender } = render(
+      <Tooltip content="50%" placement="top">
+        <button type="button">Volume</button>
+      </Tooltip>
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Volume' });
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      top: 200,
+      bottom: 228,
+      left: 220,
+      right: 260,
+      width: 40,
+      height: 28,
+      x: 220,
+      y: 200,
+      toJSON: () => ({}),
+    });
+
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('role') === 'tooltip') {
+          const isLong = (this.textContent?.length ?? 0) > 10;
+          const width = isLong ? 200 : 40;
+          return {
+            top: 0,
+            bottom: 24,
+            left: 0,
+            right: width,
+            width,
+            height: 24,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+        return {
+          top: 200,
+          bottom: 228,
+          left: 220,
+          right: 260,
+          width: 40,
+          height: 28,
+          x: 220,
+          y: 200,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+    try {
+      fireEvent.focus(trigger);
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip.style.left).toBe('220px');
+
+      rerender(
+        <Tooltip content="Connection failed: timeout" placement="top">
+          <button type="button">Volume</button>
+        </Tooltip>
+      );
+
+      expect(screen.getByRole('tooltip').style.left).toBe('92px');
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
 });

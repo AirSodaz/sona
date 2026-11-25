@@ -98,10 +98,10 @@ export function ProjectsToolbar({
 
         <div className="projects-filter-menu" ref={filterMenuRef}>
           <Button
-            tier="ghost"
+            tier="secondary"
             size="md"
             active={isFilterMenuOpen}
-            className={`btn-icon projects-toolbar-icon projects-filter-trigger ${hasActiveFilters ? 'has-active' : ''}`}
+            className={`projects-filter-trigger ${hasActiveFilters ? 'has-active' : ''}`}
             onClick={() => onSetFilterMenuOpen((value) => !value)}
             aria-haspopup="dialog"
             aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}

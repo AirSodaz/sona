@@ -195,7 +195,6 @@ export function SecondaryTabs<T extends string = string>({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       style={style}
-      tabIndex={disabled && tooltip ? 0 : undefined}
     >
       {hasSlider && hasMeasured && (
         <div className="settings-subtab-slider" style={sliderStyle} aria-hidden="true" />
