@@ -163,6 +163,7 @@
   border-radius: var(--radius-xs, 4px);
   margin-top: 2px;
   width: fit-content;
+  max-width: 100%;
 }
 
 .media-server-card-status.is-testing {
@@ -185,6 +186,15 @@
   height: 6px;
   border-radius: 50%;
   background-color: currentColor;
+  flex-shrink: 0;
+}
+
+.media-server-status-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Card Actions - aligned with ModelCard & LocalModelCard */

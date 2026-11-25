@@ -163,14 +163,6 @@
   text-align: left;
 }
 
-.tool-cli-btn-icon {
-  padding: 6px 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
 @media (max-width: 768px) {
   .tool-cli-path-tooltip-wrapper,
   .tool-cli-path-display-group .tool-cli-path-tooltip-wrapper,

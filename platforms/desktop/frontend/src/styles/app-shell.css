@@ -51,6 +51,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.project-selector-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+.project-selector-trigger[aria-expanded="true"] .project-selector-chevron,
+.project-selector-chevron.is-open {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-selector-chevron {
+    transition: none;
+  }
+}
 .project-color-dot {
   width: 8px;
   height: 8px;

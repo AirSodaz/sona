@@ -2,7 +2,7 @@
    Unified Slider Primitive (Warm Minimalism)
    ========================================================================== */
 
-.sona-slider {
+:where(.sona-slider) {
   --slider-track-size: 5px;
   --slider-thumb-size: 16px;
   --slider-hit-size: 24px;
@@ -176,7 +176,7 @@
 }
 
 @media (forced-colors: active) {
-  .sona-slider {
+  :where(.sona-slider) {
     --slider-track-bg: Canvas;
     --slider-fill-color: Highlight;
     --slider-thumb-bg: Highlight;

@@ -497,7 +497,7 @@ export function MediaServerManageModal({
                                     multiline
                                     onlyWhenTruncated
                                   >
-                                    <span>
+                                    <span className="media-server-status-text">
                                       {t('common.error', { defaultValue: 'Error' })}:{' '}
                                       {status.message}
                                     </span>

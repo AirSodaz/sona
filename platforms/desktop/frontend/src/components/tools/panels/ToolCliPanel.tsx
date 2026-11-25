@@ -502,7 +502,6 @@ export function ToolCliPanel(): React.JSX.Element {
                     tier="secondary"
                     size="sm"
                     feedback={copiedKey === 'binDir' ? 'success' : 'idle'}
-                    className="tool-cli-btn-icon"
                     icon={copiedKey === 'binDir' ? <Check size={13} /> : <Copy size={13} />}
                     onClick={() => status.binDir && copyToClipboard(status.binDir, 'binDir')}
                     aria-label={
@@ -514,7 +513,6 @@ export function ToolCliPanel(): React.JSX.Element {
                   <IconButton
                     tier="secondary"
                     size="sm"
-                    className="tool-cli-btn-icon"
                     icon={<FolderOpen size={13} />}
                     onClick={() => status.binDir && openDirectory(status.binDir)}
                     aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}

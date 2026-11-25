@@ -192,7 +192,11 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
               aria-label={t('projects.pipeline_enabled', { defaultValue: 'Pipeline enabled' })}
             />
           )}
-          <ChevronDownIcon width={14} height={14} />
+          <ChevronDownIcon
+            width={14}
+            height={14}
+            className={`project-selector-chevron ${open ? 'is-open' : ''}`.trim()}
+          />
         </button>
 
         {open && (

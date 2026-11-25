@@ -348,12 +348,9 @@
 
 /* --- Transient Feedback States (Success / Error) --- */
 
-.btn.btn-feedback-success:not(:disabled) {
-  color: var(--color-success);
-}
-
 .btn-secondary.btn-feedback-success:not(:disabled),
 .btn-ghost.btn-feedback-success:not(:disabled) {
+  color: var(--color-success);
   background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 
@@ -361,12 +358,9 @@
   border-color: color-mix(in srgb, var(--color-success) 42%, transparent);
 }
 
-.btn.btn-feedback-error:not(:disabled) {
-  color: var(--color-error);
-}
-
 .btn-secondary.btn-feedback-error:not(:disabled),
 .btn-ghost.btn-feedback-error:not(:disabled) {
+  color: var(--color-error);
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
 }
 

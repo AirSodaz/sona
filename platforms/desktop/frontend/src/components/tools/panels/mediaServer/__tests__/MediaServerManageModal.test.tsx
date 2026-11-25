@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as mediaServerService from '../../../../../services/mediaServer/mediaServerService';
@@ -190,5 +190,41 @@ describe('MediaServerManageModal', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Delete');
     expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
     fireEvent.blur(deleteBtn);
+  });
+
+  it('renders truncatable status text element and opens Portal Tooltip on truncated test error', async () => {
+    const longError =
+      'Connection refused after timeout while contacting remote media server endpoint';
+    vi.spyOn(mediaServerService, 'testMediaServerConnection').mockRejectedValue(
+      new Error(longError)
+    );
+
+    render(
+      <MediaServerManageModal
+        isOpen={true}
+        onClose={vi.fn()}
+        profiles={mockProfiles}
+        activeProfileId="emby-1"
+        onProfilesUpdated={vi.fn()}
+        onSelectActiveProfile={vi.fn()}
+      />
+    );
+
+    const testBtns = screen.getAllByRole('button', { name: /Test/i });
+    fireEvent.click(testBtns[0]);
+
+    const errorSpan = await screen.findByText(new RegExp(`Error: ${longError}`));
+    expect(errorSpan.className).toContain('media-server-status-text');
+
+    Object.defineProperty(errorSpan, 'clientWidth', { configurable: true, value: 180 });
+    Object.defineProperty(errorSpan, 'scrollWidth', { configurable: true, value: 420 });
+
+    fireEvent.mouseEnter(errorSpan);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 280));
+    });
+    const errorTooltip = screen.getAllByRole('tooltip').find((el) => el.textContent === longError);
+    expect(errorTooltip).toBeDefined();
+    expect(errorSpan.getAttribute('aria-describedby')).toBe(errorTooltip?.id);
   });
 });
