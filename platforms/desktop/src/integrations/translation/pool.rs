@@ -180,7 +180,6 @@ impl TranslationModelPool {
             }
         }
 
-        crate::integrations::register_shared_ort_environment();
         let adapter = Arc::new(OnnxNmtAdapter::new(Some(model_dir), 2));
         adapter.ensure_loaded()?;
 

@@ -714,6 +714,7 @@ fn aimux_call_options_maps_budget_thinking_for_anthropic_and_gemini() {
     assert_eq!(anthropic_thinking["type"], "enabled");
     assert_eq!(anthropic_thinking["budgetTokens"], 4096);
     assert!(anthropic_thinking.get("budget_tokens").is_none());
+    assert!(anthropic_provider_options.get("google").is_none());
 
     let mut gemini_req = request();
     gemini_req.config.strategy = LlmProviderStrategy::Gemini;
@@ -728,6 +729,7 @@ fn aimux_call_options_maps_budget_thinking_for_anthropic_and_gemini() {
         gemini_provider_options["google"]["thinkingConfig"]["thinkingBudget"],
         2048
     );
+    assert!(gemini_provider_options.get("anthropic").is_none());
 }
 
 fn spawn_single_json_mock(

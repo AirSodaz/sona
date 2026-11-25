@@ -509,15 +509,22 @@ pub fn build_aimux_call_options(
             }
             ThinkingLevel::Budget(budget) => {
                 options.reasoning = Some(ReasoningEffort::Medium);
-                let mut anthropic_map = serde_json::Map::new();
-                anthropic_map.insert(
-                    "thinking".to_string(),
-                    json!({
-                        "type": "enabled",
-                        "budgetTokens": budget
-                    }),
-                );
-                provider_options.insert("anthropic".to_string(), anthropic_map);
+                if matches!(
+                    request.config.strategy,
+                    LlmProviderStrategy::Anthropic
+                        | LlmProviderStrategy::AmazonBedrock
+                        | LlmProviderStrategy::OpenRouter
+                ) {
+                    let mut anthropic_map = serde_json::Map::new();
+                    anthropic_map.insert(
+                        "thinking".to_string(),
+                        json!({
+                            "type": "enabled",
+                            "budgetTokens": budget
+                        }),
+                    );
+                    provider_options.insert("anthropic".to_string(), anthropic_map);
+                }
                 if request.config.strategy == LlmProviderStrategy::Gemini {
                     insert_google_thinking_budget(&mut provider_options, budget);
                 }

@@ -132,6 +132,177 @@ pub fn detect_audio_mime_type(file_path: &Path) -> &'static str {
         _ => "audio/wav",
     }
 }
+fn non_empty_hotword_lines(request: &AsrTranscriptionRequest) -> Vec<&str> {
+    request
+        .hotwords
+        .as_deref()
+        .into_iter()
+        .flat_map(str::lines)
+        .map(str::trim)
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+fn insert_non_empty_map(
+    po: &mut SharedProviderOptions,
+    namespace: &str,
+    map: serde_json::Map<String, Value>,
+) {
+    if !map.is_empty() {
+        po.insert(namespace.to_string(), map);
+    }
+}
+
+/// Builds `SharedProviderOptions` containing only the namespace required by `provider_id`.
+fn build_asr_provider_options(
+    provider_id: &str,
+    request: &AsrTranscriptionRequest,
+) -> SharedProviderOptions {
+    let mut po = SharedProviderOptions::new();
+    let language = normalize_language_hint(&request.language);
+    let speaker_diarization_enabled = is_cloud_speaker_diarization_enabled(request);
+
+    match provider_id {
+        OPENAI_WHISPER_PROVIDER_ID | GROQ_WHISPER_PROVIDER_ID | MISTRAL_VOXTRAL_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            if let Some(hotwords) = request
+                .hotwords
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+            {
+                opts.insert(
+                    "prompt".to_string(),
+                    Value::String(hotwords.replace('\n', ", ")),
+                );
+            }
+            insert_non_empty_map(&mut po, "openai", opts);
+        }
+        VOLCENGINE_DOUBAO_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            opts.insert("enable_itn".to_string(), Value::Bool(request.enable_itn));
+            if speaker_diarization_enabled {
+                opts.insert("enable_speaker_info".to_string(), Value::Bool(true));
+            }
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            if let Some(hotwords) = request
+                .hotwords
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+            {
+                opts.insert("hotwords".to_string(), Value::String(hotwords.to_string()));
+            }
+            po.insert("volcengine".to_string(), opts);
+        }
+        DEEPGRAM_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if speaker_diarization_enabled {
+                opts.insert("diarize".to_string(), Value::Bool(true));
+                opts.insert("paragraphs".to_string(), Value::Bool(true));
+                opts.insert("utterances".to_string(), Value::Bool(true));
+            }
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            insert_non_empty_map(&mut po, "deepgram", opts);
+        }
+        ASSEMBLYAI_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if speaker_diarization_enabled {
+                opts.insert("speaker_labels".to_string(), Value::Bool(true));
+            }
+            if let Some(lang) = language {
+                opts.insert("language_code".to_string(), Value::String(lang));
+            }
+            let words = non_empty_hotword_lines(request);
+            if !words.is_empty() {
+                opts.insert("word_boost".to_string(), serde_json::json!(words));
+            }
+            insert_non_empty_map(&mut po, "assemblyai", opts);
+        }
+        ELEVENLABS_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if speaker_diarization_enabled {
+                opts.insert("diarize".to_string(), Value::Bool(true));
+            }
+            if let Some(lang) = language {
+                opts.insert("languageCode".to_string(), Value::String(lang));
+            }
+            insert_non_empty_map(&mut po, "elevenlabs", opts);
+        }
+        AZURE_SPEECH_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            opts.insert("api".to_string(), serde_json::json!("speech"));
+            if let Some(lang) = language {
+                opts.insert("locales".to_string(), serde_json::json!([lang]));
+            }
+            if speaker_diarization_enabled {
+                opts.insert(
+                    "diarization".to_string(),
+                    serde_json::json!({ "enabled": true }),
+                );
+            }
+            let words = non_empty_hotword_lines(request);
+            if !words.is_empty() {
+                opts.insert(
+                    "phraseList".to_string(),
+                    serde_json::json!({ "phrases": words }),
+                );
+            }
+            po.insert("azure".to_string(), opts);
+        }
+        FAL_WHISPER_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            opts.insert(
+                "diarize".to_string(),
+                Value::Bool(speaker_diarization_enabled),
+            );
+            po.insert("fal".to_string(), opts);
+        }
+        GOOGLE_GEMINI_ASR_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if let Some(lang) = language {
+                opts.insert("languageCodes".to_string(), serde_json::json!([lang]));
+            }
+            if speaker_diarization_enabled {
+                opts.insert("diarization".to_string(), Value::Bool(true));
+            }
+            let words = non_empty_hotword_lines(request);
+            if !words.is_empty() {
+                opts.insert("customVocabulary".to_string(), serde_json::json!(words));
+            }
+            insert_non_empty_map(&mut po, "google", opts);
+        }
+        GLADIA_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            if speaker_diarization_enabled {
+                opts.insert("diarization".to_string(), Value::Bool(true));
+            }
+            insert_non_empty_map(&mut po, "gladia", opts);
+        }
+        REVAI_PROVIDER_ID => {
+            let mut opts = serde_json::Map::new();
+            if let Some(lang) = language {
+                opts.insert("language".to_string(), Value::String(lang));
+            }
+            insert_non_empty_map(&mut po, "revai", opts);
+        }
+        _ => {}
+    }
+
+    po
+}
+
 fn normalize_language_hint(language: &str) -> Option<String> {
     let lang = language.trim();
     if lang.is_empty() || lang.eq_ignore_ascii_case("auto") {
@@ -617,209 +788,8 @@ pub async fn execute_aimux_batch(
 
     let buffered_samples = bytes.len() / 2;
     let mut call_options = TranscriptionCallOptions::new(AudioInput::Binary(bytes), media_type);
-    // Build provider options
-    let mut po = SharedProviderOptions::new();
-
-    // 1. OpenAI-compatible options
-    let mut openai_options = serde_json::Map::new();
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        openai_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    if let Some(hotwords) = input
-        .request
-        .hotwords
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        openai_options.insert(
-            "prompt".to_string(),
-            serde_json::Value::String(hotwords.replace('\n', ", ")),
-        );
-    }
-    if !openai_options.is_empty() {
-        po.insert("openai".to_string(), openai_options);
-    }
-
-    let speaker_diarization_enabled = is_cloud_speaker_diarization_enabled(&input.request);
-
-    // 2. Volcengine options
-    let mut volc_options = serde_json::Map::new();
-    volc_options.insert(
-        "enable_itn".to_string(),
-        serde_json::Value::Bool(input.request.enable_itn),
-    );
-    if speaker_diarization_enabled {
-        volc_options.insert(
-            "enable_speaker_info".to_string(),
-            serde_json::Value::Bool(true),
-        );
-    }
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        volc_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    if let Some(hotwords) = input
-        .request
-        .hotwords
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        volc_options.insert(
-            "hotwords".to_string(),
-            serde_json::Value::String(hotwords.to_string()),
-        );
-    }
-    po.insert("volcengine".to_string(), volc_options);
-
-    // 3. Deepgram options
-    let mut deepgram_options = serde_json::Map::new();
-    if speaker_diarization_enabled {
-        deepgram_options.insert("diarize".to_string(), serde_json::Value::Bool(true));
-        deepgram_options.insert("paragraphs".to_string(), serde_json::Value::Bool(true));
-        deepgram_options.insert("utterances".to_string(), serde_json::Value::Bool(true));
-    }
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        deepgram_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    if !deepgram_options.is_empty() {
-        po.insert("deepgram".to_string(), deepgram_options);
-    }
-
-    // 4. AssemblyAI options
-    let mut assemblyai_options = serde_json::Map::new();
-    if speaker_diarization_enabled {
-        assemblyai_options.insert("speaker_labels".to_string(), serde_json::Value::Bool(true));
-    }
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        assemblyai_options.insert(
-            "language_code".to_string(),
-            serde_json::Value::String(language),
-        );
-    }
-    if let Some(hotwords) = input
-        .request
-        .hotwords
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        let words = hotwords
-            .lines()
-            .map(str::trim)
-            .filter(|w| !w.is_empty())
-            .collect::<Vec<_>>();
-        if !words.is_empty() {
-            assemblyai_options.insert("word_boost".to_string(), serde_json::json!(words));
-        }
-    }
-    if !assemblyai_options.is_empty() {
-        po.insert("assemblyai".to_string(), assemblyai_options);
-    }
-
-    // 5. ElevenLabs options
-    let mut elevenlabs_options = serde_json::Map::new();
-    if speaker_diarization_enabled {
-        elevenlabs_options.insert("diarize".to_string(), serde_json::Value::Bool(true));
-    }
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        elevenlabs_options.insert(
-            "languageCode".to_string(),
-            serde_json::Value::String(language),
-        );
-    }
-    if !elevenlabs_options.is_empty() {
-        po.insert("elevenlabs".to_string(), elevenlabs_options);
-    }
-
-    // 6. Azure Speech options
-    let mut azure_options = serde_json::Map::new();
-    azure_options.insert("api".to_string(), serde_json::json!("speech"));
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        azure_options.insert("locales".to_string(), serde_json::json!([language]));
-    }
-    if speaker_diarization_enabled {
-        azure_options.insert(
-            "diarization".to_string(),
-            serde_json::json!({ "enabled": true }),
-        );
-    }
-    if let Some(hotwords) = input
-        .request
-        .hotwords
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        let words = hotwords
-            .lines()
-            .map(str::trim)
-            .filter(|w| !w.is_empty())
-            .collect::<Vec<_>>();
-        if !words.is_empty() {
-            azure_options.insert(
-                "phraseList".to_string(),
-                serde_json::json!({ "phrases": words }),
-            );
-        }
-    }
-    po.insert("azure".to_string(), azure_options);
-
-    // 7. FAL options
-    let mut fal_options = serde_json::Map::new();
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        fal_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    fal_options.insert(
-        "diarize".to_string(),
-        serde_json::Value::Bool(speaker_diarization_enabled),
-    );
-    po.insert("fal".to_string(), fal_options);
-
-    // 8. Google options
-    let mut google_options = serde_json::Map::new();
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        google_options.insert("languageCodes".to_string(), serde_json::json!([language]));
-    }
-    if speaker_diarization_enabled {
-        google_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
-    }
-    if let Some(hotwords) = input
-        .request
-        .hotwords
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        let words = hotwords
-            .lines()
-            .map(str::trim)
-            .filter(|w| !w.is_empty())
-            .collect::<Vec<_>>();
-        if !words.is_empty() {
-            google_options.insert("customVocabulary".to_string(), serde_json::json!(words));
-        }
-    }
-    if !google_options.is_empty() {
-        po.insert("google".to_string(), google_options);
-    }
-
-    // 9. Gladia options
-    let mut gladia_options = serde_json::Map::new();
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        gladia_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    if speaker_diarization_enabled {
-        gladia_options.insert("diarization".to_string(), serde_json::Value::Bool(true));
-    }
-    if !gladia_options.is_empty() {
-        po.insert("gladia".to_string(), gladia_options);
-    }
-
-    // 10. Rev.ai options
-    let mut revai_options = serde_json::Map::new();
-    if let Some(language) = normalize_language_hint(&input.request.language) {
-        revai_options.insert("language".to_string(), serde_json::Value::String(language));
-    }
-    if !revai_options.is_empty() {
-        po.insert("revai".to_string(), revai_options);
-    }
-
+    let provider_id = resolve_online_asr_provider_id(&input.request)?;
+    let po = build_asr_provider_options(provider_id, &input.request);
     if !po.is_empty() {
         call_options.provider_options = Some(po);
     }
@@ -829,6 +799,7 @@ pub async fn execute_aimux_batch(
         .await
         .map_err(map_aimux_asr_error)?;
 
+    let speaker_diarization_enabled = is_cloud_speaker_diarization_enabled(&input.request);
     let segments = if speaker_diarization_enabled
         && let Some(raw_body) = result.response.body.as_ref()
         && let Some(parsed) = parse_raw_provider_segments(model.provider(), raw_body)
@@ -2634,6 +2605,31 @@ mod tests {
                 })
                 .to_string(),
                 "hello openai",
+                "openai",
+            ),
+            (
+                GROQ_WHISPER_PROVIDER_ID,
+                "whisper-large-v3-turbo",
+                json!({
+                    "text": "hello groq",
+                    "language": "en",
+                    "duration": 1.0
+                })
+                .to_string(),
+                "hello groq",
+                "openai",
+            ),
+            (
+                MISTRAL_VOXTRAL_PROVIDER_ID,
+                "mistral-small-latest",
+                json!({
+                    "text": "hello mistral",
+                    "language": "en",
+                    "duration": 1.0
+                })
+                .to_string(),
+                "hello mistral",
+                "openai",
             ),
             (
                 DEEPGRAM_PROVIDER_ID,
@@ -2649,6 +2645,20 @@ mod tests {
                 })
                 .to_string(),
                 "hello deepgram",
+                "deepgram",
+            ),
+            (
+                ELEVENLABS_PROVIDER_ID,
+                "scribe_v1",
+                json!({
+                    "language_code": "en",
+                    "language_probability": 0.99,
+                    "text": "hello elevenlabs",
+                    "words": []
+                })
+                .to_string(),
+                "hello elevenlabs",
+                "elevenlabs",
             ),
             (
                 AZURE_SPEECH_PROVIDER_ID,
@@ -2665,10 +2675,26 @@ mod tests {
                 })
                 .to_string(),
                 "hello azure",
+                "azure",
+            ),
+            (
+                GOOGLE_GEMINI_ASR_PROVIDER_ID,
+                "gemini-3.5-transcribe",
+                json!({
+                    "steps": [{
+                        "content": [{
+                            "type": "text",
+                            "text": "hello google"
+                        }]
+                    }]
+                })
+                .to_string(),
+                "hello google",
+                "google",
             ),
         ];
 
-        for (provider_id, model_id, response_body, expected_text) in cases {
+        for (provider_id, model_id, response_body, expected_text, expected_namespace) in cases {
             let (addr, server) = spawn_asr_json_mock(response_body);
             let mut request = online_request(
                 provider_id,
@@ -2681,6 +2707,13 @@ mod tests {
             );
             request.language = "en".to_string();
             request.hotwords = Some("Sona, aimux".to_string());
+
+            let po = build_asr_provider_options(provider_id, &request);
+            assert_eq!(
+                po.keys().map(String::as_str).collect::<Vec<_>>(),
+                vec![expected_namespace],
+                "{provider_id}: expected only {expected_namespace} namespace in provider_options"
+            );
 
             let model = create_aimux_transcription_model(&request).unwrap();
             let output = execute_aimux_batch(

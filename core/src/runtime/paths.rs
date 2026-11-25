@@ -28,6 +28,26 @@ pub fn find_executable_ancestor_file(filename: &str, max_ancestor_hops: usize) -
     find_file_in_ancestors(start_dir, filename, max_ancestor_hops)
 }
 
+/// Resolves a bundled ONNX Runtime shared library near the executable when `ORT_DYLIB_PATH` is unset.
+pub fn resolve_bundled_onnxruntime_dylib() -> Option<PathBuf> {
+    #[cfg(target_os = "android")]
+    {
+        None
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        if !std::env::var_os("ORT_DYLIB_PATH").is_none_or(|v| v.is_empty()) {
+            return None;
+        }
+        let dylib_name = format!(
+            "{}onnxruntime{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        );
+        find_executable_ancestor_file(&dylib_name, 5)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::find_file_in_ancestors;

@@ -2,54 +2,26 @@ use crate::tokenizer::SentencePieceTokenizer;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Value;
 use sona_core::ports::translation::TranslationPortError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-pub type OrtEnvironment = std::sync::Arc<ort::environment::Environment>;
-pub type OrtResult<T> = ort::Result<T>;
-pub type OrtEnvProvider = fn() -> OrtResult<OrtEnvironment>;
+static ORT_DYLIB_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-static ORT_ENV_PROVIDER: OnceLock<OrtEnvProvider> = OnceLock::new();
-static ORT_ENV: Mutex<Option<OrtEnvironment>> = Mutex::new(None);
-
-/// Registers a host-provided factory so multiple ORT crates can share one process environment.
-pub fn register_ort_environment_provider(provider: OrtEnvProvider) {
-    let _ = ORT_ENV_PROVIDER.set(provider);
-}
-
-fn create_default_ort_environment() -> OrtResult<OrtEnvironment> {
-    #[cfg(not(target_os = "android"))]
-    if std::env::var_os("ORT_DYLIB_PATH").is_none_or(|v| v.is_empty()) {
-        let dylib_name = format!(
-            "{}onnxruntime{}",
-            std::env::consts::DLL_PREFIX,
-            std::env::consts::DLL_SUFFIX
-        );
-        if let Some(dylib_path) =
-            sona_core::runtime::paths::find_executable_ancestor_file(&dylib_name, 5)
-        {
-            let _ = ort::init_from(&dylib_path)
-                .map_err(|e| ort::Error::new(e.to_string()))?
-                .commit();
-            return ort::environment::Environment::current();
-        }
+/// Ensures the global ONNX Runtime library and environment are initialized without retaining a
+/// static `Arc<Environment>`, allowing `ort`'s exit hook to call `ReleaseEnv` cleanly.
+fn ensure_ort_initialized() -> Result<(), TranslationPortError> {
+    let dylib_path =
+        ORT_DYLIB_PATH.get_or_init(sona_core::runtime::paths::resolve_bundled_onnxruntime_dylib);
+    if let Some(dylib_path) = dylib_path {
+        let _ = ort::init_from(dylib_path)
+            .map_err(|e| TranslationPortError::engine_failed(e.to_string()))?
+            .commit();
+    } else {
+        let _ = ort::init().commit();
     }
-    let _ = ort::init().commit();
     ort::environment::Environment::current()
-}
-
-fn shared_ort_environment() -> Result<OrtEnvironment, TranslationPortError> {
-    let mut guard = ORT_ENV.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(env) = guard.as_ref() {
-        return Ok(env.clone());
-    }
-    let env = match ORT_ENV_PROVIDER.get() {
-        Some(provider) => provider(),
-        None => create_default_ort_environment(),
-    }
-    .map_err(TranslationPortError::engine_failed)?;
-    *guard = Some(env.clone());
-    Ok(env)
+        .map(|_| ())
+        .map_err(TranslationPortError::engine_failed)
 }
 
 #[derive(Clone, Debug)]
@@ -117,7 +89,7 @@ impl OnnxNmtModel {
         target_tokenizer
             .load_vocab(&vocab_path)
             .map_err(TranslationPortError::tokenization_failed)?;
-        let _env = shared_ort_environment()?;
+        ensure_ort_initialized()?;
         let encoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
