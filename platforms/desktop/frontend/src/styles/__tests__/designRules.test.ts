@@ -112,7 +112,7 @@ describe('Desktop Design System Rules Guardrails', () => {
       (file) => path.basename(file) !== 'tokens.css'
     );
     const forbiddenColorRe =
-      /(#646cff|#0a84ff|#007aff|#6366f1|#60a5fa|#4a9eff|background(?:-color)?:\s*var\(--color-(?:accent-primary|primary)\))/i;
+      /(#646cff|#0a84ff|#007aff|#6366f1|#60a5fa|#4a9eff|#2563eb|#2b7fff|--color-accent-blue|background(?:-color)?:\s*var\(--color-(?:accent-primary|primary)\))/i;
 
     const violations: string[] = [];
     for (const file of cssFiles) {

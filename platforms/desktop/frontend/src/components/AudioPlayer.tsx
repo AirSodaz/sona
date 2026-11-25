@@ -12,6 +12,7 @@ import { SeekSlider } from './audio-player/SeekSlider';
 import { TimeDisplay } from './audio-player/TimeDisplay';
 import { MuteIcon, PauseIcon, PlayFilledIcon, VolumeIcon } from './Icons';
 import { Button, IconButton } from './ui/Button';
+import { Slider } from './ui/Slider';
 import { Tooltip } from './ui/Tooltip';
 
 /** Props for AudioPlayer. */
@@ -197,9 +198,9 @@ export function AudioPlayer({
           tooltipPos="top"
         />
         <Tooltip content={`${Math.round(volume * 100)}%`} placement="top">
-          <input
-            type="range"
-            className="audio-slider audio-slider-volume"
+          <Slider
+            size="sm"
+            className="audio-slider-volume"
             min={0}
             max={1}
             step={0.01}

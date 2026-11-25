@@ -30,6 +30,7 @@ import {
 } from '../../settings/SettingsLayout';
 import { SettingsShortcutInput } from '../../settings/SettingsShortcutInput';
 import { Button, IconButton } from '../../ui/Button';
+import { Slider } from '../../ui/Slider';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 
 const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4ade80', '#f87171'];
@@ -477,15 +478,13 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
         >
           <SettingsItem title={t('live.window_width', { defaultValue: 'Floating Window Width' })}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
+              <Slider
                 min="400"
                 max="1600"
                 step="10"
                 value={captionWindowWidth}
                 onChange={(e) => updateConfig({ captionWindowWidth: Number(e.target.value) })}
                 aria-label={t('live.window_width', { defaultValue: 'Floating Window Width' })}
-                className="settings-slider"
                 style={{ width: '160px' }}
               />
               <span
@@ -502,15 +501,13 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
+              <Slider
                 min="14"
                 max="48"
                 step="1"
                 value={captionFontSize}
                 onChange={(e) => updateConfig({ captionFontSize: Number(e.target.value) })}
                 aria-label={t('live.original_font_size', { defaultValue: 'Original Font Size' })}
-                className="settings-slider"
                 style={{ width: '160px' }}
               />
               <span
@@ -540,8 +537,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="range"
+              <Slider
                 min="12"
                 max="48"
                 step="1"
@@ -557,7 +553,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 aria-label={t('live.translation_font_size', {
                   defaultValue: 'Translation Font Size',
                 })}
-                className="settings-slider"
                 style={{ width: '160px' }}
               />
               <span
@@ -596,8 +591,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             title={t('live.background_opacity', { defaultValue: 'Background Opacity' })}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-              <input
-                type="range"
+              <Slider
                 min="0"
                 max="100"
                 step="1"
@@ -606,7 +600,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                   updateConfig({ captionBackgroundOpacity: Number(e.target.value) / 100 })
                 }
                 aria-label={t('live.background_opacity', { defaultValue: 'Background Opacity' })}
-                className="settings-slider"
                 style={{ flex: 1 }}
               />
               <span
@@ -669,14 +662,12 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 title={t('settings.caption_stroke_width', { defaultValue: 'Stroke Width' })}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-                  <input
-                    type="range"
+                  <Slider
                     min="1"
                     max="5"
                     step="0.5"
                     value={captionStrokeWidth}
                     onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
-                    className="settings-slider"
                     style={{ flex: 1 }}
                     aria-label={t('settings.caption_stroke_width', {
                       defaultValue: 'Stroke Width',
@@ -728,14 +719,12 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             })}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-              <input
-                type="range"
+              <Slider
                 min="1"
                 max="10"
                 step="0.5"
                 value={captionDisappearDelay}
                 onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
-                className="settings-slider"
                 style={{ flex: 1 }}
                 aria-label={t('settings.caption_disappear_delay', {
                   defaultValue: 'Disappear Delay',

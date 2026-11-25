@@ -31,6 +31,7 @@ import type {
 } from '../../../types/transcript';
 import { Dropdown } from '../../Dropdown';
 import { Button } from '../../ui/Button';
+import { Slider } from '../../ui/Slider';
 import {
   getCurrentLlmSettings,
   getModelPlaceholder,
@@ -1085,9 +1086,9 @@ export function FeatureCard({
                     1.0
                   </Button>
                 )}
-                <input
+                <Slider
                   id={`feature-temp-slider-${featureId}`}
-                  type="range"
+                  size="sm"
                   className="feature-temperature-slider"
                   min={0}
                   max={2}
@@ -1095,11 +1096,6 @@ export function FeatureCard({
                   value={temperature}
                   onChange={(e) => handleTempChange(parseFloat(e.target.value))}
                   aria-label={`${title} ${t('settings.llm.temperature')}`}
-                  style={
-                    {
-                      '--temperature-progress': `${(temperature / 2) * 100}%`,
-                    } as React.CSSProperties
-                  }
                 />
                 <input
                   id={`feature-temp-${featureId}`}

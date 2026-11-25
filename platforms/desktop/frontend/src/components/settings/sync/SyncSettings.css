@@ -285,13 +285,13 @@
 }
 
 .sync-banner-box.is-info {
-  background: color-mix(in srgb, var(--color-info, #2b7fff) 8%, var(--color-bg-primary));
-  border: 1px solid color-mix(in srgb, var(--color-info, #2b7fff) 20%, var(--color-border));
+  background: color-mix(in srgb, var(--color-info) 8%, var(--color-bg-primary));
+  border: 1px solid color-mix(in srgb, var(--color-info) 20%, var(--color-border));
   color: var(--color-text-secondary);
 }
 
 .sync-banner-box.is-info svg {
-  color: var(--color-info, #2b7fff);
+  color: var(--color-info);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -1570,7 +1570,7 @@ input[type="password"]::-ms-clear {
 }
 
 .sync-conflict-version-col.is-local {
-  border-top: 3px solid var(--color-info, #2b7fff);
+  border-top: 3px solid var(--color-info);
 }
 
 .sync-conflict-version-col.is-remote {
@@ -1595,7 +1595,7 @@ input[type="password"]::-ms-clear {
 }
 
 .sync-conflict-version-col.is-local .sync-conflict-col-header svg {
-  color: var(--color-info, #2b7fff);
+  color: var(--color-info);
 }
 
 .sync-conflict-version-col.is-remote .sync-conflict-col-header svg {

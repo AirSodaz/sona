@@ -35,7 +35,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-info) 24%, transparent);
 }
 
 .notification-center-panel {
@@ -235,7 +235,7 @@
 }
 
 .notification-center-item {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -279,7 +279,7 @@
 }
 
 .notification-center-item-tone-recovery {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
 }
 
 .notification-center-item-tone-automation-failure {
@@ -316,7 +316,7 @@
 }
 
 .notification-center-item-tone-accent {
-  --notification-center-accent: #2563eb;
+  --notification-center-accent: var(--color-brand);
 }
 
 .notification-center-item-header {

@@ -161,38 +161,14 @@
   min-width: 50px;
 }
 
-.audio-slider {
+.audio-timeline-slider {
   flex: 1;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-bg-tertiary);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-}
-
-.audio-slider:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-}
-
-.audio-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  background: var(--color-switch-checked);
-  border: 1.5px solid var(--color-bg-elevated);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform var(--transition-fast);
-}
-
-.audio-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  min-width: 0;
 }
 
 .audio-slider-volume {
   width: 80px;
+  flex-shrink: 0;
 }
 
 /* ===========================

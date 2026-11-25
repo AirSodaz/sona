@@ -14,7 +14,6 @@
   --color-accent-secondary: #e6e6e6;
   --color-accent-gradient: linear-gradient(135deg, #2f2f2f 0%, #575757 100%);
   --color-accent-glow: rgba(0, 0, 0, 0.05);
-  --color-accent-blue: #2563eb;
   --color-accent-purple: #7c3aed;
   --color-text-primary: #37352f;
   --color-text-secondary: #787774;
@@ -154,7 +153,6 @@
   --color-accent-secondary: #474747;
   --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
   --color-accent-glow: rgba(255, 255, 255, 0.05);
-  --color-accent-blue: #3b82f6;
   --color-accent-purple: #8b5cf6;
   --color-text-primary: #d4d4d4;
   --color-text-secondary: #9b9a97;

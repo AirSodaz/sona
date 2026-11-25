@@ -305,7 +305,7 @@
   outline-offset: 1px;
   border-color: var(--color-primary);
   background: var(--color-bg-hover);
-  box-shadow: var(--apple-control-focus-ring, 0 0 0 2px rgba(59, 130, 246, 0.5));
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .provider-picker-meta {
@@ -916,110 +916,8 @@ html[data-theme="dark"] .provider-mode-option.selected {
 }
 
 .feature-temperature-slider {
-  --temperature-track: color-mix(in srgb, var(--color-text-muted) 24%, var(--color-bg-secondary));
-  --temperature-fill: color-mix(
-    in srgb,
-    var(--color-text-primary) 84%,
-    var(--color-text-secondary)
-  );
-  --temperature-thumb: color-mix(
-    in srgb,
-    var(--color-text-primary) 90%,
-    var(--color-text-secondary)
-  );
-  --temperature-thumb-hover: color-mix(
-    in srgb,
-    var(--color-text-primary) 82%,
-    var(--color-text-secondary)
-  );
-  --temperature-focus-ring: color-mix(in srgb, var(--color-border-hover) 72%, transparent);
-  --temperature-progress: 50%;
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 18px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background:
-    radial-gradient(circle closest-side, var(--temperature-fill) 96%, transparent)
-    var(--temperature-progress) center / 12px 12px no-repeat,
-    linear-gradient(var(--temperature-fill), var(--temperature-fill)) left center /
-    var(--temperature-progress) 5px no-repeat,
-    linear-gradient(to right, var(--temperature-track) 0 100%) center / 100% 5px no-repeat;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.feature-temperature-slider:focus {
-  outline: none;
-}
-
-.feature-temperature-slider:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-  border-radius: var(--radius-full);
-}
-
-.feature-temperature-slider::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: transparent;
-}
-
-.feature-temperature-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -3.5px;
-  border: none;
-  border-radius: 50%;
-  background: var(--temperature-thumb);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  transition:
-    transform var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.feature-temperature-slider:hover::-webkit-slider-thumb {
-  transform: scale(1.08);
-  background: var(--temperature-thumb-hover);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
-}
-
-.feature-temperature-slider::-moz-range-track {
-  height: 5px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--temperature-track);
-}
-
-.feature-temperature-slider::-moz-range-progress {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: var(--temperature-fill);
-}
-
-.feature-temperature-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: none;
-  border-radius: 50%;
-  background: var(--temperature-thumb);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  transition:
-    transform var(--transition-fast),
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.feature-temperature-slider:hover::-moz-range-thumb {
-  transform: scale(1.08);
-  background: var(--temperature-thumb-hover);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
+  width: 136px;
+  flex-shrink: 0;
 }
 
 .feature-temperature-number {

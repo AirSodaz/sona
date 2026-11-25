@@ -403,10 +403,10 @@ export function VoiceTypingOverlay() {
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
       border: isTranslating
-        ? '1px solid rgba(59, 130, 246, 0.6)'
+        ? '1px solid color-mix(in srgb, var(--color-brand) 60%, transparent)'
         : '1px solid rgba(168, 85, 247, 0.6)',
       boxShadow: isTranslating
-        ? '0 8px 24px -4px rgba(59, 130, 246, 0.35), 0 2px 6px rgba(59, 130, 246, 0.2)'
+        ? '0 8px 24px -4px var(--color-brand-glow), 0 2px 6px var(--color-brand-light)'
         : '0 8px 24px -4px rgba(168, 85, 247, 0.35), 0 2px 6px rgba(168, 85, 247, 0.2)',
     };
   } else if (isSegment) {
@@ -642,7 +642,7 @@ export function VoiceTypingOverlay() {
                     : isPolishing
                       ? 'linear-gradient(180deg, #c084fc 0%, #9333ea 100%)'
                       : isTranslating
-                        ? 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)'
+                        ? 'linear-gradient(180deg, color-mix(in srgb, var(--color-brand) 72%, white) 0%, var(--color-brand) 100%)'
                         : isSegment
                           ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
                           : '#4ade80',
@@ -702,7 +702,9 @@ export function VoiceTypingOverlay() {
             </span>
           ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
-          {isTranslating && <Sparkles size={14} color="#3b82f6" style={{ flexShrink: 0 }} />}
+          {isTranslating && (
+            <Sparkles size={14} color="var(--color-brand)" style={{ flexShrink: 0 }} />
+          )}
           <div
             style={{
               display: 'flex',

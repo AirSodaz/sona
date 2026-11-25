@@ -45,6 +45,7 @@ import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
+import { Slider } from '../ui/Slider';
 import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
   ScenarioCardTabs,
@@ -758,15 +759,15 @@ export function VoiceTypingHistorySection(): React.JSX.Element {
                         background:
                           item.mode === 'polish'
                             ? 'rgba(168, 85, 247, 0.12)'
-                            : 'rgba(59, 130, 246, 0.12)',
+                            : 'var(--color-brand-light)',
                         color:
                           item.mode === 'polish'
                             ? 'var(--color-accent-purple, #a855f7)'
-                            : 'var(--color-accent-blue, #3b82f6)',
+                            : 'var(--color-brand)',
                         border:
                           item.mode === 'polish'
                             ? '1px solid rgba(168, 85, 247, 0.25)'
-                            : '1px solid rgba(59, 130, 246, 0.25)',
+                            : '1px solid color-mix(in srgb, var(--color-brand) 25%, transparent)',
                       }}
                     >
                       {item.mode === 'polish'
@@ -1296,8 +1297,7 @@ export function SettingsSubtitleTab({
 
             <SettingsItem title={t('live.background_opacity')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-                <input
-                  type="range"
+                <Slider
                   min="0"
                   max="100"
                   step="1"
@@ -1305,7 +1305,7 @@ export function SettingsSubtitleTab({
                   onChange={(e) =>
                     updateConfig({ captionBackgroundOpacity: Number(e.target.value) / 100 })
                   }
-                  className="settings-slider"
+                  aria-label={t('live.background_opacity')}
                   style={{ flex: 1 }}
                 />
                 <span
@@ -1369,14 +1369,15 @@ export function SettingsSubtitleTab({
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}
                   >
-                    <input
-                      type="range"
+                    <Slider
                       min="1"
                       max="5"
                       step="0.5"
                       value={captionStrokeWidth}
                       onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
-                      className="settings-slider"
+                      aria-label={t('settings.caption_stroke_width', {
+                        defaultValue: 'Stroke Width',
+                      })}
                       style={{ flex: 1 }}
                     />
                     <span
@@ -1425,14 +1426,15 @@ export function SettingsSubtitleTab({
               })}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
-                <input
-                  type="range"
+                <Slider
                   min="1"
                   max="10"
                   step="0.5"
                   value={captionDisappearDelay}
                   onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
-                  className="settings-slider"
+                  aria-label={t('settings.caption_disappear_delay', {
+                    defaultValue: 'Disappear Delay',
+                  })}
                   style={{ flex: 1 }}
                 />
                 <span
