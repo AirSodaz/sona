@@ -147,10 +147,11 @@ describe('NotificationCard Collapsible Feature', () => {
     expect(screen.getByRole('button', { name: 'Hide details' })).toBeDefined();
 
     // Copy detail button works
-    // Copy detail button works and does NOT have a tooltip (neither title nor data-tooltip)
+    // Copy detail button works and does NOT have a tooltip (neither title nor Portal tooltip)
     const copyBtn = screen.getByRole('button', { name: 'Copy details' });
     expect(copyBtn.getAttribute('title')).toBeNull();
-    expect(copyBtn.getAttribute('data-tooltip')).toBeNull();
+    fireEvent.focus(copyBtn);
+    expect(screen.queryByRole('tooltip')).toBeNull();
     await act(async () => {
       fireEvent.click(copyBtn);
     });
@@ -159,7 +160,7 @@ describe('NotificationCard Collapsible Feature', () => {
     expect(screen.getByText('Copied')).toBeDefined();
   });
 
-  it('renders close button with unified project data-tooltip and no native title', () => {
+  it('renders close button with unified Portal tooltip and no native title', () => {
     const onClose = vi.fn();
     const entry = createMockEntry({
       closeAction: {
@@ -175,9 +176,10 @@ describe('NotificationCard Collapsible Feature', () => {
       '.notification-center-item-close'
     ) as HTMLButtonElement;
     expect(closeBtn).not.toBeNull();
-    expect(closeBtn.getAttribute('data-tooltip')).toBe('Dismiss notification');
-    expect(closeBtn.getAttribute('data-tooltip-pos')).toBe('left');
     expect(closeBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(closeBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Dismiss notification');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('left');
 
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledTimes(1);

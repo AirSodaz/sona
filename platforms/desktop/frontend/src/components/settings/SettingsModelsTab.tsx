@@ -43,6 +43,7 @@ import { Dropdown } from '../Dropdown';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { Button } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
 import { LocalModelManagementSection } from './LocalModelManagementSection';
 import {
@@ -697,10 +698,10 @@ export function SettingsModelsTab({
                   rightIcon={<ArrowRight size={13} />}
                   className="settings-speaker-profiles-btn"
                   onClick={() => navContext?.navigateToTab('vocabulary')}
-                  data-tooltip={t('settings.speaker_manage_profiles', {
+                  tooltip={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
-                  data-tooltip-pos="top"
+                  tooltipPos="top"
                   aria-label={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
@@ -923,10 +924,10 @@ export function SettingsModelsTab({
                   rightIcon={<ArrowRight size={13} />}
                   className="settings-speaker-profiles-btn"
                   onClick={() => navContext?.navigateToTab('vocabulary')}
-                  data-tooltip={t('settings.speaker_manage_profiles', {
+                  tooltip={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
-                  data-tooltip-pos="top"
+                  tooltipPos="top"
                   aria-label={t('settings.speaker_manage_profiles', {
                     defaultValue: 'Manage Voiceprints',
                   })}
@@ -1399,14 +1400,13 @@ export function SettingsModelsTab({
                           (cudaStatus?.requiredVersion ?? '—'),
                       })}
                   {cudaStatusError && (
-                    <span
-                      title={cudaStatusError}
-                      style={{ display: 'block', color: 'var(--color-warning)' }}
-                    >
-                      {t('settings.cuda_addon_update_unavailable', {
-                        defaultValue: 'Unable to check compatible addon version.',
-                      })}
-                    </span>
+                    <Tooltip content={cudaStatusError} placement="top" multiline>
+                      <span style={{ display: 'block', color: 'var(--color-warning)' }}>
+                        {t('settings.cuda_addon_update_unavailable', {
+                          defaultValue: 'Unable to check compatible addon version.',
+                        })}
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
                 {cudaStatus?.updateAvailable && cudaStatus.downloadUrl && !isMac && (

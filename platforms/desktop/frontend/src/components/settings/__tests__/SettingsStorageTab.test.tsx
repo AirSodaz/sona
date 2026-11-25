@@ -468,25 +468,31 @@ describe('SettingsStorageTab', () => {
     expect(screen.getByText('/default/data')).toBeTruthy();
     expect(screen.getByText('/default/data/models')).toBeTruthy();
 
-    const dataPathBox = dataCard.querySelector('.settings-storage-path-box');
-    expect(dataPathBox?.getAttribute('title')).toBeNull();
-    expect(dataPathBox?.getAttribute('data-tooltip')).toBe('/default/data');
-    expect(dataPathBox?.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(dataPathBox?.hasAttribute('data-tooltip-multiline')).toBe(true);
+    const dataPathBox = dataCard.querySelector('.settings-storage-path-box') as HTMLElement;
+    expect(dataPathBox.getAttribute('title')).toBeNull();
+    fireEvent.focus(dataPathBox);
+    expect(screen.getByRole('tooltip').textContent).toBe('/default/data');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    expect(screen.getByRole('tooltip').className).toContain('tooltip-portal--multiline');
+    fireEvent.blur(dataPathBox);
 
-    const modelsPathBox = modelsCard.querySelector('.settings-storage-path-box');
-    expect(modelsPathBox?.getAttribute('title')).toBeNull();
-    expect(modelsPathBox?.getAttribute('data-tooltip')).toBe('/default/data/models');
-    expect(modelsPathBox?.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(modelsPathBox?.hasAttribute('data-tooltip-multiline')).toBe(true);
+    const modelsPathBox = modelsCard.querySelector('.settings-storage-path-box') as HTMLElement;
+    expect(modelsPathBox.getAttribute('title')).toBeNull();
+    fireEvent.focus(modelsPathBox);
+    expect(screen.getByRole('tooltip').textContent).toBe('/default/data/models');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    expect(screen.getByRole('tooltip').className).toContain('tooltip-portal--multiline');
+    fireEvent.blur(modelsPathBox);
 
     const dataOpenBtn = dataCard.querySelectorAll('button')[1];
     expect(dataOpenBtn?.getAttribute('title')).toBeNull();
-    expect(dataOpenBtn?.getAttribute('data-tooltip')).toBeNull();
+    fireEvent.focus(dataOpenBtn);
+    expect(screen.queryByRole('tooltip')).toBeNull();
 
     const modelsOpenBtn = modelsCard.querySelectorAll('button')[1];
     expect(modelsOpenBtn?.getAttribute('title')).toBeNull();
-    expect(modelsOpenBtn?.getAttribute('data-tooltip')).toBeNull();
+    fireEvent.focus(modelsOpenBtn);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   it('allows changing data directory and confirms with hot reload', async () => {

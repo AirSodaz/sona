@@ -79,8 +79,7 @@ export function TranscriptScrollFollowBadge({
               )
             }
             onClick={onResume}
-            data-tooltip={tooltipText}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={tooltipText}
             data-testid="scroll-follow-resume-btn"
             tabIndex={isDetached ? 0 : -1}

@@ -129,7 +129,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-accent-primary, #2f2f2f);
+  background: var(--color-brand);
   flex-shrink: 0;
 }
 
@@ -272,7 +272,7 @@
 }
 
 .live-caption-speaker {
-  color: var(--color-brand, #60a5fa);
+  color: var(--color-brand);
   font-weight: 600;
   margin-right: 6px;
 }

@@ -236,8 +236,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls="polish-menu-dropdown"
-        data-tooltip={tooltipText}
-        data-tooltip-pos="bottom"
+        tooltip={tooltipText}
+        tooltipPos="bottom"
         aria-label={tooltipText}
       >
         {(() => {

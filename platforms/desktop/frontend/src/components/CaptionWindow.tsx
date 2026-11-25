@@ -340,7 +340,6 @@ export function CaptionWindow() {
             className="caption-action-btn"
             icon={<Copy size={14} />}
             data-tauri-drag-region="false"
-            title={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
             aria-label={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
@@ -351,7 +350,6 @@ export function CaptionWindow() {
             className="caption-action-btn"
             icon={<Lock size={14} />}
             data-tauri-drag-region="false"
-            title={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
             aria-label={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
             onClick={handleLock}
             onMouseDown={(e) => e.stopPropagation()}

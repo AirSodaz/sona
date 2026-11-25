@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDisplayTime } from '../../utils/exportFormats';
+import { Tooltip } from '../ui/Tooltip';
 
 /** Props for SegmentTimestamp component. */
 export interface SegmentTimestampProps {
@@ -28,16 +29,17 @@ export function SegmentTimestamp({ start, onSeek }: SegmentTimestampProps): Reac
   }
 
   return (
-    <span
-      className="segment-timestamp"
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      role="button"
-      tabIndex={0}
-      aria-label={t('editor.seek_label', { time: formatDisplayTime(start) })}
-      data-tooltip={t('editor.seek_tooltip')}
-    >
-      {formatDisplayTime(start)}
-    </span>
+    <Tooltip content={t('editor.seek_tooltip')} placement="top">
+      <span
+        className="segment-timestamp"
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={t('editor.seek_label', { time: formatDisplayTime(start) })}
+      >
+        {formatDisplayTime(start)}
+      </span>
+    </Tooltip>
   );
 }

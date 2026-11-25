@@ -19,6 +19,7 @@ import { Modal } from '../Modal';
 import { Switch } from '../Switch';
 import { Button, IconButton } from '../ui/Button';
 import { SearchInput } from '../ui/SearchInput';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsSection } from './SettingsLayout';
 import './vocabulary/vocabulary.css';
 
@@ -491,55 +492,62 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                           minWidth: '150px',
                         }}
                       />
-                      <button
-                        type="button"
-                        className="dict-scope-pill"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openScopeModal(profile);
-                        }}
-                        style={{
-                          height: '24px',
-                          padding: '0 8px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          border:
-                            profile.scope === 'project' &&
-                            (!profile.projectIds || profile.projectIds.length === 0)
-                              ? '1px dashed var(--color-warning)'
-                              : undefined,
-                        }}
-                        data-tooltip={t('settings.speaker_edit_scope', {
+                      <Tooltip
+                        content={t('settings.speaker_edit_scope', {
                           defaultValue: 'Click to edit target scope',
                         })}
-                        data-tooltip-pos="top"
+                        placement="top"
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {profile.scope === 'project' ? (
-                            <>
-                              <span
-                                style={{
-                                  width: '6px',
-                                  height: '6px',
-                                  borderRadius: '50%',
-                                  background:
-                                    profile.projectIds && profile.projectIds.length > 0
-                                      ? 'var(--color-accent-primary)'
-                                      : 'var(--color-warning)',
-                                }}
-                              />
-                              {getScopeBadgeText(profile)}
-                            </>
-                          ) : (
-                            <>
-                              <Globe size={11} style={{ opacity: 0.7 }} />
-                              <span>
-                                {t('settings.dict_scope_badge_global', { defaultValue: 'Global' })}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          className="dict-scope-pill"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openScopeModal(profile);
+                          }}
+                          style={{
+                            height: '24px',
+                            padding: '0 8px',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            border:
+                              profile.scope === 'project' &&
+                              (!profile.projectIds || profile.projectIds.length === 0)
+                                ? '1px dashed var(--color-warning)'
+                                : undefined,
+                          }}
+                        >
+                          <span
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            {profile.scope === 'project' ? (
+                              <>
+                                <span
+                                  style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    background:
+                                      profile.projectIds && profile.projectIds.length > 0
+                                        ? 'var(--color-brand)'
+                                        : 'var(--color-warning)',
+                                  }}
+                                />
+                                {getScopeBadgeText(profile)}
+                              </>
+                            ) : (
+                              <>
+                                <Globe size={11} style={{ opacity: 0.7 }} />
+                                <span>
+                                  {t('settings.dict_scope_badge_global', {
+                                    defaultValue: 'Global',
+                                  })}
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      </Tooltip>
 
                       <span
                         style={{
@@ -576,11 +584,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                         size="sm"
                         icon={<Trash2 size={18} />}
                         onClick={() => void handleDeleteProfile(profile)}
-                        data-tooltip={t('settings.delete_speaker_profile', {
-                          name: profile.name,
-                          defaultValue: 'Delete {{name}}',
-                        })}
-                        data-tooltip-pos="top"
+                        tooltipPos="top"
                         aria-label={t('settings.delete_speaker_profile', {
                           name: profile.name,
                           defaultValue: 'Delete {{name}}',
@@ -669,8 +673,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                               icon={<Trash2 size={14} />}
                               onClick={() => void handleDeleteSample(profile.id, sample.id)}
                               aria-label={t('common.delete')}
-                              data-tooltip={t('common.delete')}
-                              data-tooltip-pos="top"
+                              tooltipPos="top"
                             />
                           </div>
                         ))

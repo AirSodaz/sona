@@ -394,9 +394,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                     size="sm"
                     icon={<ArrowLeftRight size={14} />}
                     onClick={handleSwapLanguages}
-                    title={t('settings.swap_translation_languages', {
-                      defaultValue: 'Swap languages',
-                    })}
                     aria-label={t('settings.swap_translation_languages', {
                       defaultValue: 'Swap languages',
                     })}

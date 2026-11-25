@@ -12,6 +12,7 @@ import { SeekSlider } from './audio-player/SeekSlider';
 import { TimeDisplay } from './audio-player/TimeDisplay';
 import { MuteIcon, PauseIcon, PlayFilledIcon, VolumeIcon } from './Icons';
 import { Button, IconButton } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
 
 /** Props for AudioPlayer. */
 interface AudioPlayerProps {
@@ -165,7 +166,6 @@ export function AudioPlayer({
           icon={isPlaying ? <PauseIcon /> : <PlayFilledIcon />}
           onClick={handlePlayPause}
           aria-label={isPlaying ? t('player.pause') : t('player.play')}
-          data-tooltip={isPlaying ? t('player.pause') : t('player.play')}
         />
       </div>
 
@@ -181,8 +181,8 @@ export function AudioPlayer({
           size="sm"
           onClick={handleCyclePlaybackRate}
           aria-label={`${t('player.speed')} ${playbackRate}x`}
-          data-tooltip={t('player.speed')}
-          data-tooltip-pos="top"
+          tooltip={t('player.speed')}
+          tooltipPos="top"
           style={{ minWidth: '3ch', fontSize: '0.85rem', fontWeight: 500 }}
         >
           {playbackRate}x
@@ -194,25 +194,24 @@ export function AudioPlayer({
           onClick={toggleMute}
           aria-label={isMuted ? t('player.unmute') : t('player.mute')}
           aria-pressed={isMuted}
-          data-tooltip={isMuted ? t('player.unmute') : t('player.mute')}
-          data-tooltip-pos="top"
+          tooltipPos="top"
         />
-        <input
-          type="range"
-          className="audio-slider audio-slider-volume"
-          min={0}
-          max={1}
-          step={0.01}
-          value={volume}
-          onChange={handleVolumeChange}
-          aria-label={t('player.volume')}
-          aria-valuenow={volume}
-          aria-valuemin={0}
-          aria-valuemax={1}
-          aria-valuetext={`${Math.round(volume * 100)}%`}
-          data-tooltip={`${Math.round(volume * 100)}%`}
-          data-tooltip-pos="top"
-        />
+        <Tooltip content={`${Math.round(volume * 100)}%`} placement="top">
+          <input
+            type="range"
+            className="audio-slider audio-slider-volume"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={handleVolumeChange}
+            aria-label={t('player.volume')}
+            aria-valuenow={volume}
+            aria-valuemin={0}
+            aria-valuemax={1}
+            aria-valuetext={`${Math.round(volume * 100)}%`}
+          />
+        </Tooltip>
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ import { Dropdown, type DropdownOption } from '../../Dropdown';
 import { Modal } from '../../Modal';
 import { Switch } from '../../Switch';
 import { Button } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   ScenarioCardTabs,
   SettingsAccordion,
@@ -1293,9 +1294,9 @@ export function SyncSetupPanel({
                     icon: <DatabaseZap size={18} />,
                     label: (
                       <span className="sync-multivault-label-row">
-                        <strong className="sync-multivault-id" title={v.vaultId}>
-                          {v.vaultId}
-                        </strong>
+                        <Tooltip content={v.vaultId} placement="top" onlyWhenTruncated>
+                          <strong className="sync-multivault-id">{v.vaultId}</strong>
+                        </Tooltip>
                         <span className="sync-scope-tag is-badge">
                           {t(`settings.sync.preset_${v.preset}`, { defaultValue: v.preset })}
                         </span>

@@ -97,10 +97,8 @@ export function QueueClearMenu({
         aria-expanded={isOpen}
         aria-controls={menuId}
         aria-label={t('batch.clear_options', { defaultValue: 'Clear options' })}
-        data-tooltip={
-          isOpen ? undefined : t('batch.clear_options', { defaultValue: 'Clear options' })
-        }
-        data-tooltip-pos="left"
+        tooltip={isOpen ? undefined : t('batch.clear_options', { defaultValue: 'Clear options' })}
+        tooltipPos="left"
         data-testid="queue-clear-trigger"
       />
 

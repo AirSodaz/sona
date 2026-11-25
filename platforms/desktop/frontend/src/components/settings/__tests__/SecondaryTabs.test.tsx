@@ -195,12 +195,15 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
     expect(tab1.id).toBe('test-subtab-sub1');
     expect(tab1.classList.contains('settings-subtab-btn')).toBe(true);
     expect(tab1.classList.contains('active')).toBe(true);
-    expect(tab1.getAttribute('data-tooltip')).toBe('Tooltip for sub1');
-    expect(tab1.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(tab1);
+    expect(screen.getByRole('tooltip').textContent).toBe('Tooltip for sub1');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(tab1);
 
     const tab2 = screen.getByRole('tab', { name: 'Sub Tab 2' });
-    expect(tab2.getAttribute('data-tooltip')).toBe('Tooltip for sub2');
-    expect(tab2.getAttribute('data-tooltip-pos')).toBe('bottom');
+    fireEvent.focus(tab2);
+    expect(screen.getByRole('tooltip').textContent).toBe('Tooltip for sub2');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('bottom');
 
     fireEvent.click(tab2);
     expect(onChange).toHaveBeenCalledWith('sub2');

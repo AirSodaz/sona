@@ -26,6 +26,7 @@ import {
   SettingsTabContainer,
 } from '../../settings/SettingsLayout';
 import { Button, IconButton } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 import './ToolCliPanel.css';
 
@@ -308,7 +309,6 @@ export function ToolCliPanel(): React.JSX.Element {
             leftIcon={<RefreshCw size={13} className={isLoading ? 'spin' : ''} />}
             onClick={() => void fetchStatus()}
             disabled={isLoading}
-            title={t('common.refresh', { defaultValue: 'Refresh' })}
             aria-label={t('common.refresh', { defaultValue: 'Refresh' })}
           >
             <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
@@ -482,18 +482,20 @@ export function ToolCliPanel(): React.JSX.Element {
             })}
           >
             <div className="tool-cli-path-display-group">
-              <div
-                className="tool-cli-path-tooltip-wrapper"
-                data-tooltip={status?.binDir || undefined}
-                data-tooltip-pos="top"
-                data-tooltip-multiline
+              <Tooltip
+                content={status?.binDir || undefined}
+                placement="top"
+                multiline
+                disabled={!status?.binDir}
               >
-                <code
-                  className={`settings-code-inline ${status?.binDir ? 'tool-cli-path-code' : ''}`}
-                >
-                  {status?.binDir || t('tools.cli.not_located', { defaultValue: 'Not located' })}
-                </code>
-              </div>
+                <div className="tool-cli-path-tooltip-wrapper">
+                  <code
+                    className={`settings-code-inline ${status?.binDir ? 'tool-cli-path-code' : ''}`}
+                  >
+                    {status?.binDir || t('tools.cli.not_located', { defaultValue: 'Not located' })}
+                  </code>
+                </div>
+              </Tooltip>
               {status?.binDir && (
                 <>
                   <IconButton
@@ -588,7 +590,6 @@ export function ToolCliPanel(): React.JSX.Element {
                         size="sm"
                         icon={<FolderOpen size={13} />}
                         onClick={() => openDirectory(entry.pathDir)}
-                        title={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                         aria-label={t('tools.cli.open_folder', { defaultValue: 'Open Folder' })}
                       />
                       {entry.canRemove && (
@@ -599,7 +600,6 @@ export function ToolCliPanel(): React.JSX.Element {
                           loading={removingPathDir === entry.pathDir}
                           icon={<Trash2 size={13} />}
                           onClick={() => void removePathEntry(entry.pathDir)}
-                          title={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
                           aria-label={t('tools.cli.remove_entry', { defaultValue: 'Remove' })}
                         />
                       )}

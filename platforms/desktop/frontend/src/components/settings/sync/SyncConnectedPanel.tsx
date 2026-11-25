@@ -34,6 +34,7 @@ import type {
 } from '../../../types/sync';
 import { Modal } from '../../Modal';
 import { Button } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
 import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
@@ -467,12 +468,13 @@ export function SyncConnectedPanel({
               {serverHost && (
                 <>
                   <span className="sync-meta-divider">·</span>
-                  <span
-                    className="sync-hero-server-url"
-                    title={pairingInfo?.serverUrl || undefined}
+                  <Tooltip
+                    content={pairingInfo?.serverUrl || undefined}
+                    placement="top"
+                    disabled={!pairingInfo?.serverUrl}
                   >
-                    {serverHost}
-                  </span>
+                    <span className="sync-hero-server-url">{serverHost}</span>
+                  </Tooltip>
                 </>
               )}
             </div>
@@ -523,7 +525,6 @@ export function SyncConnectedPanel({
               leftIcon={<Lock size={14} />}
               onClick={() => void onLock()}
               disabled={isBusy}
-              title={t('settings.sync.lock_action', { defaultValue: 'Lock vault' })}
             >
               {t('settings.sync.lock_action', { defaultValue: 'Lock' })}
             </Button>
@@ -662,22 +663,12 @@ export function SyncConnectedPanel({
                         {p.label}
                         {p.badge && <span className="sync-scope-tag is-badge">{p.badge}</span>}
                         {isCurrent && (
-                          <span
-                            className="sync-scope-tag is-current"
-                            title={t('settings.sync.preset_current_tag', {
-                              defaultValue: 'Current',
-                            })}
-                          >
+                          <span className="sync-scope-tag is-current">
                             {t('settings.sync.preset_current_tag', { defaultValue: 'Current' })}
                           </span>
                         )}
                         {isPending && (
-                          <span
-                            className="sync-scope-tag is-pending"
-                            title={t('settings.sync.preset_pending_tag', {
-                              defaultValue: 'Pending',
-                            })}
-                          >
+                          <span className="sync-scope-tag is-pending">
                             {t('settings.sync.preset_pending_tag', { defaultValue: 'Pending' })}
                           </span>
                         )}
@@ -806,9 +797,6 @@ export function SyncConnectedPanel({
                   leftIcon={<Lock size={14} />}
                   onClick={() => void onLock()}
                   disabled={isBusy}
-                  title={t('settings.sync.lock_and_test_recovery_action', {
-                    defaultValue: 'Lock & test recovery key',
-                  })}
                 >
                   {t('settings.sync.lock_and_test_recovery_action', {
                     defaultValue: 'Lock & test recovery key',
@@ -845,11 +833,6 @@ export function SyncConnectedPanel({
                       size="sm"
                       leftIcon={isKeyRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
                       onClick={() => setIsKeyRevealed((prev) => !prev)}
-                      title={
-                        isKeyRevealed
-                          ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' })
-                          : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })
-                      }
                       aria-label={
                         isKeyRevealed
                           ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' })
@@ -866,7 +849,6 @@ export function SyncConnectedPanel({
                       feedback={copiedKey ? 'success' : 'idle'}
                       leftIcon={copiedKey ? <Check size={14} /> : <Copy size={14} />}
                       onClick={handleCopyKeyWithFeedback}
-                      title={t('common.copy', { defaultValue: 'Copy' })}
                     >
                       {copiedKey
                         ? t('common.copied', { defaultValue: 'Copied' })
@@ -877,9 +859,6 @@ export function SyncConnectedPanel({
                       size="sm"
                       leftIcon={<Download size={14} />}
                       onClick={() => void onExportRecoveryKey()}
-                      title={t('settings.sync.export_recovery_key', {
-                        defaultValue: 'Export recovery key',
-                      })}
                     >
                       {t('settings.sync.export_recovery_key', { defaultValue: 'Export' })}
                     </Button>
@@ -890,9 +869,6 @@ export function SyncConnectedPanel({
                         size="sm"
                         leftIcon={<Trash2 size={14} />}
                         onClick={() => void handleDeleteRecoveryKey()}
-                        title={t('settings.sync.delete_recovery_key', {
-                          defaultValue: 'Delete key',
-                        })}
                         aria-label={t('settings.sync.delete_recovery_key', {
                           defaultValue: 'Delete key',
                         })}
@@ -1117,9 +1093,14 @@ export function SyncConnectedPanel({
           <div className="sync-pairing-summary-card">
             <div className="sync-pairing-summary-row">
               <span>{t('settings.sync.server_url', { defaultValue: 'Server URL' })}</span>
-              <code title={pairingInfo?.serverUrl || undefined}>
-                {pairingInfo?.serverUrl || '—'}
-              </code>
+              <Tooltip
+                content={pairingInfo?.serverUrl || undefined}
+                placement="top"
+                onlyWhenTruncated
+                disabled={!pairingInfo?.serverUrl}
+              >
+                <code>{pairingInfo?.serverUrl || '—'}</code>
+              </Tooltip>
             </div>
             <div className="sync-pairing-summary-row">
               <span>{t('settings.sync.username', { defaultValue: 'Username' })}</span>

@@ -1,11 +1,12 @@
 import type React from 'react';
+import { Tooltip, type TooltipPlacement } from './Tooltip';
 
 export type ButtonTier = 'primary' | 'secondary' | 'ghost';
 export type ButtonTone = 'neutral' | 'danger';
 export type ButtonSize = 'xs' | 'sm' | 'md';
 export type ButtonFeedback = 'idle' | 'success' | 'error';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title'> {
   tier?: ButtonTier;
   tone?: ButtonTone;
   size?: ButtonSize;
@@ -16,6 +17,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   fullWidth?: boolean;
   pill?: boolean;
   active?: boolean;
+  tooltip?: React.ReactNode | false;
+  tooltipPos?: TooltipPlacement;
+  tooltipMultiline?: boolean;
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -96,6 +100,9 @@ export function Button({
   fullWidth = false,
   pill = false,
   active = false,
+  tooltip,
+  tooltipPos = 'top',
+  tooltipMultiline = false,
   type = 'button',
   disabled = false,
   className,
@@ -117,7 +124,7 @@ export function Button({
     className,
   });
 
-  return (
+  const buttonEl = (
     <button
       ref={ref}
       type={type}
@@ -142,10 +149,25 @@ export function Button({
       {loading && <ButtonSpinner />}
     </button>
   );
+
+  return (
+    <Tooltip
+      content={tooltip}
+      placement={tooltipPos}
+      multiline={tooltipMultiline}
+      disabled={tooltip === undefined || tooltip === false}
+      triggerDisabled={isDisabled && tooltip !== undefined && tooltip !== false}
+      fullWidthWrapper={fullWidth}
+    >
+      {buttonEl}
+    </Tooltip>
+  );
 }
 
 /**
  * Square icon-only button primitive requiring an explicit accessible name (`aria-label`).
+ * Automatically renders a unified Portal Tooltip reusing `aria-label` unless `tooltip={false}`
+ * or a custom `tooltip` is provided.
  */
 export function IconButton({
   tier = 'ghost',
@@ -155,6 +177,9 @@ export function IconButton({
   feedback = 'idle',
   pill = false,
   active = false,
+  tooltip,
+  tooltipPos = 'top',
+  tooltipMultiline = false,
   type = 'button',
   disabled = false,
   className,
@@ -176,7 +201,9 @@ export function IconButton({
     className,
   });
 
-  return (
+  const resolvedTooltip = tooltip === undefined ? rest['aria-label'] : tooltip;
+
+  const buttonEl = (
     <button
       ref={ref}
       type={type}
@@ -190,5 +217,17 @@ export function IconButton({
       </span>
       {loading && <ButtonSpinner />}
     </button>
+  );
+
+  return (
+    <Tooltip
+      content={resolvedTooltip}
+      placement={tooltipPos}
+      multiline={tooltipMultiline}
+      disabled={resolvedTooltip === false || resolvedTooltip === undefined}
+      triggerDisabled={isDisabled && resolvedTooltip !== false && resolvedTooltip !== undefined}
+    >
+      {buttonEl}
+    </Tooltip>
   );
 }

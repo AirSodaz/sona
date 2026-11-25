@@ -28,6 +28,7 @@ import type { TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
 import { RecordingTimer } from './RecordingTimer';
+import { Tooltip } from './ui/Tooltip';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -344,19 +345,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         <div className="record-controls">
           {!isRecording ? (
-            <button
-              ref={startButtonRef}
-              className="control-button start"
-              onClick={handleToggleRecording}
-              disabled={isInitializing || isTransitioning || isAgentRecording}
-              aria-label={
-                isAgentRecording
-                  ? t('live.agent_recording_locked', {
-                      defaultValue: 'AI Agent recording in progress',
-                    })
-                  : t('live.start_recording')
-              }
-              data-tooltip={
+            <Tooltip
+              content={
                 isAgentRecording
                   ? t('live.agent_recording_locked', {
                       defaultValue: 'AI Agent recording in progress',
@@ -365,44 +355,59 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     ? 'Initializing...'
                     : t('live.start_recording')
               }
-              data-tooltip-pos="bottom"
-              style={
-                isAgentRecording
-                  ? { opacity: 0.5, cursor: 'not-allowed' }
-                  : isInitializing || isTransitioning
-                    ? { opacity: 0.7, cursor: 'wait' }
-                    : {}
-              }
+              placement="bottom"
+              triggerDisabled={isInitializing || isTransitioning || isAgentRecording}
             >
-              <div className="control-button-inner" />
-            </button>
+              <button
+                ref={startButtonRef}
+                className="control-button start"
+                onClick={handleToggleRecording}
+                disabled={isInitializing || isTransitioning || isAgentRecording}
+                aria-label={
+                  isAgentRecording
+                    ? t('live.agent_recording_locked', {
+                        defaultValue: 'AI Agent recording in progress',
+                      })
+                    : t('live.start_recording')
+                }
+                style={
+                  isAgentRecording
+                    ? { opacity: 0.5, cursor: 'not-allowed' }
+                    : isInitializing || isTransitioning
+                      ? { opacity: 0.7, cursor: 'wait' }
+                      : {}
+                }
+              >
+                <div className="control-button-inner" />
+              </button>
+            </Tooltip>
           ) : (
             <>
-              <button
-                className="control-button pause"
-                onClick={handleTogglePause}
-                disabled={isInitializing || isTransitioning}
-                aria-label={isPaused ? t('live.resume') : t('live.pause')}
-                data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
-                data-tooltip-pos="bottom"
-              >
-                {isPaused ? (
-                  <Play size={24} fill="currentColor" aria-hidden="true" />
-                ) : (
-                  <Pause size={24} fill="currentColor" aria-hidden="true" />
-                )}
-              </button>
+              <Tooltip content={isPaused ? t('live.resume') : t('live.pause')} placement="bottom">
+                <button
+                  className="control-button pause"
+                  onClick={handleTogglePause}
+                  disabled={isInitializing || isTransitioning}
+                  aria-label={isPaused ? t('live.resume') : t('live.pause')}
+                >
+                  {isPaused ? (
+                    <Play size={24} fill="currentColor" aria-hidden="true" />
+                  ) : (
+                    <Pause size={24} fill="currentColor" aria-hidden="true" />
+                  )}
+                </button>
+              </Tooltip>
 
-              <button
-                className="control-button stop"
-                onClick={handleToggleRecording}
-                disabled={isInitializing || isTransitioning}
-                aria-label={t('live.stop')}
-                data-tooltip={t('live.stop')}
-                data-tooltip-pos="bottom"
-              >
-                <Square size={28} fill="white" color="white" aria-hidden="true" />
-              </button>
+              <Tooltip content={t('live.stop')} placement="bottom">
+                <button
+                  className="control-button stop"
+                  onClick={handleToggleRecording}
+                  disabled={isInitializing || isTransitioning}
+                  aria-label={t('live.stop')}
+                >
+                  <Square size={28} fill="white" color="white" aria-hidden="true" />
+                </button>
+              </Tooltip>
             </>
           )}
         </div>

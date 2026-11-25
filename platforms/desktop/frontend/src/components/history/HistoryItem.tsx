@@ -22,6 +22,7 @@ import {
 } from '../Icons';
 import { ProjectBadge } from '../projects/ProjectVisual';
 import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 
 interface HistoryItemProps {
   item: HistoryItemType;
@@ -259,9 +260,9 @@ export function HistoryItem({
       >
         <div className="history-item-header">
           <div className="history-item-title-row">
-            <span className="history-item-type-icon" title={itemTypeLabel}>
-              {renderIcon(item.icon, item.type)}
-            </span>
+            <Tooltip content={itemTypeLabel} placement="top">
+              <span className="history-item-type-icon">{renderIcon(item.icon, item.type)}</span>
+            </Tooltip>
             <span className="history-item-title">
               {highlightRange(item.title, searchTitleMatch)}
             </span>
@@ -329,8 +330,8 @@ export function HistoryItem({
                 item: item.title,
                 defaultValue: `Rename ${item.title}`,
               })}
-              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
-              data-tooltip-pos="left"
+              tooltip={t('common.rename', { defaultValue: 'Rename' })}
+              tooltipPos="left"
               disabled={isRenameDisabled}
             />
           )}
@@ -348,8 +349,8 @@ export function HistoryItem({
               item: item.title,
               defaultValue: `Delete ${item.title}`,
             })}
-            data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-            data-tooltip-pos="left"
+            tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+            tooltipPos="left"
             disabled={isDeleteDisabled}
           />
         </div>

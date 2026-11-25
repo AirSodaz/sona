@@ -41,6 +41,7 @@ import { PolishButton } from '../PolishButton';
 import { RenameModal } from '../RenameModal';
 import { TranslateButton } from '../TranslateButton';
 import { Button, IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { TranscriptEditor } from './TranscriptEditor';
 import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
@@ -270,47 +271,52 @@ export function TranscriptWorkbench({
             >
               {renderHeaderIcon(storeIcon, displayIconType)}
             </div>
-            <h4
-              style={{
-                margin: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-              title={displayTitle}
-            >
-              {displayTitle}
-            </h4>
-            {embyContext && (
-              <span
+            <Tooltip content={displayTitle} placement="bottom" onlyWhenTruncated>
+              <h4
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background:
-                    embyContext.serverType === 'jellyfin'
-                      ? 'rgba(168, 85, 247, 0.12)'
-                      : 'rgba(82, 196, 26, 0.12)',
-                  color:
-                    embyContext.serverType === 'jellyfin'
-                      ? '#a855f7'
-                      : 'var(--color-success, #52c41a)',
-                  border:
-                    embyContext.serverType === 'jellyfin'
-                      ? '1px solid rgba(168, 85, 247, 0.25)'
-                      : '1px solid rgba(82, 196, 26, 0.25)',
+                  margin: 0,
                   whiteSpace: 'nowrap',
-                  marginLeft: '4px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
-                title={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
               >
-                <EmbyIcon size={12} />
-                <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
-              </span>
+                {displayTitle}
+              </h4>
+            </Tooltip>
+            {embyContext && (
+              <Tooltip
+                content={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
+                placement="bottom"
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    background:
+                      embyContext.serverType === 'jellyfin'
+                        ? 'rgba(168, 85, 247, 0.12)'
+                        : 'rgba(82, 196, 26, 0.12)',
+                    color:
+                      embyContext.serverType === 'jellyfin'
+                        ? '#a855f7'
+                        : 'var(--color-success, #52c41a)',
+                    border:
+                      embyContext.serverType === 'jellyfin'
+                        ? '1px solid rgba(168, 85, 247, 0.25)'
+                        : '1px solid rgba(82, 196, 26, 0.25)',
+                    whiteSpace: 'nowrap',
+                    marginLeft: '4px',
+                  }}
+                >
+                  <EmbyIcon size={12} />
+                  <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
+                </span>
+              </Tooltip>
             )}
             <IconButton
               tier="ghost"
@@ -324,8 +330,7 @@ export function TranscriptWorkbench({
               }}
               aria-label={t('common.rename', { defaultValue: 'Rename' })}
               disabled={isManualHeaderActionsDisabled}
-              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
-              data-tooltip-pos="bottom"
+              tooltipPos="bottom"
             />
             {showSummaryButton && (
               <IconButton
@@ -334,8 +339,7 @@ export function TranscriptWorkbench({
                 icon={<SummaryIcon />}
                 onClick={() => setIsSummaryOpen(true)}
                 aria-label={t('summary.title')}
-                data-tooltip={t('summary.title')}
-                data-tooltip-pos="bottom"
+                tooltipPos="bottom"
               />
             )}
             {hasSegments && (
@@ -345,8 +349,7 @@ export function TranscriptWorkbench({
                 icon={<SpeakerReviewIcon size={16} />}
                 onClick={() => setIsSpeakerReviewOpen(true)}
                 aria-label={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
-                data-tooltip={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
-                data-tooltip-pos="bottom"
+                tooltipPos="bottom"
               />
             )}
             {showVersionButton && (
@@ -356,8 +359,7 @@ export function TranscriptWorkbench({
                 icon={<VersionHistoryIcon size={16} />}
                 onClick={() => setIsVersionPanelOpen(true)}
                 aria-label={t('versions.title', { defaultValue: 'Versions' })}
-                data-tooltip={t('versions.title', { defaultValue: 'Versions' })}
-                data-tooltip-pos="bottom"
+                tooltipPos="bottom"
               />
             )}
           </div>
@@ -371,10 +373,10 @@ export function TranscriptWorkbench({
                 leftIcon={<EmbyIcon size={14} />}
                 onClick={handleResyncEmby}
                 disabled={isManualHeaderActionsDisabled || segments.length === 0}
-                data-tooltip={t('emby.resync_tooltip', {
+                tooltip={t('emby.resync_tooltip', {
                   defaultValue: 'Re-sync subtitles to Emby server',
                 })}
-                data-tooltip-pos="bottom"
+                tooltipPos="bottom"
               >
                 <span>
                   {isSyncingEmby
@@ -399,8 +401,7 @@ export function TranscriptWorkbench({
                 onClose();
               }}
               aria-label={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip-pos="bottom-left"
+              tooltipPos="bottom-left"
               disabled={isManualHeaderActionsDisabled}
             />
           </div>

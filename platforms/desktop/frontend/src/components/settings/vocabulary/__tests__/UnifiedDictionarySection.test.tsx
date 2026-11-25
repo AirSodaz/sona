@@ -76,16 +76,20 @@ projects:
     render(<UnifiedDictionarySection content={messyContent} onUpdateContent={onUpdateContent} />);
 
     const formatBtn = screen.getByRole('button', { name: 'Format' });
-    expect(formatBtn.getAttribute('data-tooltip')).toBe(
+    expect(formatBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(formatBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe(
       'Format indentation, canonicalize arrows, and sync project links'
     );
-    expect(formatBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(formatBtn.getAttribute('title')).toBeNull();
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(formatBtn);
 
     const copyBtn = screen.getByRole('button', { name: 'Copy dictionary YAML to clipboard' });
-    expect(copyBtn.getAttribute('data-tooltip')).toBe('Copy dictionary YAML to clipboard');
-    expect(copyBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(copyBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(copyBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Copy dictionary YAML to clipboard');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(copyBtn);
 
     fireEvent.click(formatBtn);
     expect(onUpdateContent).toHaveBeenCalledTimes(1);

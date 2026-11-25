@@ -448,8 +448,7 @@ export function ColorPicker({
             icon={<Pipette size={13} />}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={handleEyeDropper}
-            data-tooltip="Pick color"
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label="Pick color"
           />
           <div
@@ -598,8 +597,7 @@ export function ColorPicker({
             icon={<ChevronsUpDown size={14} />}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setFormat((prev) => (prev === 'rgb' ? 'hex' : 'rgb'))}
-            data-tooltip="Toggle RGB / HEX"
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label="Toggle RGB / HEX"
           />
         </div>

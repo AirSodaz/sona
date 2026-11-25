@@ -12,6 +12,8 @@ describe('Button', () => {
     expect(btn.className).toContain('btn-secondary');
     expect(btn.className).toContain('btn-md');
     expect(btn.className).not.toContain('btn-danger');
+    fireEvent.focus(btn);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   it('applies orthogonal tier, tone, size, pill, fullWidth, and active classes', () => {
@@ -80,6 +82,19 @@ describe('Button', () => {
     expect(btn.className).toContain('btn-feedback-error');
   });
 
+  it('renders Portal Tooltip on disabled Button when tooltip prop is provided', () => {
+    render(
+      <Button tier="secondary" tone="danger" disabled tooltip="Active project cannot be deleted">
+        Delete Project
+      </Button>
+    );
+    const btn = screen.getByRole('button', { name: 'Delete Project' }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    const wrapper = btn.parentElement as HTMLElement;
+    fireEvent.focus(wrapper);
+    expect(screen.getByRole('tooltip').textContent).toBe('Active project cannot be deleted');
+  });
+
   it('forwards ref to the underlying button element', () => {
     const ref = createRef<HTMLButtonElement>();
     render(<Button ref={ref}>RefTarget</Button>);
@@ -89,7 +104,7 @@ describe('Button', () => {
 });
 
 describe('IconButton', () => {
-  it('defaults to ghost tier, sm size, square btn-icon class, and aria-label', () => {
+  it('defaults to ghost tier, sm size, square btn-icon class, and auto Portal Tooltip from aria-label', () => {
     render(<IconButton aria-label="Close modal" icon={<span data-testid="x-icon" />} />);
     const btn = screen.getByRole('button', { name: 'Close modal' }) as HTMLButtonElement;
     expect(btn.type).toBe('button');
@@ -98,6 +113,23 @@ describe('IconButton', () => {
     expect(btn.className).toContain('btn-sm');
     expect(btn.className).toContain('btn-icon');
     expect(screen.getByTestId('x-icon').parentElement?.getAttribute('aria-hidden')).toBe('true');
+
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Close modal');
+  });
+
+  it('supports custom tooltip override and tooltip={false} opt-out', () => {
+    const { rerender } = render(
+      <IconButton aria-label="Undo" tooltip="Undo (Ctrl+Z)" icon={<span>U</span>} />
+    );
+    const btn = screen.getByRole('button', { name: 'Undo' });
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Undo (Ctrl+Z)');
+
+    rerender(<IconButton aria-label="Undo" tooltip={false} icon={<span>U</span>} />);
+    fireEvent.blur(btn);
+    fireEvent.focus(btn);
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
   it('supports ghost danger and xs size', () => {

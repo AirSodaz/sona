@@ -43,8 +43,7 @@ export function ProjectsSelectionBar({
           icon={<ListChecks size={16} />}
           onClick={onToggleSelectAll}
           aria-label={t('common.select_all', { defaultValue: 'Select All' })}
-          data-tooltip={t('common.select_all', { defaultValue: 'Select All' })}
-          data-tooltip-pos="top"
+          tooltipPos="top"
         />
         <div className="projects-toolbar-divider" />
         <IconButton
@@ -59,12 +58,7 @@ export function ProjectsSelectionBar({
               ? t('history.restore', { defaultValue: 'Restore' })
               : t('projects.assign_project', { defaultValue: 'Assign Project' })
           }
-          data-tooltip={
-            isTrashScope
-              ? t('history.restore', { defaultValue: 'Restore' })
-              : t('projects.assign_project', { defaultValue: 'Assign Project' })
-          }
-          data-tooltip-pos="top"
+          tooltipPos="top"
         />
         <IconButton
           tier="ghost"
@@ -75,8 +69,7 @@ export function ProjectsSelectionBar({
           onClick={onDeleteSelected}
           disabled={selectedIds.length === 0}
           aria-label={t('common.delete', { defaultValue: 'Delete' })}
-          data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-          data-tooltip-pos="top"
+          tooltipPos="top"
         />
         <IconButton
           tier="ghost"
@@ -85,8 +78,7 @@ export function ProjectsSelectionBar({
           icon={<X size={16} />}
           onClick={onCancel}
           aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-          data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
-          data-tooltip-pos="top"
+          tooltipPos="top"
         />
       </div>
     </div>

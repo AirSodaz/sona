@@ -151,7 +151,7 @@ describe('MediaServerManageModal', () => {
     expect(await screen.findByText(/Connected v4\.8\.8\.0/i)).toBeDefined();
   });
 
-  it('renders test, edit, and delete action buttons matching model-action-icon and data-tooltip styles', () => {
+  it('renders test, edit, and delete action buttons matching model-action-icon and unified Tooltip styles', () => {
     render(
       <MediaServerManageModal
         isOpen={true}
@@ -169,20 +169,26 @@ describe('MediaServerManageModal', () => {
 
     expect(testBtn.className).toContain('btn-icon');
     expect(testBtn.className).toContain('btn-ghost');
-    expect(testBtn.getAttribute('data-tooltip')).toBe('Test Connection');
-    expect(testBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(testBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(testBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Test Connection');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(testBtn);
 
     expect(editBtn.className).toContain('btn-icon');
     expect(editBtn.className).toContain('btn-ghost');
-    expect(editBtn.getAttribute('data-tooltip')).toBe('Edit');
-    expect(editBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(editBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(editBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Edit');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(editBtn);
 
     expect(deleteBtn.className).toContain('btn-icon');
     expect(deleteBtn.className).toContain('btn-danger');
-    expect(deleteBtn.getAttribute('data-tooltip')).toBe('Delete');
-    expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(deleteBtn.getAttribute('title')).toBeNull();
+    fireEvent.focus(deleteBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Delete');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(deleteBtn);
   });
 });

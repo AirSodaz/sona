@@ -282,8 +282,7 @@ export function GlobalDialog(): React.JSX.Element | null {
                 loading={isAiLoading}
                 icon={<SparklesIcon width={16} height={16} />}
                 onClick={handleAiClick}
-                data-tooltip={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
-                data-tooltip-pos="top"
+                tooltipPos="top"
                 aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
                 style={{
                   position: 'absolute',

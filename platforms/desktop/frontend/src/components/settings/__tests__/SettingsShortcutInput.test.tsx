@@ -13,7 +13,8 @@ describe('SettingsShortcutInput', () => {
     render(<SettingsShortcutInput value="Ctrl + Space" onChange={vi.fn()} />);
 
     const editButton = screen.getByRole('button', { name: 'Edit manually' });
-    expect(editButton.getAttribute('data-tooltip')).toBe('Edit manually');
+    fireEvent.focus(editButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('Edit manually');
 
     fireEvent.click(editButton);
 

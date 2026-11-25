@@ -51,7 +51,7 @@
 
 .theme-card.active .theme-preview,
 .theme-card:focus-visible .theme-preview {
-  box-shadow: 0 0 0 2px #007aff;
+  box-shadow: 0 0 0 2px var(--color-brand);
 }
 
 .theme-label {

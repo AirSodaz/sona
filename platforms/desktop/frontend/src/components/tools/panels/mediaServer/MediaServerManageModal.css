@@ -195,12 +195,6 @@
   flex-shrink: 0;
 }
 
-.media-server-card-actions .btn-icon[data-tooltip]:hover,
-.media-server-card-actions .btn-icon[data-tooltip]:focus-visible {
-  position: relative;
-  z-index: 20;
-}
-
 /* --- Form View --- */
 
 .media-server-form-body {

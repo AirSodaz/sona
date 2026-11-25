@@ -128,8 +128,9 @@ describe('SegmentTokens', () => {
 
     const token = screen.getByText('Hello');
     expect(token.getAttribute('title')).toBeNull();
-    expect(token.getAttribute('data-tooltip')).toBe('Time: 0');
-    expect(token.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(token);
+    expect(screen.getByRole('tooltip').textContent).toBe('Time: 0');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
   });
 
   it('highlights search matches correctly', () => {

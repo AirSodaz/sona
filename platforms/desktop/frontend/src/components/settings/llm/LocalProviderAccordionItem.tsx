@@ -599,10 +599,10 @@ export function LocalProviderAccordionItem({
                 size="sm"
                 leftIcon={<Plus size={14} />}
                 onClick={handleImportCustomFile}
-                data-tooltip={t('settings.llm.import_custom_model_hint', {
+                tooltip={t('settings.llm.import_custom_model_hint', {
                   defaultValue: 'Import existing local GGUF model files',
                 })}
-                data-tooltip-pos="top"
+                tooltipPos="top"
               >
                 {t('settings.llm.import_custom_model', { defaultValue: 'Import Local GGUF' })}
               </Button>
@@ -613,8 +613,7 @@ export function LocalProviderAccordionItem({
               loading={isLoading}
               icon={<RefreshCw size={14} />}
               onClick={fetchCards}
-              data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
-              data-tooltip-pos="top"
+              tooltipPos="top"
               aria-label={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
             />
           </div>

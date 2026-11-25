@@ -782,8 +782,8 @@ html[data-theme="dark"] .provider-mode-option.selected {
 }
 
 .provider-mode-radio-dot.is-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
+  border-color: var(--color-switch-checked);
+  background: var(--color-switch-checked);
 }
 
 .provider-mode-radio-dot.is-active::after {
@@ -791,7 +791,7 @@ html[data-theme="dark"] .provider-mode-option.selected {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-bg-elevated, #fff);
+  background: #ffffff;
 }
 
 @media (max-width: 520px) {

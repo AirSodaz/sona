@@ -157,8 +157,7 @@ export function ProjectSettingsModal({
             tier="secondary"
             tone="danger"
             disabled={disableDelete}
-            data-tooltip={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
-            title={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
+            tooltip={disableDelete && deleteDisabledReason ? deleteDisabledReason : undefined}
             onClick={() => void onDelete()}
           >
             {t('projects.delete_project', { defaultValue: 'Delete Project' })}
@@ -229,7 +228,7 @@ export function ProjectSettingsModal({
           <div className="project-pipeline-section">
             <div className="project-pipeline-toggle">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Zap size={15} style={{ color: 'var(--color-accent-primary, #64748b)' }} />
+                <Zap size={15} style={{ color: 'var(--color-brand)' }} />
                 {t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
               </span>
               <Switch
@@ -411,7 +410,6 @@ export function ProjectSettingsModal({
                           icon={<FolderOpen size={14} />}
                           onClick={() => void handleBrowseExportDir()}
                           aria-label={t('settings.browse', { defaultValue: 'Browse' })}
-                          title={t('settings.browse', { defaultValue: 'Browse' })}
                         />
                       </div>
                     </div>

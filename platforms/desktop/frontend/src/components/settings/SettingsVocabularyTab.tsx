@@ -6,6 +6,7 @@ import { isFeatureLlmConfigComplete } from '../../services/llm/configUtils';
 import { getFeatureModelEntry } from '../../services/llm/state';
 import { useLlmAssistantConfig, useSetConfig, useVocabularyConfig } from '../../stores/configStore';
 import { BookIcon, SummaryIcon } from '../Icons';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsContextSection } from './SettingsContextSection';
 import {
   ScenarioCardTabs,
@@ -213,26 +214,26 @@ export function SettingsVocabularyTab({
               ]}
             />
 
-            <button
-              id="settings-vocab-llm-status-btn"
-              type="button"
-              className={`settings-vocab-llm-btn ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
-              onClick={() => navContext?.navigateToTab('llm_service')}
-              data-tooltip={llmStatusTooltip}
-              data-tooltip-pos="top"
-              aria-label={`${llmStatusLabel}. ${t('settings.vocabulary_prompts_llm_jump_aria', { defaultValue: 'Jump to LLM Service settings' })}`}
-            >
-              <Bot size={15} className="settings-vocab-llm-icon" aria-hidden="true" />
-              <span
-                className={`settings-vocab-llm-dot ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
-                aria-hidden="true"
-              />
-              <span className="settings-vocab-llm-label">{llmStatusLabel}</span>
-              {isLlmConfigured && modelDisplayName && (
-                <span className="settings-vocab-llm-model-badge">{modelDisplayName}</span>
-              )}
-              <ArrowRight size={13} className="settings-vocab-llm-arrow" aria-hidden="true" />
-            </button>
+            <Tooltip content={llmStatusTooltip} placement="top">
+              <button
+                id="settings-vocab-llm-status-btn"
+                type="button"
+                className={`settings-vocab-llm-btn ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
+                onClick={() => navContext?.navigateToTab('llm_service')}
+                aria-label={`${llmStatusLabel}. ${t('settings.vocabulary_prompts_llm_jump_aria', { defaultValue: 'Jump to LLM Service settings' })}`}
+              >
+                <Bot size={15} className="settings-vocab-llm-icon" aria-hidden="true" />
+                <span
+                  className={`settings-vocab-llm-dot ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
+                  aria-hidden="true"
+                />
+                <span className="settings-vocab-llm-label">{llmStatusLabel}</span>
+                {isLlmConfigured && modelDisplayName && (
+                  <span className="settings-vocab-llm-model-badge">{modelDisplayName}</span>
+                )}
+                <ArrowRight size={13} className="settings-vocab-llm-arrow" aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
 
           {activePromptsSubTab === 'polish' && (

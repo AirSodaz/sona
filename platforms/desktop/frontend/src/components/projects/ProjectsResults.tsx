@@ -130,10 +130,7 @@ function ProjectsVirtualFooter({
             aria-label={context.t('projects.retry_load_more', {
               defaultValue: 'Retry loading more items',
             })}
-            data-tooltip={context.t('projects.retry_load_more', {
-              defaultValue: 'Retry loading more items',
-            })}
-            data-tooltip-pos="top"
+            tooltipPos="top"
           />
         </div>
       )}

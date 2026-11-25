@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDownIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
 import { SearchInput } from './ui/SearchInput';
+import { Tooltip } from './ui/Tooltip';
 
 export interface DropdownOption {
   value: string;
@@ -404,26 +405,32 @@ export function Dropdown({
                 return (
                   <React.Fragment key={option.value}>
                     {header}
-                    <button
-                      type="button"
-                      className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
-                      onClick={() => handleSelect(option)}
-                      role="option"
-                      aria-selected={option.value === value}
-                      aria-label={option.ariaLabel}
-                      aria-disabled={option.disabled || undefined}
-                      disabled={option.disabled}
-                      tabIndex={-1}
-                      style={option.style}
-                      title={option.description}
+                    <Tooltip
+                      content={option.description}
+                      placement="right"
+                      multiline
+                      disabled={!option.description}
                     >
-                      <span className="dropdown-item-content">
-                        <span>{option.label}</span>
-                        {option.description && (
-                          <span className="dropdown-item-description">{option.description}</span>
-                        )}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
+                        onClick={() => handleSelect(option)}
+                        role="option"
+                        aria-selected={option.value === value}
+                        aria-label={option.ariaLabel}
+                        aria-disabled={option.disabled || undefined}
+                        disabled={option.disabled}
+                        tabIndex={-1}
+                        style={option.style}
+                      >
+                        <span className="dropdown-item-content">
+                          <span>{option.label}</span>
+                          {option.description && (
+                            <span className="dropdown-item-description">{option.description}</span>
+                          )}
+                        </span>
+                      </button>
+                    </Tooltip>
                   </React.Fragment>
                 );
               });

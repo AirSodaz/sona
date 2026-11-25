@@ -16,6 +16,7 @@ import { useSpeakerReview } from '../../hooks/useSpeakerReview';
 import type { SpeakerReviewGroup } from '../../services/speakerReviewService';
 import { PanelModal } from '../PanelModal';
 import { Button } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import './TranscriptSpeakerReviewPanel.css';
 
 interface TranscriptSpeakerReviewPanelProps {
@@ -205,17 +206,21 @@ export function TranscriptSpeakerReviewPanel({
           </div>
           <div className="transcript-speaker-distribution-bar">
             {distribution.map((slice) => (
-              <div
+              <Tooltip
                 key={slice.groupId}
-                className="transcript-speaker-distribution-slice"
-                style={{
-                  flex: `${Math.max(slice.durationSeconds, 0.01)} 1 0`,
-                  minWidth: '4px',
-                  backgroundColor: slice.color,
-                }}
-                title={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}
-                onClick={() => setActiveGroupId(slice.groupId)}
-              />
+                content={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}
+                placement="top"
+              >
+                <div
+                  className="transcript-speaker-distribution-slice"
+                  style={{
+                    flex: `${Math.max(slice.durationSeconds, 0.01)} 1 0`,
+                    minWidth: '4px',
+                    backgroundColor: slice.color,
+                  }}
+                  onClick={() => setActiveGroupId(slice.groupId)}
+                />
+              </Tooltip>
             ))}
           </div>
           <div className="transcript-speaker-distribution-legend">

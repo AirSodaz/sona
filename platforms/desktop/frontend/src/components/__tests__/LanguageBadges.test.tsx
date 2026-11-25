@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { LanguageBadges } from '../LanguageBadges';
 
@@ -23,15 +23,17 @@ describe('LanguageBadges', () => {
     expect(c2.firstChild).toBeNull();
   });
 
-  it('renders visible language badges and applies custom data-tooltip without native title', () => {
+  it('renders visible language badges and applies custom Portal tooltip without native title', () => {
     const { container } = render(<LanguageBadges languages={['zh', 'en']} />);
 
-    const cluster = container.querySelector('.language-badges');
+    const cluster = container.querySelector('.language-badges') as HTMLElement;
     expect(cluster).not.toBeNull();
-    expect(cluster?.getAttribute('title')).toBeNull();
-    expect(cluster?.getAttribute('data-tooltip')).toBe('中文, 英语');
-    expect(cluster?.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(cluster?.hasAttribute('data-tooltip-multiline')).toBe(true);
+    expect(cluster.getAttribute('title')).toBeNull();
+    fireEvent.focus(cluster);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.textContent).toBe('中文, 英语');
+    expect(tooltip.getAttribute('data-placement')).toBe('top');
+    expect(tooltip.className).toContain('tooltip-portal--multiline');
 
     expect(screen.getByText('ZH')).toBeDefined();
     expect(screen.getByText('EN')).toBeDefined();
@@ -73,11 +75,12 @@ describe('LanguageBadges', () => {
     ];
     const { container } = render(<LanguageBadges languages={longLanguages} />);
 
-    const cluster = container.querySelector('.language-badges');
+    const cluster = container.querySelector('.language-badges') as HTMLElement;
     expect(cluster).not.toBeNull();
-    expect(cluster?.getAttribute('title')).toBeNull();
+    expect(cluster.getAttribute('title')).toBeNull();
 
-    const tooltip = cluster?.getAttribute('data-tooltip') ?? '';
+    fireEvent.focus(cluster);
+    const tooltip = screen.getByRole('tooltip').textContent ?? '';
     expect(tooltip).toContain('等共 30 种语言');
 
     // 4 visible + 26 overflow

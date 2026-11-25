@@ -157,8 +157,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<UndoIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('undo')}
-            data-tooltip={t('editor.undo', 'Undo')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.undo', 'Undo')}
           />
           <IconButton
@@ -168,8 +167,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<RedoIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('redo')}
-            data-tooltip={t('editor.redo', 'Redo')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.redo', 'Redo')}
           />
 
@@ -182,8 +180,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<BoldIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('bold')}
-            data-tooltip={t('editor.bold', 'Bold')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.bold', 'Bold')}
           />
           <IconButton
@@ -193,8 +190,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<ItalicIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('italic')}
-            data-tooltip={t('editor.italic', 'Italic')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.italic', 'Italic')}
           />
           <IconButton
@@ -204,8 +200,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<UnderlineIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('underline')}
-            data-tooltip={t('editor.underline', 'Underline')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.underline', 'Underline')}
           />
           <IconButton
@@ -215,8 +210,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<StrikethroughIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('strikethrough')}
-            data-tooltip={t('editor.strikethrough', 'Strikethrough')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.strikethrough', 'Strikethrough')}
           />
           <IconButton
@@ -226,8 +220,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<CodeIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('code')}
-            data-tooltip={t('editor.code', 'Code')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.code', 'Code')}
           />
 
@@ -240,8 +233,7 @@ export function EditorToolbar(): React.JSX.Element | null {
             icon={<ReturnIcon />}
             onMouseDown={handleMouseDown}
             onClick={() => handleAction('insertLineBreak')}
-            data-tooltip={t('editor.split_segment', 'Split segment')}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('editor.split_segment', 'Split segment')}
           />
         </div>

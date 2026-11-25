@@ -287,8 +287,7 @@ export function Modal({
                 icon={<X size={18} />}
                 onClick={onClose}
                 aria-label={t('common.close', { defaultValue: 'Close' })}
-                data-tooltip={t('common.close', { defaultValue: 'Close' })}
-                data-tooltip-pos="bottom-left"
+                tooltipPos="bottom-left"
               />
             )}
           </div>

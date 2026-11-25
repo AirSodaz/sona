@@ -172,7 +172,12 @@ describe('CloudAsrProviderGrid', () => {
     const addNova3Btn = screen.getByRole('button', { name: /Add Nova-3/i });
     expect(addNova3Btn).toBeDefined();
     expect(addNova3Btn.hasAttribute('disabled')).toBe(true);
-    expect(addNova3Btn.getAttribute('data-tooltip')).toBe('Configure API Key first');
+    expect(addNova3Btn.parentElement).not.toBeNull();
+    if (addNova3Btn.parentElement) {
+      fireEvent.focus(addNova3Btn.parentElement);
+      expect(screen.getByRole('tooltip').textContent).toBe('Configure API Key first');
+      fireEvent.blur(addNova3Btn.parentElement);
+    }
 
     // Clicking disabled Add button does nothing
     fireEvent.click(addNova3Btn);
@@ -212,7 +217,12 @@ describe('CloudAsrProviderGrid', () => {
     fireEvent.click(testModelBtn);
 
     await waitFor(() => {
-      expect(testModelBtn.getAttribute('data-tooltip')).toContain('Invalid API Key (HTTP 401)');
+      const updatedBtn = screen.getByRole('button', {
+        name: /Test Connection Seed-ASR.*Flash/i,
+      });
+      fireEvent.focus(updatedBtn);
+      expect(screen.getByRole('tooltip').textContent).toContain('Invalid API Key (HTTP 401)');
+      fireEvent.blur(updatedBtn);
     });
   });
 

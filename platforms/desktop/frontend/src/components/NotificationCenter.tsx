@@ -76,8 +76,8 @@ export function NotificationCenter({
         size="md"
         className="btn-icon notification-center-trigger"
         onClick={toggle}
-        data-tooltip={t('header.notifications')}
-        data-tooltip-pos="bottom-left"
+        tooltip={t('header.notifications')}
+        tooltipPos="bottom-left"
         aria-label={t('header.notifications')}
         aria-haspopup="dialog"
         aria-expanded={isOpen}

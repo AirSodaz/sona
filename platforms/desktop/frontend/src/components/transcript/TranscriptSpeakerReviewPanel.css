@@ -69,15 +69,15 @@
 }
 
 .transcript-speaker-review-card.is-pending {
-  border-left-color: #d97706;
+  border-left-color: var(--color-warning);
 }
 
 .transcript-speaker-review-card.is-auto {
-  border-left-color: #2563eb;
+  border-left-color: var(--color-info);
 }
 
 .transcript-speaker-review-card.is-reviewed {
-  border-left-color: #16a34a;
+  border-left-color: var(--color-success);
 }
 
 .transcript-speaker-review-card-head {

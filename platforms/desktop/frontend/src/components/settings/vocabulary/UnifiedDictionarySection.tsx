@@ -38,6 +38,7 @@ import { Dropdown } from '../../Dropdown';
 import { Modal } from '../../Modal';
 import { Button, IconButton } from '../../ui/Button';
 import { SearchInput } from '../../ui/SearchInput';
+import { Tooltip } from '../../ui/Tooltip';
 import { SegmentedSubTabs, SettingsSection } from '../SettingsLayout';
 import './vocabulary.css';
 
@@ -611,10 +612,10 @@ export function UnifiedDictionarySection({
             feedback={formatFeedback ? 'success' : 'idle'}
             leftIcon={formatFeedback ? <Check size={13} /> : <Wand2 size={13} />}
             onClick={handleFormat}
-            data-tooltip={t('settings.dict_format_tooltip', {
+            tooltip={t('settings.dict_format_tooltip', {
               defaultValue: 'Format indentation, canonicalize arrows, and sync project links',
             })}
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('settings.dict_format', { defaultValue: 'Format' })}
           >
             {formatFeedback
@@ -628,14 +629,14 @@ export function UnifiedDictionarySection({
             feedback={copyFeedback ? 'success' : 'idle'}
             icon={copyFeedback ? <Check size={13} /> : <Copy size={13} />}
             onClick={handleCopyAll}
-            data-tooltip={
+            tooltip={
               copyFeedback
                 ? t('common.copied', { defaultValue: 'Copied' })
                 : t('settings.dict_copy_all_tooltip', {
                     defaultValue: 'Copy dictionary YAML to clipboard',
                   })
             }
-            data-tooltip-pos="top"
+            tooltipPos="top"
             aria-label={t('settings.dict_copy_all_tooltip', {
               defaultValue: 'Copy dictionary YAML to clipboard',
             })}
@@ -1023,20 +1024,22 @@ export function UnifiedDictionarySection({
 
               <div className="dict-diagnostics-list">
                 {diagnostics.map((diag) => (
-                  <div
+                  <Tooltip
                     key={`${diag.line}-${diag.severity}-${diag.message}`}
-                    onClick={() => jumpToLine(diag.line)}
-                    title={t('settings.dict_click_to_jump', {
+                    content={t('settings.dict_click_to_jump', {
                       defaultValue: 'Click to jump to line',
                     })}
+                    placement="top"
                   >
-                    <span
-                      className={`dict-diagnostic-line ${diag.severity === 'error' ? 'error' : 'warning'}`}
-                    >
-                      Line {diag.line}:
-                    </span>
-                    <span className="dict-diagnostic-msg">{diag.message}</span>
-                  </div>
+                    <div onClick={() => jumpToLine(diag.line)}>
+                      <span
+                        className={`dict-diagnostic-line ${diag.severity === 'error' ? 'error' : 'warning'}`}
+                      >
+                        Line {diag.line}:
+                      </span>
+                      <span className="dict-diagnostic-msg">{diag.message}</span>
+                    </div>
+                  </Tooltip>
                 ))}
               </div>
             </div>

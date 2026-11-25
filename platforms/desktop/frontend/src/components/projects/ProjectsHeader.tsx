@@ -49,8 +49,7 @@ export function ProjectsHeader({
               onClick={onEmptyTrash}
               disabled={trashItemCount === 0}
               aria-label={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
-              data-tooltip={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
-              data-tooltip-pos="bottom-left"
+              tooltipPos="bottom-left"
             />
           </div>
         )}

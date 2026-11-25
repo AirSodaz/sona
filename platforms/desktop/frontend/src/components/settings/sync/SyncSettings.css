@@ -255,8 +255,8 @@
 }
 
 .sync-multivault-radio-dot.is-active {
-  border-color: var(--color-accent-primary);
-  background: var(--color-accent-primary);
+  border-color: var(--color-switch-checked);
+  background: var(--color-switch-checked);
 }
 
 .sync-multivault-radio-dot.is-active::after {
@@ -264,7 +264,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-bg-elevated, #fff);
+  background: #ffffff;
 }
 /* --------------------------------------------------------------------------
    Standard Banner Row (Embedded in section content)
@@ -460,8 +460,8 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm, 6px);
-  background: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 12%, transparent);
-  color: var(--color-accent-primary, #3b82f6);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
   flex-shrink: 0;
 }
 
@@ -857,8 +857,8 @@ input[type="password"]::-ms-clear {
 }
 
 .sync-status-dot.is-syncing {
-  background: var(--color-primary, #2563eb);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #2563eb) 35%, transparent);
+  background: var(--color-info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-info) 35%, transparent);
   animation: syncDotPulse 1.6s infinite ease-in-out;
 }
 
@@ -978,8 +978,9 @@ input[type="password"]::-ms-clear {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-hover);
   font-size: 0.72rem;
   font-weight: 700;
   display: grid;

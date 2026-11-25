@@ -5,6 +5,7 @@ import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore
 import type { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { sanitizeTranscriptHtml } from '../../utils/transcriptTextUtils';
+import { Tooltip } from '../ui/Tooltip';
 import { useReadonlySegmentContextMenu } from './context-menu/useReadonlySegmentContextMenu';
 
 /** Props for SegmentTokens component. */
@@ -158,33 +159,36 @@ function TokenList({
             .join(' ');
 
           return (
-            <span
+            <Tooltip
               key={`${tokenObj.startIndex}-${tokenObj.endIndex}`}
-              className={className}
-              data-tooltip={formatDisplayTime(tokenObj.start)}
-              data-tooltip-pos="top"
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSeek(tokenObj.start);
-                if (isMatch && matchIndex !== -1 && onMatchClick) {
-                  onMatchClick(matchIndex);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+              content={formatDisplayTime(tokenObj.start)}
+              placement="top"
+            >
+              <span
+                className={className}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
                   e.stopPropagation();
                   onSeek(tokenObj.start);
                   if (isMatch && matchIndex !== -1 && onMatchClick) {
                     onMatchClick(matchIndex);
                   }
-                }
-              }}
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: tokenObj.text is sanitized via sanitizeTranscriptHtml
-              dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
-            />
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSeek(tokenObj.start);
+                    if (isMatch && matchIndex !== -1 && onMatchClick) {
+                      onMatchClick(matchIndex);
+                    }
+                  }
+                }}
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: tokenObj.text is sanitized via sanitizeTranscriptHtml
+                dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
+              />
+            </Tooltip>
           );
         })
       ) : (

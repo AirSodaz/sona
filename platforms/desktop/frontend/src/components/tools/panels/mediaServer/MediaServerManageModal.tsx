@@ -30,6 +30,7 @@ import type {
 } from '../../../../types/mediaServer';
 import { Modal } from '../../../Modal';
 import { Button, IconButton } from '../../../ui/Button';
+import { Tooltip } from '../../../ui/Tooltip';
 import './MediaServerManageModal.css';
 
 export interface MediaServerManageModalProps {
@@ -448,10 +449,12 @@ export function MediaServerManageModal({
                           </div>
 
                           <div className="media-server-card-meta">
-                            <span className="media-server-meta-item" title={profile.serverUrl}>
-                              <Globe size={11} style={{ opacity: 0.7 }} />
-                              <span>{profile.serverUrl}</span>
-                            </span>
+                            <Tooltip content={profile.serverUrl} placement="top" onlyWhenTruncated>
+                              <span className="media-server-meta-item">
+                                <Globe size={11} style={{ opacity: 0.7 }} />
+                                <span>{profile.serverUrl}</span>
+                              </span>
+                            </Tooltip>
                             {profile.username && (
                               <span className="media-server-meta-item">
                                 <User size={11} style={{ opacity: 0.7 }} />
@@ -488,9 +491,17 @@ export function MediaServerManageModal({
                               ) : (
                                 <>
                                   <span className="media-server-status-dot" />
-                                  <span title={status.message}>
-                                    {t('common.error', { defaultValue: 'Error' })}: {status.message}
-                                  </span>
+                                  <Tooltip
+                                    content={status.message}
+                                    placement="top"
+                                    multiline
+                                    onlyWhenTruncated
+                                  >
+                                    <span>
+                                      {t('common.error', { defaultValue: 'Error' })}:{' '}
+                                      {status.message}
+                                    </span>
+                                  </Tooltip>
                                 </>
                               )}
                             </div>
@@ -505,8 +516,6 @@ export function MediaServerManageModal({
                             size="xs"
                             onClick={() => void onSelectActiveProfile(profile.id)}
                             aria-label={t('media_server.set_active', { defaultValue: 'Select' })}
-                            data-tooltip={t('media_server.set_active', { defaultValue: 'Select' })}
-                            data-tooltip-pos="top"
                           >
                             {t('media_server.set_active', { defaultValue: 'Select' })}
                           </Button>
@@ -525,7 +534,7 @@ export function MediaServerManageModal({
                           icon={<RefreshCw size={14} />}
                           onClick={() => void handleTestInList(profile)}
                           aria-label={`${t('media_server.test', { defaultValue: 'Test' })} ${profile.name}`}
-                          data-tooltip={
+                          tooltip={
                             status?.status === 'testing'
                               ? t('media_server.testing', { defaultValue: 'Testing...' })
                               : status?.status === 'ok'
@@ -534,7 +543,7 @@ export function MediaServerManageModal({
                                   ? `✕ ${status.message || t('common.error', { defaultValue: 'Error' })}`
                                   : t('media_server.test', { defaultValue: 'Test Connection' })
                           }
-                          data-tooltip-pos="top"
+                          tooltipPos="top"
                         />
                         <IconButton
                           tier="ghost"
@@ -542,8 +551,8 @@ export function MediaServerManageModal({
                           icon={<Edit2 size={14} />}
                           onClick={() => startEditServer(profile)}
                           aria-label={`${t('common.edit', { defaultValue: 'Edit' })} ${profile.name}`}
-                          data-tooltip={t('common.edit', { defaultValue: 'Edit' })}
-                          data-tooltip-pos="top"
+                          tooltip={t('common.edit', { defaultValue: 'Edit' })}
+                          tooltipPos="top"
                         />
                         <IconButton
                           tier="ghost"
@@ -552,8 +561,8 @@ export function MediaServerManageModal({
                           icon={<Trash2 size={14} />}
                           onClick={() => void handleDelete(profile.id)}
                           aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${profile.name}`}
-                          data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-                          data-tooltip-pos="top"
+                          tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                          tooltipPos="top"
                         />
                       </div>
                     </div>

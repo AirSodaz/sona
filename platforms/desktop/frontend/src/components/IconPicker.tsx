@@ -169,8 +169,13 @@ export function IconPicker({
       <Button
         ref={buttonRef}
         tier="secondary"
-        data-tooltip={t('history.choose_icon', { defaultValue: 'Choose icon' })}
-        data-tooltip-pos="top"
+        aria-label={
+          icon && !icon.startsWith('system:')
+            ? undefined
+            : t('history.choose_icon', { defaultValue: 'Choose icon' })
+        }
+        tooltip={t('history.choose_icon', { defaultValue: 'Choose icon' })}
+        tooltipPos="top"
         style={{
           gap: 'var(--spacing-xs)',
           minWidth: '60px',
@@ -269,8 +274,8 @@ export function IconPicker({
                         onChange(si.id);
                         setIsPickerOpen(false);
                       }}
-                      data-tooltip={label}
-                      data-tooltip-pos="top"
+                      tooltip={label}
+                      tooltipPos="top"
                       aria-label={label}
                     />
                   );
@@ -359,8 +364,8 @@ export function IconPicker({
                 onChange('');
                 setIsPickerOpen(false);
               }}
-              data-tooltip={t('history.reset_icon', { defaultValue: 'Reset icon' })}
-              data-tooltip-pos="top"
+              tooltip={t('history.reset_icon', { defaultValue: 'Reset icon' })}
+              tooltipPos="top"
             >
               {t('common.reset', { defaultValue: 'Reset' })}
             </Button>

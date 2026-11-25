@@ -755,8 +755,7 @@ export function Settings({
             icon={<XIcon />}
             onClick={onClose}
             aria-label={t('common.close')}
-            data-tooltip={t('common.close')}
-            data-tooltip-pos="bottom-left"
+            tooltipPos="bottom-left"
           />
         </div>
 

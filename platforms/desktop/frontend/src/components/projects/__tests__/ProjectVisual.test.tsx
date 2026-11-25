@@ -90,8 +90,9 @@ describe('ProjectCreateModal with unified identity selection', () => {
 
     // Clicking a color swatch inside picker calls onColorChange
     const emeraldSwatch = screen.getByLabelText('#10B981');
-    expect(emeraldSwatch.getAttribute('data-tooltip')).toBe('#10B981');
     expect(emeraldSwatch.getAttribute('title')).toBeNull();
+    fireEvent.focus(emeraldSwatch);
+    expect(screen.getByRole('tooltip').textContent).toBe('#10B981');
     fireEvent.click(emeraldSwatch);
     expect(onColorChange).toHaveBeenCalledWith('#10B981');
     // Selecting an emoji calls onIconChange

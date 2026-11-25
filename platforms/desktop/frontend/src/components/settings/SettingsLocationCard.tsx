@@ -3,6 +3,7 @@ import type React from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import './SettingsShared.css';
 
 export interface SettingsLocationCardProps {
@@ -136,14 +137,11 @@ export function SettingsLocationCard({
         {hint && <p className="settings-storage-location-hint">{hint}</p>}
       </div>
 
-      <div
-        className="settings-storage-path-box"
-        data-tooltip={path || undefined}
-        data-tooltip-pos="top"
-        data-tooltip-multiline
-      >
-        <code>{path || t('common.loading', { defaultValue: 'Loading...' })}</code>
-      </div>
+      <Tooltip content={path || undefined} placement="top" multiline disabled={!path}>
+        <div className="settings-storage-path-box">
+          <code>{path || t('common.loading', { defaultValue: 'Loading...' })}</code>
+        </div>
+      </Tooltip>
 
       <div className="settings-storage-location-actions">
         {onChangePath && (

@@ -1163,9 +1163,6 @@ export function SettingsSubtitleTab({
                         defaultValue: 'Swap languages',
                       })}
                       onClick={handleSwapLanguages}
-                      title={t('settings.swap_translation_languages', {
-                        defaultValue: 'Swap languages',
-                      })}
                     />
                     <Dropdown
                       id="translation-target-language"

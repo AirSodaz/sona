@@ -260,7 +260,7 @@
     0 0 0 1px var(--color-border);
   background: var(--color-bg-elevated);
   transform: scale(1.02);
-  border-color: var(--color-accent-primary, #64748b);
+  border-color: var(--color-border-hover);
 }
 
 .projects-rail-item-container .projects-rail-item {
@@ -363,8 +363,8 @@
   height: 15px;
   flex-shrink: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent-primary, #0a84ff) 16%, transparent);
-  color: var(--color-accent-primary, #0a84ff);
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
   margin-right: 4px;
   transition: opacity 0.12s ease;
 }
@@ -372,7 +372,7 @@
 .projects-rail-pipeline-badge {
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-secondary, #64748b);
+  color: var(--color-text-secondary);
   margin-right: 4px;
   transition: opacity 0.12s ease;
 }
@@ -883,8 +883,9 @@
   height: 18px;
   padding: 0 4px;
   border-radius: var(--radius-full);
-  background: var(--color-accent-primary);
-  color: white;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-hover);
   font-size: 0.65rem;
   font-weight: 700;
   line-height: 1;

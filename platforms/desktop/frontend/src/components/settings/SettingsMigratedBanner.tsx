@@ -115,8 +115,9 @@ export function SettingsMigratedBanner({
               width: '44px',
               height: '44px',
               borderRadius: 'var(--radius-md, 8px)',
-              background: 'var(--color-primary-subtle, rgba(59, 130, 246, 0.12))',
-              color: 'var(--color-primary)',
+              background: 'var(--color-bg-hover)',
+              color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-border)',
               flexShrink: 0,
             }}
           >
@@ -141,8 +142,9 @@ export function SettingsMigratedBanner({
                   fontWeight: 500,
                   padding: '2px 8px',
                   borderRadius: '9999px',
-                  background: 'var(--color-primary-subtle, rgba(59, 130, 246, 0.12))',
-                  color: 'var(--color-primary)',
+                  background: 'var(--color-bg-hover)',
+                  color: 'var(--color-text-primary)',
+                  border: '1px solid var(--color-border)',
                 }}
               >
                 {t('tools.migrated_badge', { defaultValue: 'Moved to Tools' })}

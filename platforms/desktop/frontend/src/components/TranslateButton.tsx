@@ -519,12 +519,12 @@ export function TranslateButton({
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls="translate-menu-dropdown"
-        data-tooltip={
+        tooltip={
           isTranslating
             ? t('translation.translating')
             : t('translation.translate_all', { defaultValue: 'Translate Transcript' })
         }
-        data-tooltip-pos="bottom"
+        tooltipPos="bottom"
         aria-label={
           isTranslating
             ? t('translation.translating')
@@ -665,7 +665,6 @@ export function TranslateButton({
               size="sm"
               icon={<SwapIcon />}
               aria-label={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
-              title={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
               onClick={handleSwapLanguages}
             />
             <Button
@@ -894,12 +893,11 @@ export function TranslateButton({
                           data-candidate-lang="true"
                           onClick={() => void handleLanguageSelect(lang)}
                           style={{
-                            borderColor: isSelected ? 'var(--color-accent-primary)' : undefined,
+                            borderColor: isSelected ? 'var(--color-brand)' : undefined,
                             fontWeight: isSelected ? 600 : 'normal',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                           }}
-                          title={getLocalizedLanguageName(lang, i18n.language)}
                         >
                           {getLocalizedLanguageName(lang, i18n.language)}
                         </Button>

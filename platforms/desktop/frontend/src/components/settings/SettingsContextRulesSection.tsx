@@ -62,7 +62,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
       id: `custom-${Date.now()}`,
       name: '',
       icon: '✨',
-      badgeColor: '#6366f1',
+      badgeColor: '#5c4d43',
       appsByPlatform: {
         windows: [],
         macos: [],
@@ -345,9 +345,9 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                           fontWeight: 500,
                           padding: '1px 5px',
                           borderRadius: '4px',
-                          background: 'rgba(59, 130, 246, 0.12)',
-                          color: '#3b82f6',
-                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                          background: 'var(--color-bg-hover)',
+                          color: 'var(--color-text-secondary)',
+                          border: '1px solid var(--color-border)',
                         }}
                       >
                         {t('settings.voice_typing_rule_strip_active', {
@@ -400,7 +400,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     tier="ghost"
                     tone="danger"
                     size="sm"
-                    title={t('common.delete', { defaultValue: 'Delete' })}
                     onClick={() => handleDeleteRule(rule.id)}
                   >
                     {t('common.delete', { defaultValue: 'Delete' })}
@@ -501,7 +500,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       borderRadius: '6px',
                       border:
                         draft.icon === emoji
-                          ? '1px solid var(--color-primary, #6366f1)'
+                          ? '1px solid var(--color-brand)'
                           : '1px solid var(--color-border)',
                       background:
                         draft.icon === emoji
@@ -514,7 +513,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                     }}
-                    title={emoji}
+                    aria-label={emoji}
                   >
                     {emoji}
                   </button>
@@ -598,7 +597,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                         icon={<span aria-hidden="true">×</span>}
                         onClick={() => handleRemoveApp(app)}
                         aria-label={t('common.remove', { defaultValue: 'Remove' })}
-                        title={t('common.remove', { defaultValue: 'Remove' })}
                       />
                     </span>
                   ))
@@ -703,7 +701,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                         icon={<span aria-hidden="true">×</span>}
                         onClick={() => handleRemoveTitlePattern(pattern)}
                         aria-label={t('common.remove', { defaultValue: 'Remove' })}
-                        title={t('common.remove', { defaultValue: 'Remove' })}
                       />
                     </span>
                   ))

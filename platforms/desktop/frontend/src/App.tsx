@@ -274,8 +274,7 @@ function App(): React.JSX.Element | null {
             onClick={openDefaultSettings}
             onPointerEnter={() => preloadSettings('general')}
             onFocus={() => preloadSettings('general')}
-            data-tooltip={t('header.settings')}
-            data-tooltip-pos="bottom-left"
+            tooltipPos="bottom-left"
             aria-label={t('header.settings')}
           />
         </div>

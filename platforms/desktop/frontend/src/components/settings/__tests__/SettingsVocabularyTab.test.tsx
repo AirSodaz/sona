@@ -349,23 +349,28 @@ describe('SettingsVocabularyTab', () => {
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('renders unified project data-tooltips on prompts sub-tabs instead of title attribute', () => {
+  it('renders unified project Portal tooltips on prompts sub-tabs instead of title attribute', () => {
     render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     const polishTab = screen.getByRole('tab', { name: 'Polish' });
-    expect(polishTab.getAttribute('data-tooltip')).toBe('Presets and style prompts');
-    expect(polishTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(polishTab.getAttribute('title')).toBeNull();
+    fireEvent.focus(polishTab);
+    expect(screen.getByRole('tooltip').textContent).toBe('Presets and style prompts');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(polishTab);
 
     const translationTab = screen.getByRole('tab', { name: 'Translation' });
-    expect(translationTab.getAttribute('data-tooltip')).toBe('Default target language');
-    expect(translationTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(translationTab.getAttribute('title')).toBeNull();
+    fireEvent.focus(translationTab);
+    expect(screen.getByRole('tooltip').textContent).toBe('Default target language');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(translationTab);
 
     const summaryTab = screen.getByRole('tab', { name: 'Summary' });
-    expect(summaryTab.getAttribute('data-tooltip')).toBe('Summary templates');
-    expect(summaryTab.getAttribute('data-tooltip-pos')).toBe('top');
     expect(summaryTab.getAttribute('title')).toBeNull();
+    fireEvent.focus(summaryTab);
+    expect(screen.getByRole('tooltip').textContent).toBe('Summary templates');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
   });
 
   it('renders LLM service configuration status and navigates to LLM settings when clicked', () => {
@@ -376,16 +381,17 @@ describe('SettingsVocabularyTab', () => {
       </SettingsNavigationProvider>
     );
 
-    const llmBtn = document.getElementById('settings-vocab-llm-status-btn');
+    const llmBtn = document.getElementById('settings-vocab-llm-status-btn') as HTMLElement;
     expect(llmBtn).not.toBeNull();
-    expect(llmBtn?.classList.contains('unconfigured')).toBe(true);
-    expect(llmBtn?.textContent).toContain('LLM Service: Not Configured');
-    expect(llmBtn?.getAttribute('data-tooltip')).toBe(
+    expect(llmBtn.classList.contains('unconfigured')).toBe(true);
+    expect(llmBtn.textContent).toContain('LLM Service: Not Configured');
+    fireEvent.focus(llmBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe(
       'LLM service is not configured for this feature. Click to open LLM Service settings.'
     );
-    expect(llmBtn?.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
 
-    fireEvent.click(llmBtn!);
+    fireEvent.click(llmBtn);
     expect(navigateToTab).toHaveBeenCalledWith('llm_service');
   });
 
@@ -413,11 +419,12 @@ describe('SettingsVocabularyTab', () => {
       </SettingsNavigationProvider>
     );
 
-    const llmBtn = document.getElementById('settings-vocab-llm-status-btn');
+    const llmBtn = document.getElementById('settings-vocab-llm-status-btn') as HTMLElement;
     expect(llmBtn?.classList.contains('configured')).toBe(true);
     expect(llmBtn?.textContent).toContain('LLM Service: Configured');
     expect(llmBtn?.textContent).toContain('GPT-4o Mini');
-    expect(llmBtn?.getAttribute('data-tooltip')).toContain('GPT-4o Mini');
+    fireEvent.focus(llmBtn);
+    expect(screen.getByRole('tooltip').textContent).toContain('GPT-4o Mini');
 
     // Switch to Translation tab (which has no model selected)
     fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));

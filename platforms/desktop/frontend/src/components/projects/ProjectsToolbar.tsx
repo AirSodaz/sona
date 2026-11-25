@@ -107,8 +107,8 @@ export function ProjectsToolbar({
             aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
             aria-expanded={isFilterMenuOpen}
             aria-controls="projects-filter-panel"
-            data-tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
-            data-tooltip-pos="bottom"
+            tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
+            tooltipPos="bottom"
           >
             <SlidersHorizontal size={16} />
             {hasActiveFilters && (
@@ -214,8 +214,7 @@ export function ProjectsToolbar({
               onClick={() => onSetViewMode('list')}
               aria-pressed={viewMode === 'list'}
               aria-label={t('projects.view_list', { defaultValue: 'List View' })}
-              data-tooltip={t('projects.view_list', { defaultValue: 'List View' })}
-              data-tooltip-pos="bottom"
+              tooltipPos="bottom"
             />
             <IconButton
               tier="ghost"
@@ -226,8 +225,7 @@ export function ProjectsToolbar({
               onClick={() => onSetViewMode('grid')}
               aria-pressed={viewMode === 'grid'}
               aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
-              data-tooltip={t('projects.view_grid', { defaultValue: 'Grid View' })}
-              data-tooltip-pos="bottom"
+              tooltipPos="bottom"
             />
             <IconButton
               tier="ghost"
@@ -238,8 +236,7 @@ export function ProjectsToolbar({
               onClick={() => onSetViewMode('table')}
               aria-pressed={viewMode === 'table'}
               aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
-              data-tooltip={t('projects.view_table', { defaultValue: 'Table View' })}
-              data-tooltip-pos="bottom"
+              tooltipPos="bottom"
             />
           </div>
 
@@ -252,8 +249,7 @@ export function ProjectsToolbar({
             icon={<FolderIcon width={16} height={16} />}
             onClick={onOpenHistoryFolder}
             aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-            data-tooltip={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-            data-tooltip-pos="bottom"
+            tooltipPos="bottom"
           />
           <IconButton
             tier="ghost"
@@ -263,8 +259,7 @@ export function ProjectsToolbar({
             icon={<CheckSquare size={16} />}
             onClick={onToggleSelectionMode}
             aria-label={t('common.select', { defaultValue: 'Select' })}
-            data-tooltip={t('common.select', { defaultValue: 'Select' })}
-            data-tooltip-pos="bottom"
+            tooltipPos="bottom"
           />
         </div>
       </div>

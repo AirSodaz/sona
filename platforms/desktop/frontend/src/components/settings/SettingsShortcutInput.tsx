@@ -138,8 +138,7 @@ export function SettingsShortcutInput({
           setIsEditing(true);
         }}
         aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
-        data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
-        data-tooltip-pos="top"
+        tooltipPos="top"
       />
     </div>
   );

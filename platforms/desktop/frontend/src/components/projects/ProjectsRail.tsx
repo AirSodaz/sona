@@ -30,6 +30,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
 import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
@@ -123,21 +124,27 @@ function SortableProjectItem({
         <RailItemContent icon={renderScopeIcon(project.id, project)} title={project.name} />
         <div className="projects-rail-actions">
           {isActiveDefault && (
-            <span
-              className="projects-rail-active-badge"
-              title={t('projects.active_project_badge', { defaultValue: 'Active project' })}
-              aria-label={t('projects.active_project_badge', { defaultValue: 'Active project' })}
+            <Tooltip
+              content={t('projects.active_project_badge', { defaultValue: 'Active project' })}
+              placement="top"
             >
-              <Check size={10} strokeWidth={2.75} aria-hidden="true" />
-            </span>
+              <span
+                className="projects-rail-active-badge"
+                aria-label={t('projects.active_project_badge', { defaultValue: 'Active project' })}
+              >
+                <Check size={10} strokeWidth={2.75} aria-hidden="true" />
+              </span>
+            </Tooltip>
           )}
           {project.pipeline?.enabled && (
-            <span
-              className="projects-rail-pipeline-badge"
-              title={t('projects.pipeline_enabled', { defaultValue: 'Pipeline enabled' })}
+            <Tooltip
+              content={t('projects.pipeline_enabled', { defaultValue: 'Pipeline enabled' })}
+              placement="top"
             >
-              <Zap size={13} />
-            </span>
+              <span className="projects-rail-pipeline-badge">
+                <Zap size={13} />
+              </span>
+            </Tooltip>
           )}
           <span className="projects-rail-count">{projectCount}</span>
         </div>
@@ -319,8 +326,7 @@ export function ProjectsRail({
             icon={<Plus size={14} />}
             onClick={onOpenCreateModal}
             aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip-pos="bottom"
+            tooltipPos="bottom"
           />
         </div>
         <div
@@ -362,13 +368,11 @@ export function ProjectsRail({
               />
               <div className="projects-rail-actions">
                 {activeProjectId === null && (
-                  <span
-                    className="projects-rail-active-badge"
-                    title={activeBadgeLabel}
-                    aria-label={activeBadgeLabel}
-                  >
-                    <Check size={10} strokeWidth={2.75} aria-hidden="true" />
-                  </span>
+                  <Tooltip content={activeBadgeLabel} placement="top">
+                    <span className="projects-rail-active-badge" aria-label={activeBadgeLabel}>
+                      <Check size={10} strokeWidth={2.75} aria-hidden="true" />
+                    </span>
+                  </Tooltip>
                 )}
                 <span className="projects-rail-count">{inboxCount}</span>
               </div>
@@ -473,21 +477,12 @@ export function ProjectsRail({
                     />
                     <div className="projects-rail-actions">
                       {activeDragProject && activeProjectId === activeDragProject.id && (
-                        <span
-                          className="projects-rail-active-badge"
-                          title={activeBadgeLabel}
-                          aria-label={activeBadgeLabel}
-                        >
+                        <span className="projects-rail-active-badge" aria-label={activeBadgeLabel}>
                           <Check size={10} strokeWidth={2.75} aria-hidden="true" />
                         </span>
                       )}
                       {activeDragProject?.pipeline?.enabled && (
-                        <span
-                          className="projects-rail-pipeline-badge"
-                          title={t('projects.pipeline_enabled', {
-                            defaultValue: 'Pipeline enabled',
-                          })}
-                        >
+                        <span className="projects-rail-pipeline-badge">
                           <Zap size={13} />
                         </span>
                       )}

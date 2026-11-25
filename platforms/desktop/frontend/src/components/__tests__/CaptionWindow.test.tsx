@@ -700,7 +700,7 @@ describe('CaptionWindow', () => {
       });
     });
 
-    const copyBtn = screen.getByTitle('Copy Subtitle');
+    const copyBtn = screen.getByRole('button', { name: 'Copy Subtitle' });
     await act(async () => {
       fireEvent.click(copyBtn);
     });
@@ -718,7 +718,7 @@ describe('CaptionWindow', () => {
   it('locks window, emits caption:lock-toggle, and shows toast banner', async () => {
     render(<CaptionWindow />);
 
-    const lockBtn = screen.getByTitle('Lock click-through (Alt+C)');
+    const lockBtn = screen.getByRole('button', { name: 'Lock click-through (Alt+C)' });
     await act(async () => {
       fireEvent.click(lockBtn);
     });
@@ -738,7 +738,7 @@ describe('CaptionWindow', () => {
   it('cleans up active toast and lock timers on unmount', async () => {
     const { unmount } = render(<CaptionWindow />);
 
-    const lockBtn = screen.getByTitle('Lock click-through (Alt+C)');
+    const lockBtn = screen.getByRole('button', { name: 'Lock click-through (Alt+C)' });
     await act(async () => {
       fireEvent.click(lockBtn);
     });
@@ -794,7 +794,7 @@ describe('CaptionWindow', () => {
       });
     });
 
-    const copyBtn = screen.getByTitle('Copy Subtitle');
+    const copyBtn = screen.getByRole('button', { name: 'Copy Subtitle' });
     await act(async () => {
       fireEvent.click(copyBtn);
     });

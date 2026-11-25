@@ -30,6 +30,7 @@ import { CheckIcon, TrashIcon } from '../Icons';
 import { ModelBrandLogo } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
 import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { SettingsItem } from './SettingsLayout';
 
 interface InlineApiKeyInputProps {
@@ -72,10 +73,6 @@ function InlineApiKeyInput({
             rel="noreferrer"
             className="cloud-console-link"
             onClick={handleOpenConsole}
-            data-tooltip={t('settings.asr.get_api_key', {
-              defaultValue: 'Get API Key from Console',
-            })}
-            data-tooltip-pos="top"
           >
             <span>
               {t('settings.asr.get_api_key', { defaultValue: 'Get API Key from Console' })}
@@ -574,22 +571,24 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                           (tag) => !commonTagTokens.has(tag.toLowerCase())
                         );
 
+                        const modelDescription = model.descriptionKey
+                          ? t(model.descriptionKey)
+                          : model.description
+                            ? t(model.description)
+                            : undefined;
+
                         return (
                           <div key={model.id} className="model-version-row">
                             <div className="model-version-main">
                               <div className="model-version-info">
-                                <span
-                                  className="model-version-label"
-                                  title={
-                                    model.descriptionKey
-                                      ? t(model.descriptionKey)
-                                      : model.description
-                                        ? t(model.description)
-                                        : undefined
-                                  }
+                                <Tooltip
+                                  content={modelDescription}
+                                  placement="top"
+                                  multiline
+                                  disabled={!modelDescription}
                                 >
-                                  {model.name}
-                                </span>
+                                  <span className="model-version-label">{model.name}</span>
+                                </Tooltip>
                                 {displayTags.map((tag) => (
                                   <span key={tag} className="model-tag">
                                     {tag}
@@ -623,8 +622,8 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                   onClick={() => handleTestModel(provider, model.id)}
                                   disabled={!hasApiKey}
                                   aria-label={`${t('settings.asr.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
-                                  data-tooltip={testTooltip}
-                                  data-tooltip-pos="top"
+                                  tooltip={testTooltip}
+                                  tooltipPos="top"
                                 />
 
                                 {/* Add / Delete button */}
@@ -636,10 +635,10 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                     icon={<TrashIcon />}
                                     onClick={() => handleRemoveModel(provider, model.id)}
                                     aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
-                                    data-tooltip={t('settings.asr.delete_model', {
+                                    tooltip={t('settings.asr.delete_model', {
                                       defaultValue: 'Delete Model',
                                     })}
-                                    data-tooltip-pos="top"
+                                    tooltipPos="top"
                                   />
                                 ) : (
                                   <IconButton
@@ -649,7 +648,7 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                     onClick={() => handleAddModel(provider, model.id)}
                                     disabled={!hasApiKey}
                                     aria-label={`${t('common.add', { defaultValue: 'Add' })} ${model.name}`}
-                                    data-tooltip={
+                                    tooltip={
                                       !hasApiKey
                                         ? t('settings.asr.api_key_required_to_add', {
                                             defaultValue: 'Configure API Key first',
@@ -658,7 +657,7 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                             defaultValue: 'Add Model',
                                           })
                                     }
-                                    data-tooltip-pos="top"
+                                    tooltipPos="top"
                                   />
                                 )}
                               </div>

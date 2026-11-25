@@ -10,7 +10,7 @@
 }
 
 .ffmpeg-install-guide.missing {
-  border-color: color-mix(in srgb, var(--color-primary, #6366f1) 40%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
 }
 
 .ffmpeg-install-guide-header {

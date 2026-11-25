@@ -497,7 +497,7 @@ export function VoiceTypingOverlay() {
                 fontSize: '12px',
               }}
             >
-              <History size={14} color="var(--color-accent-blue, #3b82f6)" />
+              <History size={14} color="var(--color-text-secondary)" />
               <span>
                 {t('voice_typing.quick_recall_title', {
                   defaultValue: 'Quick Recall (Keys 1-5)',
@@ -511,7 +511,6 @@ export function VoiceTypingOverlay() {
               icon={<X size={12} />}
               data-testid="voice-typing-recall-close-btn"
               aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-              title={t('common.cancel', { defaultValue: 'Cancel' })}
               onClick={handleCancel}
             />
           </div>
@@ -606,7 +605,6 @@ export function VoiceTypingOverlay() {
                       size="xs"
                       icon={<Copy size={11} />}
                       aria-label={t('common.copy', { defaultValue: 'Copy' })}
-                      title={t('common.copy', { defaultValue: 'Copy' })}
                       onClick={(e) => {
                         e.stopPropagation();
                         void navigator.clipboard.writeText(item.injectedText);
@@ -660,8 +658,8 @@ export function VoiceTypingOverlay() {
                 fontWeight: 600,
                 padding: '1px 6px',
                 borderRadius: '4px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: 'var(--color-accent-blue, #3b82f6)',
+                background: 'var(--color-brand-light)',
+                color: 'var(--color-brand)',
                 flexShrink: 0,
               }}
             >
@@ -730,7 +728,7 @@ export function VoiceTypingOverlay() {
                 data-testid="voice-typing-realtime-translation"
                 style={{
                   fontSize: '12px',
-                  color: 'var(--color-primary, #3b82f6)',
+                  color: 'var(--color-info)',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -757,7 +755,6 @@ export function VoiceTypingOverlay() {
             icon={<X size={12} />}
             data-testid="voice-typing-cancel-btn"
             aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-            title={t('common.cancel', { defaultValue: 'Cancel' })}
             onClick={handleCancel}
             style={{
               marginLeft: '2px',

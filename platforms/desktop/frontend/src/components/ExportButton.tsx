@@ -30,12 +30,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
 
   return (
     <>
-      <div
-        className={`export-menu ${className}`}
-        data-tooltip={t('export.button')}
-        data-tooltip-pos="bottom"
-        style={{ display: 'inline-block' }}
-      >
+      <div className={`export-menu ${className}`} style={{ display: 'inline-block' }}>
         <IconButton
           id="export-menu-button"
           tier="ghost"
@@ -44,8 +39,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
           onClick={() => setIsModalOpen(true)}
           disabled={segments.length === 0}
           aria-label={t('export.button')}
-          data-tooltip={t('export.button')}
-          data-tooltip-pos="bottom"
+          tooltipPos="bottom"
         />
       </div>
 

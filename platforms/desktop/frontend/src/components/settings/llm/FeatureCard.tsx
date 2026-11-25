@@ -1078,8 +1078,8 @@ export function FeatureCard({
                     leftIcon={<RotateCcw size={12} />}
                     className="feature-temperature-reset-btn"
                     onClick={() => handleTempChange(1.0)}
-                    data-tooltip="重置为默认 1.0"
-                    data-tooltip-pos="top"
+                    tooltip="重置为默认 1.0"
+                    tooltipPos="top"
                     aria-label="Reset temperature to 1.0"
                   >
                     1.0

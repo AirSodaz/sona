@@ -21,6 +21,7 @@ import { needsWordBoundarySpace } from '../../utils/cjkTypography';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { CheckIcon, CloseIcon, EditIcon, MergeIcon, TrashIcon } from '../Icons';
 import { IconButton } from '../ui/Button';
+import { Tooltip } from '../ui/Tooltip';
 import { SegmentEditor } from './SegmentEditor';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
@@ -367,22 +368,28 @@ export function SegmentItem({
   const speakerBadge =
     showSpeakerLabel && segment.speaker ? (
       <div className="speaker-badge-shell" ref={speakerMenuRef}>
-        <button
-          type="button"
-          className="speaker-badge-button"
-          data-testid={`speaker-badge-${segment.id}`}
-          aria-expanded={isSpeakerMenuOpen}
-          aria-haspopup="menu"
-          aria-label={t('editor.change_speaker_label', {
-            speaker: segment.speaker.label,
-            defaultValue: `Change speaker ${segment.speaker.label}`,
-          })}
-          onClick={handleSpeakerBadgeClick}
-          disabled={isLocked}
-          data-tooltip={isLocked ? t('editor.locked_not_final') : undefined}
+        <Tooltip
+          content={isLocked ? t('editor.locked_not_final') : undefined}
+          placement="top"
+          triggerDisabled={isLocked}
+          disabled={!isLocked}
         >
-          {segment.speaker.label}
-        </button>
+          <button
+            type="button"
+            className="speaker-badge-button"
+            data-testid={`speaker-badge-${segment.id}`}
+            aria-expanded={isSpeakerMenuOpen}
+            aria-haspopup="menu"
+            aria-label={t('editor.change_speaker_label', {
+              speaker: segment.speaker.label,
+              defaultValue: `Change speaker ${segment.speaker.label}`,
+            })}
+            onClick={handleSpeakerBadgeClick}
+            disabled={isLocked}
+          >
+            {segment.speaker.label}
+          </button>
+        </Tooltip>
 
         {isSpeakerMenuOpen && (
           <div
@@ -557,11 +564,9 @@ export function SegmentItem({
             />
           )}
           {isAligning && (
-            <span
-              className="segment-aligning-indicator"
-              data-tooltip={t('editor.aligning')}
-              aria-label={t('editor.aligning')}
-            />
+            <Tooltip content={t('editor.aligning')} placement="top">
+              <span className="segment-aligning-indicator" aria-label={t('editor.aligning')} />
+            </Tooltip>
           )}
           {isTranslationVisible &&
             ((typeof segment.translation === 'string' && segment.translation.length > 0) ||
@@ -604,7 +609,6 @@ export function SegmentItem({
                       handleSaveTranslation(translationDraft);
                       isTranslationActionClickedRef.current = false;
                     }}
-                    title={t('common.save', { defaultValue: 'Save' })}
                     aria-label={t('common.save', { defaultValue: 'Save' })}
                   />
                   <IconButton
@@ -621,7 +625,6 @@ export function SegmentItem({
                       handleCancelTranslation();
                       isTranslationActionClickedRef.current = false;
                     }}
-                    title={t('common.cancel', { defaultValue: 'Cancel' })}
                     aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
                   />
                 </div>
@@ -657,7 +660,6 @@ export function SegmentItem({
                       e.stopPropagation();
                       handleStartTranslationEdit();
                     }}
-                    title={t('editor.edit_translation', { defaultValue: 'Edit translation' })}
                     aria-label={t('editor.edit_translation', {
                       defaultValue: 'Edit translation',
                     })}
@@ -677,7 +679,7 @@ export function SegmentItem({
               onEdit(segment.id);
             }}
             disabled={isLocked}
-            data-tooltip={
+            tooltip={
               !segment.isFinal
                 ? t('editor.locked_not_final')
                 : isDocumentLocked
@@ -696,7 +698,7 @@ export function SegmentItem({
                 onMergeWithNext(segment.id);
               }}
               disabled={isLocked || !canMergeWithNext}
-              data-tooltip={
+              tooltip={
                 !segment.isFinal
                   ? t('editor.locked_not_final')
                   : isDocumentLocked
@@ -718,9 +720,6 @@ export function SegmentItem({
                 onEnrollSample?.(segment);
               }}
               disabled={isLocked}
-              data-tooltip={t('editor.enroll_speaker_sample', {
-                defaultValue: 'Enroll as Voice Sample',
-              })}
               aria-label={t('editor.enroll_speaker_sample', {
                 defaultValue: 'Enroll as Voice Sample',
               })}
@@ -736,7 +735,7 @@ export function SegmentItem({
               onDelete(segment.id);
             }}
             disabled={isLocked}
-            data-tooltip={
+            tooltip={
               !segment.isFinal
                 ? t('editor.locked_not_final')
                 : isDocumentLocked

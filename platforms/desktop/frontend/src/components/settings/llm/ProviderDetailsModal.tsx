@@ -37,6 +37,7 @@ import type { LlmModelEntry, LlmProvider } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
 import { PanelModal } from '../../PanelModal';
 import { Button, IconButton } from '../../ui/Button';
+import { Tooltip } from '../../ui/Tooltip';
 import { getCurrentLlmSettings } from './helpers';
 import { ModelMetadataEditor } from './ModelMetadataEditor';
 
@@ -390,49 +391,60 @@ export function ProviderDetailsModal({
                     </div>
                     <div className="provider-model-capabilities">
                       {entry.metadata?.supportsMultimodal ? (
-                        <span
-                          className="provider-model-capability"
-                          aria-label={t('settings.llm.capability_multimodal')}
-                          title={t('settings.llm.capability_multimodal')}
-                        >
-                          <ImageIcon size={14} />
-                        </span>
+                        <Tooltip content={t('settings.llm.capability_multimodal')} placement="top">
+                          <span
+                            className="provider-model-capability"
+                            aria-label={t('settings.llm.capability_multimodal')}
+                          >
+                            <ImageIcon size={14} />
+                          </span>
+                        </Tooltip>
                       ) : null}
                       {entry.metadata?.supportsTools ? (
-                        <span
-                          className="provider-model-capability"
-                          aria-label={t('settings.llm.capability_tools')}
-                          title={t('settings.llm.capability_tools')}
-                        >
-                          <Wrench size={14} />
-                        </span>
+                        <Tooltip content={t('settings.llm.capability_tools')} placement="top">
+                          <span
+                            className="provider-model-capability"
+                            aria-label={t('settings.llm.capability_tools')}
+                          >
+                            <Wrench size={14} />
+                          </span>
+                        </Tooltip>
                       ) : null}
                       {entry.metadata?.supportsReasoning ? (
-                        <span
-                          className="provider-model-capability"
-                          aria-label={t('settings.llm.capability_reasoning')}
-                          title={t('settings.llm.capability_reasoning')}
-                        >
-                          <BrainCircuit size={14} />
-                        </span>
+                        <Tooltip content={t('settings.llm.capability_reasoning')} placement="top">
+                          <span
+                            className="provider-model-capability"
+                            aria-label={t('settings.llm.capability_reasoning')}
+                          >
+                            <BrainCircuit size={14} />
+                          </span>
+                        </Tooltip>
                       ) : null}
                       {entry.metadata?.supportsStructuredOutput ? (
-                        <span
-                          className="provider-model-capability"
-                          aria-label={t('settings.llm.capability_structured_output')}
-                          title={t('settings.llm.capability_structured_output')}
+                        <Tooltip
+                          content={t('settings.llm.capability_structured_output')}
+                          placement="top"
                         >
-                          <FileJson2 size={14} />
-                        </span>
+                          <span
+                            className="provider-model-capability"
+                            aria-label={t('settings.llm.capability_structured_output')}
+                          >
+                            <FileJson2 size={14} />
+                          </span>
+                        </Tooltip>
                       ) : null}
                       {entry.metadata?.supportsPromptCaching ? (
-                        <span
-                          className="provider-model-capability"
-                          aria-label={t('settings.llm.capability_prompt_caching')}
-                          title={t('settings.llm.capability_prompt_caching')}
+                        <Tooltip
+                          content={t('settings.llm.capability_prompt_caching')}
+                          placement="top"
                         >
-                          <Database size={14} />
-                        </span>
+                          <span
+                            className="provider-model-capability"
+                            aria-label={t('settings.llm.capability_prompt_caching')}
+                          >
+                            <Database size={14} />
+                          </span>
+                        </Tooltip>
                       ) : null}
                     </div>
                   </div>
@@ -444,8 +456,8 @@ export function ProviderDetailsModal({
                     icon={<Pencil size={16} />}
                     className="provider-model-edit"
                     aria-label={`${t('settings.llm.edit_model_metadata')} ${entry.model}`}
-                    data-tooltip={t('settings.llm.edit_model_metadata')}
-                    data-tooltip-pos="top"
+                    tooltip={t('settings.llm.edit_model_metadata')}
+                    tooltipPos="top"
                     onClick={() => handleEditMetadata(entry)}
                   />
                   <IconButton
@@ -464,8 +476,8 @@ export function ProviderDetailsModal({
                     }
                     className="provider-model-test"
                     aria-label={`${t('settings.llm.test_connection')} ${entry.model}`}
-                    data-tooltip={t('settings.llm.test_connection')}
-                    data-tooltip-pos="top"
+                    tooltip={t('settings.llm.test_connection')}
+                    tooltipPos="top"
                     onClick={() => void handleTestModel(entry)}
                   />
                   {entry.source === 'manual' ? (
@@ -476,8 +488,8 @@ export function ProviderDetailsModal({
                       icon={<Trash2 size={16} />}
                       className="provider-model-delete"
                       aria-label={`${t('common.delete')} ${entry.model}`}
-                      data-tooltip={t('common.delete')}
-                      data-tooltip-pos="top"
+                      tooltip={t('common.delete')}
+                      tooltipPos="top"
                       onClick={() => handleDeleteModel(entry)}
                     />
                   ) : null}

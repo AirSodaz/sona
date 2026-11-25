@@ -358,8 +358,7 @@ export function TranscriptSummaryPanel({
                 void handleCloseRequest();
               }}
               aria-label={t('common.close')}
-              data-tooltip={t('common.close')}
-              data-tooltip-pos="bottom-left"
+              tooltipPos="bottom-left"
             />
           </div>
 
@@ -470,8 +469,7 @@ export function TranscriptSummaryPanel({
                 icon={<XIcon width={14} height={14} />}
                 onClick={handleDismissManualHint}
                 aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-                data-tooltip={t('common.dismiss', { defaultValue: 'Dismiss' })}
-                data-tooltip-pos="left"
+                tooltipPos="left"
               />
             </div>
           )}

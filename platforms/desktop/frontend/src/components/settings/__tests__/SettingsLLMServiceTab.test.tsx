@@ -791,15 +791,19 @@ describe('SettingsLLMServiceTab', () => {
     expect(editButton.classList.contains('btn-icon')).toBe(true);
     expect(editButton.classList.contains('provider-model-edit')).toBe(true);
     expect(editButton.classList.contains('btn-secondary-soft')).toBe(false);
-    expect(editButton.getAttribute('data-tooltip')).toBe('settings.llm.edit_model_metadata');
-    expect(editButton.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(editButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('settings.llm.edit_model_metadata');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(editButton);
     expect(editButton.textContent).toBe('');
 
     expect(testButton.classList.contains('btn-icon')).toBe(true);
     expect(testButton.classList.contains('provider-model-test')).toBe(true);
     expect(testButton.classList.contains('btn-secondary-soft')).toBe(false);
-    expect(testButton.getAttribute('data-tooltip')).toBe('settings.llm.test_connection');
-    expect(testButton.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(testButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('settings.llm.test_connection');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(testButton);
     expect(testButton.textContent).toBe('');
     expect(testButton.querySelector('svg')).not.toBeNull();
     screen.getByText('GPT-4.1');
@@ -1078,8 +1082,10 @@ describe('SettingsLLMServiceTab', () => {
     expect(deleteButton.classList.contains('btn-icon')).toBe(true);
     expect(deleteButton.classList.contains('provider-model-delete')).toBe(true);
     expect(deleteButton.classList.contains('btn-secondary-soft')).toBe(false);
-    expect(deleteButton.getAttribute('data-tooltip')).toBe('common.delete');
-    expect(deleteButton.getAttribute('data-tooltip-pos')).toBe('top');
+    fireEvent.focus(deleteButton);
+    expect(screen.getByRole('tooltip').textContent).toBe('common.delete');
+    expect(screen.getByRole('tooltip').getAttribute('data-placement')).toBe('top');
+    fireEvent.blur(deleteButton);
 
     await act(async () => {
       fireEvent.click(

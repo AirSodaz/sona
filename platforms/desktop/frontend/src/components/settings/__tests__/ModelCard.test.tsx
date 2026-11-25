@@ -194,7 +194,8 @@ describe('ModelCard interrupted download', () => {
     expect(chip?.textContent).toContain('50%');
 
     const downloadBtn = screen.getByRole('button', { name: /SenseVoice/i });
-    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+    fireEvent.focus(downloadBtn);
+    expect(screen.getByRole('tooltip').textContent).toContain('50%');
   });
 
   it('renders interrupted chip in version row for multi-version model', () => {

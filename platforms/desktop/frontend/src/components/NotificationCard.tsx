@@ -51,8 +51,7 @@ function renderCloseButton(action?: NotificationAction): React.ReactNode {
         }
       }}
       aria-label={action.label}
-      data-tooltip={action.label}
-      data-tooltip-pos="left"
+      tooltipPos="left"
       disabled={action.disabled}
     />
   );

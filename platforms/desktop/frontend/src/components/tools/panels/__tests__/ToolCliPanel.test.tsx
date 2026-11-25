@@ -413,12 +413,15 @@ describe('ToolCliPanel', () => {
     ).toBeDefined();
     expect(screen.getByText('Live Microphone Recognition')).toBeDefined();
 
-    // Verify cheat sheet copy buttons have borderless icon class and no data-tooltip
+    // Verify cheat sheet copy buttons have borderless icon class and Portal Copy tooltip
     const copyBtns = container.querySelectorAll('.tool-cli-terminal-copy');
     expect(copyBtns.length).toBe(5);
     for (const btn of copyBtns) {
       expect(btn.classList.contains('btn-icon')).toBe(true);
-      expect(btn.hasAttribute('data-tooltip')).toBe(false);
+      expect(btn.getAttribute('title')).toBeNull();
+      fireEvent.focus(btn);
+      expect(screen.getByRole('tooltip').textContent).toBe('Copy');
+      fireEvent.blur(btn);
     }
   });
 
@@ -426,8 +429,13 @@ describe('ToolCliPanel', () => {
     const { container } = render(<ToolCliPanel />);
     const tooltipWrapper = container.querySelector('.tool-cli-path-tooltip-wrapper');
     expect(tooltipWrapper).not.toBeNull();
-    expect(tooltipWrapper?.getAttribute('data-tooltip')).toBe('C:\\Program Files\\Sona\\bin');
-    expect(tooltipWrapper?.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(tooltipWrapper?.hasAttribute('data-tooltip-multiline')).toBe(true);
+    if (tooltipWrapper) {
+      fireEvent.focus(tooltipWrapper);
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip.textContent).toBe('C:\\Program Files\\Sona\\bin');
+      expect(tooltip.getAttribute('data-placement')).toBe('top');
+      expect(tooltip.classList.contains('tooltip-portal--multiline')).toBe(true);
+      fireEvent.blur(tooltipWrapper);
+    }
   });
 });

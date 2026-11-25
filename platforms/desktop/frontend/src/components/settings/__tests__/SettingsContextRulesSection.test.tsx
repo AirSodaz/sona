@@ -94,7 +94,7 @@ describe('SettingsContextRulesSection', () => {
     const editBtn = devCard.querySelectorAll('button')[0];
     fireEvent.click(editBtn);
 
-    const emojiBtn = screen.getByTitle('⚡');
+    const emojiBtn = screen.getByRole('button', { name: '⚡' });
     fireEvent.click(emojiBtn);
 
     const iconInput = screen.getByDisplayValue('⚡');

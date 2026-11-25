@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PROJECT_COLOR_PRESETS } from '../constants/projects';
 import { ColorPicker } from './ColorPicker';
+import { Tooltip } from './ui/Tooltip';
 
 export function getContrastTextColor(hex?: string): string {
   if (!hex) return '#ffffff';
@@ -58,51 +59,51 @@ export function ColorSwatchPicker({
       aria-label={ariaLabel}
     >
       {presets.map((presetColor) => (
-        <button
-          key={presetColor}
-          type="button"
-          className={`project-color-swatch ${currentColor.toLowerCase() === presetColor.toLowerCase() ? 'active' : ''}`}
-          style={{ backgroundColor: presetColor }}
-          onClick={(e) => {
-            e.preventDefault();
-            onChange(presetColor);
-          }}
-          data-tooltip={presetColor}
-          data-tooltip-pos="bottom"
-          aria-label={presetColor}
-        />
+        <Tooltip key={presetColor} content={presetColor} placement="bottom">
+          <button
+            type="button"
+            className={`project-color-swatch ${currentColor.toLowerCase() === presetColor.toLowerCase() ? 'active' : ''}`}
+            style={{ backgroundColor: presetColor }}
+            onClick={(e) => {
+              e.preventDefault();
+              onChange(presetColor);
+            }}
+            aria-label={presetColor}
+          />
+        </Tooltip>
       ))}
       <span className="project-color-divider" aria-hidden="true" />
-      <button
-        type="button"
-        ref={customColorBtnRef}
-        className={`project-custom-color-swatch ${isCustom ? 'active' : ''}`}
-        aria-label={customColorLabel}
-        data-tooltip={
-          isCustom ? `${customColorLabel}: ${currentColor.toUpperCase()}` : customColorLabel
-        }
-        data-tooltip-pos="bottom"
-        onClick={(e) => {
-          e.preventDefault();
-          setIsColorPickerOpen((prev) => !prev);
-        }}
-        style={{
-          background: isCustom
-            ? currentColor
-            : 'conic-gradient(from 180deg at 50% 50%, #f43f5e 0deg, #ec4899 45deg, #8b5cf6 90deg, #6366f1 135deg, #06b6d4 180deg, #10b981 225deg, #f59e0b 270deg, #f43f5e 360deg)',
-        }}
+      <Tooltip
+        content={isCustom ? `${customColorLabel}: ${currentColor.toUpperCase()}` : customColorLabel}
+        placement="bottom"
       >
-        <span className="project-custom-color-badge" aria-hidden="true">
-          <Pipette
-            size={11}
-            strokeWidth={2.4}
-            style={{
-              color: iconColor,
-              filter: isCustom ? undefined : 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))',
-            }}
-          />
-        </span>
-      </button>
+        <button
+          type="button"
+          ref={customColorBtnRef}
+          className={`project-custom-color-swatch ${isCustom ? 'active' : ''}`}
+          aria-label={customColorLabel}
+          onClick={(e) => {
+            e.preventDefault();
+            setIsColorPickerOpen((prev) => !prev);
+          }}
+          style={{
+            background: isCustom
+              ? currentColor
+              : 'conic-gradient(from 180deg at 50% 50%, #f43f5e 0deg, #ec4899 45deg, #8b5cf6 90deg, #6366f1 135deg, #06b6d4 180deg, #10b981 225deg, #f59e0b 270deg, #f43f5e 360deg)',
+          }}
+        >
+          <span className="project-custom-color-badge" aria-hidden="true">
+            <Pipette
+              size={11}
+              strokeWidth={2.4}
+              style={{
+                color: iconColor,
+                filter: isCustom ? undefined : 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))',
+              }}
+            />
+          </span>
+        </button>
+      </Tooltip>
       <ColorPicker
         isOpen={isColorPickerOpen}
         color={currentColor || '#6366F1'}

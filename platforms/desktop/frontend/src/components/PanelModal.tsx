@@ -124,8 +124,7 @@ export function PanelModal({
                         icon={<ArrowLeft size={16} />}
                         onClick={onBack}
                         aria-label={resolvedBackLabel}
-                        data-tooltip={resolvedBackLabel}
-                        data-tooltip-pos="bottom"
+                        tooltipPos="bottom"
                       />
                     ) : null}
                     {headerLeading}
@@ -154,8 +153,7 @@ export function PanelModal({
                       icon={<X size={18} />}
                       onClick={onClose}
                       aria-label={resolvedCloseLabel}
-                      data-tooltip={resolvedCloseLabel}
-                      data-tooltip-pos="bottom-left"
+                      tooltipPos="bottom-left"
                     />
                   </div>
                 )}
