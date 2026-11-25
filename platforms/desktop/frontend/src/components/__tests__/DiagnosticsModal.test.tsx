@@ -102,7 +102,11 @@ describe('DiagnosticsModal', () => {
     );
 
     expect(await screen.findByText('Model & Environment Diagnostics')).toBeDefined();
-    screen.getByRole('button', { name: 'Close' });
+    expect(screen.getByRole('button', { name: 'Close' }).classList.contains('btn-md')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Refresh' }).classList.contains('btn-md')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Open Log Folder' }).classList.contains('btn-md')
+    ).toBe(true);
     screen.getByText('Live Record');
     screen.getByText('Input & Capture');
     screen.getByText('Automatic');

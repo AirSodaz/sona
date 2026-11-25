@@ -326,7 +326,7 @@ export function ProviderDetailsModal({
             />
             <Button
               tier="secondary"
-              size="sm"
+              size="md"
               onClick={handleAddModel}
               disabled={!draftModelName.trim()}
             >
@@ -336,7 +336,7 @@ export function ProviderDetailsModal({
           {definition.supportsModelListing ? (
             <Button
               tier="secondary"
-              size="sm"
+              size="md"
               loading={refreshState === 'loading'}
               leftIcon={<RefreshCw size={16} />}
               className="provider-details-refresh"
