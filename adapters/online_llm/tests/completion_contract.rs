@@ -698,3 +698,121 @@ fn creates_aimux_provider_for_new_strategies() {
         );
     }
 }
+
+#[test]
+fn aimux_call_options_maps_budget_thinking_for_anthropic_and_gemini() {
+    let mut anthropic_req = request();
+    anthropic_req.config.strategy = LlmProviderStrategy::Anthropic;
+    anthropic_req.config.model = "claude-sonnet-4-5".into();
+    anthropic_req.options.reasoning_enabled = Some(true);
+    anthropic_req.options.reasoning_level = Some("4096".into());
+
+    let anthropic_options =
+        sona_online_llm::aimux_adapter::build_aimux_call_options(&anthropic_req).unwrap();
+    let anthropic_provider_options = anthropic_options.provider_options.unwrap();
+    let anthropic_thinking = &anthropic_provider_options["anthropic"]["thinking"];
+    assert_eq!(anthropic_thinking["type"], "enabled");
+    assert_eq!(anthropic_thinking["budgetTokens"], 4096);
+    assert!(anthropic_thinking.get("budget_tokens").is_none());
+    assert!(anthropic_provider_options.get("google").is_none());
+
+    let mut gemini_req = request();
+    gemini_req.config.strategy = LlmProviderStrategy::Gemini;
+    gemini_req.config.model = "gemini-2.5-flash".into();
+    gemini_req.options.reasoning_enabled = Some(true);
+    gemini_req.options.reasoning_level = Some("2048".into());
+
+    let gemini_options =
+        sona_online_llm::aimux_adapter::build_aimux_call_options(&gemini_req).unwrap();
+    let gemini_provider_options = gemini_options.provider_options.unwrap();
+    assert_eq!(
+        gemini_provider_options["google"]["thinkingConfig"]["thinkingBudget"],
+        2048
+    );
+    assert!(gemini_provider_options.get("anthropic").is_none());
+}
+
+fn spawn_single_json_mock(
+    response_body: String,
+) -> (
+    std::net::SocketAddr,
+    std::thread::JoinHandle<serde_json::Value>,
+) {
+    use std::io::Write;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let raw = read_http_request(&mut stream);
+        let (_, body) = raw.split_once("\r\n\r\n").unwrap();
+        let body_json: serde_json::Value = serde_json::from_str(body).unwrap();
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+        body_json
+    });
+    (address, server)
+}
+
+#[tokio::test]
+async fn anthropic_and_gemini_budget_thinking_preserve_budget_on_wire() {
+    let anthropic_payload = serde_json::json!({
+        "id": "msg_test_1",
+        "model": "claude-sonnet-4-5",
+        "content": [{ "type": "text", "text": "ok" }],
+        "stop_reason": "end_turn",
+        "usage": { "input_tokens": 3, "output_tokens": 2 }
+    })
+    .to_string();
+    let (anthropic_addr, anthropic_server) = spawn_single_json_mock(anthropic_payload);
+
+    let mut anthropic_req = request();
+    anthropic_req.config.strategy = LlmProviderStrategy::Anthropic;
+    anthropic_req.config.base_url = format!("http://{anthropic_addr}");
+    anthropic_req.config.model = "claude-sonnet-4-5".into();
+    anthropic_req.options.reasoning_enabled = Some(true);
+    anthropic_req.options.reasoning_level = Some("4096".into());
+    anthropic_req.options.response_format = LlmResponseFormat::Text;
+
+    let anthropic_res =
+        LlmCompletionPort::complete(&sona_online_llm::OnlineLlmAdapter, anthropic_req)
+            .await
+            .unwrap();
+    assert_eq!(anthropic_res.text, "ok");
+
+    let anthropic_sent = anthropic_server.join().unwrap();
+    assert_eq!(anthropic_sent["thinking"]["type"], "enabled");
+    assert_eq!(anthropic_sent["thinking"]["budget_tokens"], 4096);
+
+    let gemini_payload = serde_json::json!({
+        "candidates": [{
+            "content": { "parts": [{ "text": "ok" }] },
+            "finishReason": "STOP"
+        }]
+    })
+    .to_string();
+    let (gemini_addr, gemini_server) = spawn_single_json_mock(gemini_payload);
+
+    let mut gemini_req = request();
+    gemini_req.config.strategy = LlmProviderStrategy::Gemini;
+    gemini_req.config.base_url = format!("http://{gemini_addr}");
+    gemini_req.config.model = "gemini-2.5-flash".into();
+    gemini_req.options.reasoning_enabled = Some(true);
+    gemini_req.options.reasoning_level = Some("2048".into());
+    gemini_req.options.response_format = LlmResponseFormat::Text;
+
+    let gemini_res = LlmCompletionPort::complete(&sona_online_llm::OnlineLlmAdapter, gemini_req)
+        .await
+        .unwrap();
+    assert_eq!(gemini_res.text, "ok");
+
+    let gemini_sent = gemini_server.join().unwrap();
+    assert_eq!(
+        gemini_sent["generationConfig"]["thinkingConfig"]["thinkingBudget"],
+        2048
+    );
+}

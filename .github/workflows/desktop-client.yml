@@ -48,8 +48,8 @@ jobs:
             args: "--target aarch64-pc-windows-msvc"
     env:
       LLAMA_CPP_REF: b11429
-      SHERPA_ONNX_VERSION: 2.0.2
-      SHERPA_ONNX_TAG: v2.0.2
+      SHERPA_ONNX_VERSION: 2.0.3
+      SHERPA_ONNX_TAG: v2.0.3
       LLAMA_BUILD_SHARED_LIBS: 1
       LLAMA_ENABLE_VULKAN: ${{ contains(matrix.args, 'llama-vulkan') && '1' || '0' }}
       LLAMA_ENABLE_METAL: ${{ contains(matrix.args, 'llama-metal') && '1' || '0' }}
@@ -126,17 +126,6 @@ jobs:
       - name: Configure Windows build environment
         if: startsWith(matrix.platform, 'windows')
         uses: ./.github/actions/setup-windows-build-env
-
-      - name: Install sccache with Windows Rust response-file support
-        if: startsWith(matrix.platform, 'windows')
-        shell: pwsh
-        run: |
-          # Keep Rust caching enabled while upstream sccache binaries lack the fix.
-          $env:RUSTC_WRAPPER = ''
-          "RUSTC_WRAPPER=" >> $env:GITHUB_ENV
-          cargo install --git https://github.com/AirSodaz/sccache sccache --rev 35ad0291761a8ffaa07d0ef75c30ab311ce24334 --locked --bin sccache --root "$env:RUNNER_TEMP/sccache-response-files" --force
-          "$env:RUNNER_TEMP/sccache-response-files/bin" >> $env:GITHUB_PATH
-          "RUSTC_WRAPPER=sccache" >> $env:GITHUB_ENV
 
       - name: Build the app
         env:

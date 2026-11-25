@@ -1,6 +1,12 @@
 name: 'Setup sccache'
 description: 'Configure sccache with GitHub Actions cache backend for Rust and C/C++'
 
+inputs:
+  version:
+    description: 'Upstream mozilla/sccache release tag'
+    required: false
+    default: 'v0.20.1'
+
 runs:
   using: 'composite'
   steps:
@@ -8,11 +14,16 @@ runs:
       shell: bash
       run: |
         echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+        echo "SCCACHE_SKIP_CACHE_CHECK=1" >> "$GITHUB_ENV"
+        echo "SCCACHE_IDLE_TIMEOUT=0" >> "$GITHUB_ENV"
+        echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
         echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
         echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
 
     - name: Configure sccache binary
       uses: mozilla-actions/sccache-action@v0.0.11
+      with:
+        version: ${{ inputs.version }}
       env:
         SCCACHE_GHA_ENABLED: "true"

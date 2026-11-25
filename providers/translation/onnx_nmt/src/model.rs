@@ -2,8 +2,27 @@ use crate::tokenizer::SentencePieceTokenizer;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Value;
 use sona_core::ports::translation::TranslationPortError;
-use std::path::Path;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+
+static ORT_DYLIB_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Ensures the global ONNX Runtime library and environment are initialized without retaining a
+/// static `Arc<Environment>`, allowing `ort`'s exit hook to call `ReleaseEnv` cleanly.
+fn ensure_ort_initialized() -> Result<(), TranslationPortError> {
+    let dylib_path =
+        ORT_DYLIB_PATH.get_or_init(sona_core::runtime::paths::resolve_bundled_onnxruntime_dylib);
+    if let Some(dylib_path) = dylib_path {
+        let _ = ort::init_from(dylib_path)
+            .map_err(|e| TranslationPortError::engine_failed(e.to_string()))?
+            .commit();
+    } else {
+        let _ = ort::init().commit();
+    }
+    ort::environment::Environment::current()
+        .map(|_| ())
+        .map_err(TranslationPortError::engine_failed)
+}
 
 #[derive(Clone, Debug)]
 struct BeamHypothesis {
@@ -70,6 +89,7 @@ impl OnnxNmtModel {
         target_tokenizer
             .load_vocab(&vocab_path)
             .map_err(TranslationPortError::tokenization_failed)?;
+        ensure_ort_initialized()?;
         let encoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)

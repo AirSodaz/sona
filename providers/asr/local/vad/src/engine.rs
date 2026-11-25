@@ -12,10 +12,28 @@ use sona_core::ports::vad::{
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<Session>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+static ORT_DYLIB_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Ensures the global ONNX Runtime library and environment are initialized without retaining a
+/// static `Arc<Environment>`, allowing `ort`'s exit hook to call `ReleaseEnv` cleanly.
+fn ensure_ort_initialized() -> Result<(), AsrPortError> {
+    let dylib_path =
+        ORT_DYLIB_PATH.get_or_init(sona_core::runtime::paths::resolve_bundled_onnxruntime_dylib);
+    if let Some(dylib_path) = dylib_path {
+        let _ = ort::init_from(dylib_path)
+            .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
+            .commit();
+    } else {
+        let _ = ort::init().commit();
+    }
+    ort::environment::Environment::current()
+        .map(|_| ())
+        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))
+}
 
 /// Prunes idle VAD sessions from the global cache.
 ///
@@ -69,6 +87,7 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Mutex<Session>>, 
         }
     }
 
+    ensure_ort_initialized()?;
     let session = Session::builder()
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
         .with_optimization_level(GraphOptimizationLevel::Level3)

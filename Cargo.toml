@@ -73,8 +73,8 @@ sona-uniffi-bindgen = { path = "tools/uniffi_bindgen" }
 sona-vad = { path = "providers/asr/local/vad" }
 
 # External shared dependencies
-aimux-core = "0.6.1"
-aimux-providers = "0.6.1"
+aimux-core = "0.7.0"
+aimux-providers = "0.7.0"
 async-trait = "0.1"
 axum = "0.8"
 base64 = "0.23"
@@ -94,7 +94,7 @@ hex = "0.4"
 hkdf = "0.13"
 hmac = "0.13"
 infer = "0.22"
-jsonschema = { version = "0.61", default-features = false }
+jsonschema = { version = "0.63", default-features = false }
 log = "0.4.22"
 minisign-verify = "0.3"
 notify = "8.2"
@@ -113,8 +113,8 @@ serde_json = "1"
 serde_with = { version = "3", features = ["macros"] }
 sha2 = "0.11"
 shlex = "2.0"
-sherpa-onnx = { version = "=2.0.2", default-features = false, features = ["shared"] }
-sherpa-onnx-sys = { version = "=2.0.2", default-features = false, features = ["shared"] }
+sherpa-onnx = { version = "=2.0.3", default-features = false, features = ["shared"] }
+sherpa-onnx-sys = { version = "=2.0.3", default-features = false, features = ["shared"] }
 specta = { version = "=2.0.0-rc.25" }
 specta-serde = "0.0.12"
 specta-typescript = "0.0.12"
