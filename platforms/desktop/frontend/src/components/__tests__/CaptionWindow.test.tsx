@@ -585,6 +585,37 @@ describe('CaptionWindow', () => {
     ).toBeTruthy();
   });
 
+  it('falls back to DEFAULT_CAPTION_COLORS.translationFont when translationColor is omitted', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 2,
+          segments: [
+            {
+              id: 'seg-fallback',
+              text: 'Original',
+              translation: '译文',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayPriority: 'translation_main',
+          },
+        },
+      });
+    });
+
+    const translationLine = container.querySelector('.caption-translation-line') as HTMLElement;
+    expect(translationLine).not.toBeNull();
+    // #4EC39D -> rgb(78, 195, 157)
+    expect(translationLine.style.color).toBe('rgb(78, 195, 157)');
+  });
+
   it('does not render original line in translation_only display priority', async () => {
     const { container } = render(<CaptionWindow />);
 

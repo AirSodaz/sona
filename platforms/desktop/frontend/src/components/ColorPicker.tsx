@@ -15,7 +15,7 @@ export interface ColorPickerProps {
 }
 
 // Color conversion helpers
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
+function parseHexRgb(hex: string): { r: number; g: number; b: number } | null {
   let cleaned = hex.replace('#', '');
   if (cleaned.length === 3) {
     cleaned = cleaned
@@ -24,13 +24,19 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
       .join('');
   }
   if (cleaned.length !== 6) {
-    return { r: 120, g: 113, b: 108 };
+    return null;
   }
   return {
     r: parseInt(cleaned.slice(0, 2), 16) || 0,
     g: parseInt(cleaned.slice(2, 4), 16) || 0,
     b: parseInt(cleaned.slice(4, 6), 16) || 0,
   };
+}
+
+const DEFAULT_FALLBACK_RGB = parseHexRgb(DEFAULT_PROJECT_COLOR) ?? { r: 120, g: 113, b: 108 };
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  return parseHexRgb(hex) ?? DEFAULT_FALLBACK_RGB;
 }
 
 function rgbToHex(r: number, g: number, b: number): string {

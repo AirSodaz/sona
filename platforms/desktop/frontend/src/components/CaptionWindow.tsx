@@ -261,7 +261,8 @@ export function CaptionWindow() {
           : 'original_main');
 
   const textAlign = captionState.style.textAlign ?? 'center';
-  const translationColor = captionState.style.translationColor ?? '#6ee7b7';
+  const translationColor =
+    captionState.style.translationColor ?? DEFAULT_CAPTION_COLORS.translationFont;
   const primaryFontSize = captionState.style.fontSize;
   const secondaryFontSize =
     captionState.style.translationFontSize ??

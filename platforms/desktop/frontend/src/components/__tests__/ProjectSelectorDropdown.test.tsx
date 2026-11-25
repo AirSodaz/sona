@@ -112,7 +112,7 @@ describe('ProjectSelectorDropdown', () => {
       id: 'proj-created',
       name: 'Beta',
       description: '',
-      color: '#64748b',
+      color: '#78716C',
       createdAt: 2000,
       updatedAt: 2000,
     };
@@ -145,7 +145,12 @@ describe('ProjectSelectorDropdown', () => {
       fireEvent.click(screen.getByRole('button', { name: /Create Tag/i }));
     });
 
-    expect(createProjectMock).toHaveBeenCalledTimes(1);
+    expect(createProjectMock).toHaveBeenCalledWith({
+      name: 'Beta',
+      description: '',
+      color: '#78716C',
+      icon: '',
+    });
     expect(setActiveProjectIdMock).toHaveBeenCalledWith('proj-created');
   });
 

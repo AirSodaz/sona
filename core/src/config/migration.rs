@@ -653,7 +653,11 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         (
             "captionFontColor",
-            json!(string_or_default(&parsed, "captionFontColor", "#F4F3EF")),
+            json!(string_or_default(
+                &parsed,
+                "captionFontColor",
+                DEFAULT_CAPTION_FONT_COLOR
+            )),
         ),
         (
             "captionTranslationFontSize",
@@ -664,7 +668,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(
                 &parsed,
                 "captionTranslationFontColor",
-                "#4EC39D"
+                DEFAULT_CAPTION_TRANSLATION_FONT_COLOR
             )),
         ),
         (
@@ -672,7 +676,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(
                 &parsed,
                 "captionBackgroundColor",
-                "#1E1E21"
+                DEFAULT_CAPTION_BACKGROUND_COLOR
             )),
         ),
         (
@@ -733,7 +737,11 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         (
             "captionStrokeColor",
-            json!(string_or_default(&parsed, "captionStrokeColor", "#1E1E21")),
+            json!(string_or_default(
+                &parsed,
+                "captionStrokeColor",
+                DEFAULT_CAPTION_STROKE_COLOR
+            )),
         ),
         (
             "captionTextShadow",

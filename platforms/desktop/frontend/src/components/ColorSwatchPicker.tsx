@@ -21,7 +21,7 @@ export interface ColorSwatchPickerProps {
   value?: string;
   color?: string;
   onChange: (color: string) => void;
-  presets?: string[];
+  presets?: readonly string[];
   className?: string;
   style?: React.CSSProperties;
   'aria-label'?: string;
@@ -32,7 +32,7 @@ export function ColorSwatchPicker({
   value,
   color,
   onChange,
-  presets = [...COLOR_PRESETS],
+  presets = COLOR_PRESETS,
   className = '',
   style,
   'aria-label': ariaLabel,

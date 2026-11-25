@@ -12,6 +12,11 @@ pub const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z"
 pub const BUILTIN_POLISH_PRESET_IDS: [&str; 3] = ["clean", "verbatim", "formal"];
 pub const BUILTIN_SUMMARY_TEMPLATE_IDS: [&str; 3] = ["general", "meeting", "lecture"];
 
+pub const DEFAULT_CAPTION_FONT_COLOR: &str = "#F4F3EF";
+pub const DEFAULT_CAPTION_TRANSLATION_FONT_COLOR: &str = "#4EC39D";
+pub const DEFAULT_CAPTION_BACKGROUND_COLOR: &str = "#1E1E21";
+pub const DEFAULT_CAPTION_STROKE_COLOR: &str = "#1E1E21";
+
 pub fn default_config() -> Value {
     let mut config = Map::new();
     for (key, value) in [
@@ -51,17 +56,23 @@ pub fn default_config() -> Value {
         ("captionWindowX", Value::Null),
         ("captionWindowY", Value::Null),
         ("captionFontSize", json!(22)),
-        ("captionFontColor", json!("#F4F3EF")),
+        ("captionFontColor", json!(DEFAULT_CAPTION_FONT_COLOR)),
         ("captionTranslationFontSize", json!(16)),
-        ("captionTranslationFontColor", json!("#4EC39D")),
-        ("captionBackgroundColor", json!("#1E1E21")),
+        (
+            "captionTranslationFontColor",
+            json!(DEFAULT_CAPTION_TRANSLATION_FONT_COLOR),
+        ),
+        (
+            "captionBackgroundColor",
+            json!(DEFAULT_CAPTION_BACKGROUND_COLOR),
+        ),
         ("captionBackgroundOpacity", json!(0.72)),
         ("captionDisplayMode", json!("bilingual")),
         ("captionBilingualOrder", json!("original_first")),
         ("captionDisplayPriority", json!("translation_main")),
         ("captionTextStroke", json!(false)),
         ("captionStrokeWidth", json!(2.0)),
-        ("captionStrokeColor", json!("#1E1E21")),
+        ("captionStrokeColor", json!(DEFAULT_CAPTION_STROKE_COLOR)),
         ("captionTextShadow", json!(true)),
         ("captionTextAlign", json!("center")),
         ("captionDisappearDelay", json!(4.0)),
