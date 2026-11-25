@@ -82,7 +82,7 @@
 }
 
 .sync-pill-inner.is-syncing .sync-pill-dot {
-  background: var(--color-accent-primary, var(--color-primary));
+  background: var(--color-brand);
 }
 
 .sync-pill-inner.is-paused .sync-pill-dot,

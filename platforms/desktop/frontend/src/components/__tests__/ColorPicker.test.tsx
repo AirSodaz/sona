@@ -61,6 +61,8 @@ describe('ColorPicker', () => {
     expect(bInput).toBeDefined();
     expect(rInput.style.borderRadius).toBe('6px');
     expect(rInput.style.border).toBe('1px solid var(--color-border)');
+    expect(rInput.style.height).toBe('28px');
+    expect(rInput.style.minBlockSize).toBe('0px');
 
     // Changing R input updates color
     fireEvent.change(rInput, { target: { value: '200' } });
@@ -73,6 +75,8 @@ describe('ColorPicker', () => {
     expect(hexInput).toBeDefined();
     expect(hexInput.style.borderRadius).toBe('6px');
     expect(hexInput.style.border).toBe('1px solid var(--color-border)');
+    expect(hexInput.style.height).toBe('28px');
+    expect(hexInput.style.minBlockSize).toBe('0px');
 
     // Clean up anchor
     document.body.removeChild(anchor);

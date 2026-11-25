@@ -5,10 +5,10 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
+import { useIsomorphicLayoutEffect } from '../../hooks/useIsomorphicLayoutEffect';
 import { ModalPortal } from '../ModalPortal';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
@@ -28,8 +28,6 @@ export interface TooltipProps {
 const DEFAULT_DELAY_MS = 250;
 const VIEWPORT_MARGIN = 8;
 const TRIGGER_GAP = 6;
-
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 let activeTooltipCloser: (() => void) | null = null;
 

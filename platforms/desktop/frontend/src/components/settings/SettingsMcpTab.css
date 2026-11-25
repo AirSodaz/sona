@@ -95,13 +95,13 @@
 }
 
 .mcp-client-card:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .mcp-client-card.active {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-primary));
+  border-color: var(--color-accent-primary);
+  background: color-mix(in srgb, var(--color-accent-primary) 8%, var(--color-bg-primary));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -124,7 +124,7 @@
 }
 
 .mcp-client-card.active .mcp-client-card-icon {
-  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-secondary));
+  background: color-mix(in srgb, var(--color-accent-primary) 14%, var(--color-bg-secondary));
 }
 .mcp-client-logo {
   display: block;
@@ -176,7 +176,7 @@ html[data-theme="dark"] .mcp-client-logo-monochrome {
 }
 
 .mcp-client-card.active .mcp-client-card-badge {
-  color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
 /* Integration Card Stage */
@@ -216,8 +216,8 @@ html[data-theme="dark"] .mcp-client-logo-monochrome {
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+  color: var(--color-text-primary);
   letter-spacing: 0.03em;
 }
 
@@ -308,7 +308,7 @@ html[data-theme="dark"] .mcp-client-logo-monochrome {
 
 .mcp-stage-tip-icon {
   flex-shrink: 0;
-  color: var(--color-accent);
+  color: var(--color-brand);
 }
 /* Audit log toolbar */
 .mcp-log-toolbar {

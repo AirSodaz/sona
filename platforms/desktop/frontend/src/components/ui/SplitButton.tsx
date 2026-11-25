@@ -1,7 +1,8 @@
 import type React from 'react';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import '../../styles/split-button.css';
+import { useIsomorphicLayoutEffect } from '../../hooks/useIsomorphicLayoutEffect';
 import { ChevronDownIcon } from '../Icons';
 import { ModalPortal } from '../ModalPortal';
 import type { ButtonSize } from './Button';
@@ -29,8 +30,6 @@ export interface SplitButtonProps {
   ariaLabel?: string;
   toggleAriaLabel?: string;
 }
-
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export function SplitButton({
   primaryLabel,
@@ -280,7 +279,7 @@ export function SplitButton({
             id={menuId}
             role="menu"
             aria-labelledby={triggerId}
-            className={`split-button-portal-menu split-button-menu ${hasDescriptions ? 'has-descriptions' : ''}`.trim()}
+            className={`split-button-portal-menu ${hasDescriptions ? 'has-descriptions' : ''}`.trim()}
             style={{
               top: `${menuPosition.top}px`,
               left: `${menuPosition.left}px`,

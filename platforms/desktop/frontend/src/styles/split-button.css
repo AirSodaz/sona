@@ -1,8 +1,5 @@
-/* SplitButton Component & Batch Import Tile Buttons Styles */
+/* Batch Import Actions & SplitButton Component Styles */
 
-/* ==========================================================================
-   Batch Import Tile Buttons (Option 1, Color A)
-   ========================================================================== */
 .batch-import-actions {
   display: inline-flex;
   align-items: center;
@@ -75,8 +72,7 @@
   }
 }
 
-.split-button-portal-menu,
-.split-button-menu {
+.split-button-portal-menu {
   position: fixed;
   z-index: 1400;
   width: 260px;
@@ -97,8 +93,7 @@
   animation: split-menu-fade-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.split-button-portal-menu.has-descriptions,
-.split-button-menu.has-descriptions {
+.split-button-portal-menu.has-descriptions {
   width: 270px;
 }
 
@@ -142,14 +137,7 @@
   flex-shrink: 0;
 }
 
-/* Two-line card layout (when description is provided) */
-.split-button-item.has-description {
-  align-items: center;
-  gap: 10px;
-  padding: 7px 9px;
-  border-radius: calc(var(--radius-md, 6px) - 2px);
-}
-
+/* Two-line card icon container (when description is provided) */
 .split-button-item-icon-box {
   width: 28px;
   height: 28px;

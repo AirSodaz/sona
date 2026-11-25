@@ -902,7 +902,7 @@ export function UnifiedDictionarySection({
                 placeholder={t('settings.dict_test_input_placeholder', {
                   defaultValue: 'Type or paste text to test replacement...',
                 })}
-                style={{ width: '100%', height: '30px', fontSize: '0.75rem' }}
+                style={{ width: '100%', height: '30px', minBlockSize: 0, fontSize: '0.75rem' }}
               />
               {testInput && (
                 <div className="dict-test-result">

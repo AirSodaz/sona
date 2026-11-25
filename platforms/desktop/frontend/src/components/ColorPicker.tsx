@@ -523,6 +523,7 @@ export function ColorPicker({
                     style={{
                       width: '100%',
                       height: '28px',
+                      minBlockSize: 0,
                       textAlign: 'center',
                       borderRadius: '6px',
                       border: '1px solid var(--color-border)',
@@ -566,6 +567,7 @@ export function ColorPicker({
                 style={{
                   width: '100%',
                   height: '28px',
+                  minBlockSize: 0,
                   textAlign: 'center',
                   borderRadius: '6px',
                   border: '1px solid var(--color-border)',

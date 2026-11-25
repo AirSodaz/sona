@@ -98,7 +98,9 @@ export function SecondaryTabs<T extends string = string>({
         (targetTab
           ? container?.querySelector<HTMLButtonElement>(`button[data-tab-value="${targetTab}"]`)
           : null) ??
-        container?.querySelector<HTMLButtonElement>('button[role="tab"][aria-selected="true"]') ??
+        container?.querySelector<HTMLButtonElement>(
+          'button[role="tab"][aria-selected="true"], button[role="radio"][aria-checked="true"]'
+        ) ??
         null;
       if (!container || !activeButton) {
         setHasMeasured(false);

@@ -348,4 +348,56 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
     const wrapper = container.querySelector('.tooltip-disabled-wrap') as HTMLElement | null;
     expect(wrapper?.classList.contains('tooltip-disabled-wrap--full')).toBe(true);
   });
+
+  it('supports role="radiogroup" with radio buttons and sliding indicator', () => {
+    const origGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains('settings-subtab-nav')) {
+        return {
+          left: 0,
+          top: 0,
+          width: 240,
+          height: 36,
+          right: 240,
+          bottom: 36,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        } as DOMRect;
+      }
+      return {
+        left: 4,
+        top: 4,
+        width: 100,
+        height: 28,
+        right: 104,
+        bottom: 32,
+        x: 4,
+        y: 4,
+        toJSON: () => {},
+      } as DOMRect;
+    };
+
+    try {
+      const { container } = render(
+        <SegmentedSubTabs
+          ariaLabel="Radio Mode"
+          role="radiogroup"
+          items={segmentedItems}
+          activeTab="sub1"
+          onChange={vi.fn()}
+        />
+      );
+
+      const group = screen.getByRole('radiogroup', { name: 'Radio Mode' });
+      expect(group).toBeDefined();
+
+      const radio1 = screen.getByRole('radio', { name: 'Sub Tab 1' });
+      expect(radio1.getAttribute('aria-checked')).toBe('true');
+      expect(radio1.classList.contains('is-active')).toBe(true);
+      expect(container.querySelector('.settings-subtab-slider')).not.toBeNull();
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = origGetBoundingClientRect;
+    }
+  });
 });

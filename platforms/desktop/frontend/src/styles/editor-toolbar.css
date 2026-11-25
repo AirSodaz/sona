@@ -141,44 +141,22 @@
   user-select: text;
 }
 
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.btn.toolbar-btn {
   width: 32px;
   height: 32px;
   min-inline-size: 32px;
   min-block-size: 32px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
   border-radius: 11px;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    box-shadow var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
 }
 
 @supports (corner-shape: squircle) {
-  .toolbar-btn {
+  .btn.toolbar-btn {
     corner-shape: squircle;
     border-radius: 14px;
   }
 }
 
-.toolbar-btn:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-}
-
-.toolbar-btn:active:not(:disabled) {
-  background: var(--color-bg-active);
-  transform: scale(0.98);
-}
-
-.toolbar-btn svg {
+.btn.toolbar-btn svg {
   width: 18px;
   height: 18px;
 }

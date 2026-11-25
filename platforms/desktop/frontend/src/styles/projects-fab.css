@@ -57,17 +57,11 @@
 .projects-fab-actions .projects-toolbar-icon {
   width: 30px;
   height: 30px;
+  min-inline-size: 30px;
+  min-block-size: 30px;
   min-height: 30px;
-  padding: 0;
-  border: 0;
   border-radius: 10px;
-  background: transparent;
-  box-shadow: none;
   color: var(--color-text-secondary);
-  cursor: default;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   transition:
     background var(--transition-fast),
     color var(--transition-fast),

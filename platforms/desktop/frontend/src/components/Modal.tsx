@@ -3,13 +3,10 @@ import type React from 'react';
 import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { joinClassNames } from '../utils/classNames';
 import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { ModalPortal } from './ModalPortal';
 import { IconButton } from './ui/Button';
-
-function joinClassNames(...parts: Array<string | undefined | false | null>): string {
-  return parts.filter(Boolean).join(' ');
-}
 
 export interface ModalProps {
   isOpen: boolean;

@@ -2,6 +2,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { joinClassNames } from '../utils/classNames';
 import { ModalPortal } from './ModalPortal';
 import { IconButton } from './ui/Button';
 
@@ -40,10 +41,6 @@ interface PanelModalProps {
   errorBanner?: React.ReactNode;
   children: React.ReactNode;
   shellRef?: React.Ref<HTMLDivElement>;
-}
-
-function joinClassNames(...parts: Array<string | undefined | false | null>): string {
-  return parts.filter(Boolean).join(' ');
 }
 
 export function PanelModal({
