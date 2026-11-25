@@ -15,11 +15,11 @@ ignored = ["ort-sys"]
 async-trait = { workspace = true }
 log = { workspace = true }
 sona-core = { workspace = true }
-ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "tls-rustls", "api-28", "ndarray"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "tls-rustls", "api-28", "ndarray"] }
 ndarray = { version = "0.17", default-features = false }
 parking_lot = { workspace = true }
 # Keep ort-sys aligned with ort to prevent an ABI mismatch
-ort-sys = { version = "=2.0.0-rc.15", default-features = false, features = ["download-binaries", "copy-dylibs", "tls-rustls", "api-28"] }
+ort-sys = { version = "=2.0.0-rc.13", default-features = false, features = ["download-binaries", "copy-dylibs", "tls-rustls", "api-28"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
 serde_json = { workspace = true }

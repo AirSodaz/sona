@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
-pub type OrtEnvironment = ort::environment::Environment;
+pub type OrtEnvironment = std::sync::Arc<ort::environment::Environment>;
 pub type OrtResult<T> = ort::Result<T>;
 pub type OrtEnvProvider = fn() -> OrtResult<OrtEnvironment>;
 
@@ -35,12 +35,14 @@ pub fn create_ort_environment() -> OrtResult<OrtEnvironment> {
         if let Some(dylib_path) =
             sona_core::runtime::paths::find_executable_ancestor_file(&dylib_name, 5)
         {
-            return ort::init_from(&dylib_path)
+            let _ = ort::init_from(&dylib_path)
                 .map_err(|e| ort::Error::new(e.to_string()))?
-                .build();
+                .commit();
+            return ort::environment::Environment::current();
         }
     }
-    ort::init().build()
+    let _ = ort::init().commit();
+    ort::environment::Environment::current()
 }
 
 /// Registers a host-provided factory so multiple ORT crates can share one process environment.
@@ -114,8 +116,8 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Mutex<Session>>, 
         }
     }
 
-    let env = shared_ort_environment()?;
-    let session = Session::builder(&env)
+    let _env = shared_ort_environment()?;
+    let session = Session::builder()
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
         .with_optimization_level(GraphOptimizationLevel::Level3)
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?

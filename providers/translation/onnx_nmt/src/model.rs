@@ -5,7 +5,7 @@ use sona_core::ports::translation::TranslationPortError;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-pub type OrtEnvironment = ort::environment::Environment;
+pub type OrtEnvironment = std::sync::Arc<ort::environment::Environment>;
 pub type OrtResult<T> = ort::Result<T>;
 pub type OrtEnvProvider = fn() -> OrtResult<OrtEnvironment>;
 
@@ -28,12 +28,14 @@ fn create_default_ort_environment() -> OrtResult<OrtEnvironment> {
         if let Some(dylib_path) =
             sona_core::runtime::paths::find_executable_ancestor_file(&dylib_name, 5)
         {
-            return ort::init_from(&dylib_path)
+            let _ = ort::init_from(&dylib_path)
                 .map_err(|e| ort::Error::new(e.to_string()))?
-                .build();
+                .commit();
+            return ort::environment::Environment::current();
         }
     }
-    ort::init().build()
+    let _ = ort::init().commit();
+    ort::environment::Environment::current()
 }
 
 fn shared_ort_environment() -> Result<OrtEnvironment, TranslationPortError> {
@@ -115,8 +117,8 @@ impl OnnxNmtModel {
         target_tokenizer
             .load_vocab(&vocab_path)
             .map_err(TranslationPortError::tokenization_failed)?;
-        let env = shared_ort_environment()?;
-        let encoder_session = Session::builder(&env)
+        let _env = shared_ort_environment()?;
+        let encoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(TranslationPortError::engine_failed)?
@@ -125,7 +127,7 @@ impl OnnxNmtModel {
             .commit_from_file(&encoder_path)
             .map_err(TranslationPortError::engine_failed)?;
 
-        let decoder_session = Session::builder(&env)
+        let decoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(TranslationPortError::engine_failed)?

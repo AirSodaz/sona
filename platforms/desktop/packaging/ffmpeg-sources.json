@@ -2,34 +2,34 @@
   "sources": [
     {
       "target": "x86_64-pc-windows-msvc",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-win64-gpl-8.1.zip",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-24-12-41/ffmpeg-n8.1.3-41-ga8029b6528-win64-gpl-8.1.zip",
       "archiveKind": "zip",
-      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-win64-gpl-8.1/bin/ffmpeg.exe",
-      "sha256": "682361e32c9631caec09e5d9f09077101c9ed90c14e275f62014fefa6d397990",
+      "binaryPath": "ffmpeg-n8.1.3-41-ga8029b6528-win64-gpl-8.1/bin/ffmpeg.exe",
+      "sha256": "a6bd440aa135a628da65dc4338e86761420ddb7b5f5839d08f31a79c9dc405d7",
       "license": "GPL-3.0-or-later"
     },
     {
       "target": "aarch64-pc-windows-msvc",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-winarm64-gpl-8.1.zip",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-24-12-41/ffmpeg-n8.1.3-41-ga8029b6528-winarm64-gpl-8.1.zip",
       "archiveKind": "zip",
-      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-winarm64-gpl-8.1/bin/ffmpeg.exe",
-      "sha256": "e4a86d390c1ab524acf73be651915be34bb7f1151540ab22c9774184aab18fdf",
+      "binaryPath": "ffmpeg-n8.1.3-41-ga8029b6528-winarm64-gpl-8.1/bin/ffmpeg.exe",
+      "sha256": "8107269efd6e0e64e9275433846053af34a98a1f798734098f3ff5bcbb7fc24e",
       "license": "GPL-3.0-or-later"
     },
     {
       "target": "x86_64-unknown-linux-gnu",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1.tar.xz",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-24-12-41/ffmpeg-n8.1.3-41-ga8029b6528-linux64-gpl-8.1.tar.xz",
       "archiveKind": "tar.xz",
-      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1/bin/ffmpeg",
-      "sha256": "0ba73bbd93472c7622f6dec26d334c5e62e64d858d072490b2844320970456cd",
+      "binaryPath": "ffmpeg-n8.1.3-41-ga8029b6528-linux64-gpl-8.1/bin/ffmpeg",
+      "sha256": "b4234c329574dd1d821ab79999f9e5e727045bf24d11847e1e14deba27cea5a8",
       "license": "GPL-3.0-or-later"
     },
     {
       "target": "aarch64-unknown-linux-gnu",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1.tar.xz",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-24-12-41/ffmpeg-n8.1.3-41-ga8029b6528-linuxarm64-gpl-8.1.tar.xz",
       "archiveKind": "tar.xz",
-      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1/bin/ffmpeg",
-      "sha256": "d3f90a71a38238466de2e4dc98537862d244e3307383435f94cbc4b8491033f8",
+      "binaryPath": "ffmpeg-n8.1.3-41-ga8029b6528-linuxarm64-gpl-8.1/bin/ffmpeg",
+      "sha256": "8fe297462c3eb47d05069beba773a106c166e846733104dd85bef2f11f994540",
       "license": "GPL-3.0-or-later"
     },
     {

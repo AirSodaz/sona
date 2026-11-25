@@ -15,7 +15,7 @@ sona-core = { workspace = true }
 ndarray = { version = "0.17", default-features = false }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "tls-rustls", "api-28", "ndarray"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "tls-rustls", "api-28", "ndarray"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "api-28", "ndarray"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-28", "ndarray"] }
