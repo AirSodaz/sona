@@ -556,12 +556,12 @@
 }
 
 .projects-segmented-control {
-  --projects-segmented-inner-radius: 10px;
+  --projects-segmented-inner-radius: 8px;
   display: flex;
   align-items: center;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 11px;
   padding: 2px;
   gap: 1px;
   box-shadow: var(--apple-control-shadow-flat);
@@ -569,9 +569,9 @@
 
 @supports (corner-shape: squircle) {
   .projects-segmented-control {
-    --projects-segmented-inner-radius: 13px;
+    --projects-segmented-inner-radius: 11px;
     corner-shape: squircle;
-    border-radius: 15px;
+    border-radius: 14px;
   }
 }
 
@@ -600,7 +600,7 @@
   min-inline-size: 32px;
   min-block-size: 32px;
   padding: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -628,7 +628,7 @@
 @supports (corner-shape: squircle) {
   .projects-workbench .projects-toolbar-icon {
     corner-shape: squircle;
-    border-radius: 13px;
+    border-radius: 12px;
   }
 
   .projects-workbench .projects-segmented-control .projects-toolbar-icon {
@@ -641,6 +641,7 @@
   content: "";
   position: absolute;
   inset: 0;
+  corner-shape: inherit;
   border-radius: inherit;
   pointer-events: none;
   background: var(--color-bg-elevated);

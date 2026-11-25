@@ -118,24 +118,27 @@ export function RenameModal({
               placeholder={t('common.rename_prompt')}
             />
             {onAiAction && (
-              <IconButton
-                tier="ghost"
-                size="sm"
-                loading={isAiLoading}
-                icon={<SparklesIcon width={16} height={16} />}
-                onClick={handleAiRename}
-                tooltipPos="top"
-                aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+              <div
                 style={{
                   position: 'absolute',
                   right: '4px',
                   top: 0,
                   bottom: 0,
-                  marginTop: 'auto',
-                  marginBottom: 'auto',
-                  color: 'var(--color-info)',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
-              />
+              >
+                <IconButton
+                  tier="ghost"
+                  size="sm"
+                  loading={isAiLoading}
+                  icon={<SparklesIcon width={16} height={16} />}
+                  onClick={handleAiRename}
+                  tooltipPos="top"
+                  aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                  style={{ color: 'var(--color-info)' }}
+                />
+              </div>
             )}
           </div>
         </div>

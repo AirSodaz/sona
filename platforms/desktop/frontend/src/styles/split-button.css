@@ -22,7 +22,7 @@
   border-radius: var(--radius-md, 6px);
 }
 
-.split-button-primary {
+.split-button-container .split-button-primary {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
   display: inline-flex;
@@ -30,7 +30,7 @@
   gap: 6px;
 }
 
-.split-button-toggle {
+.split-button-container .split-button-toggle {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   margin-left: -1px;
@@ -43,7 +43,7 @@
 
 /* Divider rules */
 .split-button-container:not(.is-secondary) .split-button-toggle {
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid color-mix(in srgb, var(--button-primary-text) 22%, transparent);
 }
 
 .split-button-container.is-secondary .split-button-toggle {

@@ -174,6 +174,7 @@ export function Tooltip({
   }, []);
 
   const hideTooltip = useCallback(() => {
+    pointerDownRef.current = false;
     clearHoverTimer();
     setIsOpen(false);
   }, [clearHoverTimer]);
@@ -302,6 +303,9 @@ export function Tooltip({
           onMouseDown={() => {
             pointerDownRef.current = true;
           }}
+          onMouseUp={() => {
+            pointerDownRef.current = false;
+          }}
           onMouseEnter={openWithDelay}
           onMouseLeave={hideTooltip}
           onFocus={openImmediatelyOnFocus}
@@ -336,6 +340,13 @@ export function Tooltip({
         onMouseDown: (event: React.MouseEvent<HTMLElement>) => {
           pointerDownRef.current = true;
           const handler = childProps.onMouseDown as
+            | ((e: React.MouseEvent<HTMLElement>) => void)
+            | undefined;
+          handler?.(event);
+        },
+        onMouseUp: (event: React.MouseEvent<HTMLElement>) => {
+          pointerDownRef.current = false;
+          const handler = childProps.onMouseUp as
             | ((e: React.MouseEvent<HTMLElement>) => void)
             | undefined;
           handler?.(event);

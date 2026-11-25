@@ -2838,6 +2838,7 @@
       "temperature_precise": "정밀",
       "temperature_balanced": "균형",
       "temperature_creative": "창의",
+      "reset_temperature": "기본값 1.0으로 재설정",
       "add_custom_provider": "모델 provider 추가",
       "custom_provider_name": "Provider 이름",
       "custom_provider_api_mode": "API mode",

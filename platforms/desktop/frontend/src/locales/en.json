@@ -2800,6 +2800,7 @@
       "temperature_precise": "Precise",
       "temperature_balanced": "Balanced",
       "temperature_creative": "Creative",
+      "reset_temperature": "Reset to default 1.0",
       "add_custom_provider": "Add model provider",
       "custom_provider_name": "Provider name",
       "custom_provider_api_mode": "API mode",

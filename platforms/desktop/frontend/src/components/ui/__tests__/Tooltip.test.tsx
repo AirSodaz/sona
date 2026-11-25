@@ -78,6 +78,22 @@ describe('Tooltip', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
+  it('clears pointerDown guard on mouseLeave/mouseUp so subsequent keyboard focus opens tooltip', () => {
+    render(
+      <Tooltip content="Keyboard hint">
+        <button type="button">Action</button>
+      </Tooltip>
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Action' });
+    fireEvent.mouseDown(trigger);
+    fireEvent.mouseLeave(trigger);
+    fireEvent.mouseUp(trigger);
+
+    fireEvent.focus(trigger);
+    expect(screen.getByRole('tooltip').textContent).toBe('Keyboard hint');
+  });
+
   it('flips placement from top to bottom when top space is insufficient', () => {
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(800);

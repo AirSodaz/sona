@@ -2800,6 +2800,7 @@
       "temperature_precise": "精确聚焦",
       "temperature_balanced": "平衡通用",
       "temperature_creative": "发散创意",
+      "reset_temperature": "重置为默认 1.0",
       "add_custom_provider": "添加模型供应商",
       "custom_provider_name": "供应商名称",
       "custom_provider_api_mode": "API 模式",

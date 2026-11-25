@@ -1479,7 +1479,6 @@ export function SettingsModelsTab({
         <Button
           tier="secondary"
           leftIcon={<RestoreIcon />}
-          className="btn-restore-defaults"
           onClick={restoreDefaultModelSettings}
           disabled={localModelActionsDisabled}
           aria-label={t('settings.restore_defaults')}
