@@ -38,7 +38,7 @@ test('createCudaAddonManifest generates schema with platform hashes and URLs', (
       addonVersion: '0.1.0',
       cudaVersion: '12.4',
       llamaCppRef: 'b11429',
-      sherpaOnnxVersion: '2.0.2',
+      sherpaOnnxVersion: '2.0.3',
       targetOs: 'windows',
       targetArch: 'x86_64',
       repo: 'test-org/sona',
@@ -50,7 +50,7 @@ test('createCudaAddonManifest generates schema with platform hashes and URLs', (
     assert.equal(manifest.addonVersion, '0.1.0');
     assert.equal(manifest.cudaVersion, '12.4');
     assert.equal(manifest.llamaCppRef, 'b11429');
-    assert.equal(manifest.sherpaOnnxVersion, '2.0.2');
+    assert.equal(manifest.sherpaOnnxVersion, '2.0.3');
     assert.equal(manifest.targetOs, 'windows');
     assert.equal(manifest.targetArch, 'x86_64');
     assert.equal(manifest.publishedAt, '2026-08-28T12:00:00.000Z');

@@ -1,7 +1,7 @@
 {
-  "version": "2.0.2",
-  "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.2/sherpa-onnx-v2.0.2-android.tar.bz2",
-  "sha256": "08d22f7eb5c49bd161d248633eeb66e84735725706e21202b684800e5081a029",
+  "version": "2.0.3",
+  "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-v2.0.3-android.tar.bz2",
+  "sha256": "2a30b222abae6d5cf544df4a1c27944279449c25dbb9c755097189cb45db1df0",
   "abis": [
     "arm64-v8a",
     "armeabi-v7a",

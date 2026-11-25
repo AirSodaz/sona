@@ -501,6 +501,7 @@ impl LocalModelPool {
             }
         }
 
+        crate::integrations::register_shared_ort_environment();
         self.evict_excess_idle_onnx_sync();
 
         let adapter = Arc::new(OnnxNmtAdapter::new(Some(model_dir), 2));

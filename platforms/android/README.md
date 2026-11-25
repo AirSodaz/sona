@@ -73,7 +73,7 @@ models into app-private storage. Required VAD and punctuation companions are
 installed with the selected preset. The client does not expose arbitrary
 model-directory import.
 
-The Android build downloads the locked sherpa-onnx 2.0.2 archive into
+The Android build downloads the locked sherpa-onnx 2.0.3 archive into
 `target/android-sherpa`. For offline builds, set
 `SONA_SHERPA_ONNX_ANDROID_ARCHIVE` to a local copy of the locked archive. The
 local copy must match the SHA-256 recorded in
@@ -91,7 +91,7 @@ Run the Gradle-backed smoke check with a repo-managed Gradle distribution:
 pnpm run verify:android-uniffi:gradle
 ```
 
-The managed runner downloads Gradle `9.6.1` into `target/managed-gradle`,
+The managed runner downloads Gradle `9.9.2` into `target/managed-gradle`,
 checks the distribution SHA-256, and runs the sample project from there. It
 does not commit a Gradle wrapper jar to the repository.
 The smoke check assembles the sample debug AAR, runs
@@ -107,10 +107,10 @@ Kotlin coroutines. The verifier also checks the Gradle Module Metadata runtime
 variant so Gradle consumers resolve the same AAR and runtime dependencies.
 
 On networks that cannot reach the Gradle distribution CDN, pre-download the
-official `gradle-9.6.1-bin.zip` and point the runner at it:
+official `gradle-9.9.2-bin.zip` and point the runner at it:
 
 ```powershell
-$env:SONA_GRADLE_DISTRIBUTION_ZIP="D:\downloads\gradle-9.6.1-bin.zip"
+$env:SONA_GRADLE_DISTRIBUTION_ZIP="D:\downloads\gradle-9.9.2-bin.zip"
 pnpm run verify:android-uniffi:gradle
 ```
 

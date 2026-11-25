@@ -4,7 +4,7 @@
   "version": "0.10.5",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.23.0",
   "scripts": {
     "dev": "pnpm --filter sona-desktop-frontend run dev",
     "prepare": "husky",
@@ -42,7 +42,7 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "husky": "^9.1.7",
-    "lint-staged": "^17.6.1"
+    "lint-staged": "^17.6.2"
   },
   "lint-staged": {
     "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "pnpm run lint:staged --"

@@ -96,7 +96,7 @@ test('stageCudaAddonFiles copies all components to staged directory', () => {
     assert.ok(fs.existsSync(path.join(stagedDir, 'cuda-addon-manifest.json')));
     const manifest = JSON.parse(fs.readFileSync(path.join(stagedDir, 'cuda-addon-manifest.json'), 'utf8'));
     assert.equal(manifest.llamaCppRef, 'b11429');
-    assert.equal(manifest.sherpaOnnxVersion, '2.0.2');
+    assert.equal(manifest.sherpaOnnxVersion, '2.0.3');
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

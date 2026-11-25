@@ -11,8 +11,9 @@ pub mod state_machine;
 pub mod streaming;
 
 pub use engine::{
-    FsmnVadOnnxEngine, SileroOnnxEngine, cached_session_count, cached_session_count_matching,
-    clear_session_cache, prune_idle_sessions,
+    FsmnVadOnnxEngine, OrtEnvProvider, OrtEnvironment, OrtResult, SileroOnnxEngine,
+    cached_session_count, cached_session_count_matching, clear_session_cache,
+    create_ort_environment, prune_idle_sessions, register_ort_environment_provider,
 };
 pub use shared::resolve_model_onnx_path;
 pub use streaming::NativeStreamingVad;

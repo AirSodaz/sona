@@ -122,6 +122,7 @@ pub async fn process_batch_file(
 }
 
 pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
+    crate::integrations::register_shared_ort_environment();
     let vad_engines = sona_vad::built_in_engines();
     let punct_engines = sona_punct::built_in_engines();
     LocalAsrRegistry::empty()

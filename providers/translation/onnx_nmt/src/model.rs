@@ -3,7 +3,52 @@ use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Value;
 use sona_core::ports::translation::TranslationPortError;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+
+pub type OrtEnvironment = ort::environment::Environment;
+pub type OrtResult<T> = ort::Result<T>;
+pub type OrtEnvProvider = fn() -> OrtResult<OrtEnvironment>;
+
+static ORT_ENV_PROVIDER: OnceLock<OrtEnvProvider> = OnceLock::new();
+static ORT_ENV: Mutex<Option<OrtEnvironment>> = Mutex::new(None);
+
+/// Registers a host-provided factory so multiple ORT crates can share one process environment.
+pub fn register_ort_environment_provider(provider: OrtEnvProvider) {
+    let _ = ORT_ENV_PROVIDER.set(provider);
+}
+
+fn create_default_ort_environment() -> OrtResult<OrtEnvironment> {
+    #[cfg(not(target_os = "android"))]
+    if std::env::var_os("ORT_DYLIB_PATH").is_none_or(|v| v.is_empty()) {
+        let dylib_name = format!(
+            "{}onnxruntime{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        );
+        if let Some(dylib_path) =
+            sona_core::runtime::paths::find_executable_ancestor_file(&dylib_name, 5)
+        {
+            return ort::init_from(&dylib_path)
+                .map_err(|e| ort::Error::new(e.to_string()))?
+                .build();
+        }
+    }
+    ort::init().build()
+}
+
+fn shared_ort_environment() -> Result<OrtEnvironment, TranslationPortError> {
+    let mut guard = ORT_ENV.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(env) = guard.as_ref() {
+        return Ok(env.clone());
+    }
+    let env = match ORT_ENV_PROVIDER.get() {
+        Some(provider) => provider(),
+        None => create_default_ort_environment(),
+    }
+    .map_err(TranslationPortError::engine_failed)?;
+    *guard = Some(env.clone());
+    Ok(env)
+}
 
 #[derive(Clone, Debug)]
 struct BeamHypothesis {
@@ -70,7 +115,8 @@ impl OnnxNmtModel {
         target_tokenizer
             .load_vocab(&vocab_path)
             .map_err(TranslationPortError::tokenization_failed)?;
-        let encoder_session = Session::builder()
+        let env = shared_ort_environment()?;
+        let encoder_session = Session::builder(&env)
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(TranslationPortError::engine_failed)?
@@ -79,7 +125,7 @@ impl OnnxNmtModel {
             .commit_from_file(&encoder_path)
             .map_err(TranslationPortError::engine_failed)?;
 
-        let decoder_session = Session::builder()
+        let decoder_session = Session::builder(&env)
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(TranslationPortError::engine_failed)?

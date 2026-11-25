@@ -12,10 +12,55 @@ use sona_core::ports::vad::{
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+
+pub type OrtEnvironment = ort::environment::Environment;
+pub type OrtResult<T> = ort::Result<T>;
+pub type OrtEnvProvider = fn() -> OrtResult<OrtEnvironment>;
 
 static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<Session>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+static ORT_ENV_PROVIDER: OnceLock<OrtEnvProvider> = OnceLock::new();
+static ORT_ENV: Mutex<Option<OrtEnvironment>> = Mutex::new(None);
+
+/// Creates a new ONNX Runtime environment, preferring an `ORT_DYLIB_PATH` override or a bundled runtime next to the executable (or in Cargo's target directory for v2 test layouts).
+pub fn create_ort_environment() -> OrtResult<OrtEnvironment> {
+    #[cfg(not(target_os = "android"))]
+    if std::env::var_os("ORT_DYLIB_PATH").is_none_or(|v| v.is_empty()) {
+        let dylib_name = format!(
+            "{}onnxruntime{}",
+            std::env::consts::DLL_PREFIX,
+            std::env::consts::DLL_SUFFIX
+        );
+        if let Some(dylib_path) =
+            sona_core::runtime::paths::find_executable_ancestor_file(&dylib_name, 5)
+        {
+            return ort::init_from(&dylib_path)
+                .map_err(|e| ort::Error::new(e.to_string()))?
+                .build();
+        }
+    }
+    ort::init().build()
+}
+
+/// Registers a host-provided factory so multiple ORT crates can share one process environment.
+pub fn register_ort_environment_provider(provider: OrtEnvProvider) {
+    let _ = ORT_ENV_PROVIDER.set(provider);
+}
+
+fn shared_ort_environment() -> Result<OrtEnvironment, AsrPortError> {
+    let mut guard = ORT_ENV.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(env) = guard.as_ref() {
+        return Ok(env.clone());
+    }
+    let env = match ORT_ENV_PROVIDER.get() {
+        Some(provider) => provider(),
+        None => create_ort_environment(),
+    }
+    .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?;
+    *guard = Some(env.clone());
+    Ok(env)
+}
 
 /// Prunes idle VAD sessions from the global cache.
 ///
@@ -69,7 +114,8 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Mutex<Session>>, 
         }
     }
 
-    let session = Session::builder()
+    let env = shared_ort_environment()?;
+    let session = Session::builder(&env)
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
         .with_optimization_level(GraphOptimizationLevel::Level3)
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
