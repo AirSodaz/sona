@@ -61,17 +61,17 @@ dependencies = [
 
 [[package]]
 name = "aimux-core"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afa641cecf2a70d9cd1e96eaf0aae4c7af4da15dbd7fb0b58f0c9f52379d0aa5"
+checksum = "0460e414dd98abf5a4f6883e313d907d8c8bb4cd36826ce0565a392b1cd62cdc"
 dependencies = [
  "async-stream",
  "async-trait",
  "base64 0.22.1",
- "chrono",
  "futures",
  "httpdate",
  "indexmap 2.14.2",
+ "jiff 0.2.46",
  "jsonschema 0.50.1",
  "rand 0.8.8",
  "regex",
@@ -88,9 +88,9 @@ dependencies = [
 
 [[package]]
 name = "aimux-provider-utils"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "902e4842e25b4e6b07dcd7ba5fe9a7e5a8caee52edc7512e3e6032e88b6d1441"
+checksum = "3dfc9f79e7792a011b7fdf8e273089c685a48f3eeee7f8a29152668bc9323817"
 dependencies = [
  "aimux-core",
  "aimux-stream",
@@ -98,12 +98,12 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "chrono",
  "futures",
  "hex",
  "hmac 0.12.1",
  "http",
  "indexmap 2.14.2",
+ "jiff 0.2.46",
  "reqwest 0.12.28",
  "rustls",
  "schemars 1.2.2",
@@ -121,9 +121,9 @@ dependencies = [
 
 [[package]]
 name = "aimux-providers"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e83a12b55088392e9963dcd7410ae129e54be0369fef0e89e371f30efed771e"
+checksum = "0f7fcb84629b94c6c035297a6e163f85d1bad46cdf6bed2a7f481f8418437fbc"
 dependencies = [
  "aimux-core",
  "aimux-provider-utils",
@@ -132,9 +132,9 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "chrono",
  "futures",
  "indexmap 2.14.2",
+ "jiff 0.2.46",
  "percent-encoding",
  "regex",
  "reqwest 0.12.28",
@@ -149,9 +149,9 @@ dependencies = [
 
 [[package]]
 name = "aimux-stream"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70177c3581792eec565226f4275b808f569c663884d8cc02d777ef077386e593"
+checksum = "7949cba0110ac681c285658a1e1648550b9cc1db75fc249e7f4586a492f4a4d4"
 dependencies = [
  "bytes",
  "futures",
@@ -1233,10 +1233,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-link 0.2.1",
 ]
 

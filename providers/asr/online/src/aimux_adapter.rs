@@ -2560,4 +2560,153 @@ mod tests {
         );
         assert_eq!(extract_speaker_id_from_value(&json!(null)), None);
     }
+
+    fn read_http_request_bytes(stream: &mut std::net::TcpStream) -> Vec<u8> {
+        use std::io::Read;
+        let mut data = Vec::new();
+        let mut buf = [0u8; 4096];
+        let mut expected_total: Option<usize> = None;
+        loop {
+            let n = stream.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            data.extend_from_slice(&buf[..n]);
+            if expected_total.is_none()
+                && let Some(header_end) = data.windows(4).position(|w| w == b"\r\n\r\n")
+            {
+                let headers = String::from_utf8_lossy(&data[..header_end]);
+                let content_len = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (k, v) = line.split_once(':')?;
+                        k.eq_ignore_ascii_case("content-length")
+                            .then(|| v.trim().parse::<usize>().ok())
+                            .flatten()
+                    })
+                    .unwrap_or(0);
+                expected_total = Some(header_end + 4 + content_len);
+            }
+            if let Some(total) = expected_total
+                && data.len() >= total
+            {
+                break;
+            }
+        }
+        data
+    }
+
+    fn spawn_asr_json_mock(
+        response_body: String,
+    ) -> (std::net::SocketAddr, std::thread::JoinHandle<String>) {
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let raw = read_http_request_bytes(&mut stream);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+            String::from_utf8_lossy(&raw).into_owned()
+        });
+        (addr, handle)
+    }
+
+    #[tokio::test]
+    async fn test_execute_aimux_batch_accepts_strict_070_provider_options() {
+        let wav_path =
+            std::env::temp_dir().join(format!("sona-aimux070-asr-test-{}.wav", std::process::id()));
+        let minimal_wav: &[u8] = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00";
+        tokio::fs::write(&wav_path, minimal_wav).await.unwrap();
+
+        let cases = vec![
+            (
+                OPENAI_WHISPER_PROVIDER_ID,
+                "whisper-1",
+                json!({
+                    "text": "hello openai",
+                    "language": "en",
+                    "duration": 1.0
+                })
+                .to_string(),
+                "hello openai",
+            ),
+            (
+                DEEPGRAM_PROVIDER_ID,
+                "nova-3",
+                json!({
+                    "metadata": { "duration": 1.0 },
+                    "results": {
+                        "channels": [{
+                            "detected_language": "en",
+                            "alternatives": [{ "transcript": "hello deepgram" }]
+                        }]
+                    }
+                })
+                .to_string(),
+                "hello deepgram",
+            ),
+            (
+                AZURE_SPEECH_PROVIDER_ID,
+                "fast-transcription",
+                json!({
+                    "combinedPhrases": [{ "text": "hello azure" }],
+                    "durationMilliseconds": 1000.0,
+                    "phrases": [{
+                        "text": "hello azure",
+                        "offsetMilliseconds": 0.0,
+                        "durationMilliseconds": 1000.0,
+                        "locale": "en-US"
+                    }]
+                })
+                .to_string(),
+                "hello azure",
+            ),
+        ];
+
+        for (provider_id, model_id, response_body, expected_text) in cases {
+            let (addr, server) = spawn_asr_json_mock(response_body);
+            let mut request = online_request(
+                provider_id,
+                json!({
+                    "apiKey": "test-asr-key",
+                    "model": model_id,
+                    "batchEndpoint": format!("http://{addr}"),
+                    "speakerDiarization": true
+                }),
+            );
+            request.language = "en".to_string();
+            request.hotwords = Some("Sona, aimux".to_string());
+
+            let model = create_aimux_transcription_model(&request).unwrap();
+            let output = execute_aimux_batch(
+                model.as_ref(),
+                OnlineBatchTranscriptionRequest {
+                    file_path: wav_path.clone(),
+                    request,
+                },
+            )
+            .await
+            .unwrap_or_else(|err| panic!("execute_aimux_batch failed for {provider_id}: {err:?}"));
+
+            let joined: String = output
+                .segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert!(
+                joined.contains(expected_text),
+                "{provider_id}: unexpected transcript {joined:?}"
+            );
+            let raw_http = server.join().unwrap();
+            assert!(!raw_http.is_empty(), "{provider_id}: expected HTTP request");
+        }
+
+        let _ = tokio::fs::remove_file(&wav_path).await;
+    }
 }
