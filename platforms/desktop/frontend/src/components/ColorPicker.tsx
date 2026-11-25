@@ -1,6 +1,7 @@
 import { ChevronsUpDown, Pipette } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { DEFAULT_PROJECT_COLOR } from '../constants/colors';
 import { ModalPortal } from './ModalPortal';
 import { IconButton } from './ui/Button';
 
@@ -23,7 +24,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
       .join('');
   }
   if (cleaned.length !== 6) {
-    return { r: 99, g: 102, b: 241 };
+    return { r: 120, g: 113, b: 108 };
   }
   return {
     r: parseInt(cleaned.slice(0, 2), 16) || 0,
@@ -106,21 +107,21 @@ export function ColorPicker({
   const hueRef = useRef<HTMLDivElement>(null);
   const fallbackInputRef = useRef<HTMLInputElement>(null);
   const isPickingRef = useRef(false);
-  const initialRgb = hexToRgb(color || '#6366F1');
+  const initialRgb = hexToRgb(color || DEFAULT_PROJECT_COLOR);
   const [prevColor, setPrevColor] = useState(color);
   const [rgb, setRgb] = useState(initialRgb);
   const [hsv, setHsv] = useState(() => rgbToHsv(initialRgb.r, initialRgb.g, initialRgb.b));
   const [format, setFormat] = useState<'rgb' | 'hex'>('rgb');
-  const [hexInput, setHexInput] = useState(() => (color || '#6366F1').toUpperCase());
+  const [hexInput, setHexInput] = useState(() => (color || DEFAULT_PROJECT_COLOR).toUpperCase());
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
 
   // Adjust state during render when color prop changes externally
   if (color !== prevColor) {
     setPrevColor(color);
-    const nextRgb = hexToRgb(color || '#6366F1');
+    const nextRgb = hexToRgb(color || DEFAULT_PROJECT_COLOR);
     setRgb(nextRgb);
     setHsv(rgbToHsv(nextRgb.r, nextRgb.g, nextRgb.b));
-    setHexInput((color || '#6366F1').toUpperCase());
+    setHexInput((color || DEFAULT_PROJECT_COLOR).toUpperCase());
   }
   // Position popover relative to anchor
   useLayoutEffect(() => {
@@ -616,7 +617,9 @@ export function ColorPicker({
             border: 0,
             padding: 0,
           }}
-          value={hexInput.startsWith('#') && hexInput.length === 7 ? hexInput : '#6366F1'}
+          value={
+            hexInput.startsWith('#') && hexInput.length === 7 ? hexInput : DEFAULT_PROJECT_COLOR
+          }
           onChange={(e) => {
             const val = e.target.value.toUpperCase();
             const nextRgb = hexToRgb(val);

@@ -12,6 +12,7 @@ import {
 import type React from 'react';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SPEAKER_PALETTE } from '../../constants/colors';
 import { useSpeakerReview } from '../../hooks/useSpeakerReview';
 import type { SpeakerReviewGroup } from '../../services/speakerReviewService';
 import { PanelModal } from '../PanelModal';
@@ -59,16 +60,6 @@ function getConfidenceKey(group: SpeakerReviewGroup): string {
       return 'editor.speaker_review_confidence_low';
   }
 }
-
-const SPEAKER_PALETTE = [
-  '#3b82f6',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#ec4899',
-  '#06b6d4',
-  '#64748b',
-];
 
 export function TranscriptSpeakerReviewPanel({
   isOpen,

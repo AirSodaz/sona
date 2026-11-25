@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
+import { DEFAULT_CAPTION_COLORS } from '../constants/colors';
 import { createLlmSettings } from '../services/llm/state';
 import {
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
@@ -114,17 +115,17 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionWindowX: null,
   captionWindowY: null,
   captionFontSize: 22,
-  captionFontColor: '#ffffff',
+  captionFontColor: DEFAULT_CAPTION_COLORS.font,
   captionTranslationFontSize: 16,
-  captionTranslationFontColor: '#6ee7b7',
-  captionBackgroundColor: '#17171a',
+  captionTranslationFontColor: DEFAULT_CAPTION_COLORS.translationFont,
+  captionBackgroundColor: DEFAULT_CAPTION_COLORS.background,
   captionBackgroundOpacity: 0.72,
   captionDisplayMode: 'bilingual',
   captionBilingualOrder: 'original_first',
   captionDisplayPriority: 'translation_main',
   captionTextStroke: false,
   captionStrokeWidth: 2,
-  captionStrokeColor: '#000000',
+  captionStrokeColor: DEFAULT_CAPTION_COLORS.stroke,
   captionTextShadow: true,
   captionTextAlign: 'center',
   captionDisappearDelay: 4.0,

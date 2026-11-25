@@ -51,17 +51,17 @@ pub fn default_config() -> Value {
         ("captionWindowX", Value::Null),
         ("captionWindowY", Value::Null),
         ("captionFontSize", json!(22)),
-        ("captionFontColor", json!("#ffffff")),
+        ("captionFontColor", json!("#F4F3EF")),
         ("captionTranslationFontSize", json!(16)),
-        ("captionTranslationFontColor", json!("#6ee7b7")),
-        ("captionBackgroundColor", json!("#17171a")),
+        ("captionTranslationFontColor", json!("#4EC39D")),
+        ("captionBackgroundColor", json!("#1E1E21")),
         ("captionBackgroundOpacity", json!(0.72)),
         ("captionDisplayMode", json!("bilingual")),
         ("captionBilingualOrder", json!("original_first")),
         ("captionDisplayPriority", json!("translation_main")),
         ("captionTextStroke", json!(false)),
         ("captionStrokeWidth", json!(2.0)),
-        ("captionStrokeColor", json!("#000000")),
+        ("captionStrokeColor", json!("#1E1E21")),
         ("captionTextShadow", json!(true)),
         ("captionTextAlign", json!("center")),
         ("captionDisappearDelay", json!(4.0)),
@@ -190,7 +190,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "developer",
             "name": "Developer",
             "icon": "💻",
-            "badgeColor": "#818cf8",
+            "badgeColor": "#5B82E8",
             "appsByPlatform": {
                 "windows": [
                     "code.exe", "cursor.exe", "idea64.exe", "devenv.exe", "clion64.exe",
@@ -226,7 +226,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "chat",
             "name": "Chat",
             "icon": "💬",
-            "badgeColor": "#34d399",
+            "badgeColor": "#4EC39D",
             "appsByPlatform": {
                 "windows": [
                     "wechat.exe", "qq.exe", "slack.exe", "discord.exe", "telegram.exe",
@@ -256,7 +256,7 @@ pub fn create_default_voice_typing_context_rules() -> Value {
             "id": "formal",
             "name": "Formal",
             "icon": "📄",
-            "badgeColor": "#f59e0b",
+            "badgeColor": "#E2A03F",
             "appsByPlatform": {
                 "windows": [
                     "winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe",

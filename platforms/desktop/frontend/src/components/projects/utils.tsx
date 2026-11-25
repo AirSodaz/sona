@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import type React from 'react';
+import { DEFAULT_PROJECT_COLOR } from '../../constants/colors';
 import type { ProjectRecord } from '../../types/project';
 import { InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
@@ -41,7 +42,7 @@ export function buildComparableProjectSettingsSnapshot(input: {
     name: input.name.trim(),
     description: input.description,
     icon: input.icon || '',
-    color: input.color || '#64748b',
+    color: input.color || DEFAULT_PROJECT_COLOR,
   };
 }
 

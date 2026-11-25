@@ -25,7 +25,7 @@ describe('IconPicker', () => {
     render(
       <IconPicker
         icon="system:folder"
-        color="#6366F1"
+        color="#5B82E8"
         onChange={onChange}
         onColorChange={onColorChange}
       />
@@ -53,7 +53,7 @@ describe('IconPicker', () => {
     fireEvent.click(customColorBtn);
     const hexToggleBtn = screen.getByLabelText('Toggle RGB / HEX');
     fireEvent.click(hexToggleBtn);
-    const hexInput = screen.getByDisplayValue('#6366F1');
+    const hexInput = screen.getByDisplayValue('#5B82E8');
     fireEvent.change(hexInput, { target: { value: '#123456' } });
     expect(onColorChange).toHaveBeenCalledWith('#123456');
     // Check system icons have custom tooltips without native title
@@ -64,10 +64,10 @@ describe('IconPicker', () => {
     fireEvent.blur(micBtn);
 
     // Check preset colors have custom tooltips without native title
-    const presetBtn = screen.getByRole('button', { name: '#10B981' });
+    const presetBtn = screen.getByRole('button', { name: '#4EC39D' });
     expect(presetBtn.getAttribute('title')).toBeNull();
     fireEvent.focus(presetBtn);
-    expect(screen.getByRole('tooltip').textContent).toBe('#10B981');
+    expect(screen.getByRole('tooltip').textContent).toBe('#4EC39D');
   });
   it('does not close IconPicker or ColorPicker when clicking pipette, inputs, or toggle button in ColorPicker', () => {
     const onColorChange = vi.fn();
@@ -75,7 +75,7 @@ describe('IconPicker', () => {
     render(
       <IconPicker
         icon="system:folder"
-        color="#6366F1"
+        color="#5B82E8"
         onChange={onChange}
         onColorChange={onColorChange}
       />
@@ -100,7 +100,7 @@ describe('IconPicker', () => {
     expect(document.querySelector('.icon-picker-popover')).not.toBeNull();
 
     // 2. Click R input -> should NOT close ColorPicker or IconPicker
-    const rInput = screen.getByDisplayValue('99');
+    const rInput = screen.getByDisplayValue('91');
     fireEvent.mouseDown(rInput);
     fireEvent.click(rInput);
     expect(document.querySelector('.sona-color-picker-popover')).not.toBeNull();
@@ -114,7 +114,7 @@ describe('IconPicker', () => {
     expect(document.querySelector('.icon-picker-popover')).not.toBeNull();
 
     // 4. Click HEX text input -> should NOT close ColorPicker or IconPicker
-    const hexInput = screen.getByDisplayValue('#6366F1');
+    const hexInput = screen.getByDisplayValue('#5B82E8');
     fireEvent.mouseDown(hexInput);
     fireEvent.click(hexInput);
     expect(document.querySelector('.sona-color-picker-popover')).not.toBeNull();

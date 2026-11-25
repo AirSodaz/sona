@@ -70,8 +70,8 @@
   height: 8px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--project-color, #64748b);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--project-color, #64748b) 20%, transparent);
+  background: var(--project-color, #78716c);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--project-color, #78716c) 20%, transparent);
 }
 .project-visual {
   display: inline-flex;
@@ -85,7 +85,7 @@
     color 0.15s ease;
 }
 .project-visual--with-bg {
-  background: color-mix(in srgb, var(--project-visual-color, #64748b) 14%, transparent);
+  background: color-mix(in srgb, var(--project-visual-color, #78716c) 14%, transparent);
 }
 .project-visual--xs {
   width: 16px;
@@ -264,7 +264,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: none;
   cursor: pointer;
   padding: 0;
   transition:
@@ -273,15 +273,16 @@
   position: relative;
   box-sizing: border-box;
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text-primary) 16%, transparent);
 }
 .project-color-swatch:hover {
   transform: scale(1.15);
   z-index: 2;
 }
 .project-color-swatch.active {
-  border-color: transparent;
   transform: scale(1.1);
   box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-text-primary) 16%, transparent),
     0 0 0 2px var(--color-bg-elevated),
     0 0 0 3px color-mix(in srgb, var(--color-text-secondary) 50%, var(--color-border));
 }

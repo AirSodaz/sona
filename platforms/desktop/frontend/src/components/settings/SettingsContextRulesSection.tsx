@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_CONTEXT_BADGE_COLORS } from '../../constants/colors';
 import {
   DEFAULT_VOICE_TYPING_CONTEXT_RULES,
   getCurrentPlatform,
@@ -62,7 +63,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
       id: `custom-${Date.now()}`,
       name: '',
       icon: '✨',
-      badgeColor: '#5c4d43',
+      badgeColor: DEFAULT_CONTEXT_BADGE_COLORS.custom,
       appsByPlatform: {
         windows: [],
         macos: [],

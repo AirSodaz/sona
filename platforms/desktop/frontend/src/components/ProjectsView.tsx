@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DEFAULT_PROJECT_COLOR } from '../constants/colors';
 import { TranscriptSessionProvider } from '../contexts/TranscriptSessionContext';
 import {
   flushPendingAutoSave,
@@ -136,7 +137,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [newProjectColor, setNewProjectColor] = useState('#64748b');
+  const [newProjectColor, setNewProjectColor] = useState<string>(DEFAULT_PROJECT_COLOR);
   const [newProjectIcon, setNewProjectIcon] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
@@ -809,7 +810,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     setNewProjectName('');
     setNewProjectDescription('');
-    setNewProjectColor('#64748b');
+    setNewProjectColor(DEFAULT_PROJECT_COLOR);
     setNewProjectIcon('');
     setIsCreateModalOpen(false);
     browseState.setBrowseScope(project.id);
