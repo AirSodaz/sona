@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.sqrt
 
 class LiveRecordingCoordinator(
     private val credentialResolver: BatchCredentialResolverPort,
@@ -207,6 +208,18 @@ class LiveRecordingCoordinator(
                 try {
                     openedMicrophone.frames.collect { frame ->
                         if (session.isPaused) return@collect
+                        val nowMillis = monotonicClock.elapsedRealtimeMillis()
+                        if (nowMillis - session.lastRmsEmitMillis >= RMS_EMIT_INTERVAL_MILLIS) {
+                            session.lastRmsEmitMillis = nowMillis
+                            val level = computeNormalizedPcm16Rms(frame.bytes)
+                            mutableState.update { current ->
+                                if (current is LiveRecordingState.Recording && !current.isPaused) {
+                                    current.copy(rmsLevel = level)
+                                } else {
+                                    current
+                                }
+                            }
+                        }
                         var feedFailed = false
                         session.transcriptionMutex.withLock {
                             val activeTranscription = session.transcription
@@ -450,7 +463,7 @@ class LiveRecordingCoordinator(
             session.publicationMutex.withLock {
                 mutableState.update { current ->
                     if (current is LiveRecordingState.Recording) {
-                        current.copy(isPaused = true)
+                        current.copy(isPaused = true, rmsLevel = 0f)
                     } else {
                         current
                     }
@@ -758,6 +771,7 @@ class LiveRecordingCoordinator(
         var pausedAtMillis: Long = 0
         var totalPausedMillis: Long = 0
         var startedAtMillis: Long = 0
+        var lastRmsEmitMillis: Long = 0
         var elapsedJob: Job? = null
         lateinit var checkpointJob: Job
         lateinit var transcriptJob: Job
@@ -769,4 +783,25 @@ class LiveRecordingCoordinator(
         val version: Long,
         val segments: List<TranscriptSegment>,
     )
+
+    private companion object {
+        private const val RMS_EMIT_INTERVAL_MILLIS = 55L
+    }
+}
+
+internal fun computeNormalizedPcm16Rms(bytes: ByteArray): Float {
+    val sampleCount = bytes.size / 2
+    if (sampleCount == 0) return 0f
+    var sumSquares = 0.0
+    var index = 0
+    while (index + 1 < bytes.size) {
+        val low = bytes[index].toInt() and 0xFF
+        val high = bytes[index + 1].toInt()
+        val sample = ((high shl 8) or low).toShort().toDouble() / 32768.0
+        sumSquares += sample * sample
+        index += 2
+    }
+    val rms = sqrt(sumSquares / sampleCount)
+    // Apply square-root perceptual curve scaled for natural speech levels
+    return sqrt((rms * 2.2).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f)
 }

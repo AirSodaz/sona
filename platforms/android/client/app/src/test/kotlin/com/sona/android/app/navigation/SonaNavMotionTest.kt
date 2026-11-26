@@ -8,18 +8,16 @@ import org.junit.Test
 class SonaNavMotionTest {
 
     @Test
-    fun `root tab identification recognizes home, library, and settings root`() {
-        assertTrue(SonaNavMotion.isRootTab("home"))
+    fun `root tab identification recognizes library and settings root`() {
         assertTrue(SonaNavMotion.isRootTab("library"))
         assertTrue(SonaNavMotion.isRootTab("settings"))
         assertTrue(SonaNavMotion.isRootTab("settings?section={section}", sectionArg = null))
         assertTrue(SonaNavMotion.isRootTab("settings?section={section}", sectionArg = ""))
 
+        assertFalse(SonaNavMotion.isRootTab("home"))
         assertFalse(SonaNavMotion.isRootTab("settings?section=recognition"))
         assertFalse(SonaNavMotion.isRootTab("settings?section=data_recovery"))
         assertFalse(SonaNavMotion.isRootTab("settings?section={section}", sectionArg = "recognition"))
-        assertFalse(SonaNavMotion.isRootTab(HOME_LIVE_ROUTE))
-        assertFalse(SonaNavMotion.isRootTab(HOME_FILE_ROUTE))
         assertFalse(SonaNavMotion.isRootTab("library/item-1"))
         assertFalse(SonaNavMotion.isRootTab(LIBRARY_DETAIL_ROUTE))
         assertFalse(SonaNavMotion.isRootTab(null))
@@ -27,11 +25,11 @@ class SonaNavMotionTest {
 
     @Test
     fun `root tab index returns correct sequential indices`() {
-        assertEquals(0, SonaNavMotion.rootTabIndex("home"))
-        assertEquals(1, SonaNavMotion.rootTabIndex("library"))
-        assertEquals(2, SonaNavMotion.rootTabIndex("settings"))
-        assertEquals(2, SonaNavMotion.rootTabIndex("settings?section={section}", sectionArg = null))
+        assertEquals(0, SonaNavMotion.rootTabIndex("library"))
+        assertEquals(1, SonaNavMotion.rootTabIndex("settings"))
+        assertEquals(1, SonaNavMotion.rootTabIndex("settings?section={section}", sectionArg = null))
 
+        assertEquals(-1, SonaNavMotion.rootTabIndex("home"))
         assertEquals(-1, SonaNavMotion.rootTabIndex("settings?section=recognition"))
         assertEquals(-1, SonaNavMotion.rootTabIndex("settings?section={section}", sectionArg = "recognition"))
         assertEquals(-1, SonaNavMotion.rootTabIndex("other"))
@@ -39,16 +37,13 @@ class SonaNavMotionTest {
     }
 
     @Test
-    fun `sub-page identification recognizes workspace, concrete library detail, and settings sections`() {
-        assertTrue(SonaNavMotion.isSubPage(HOME_LIVE_ROUTE))
-        assertTrue(SonaNavMotion.isSubPage(HOME_FILE_ROUTE))
+    fun `sub-page identification recognizes concrete library detail and settings sections`() {
         assertTrue(SonaNavMotion.isSubPage(LIBRARY_DETAIL_ROUTE))
         assertTrue(SonaNavMotion.isSubPage("library/history-abc"))
         assertTrue(SonaNavMotion.isSubPage("settings?section=recognition"))
         assertTrue(SonaNavMotion.isSubPage("settings?section=data_recovery"))
         assertTrue(SonaNavMotion.isSubPage("settings?section={section}", sectionArg = "recognition"))
 
-        assertFalse(SonaNavMotion.isSubPage("home"))
         assertFalse(SonaNavMotion.isSubPage("library"))
         assertFalse(SonaNavMotion.isSubPage("settings"))
         assertFalse(SonaNavMotion.isSubPage("settings?section={section}", sectionArg = null))
@@ -59,15 +54,7 @@ class SonaNavMotionTest {
     fun `peer tab switches resolve directional horizontal sliding without jumping`() {
         assertEquals(
             NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", "library", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
             SonaNavMotion.resolveMotionDirection("library", "settings", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", "settings", isPop = false),
         )
         assertEquals(
             NavMotionDirection.BACKWARD,
@@ -75,17 +62,9 @@ class SonaNavMotionTest {
         )
         assertEquals(
             NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection("library", "home", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection("settings", "home", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.BACKWARD,
             SonaNavMotion.resolveMotionDirection(
                 "settings?section={section}",
-                "home",
+                "library",
                 initialSectionArg = null,
                 isPop = true,
             ),
@@ -96,14 +75,6 @@ class SonaNavMotionTest {
     fun `drill-down to subpages and settings sections resolves forward slide`() {
         assertEquals(
             NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", HOME_LIVE_ROUTE, isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", HOME_FILE_ROUTE, isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
             SonaNavMotion.resolveMotionDirection("library", "library/history-1", isPop = false),
         )
         assertEquals(
@@ -112,20 +83,12 @@ class SonaNavMotionTest {
         )
         assertEquals(
             NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", "library/history-1", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection(HOME_FILE_ROUTE, "library/history-1", isPop = false),
-        )
-        assertEquals(
-            NavMotionDirection.FORWARD,
-            SonaNavMotion.resolveMotionDirection("home", "settings?section=recognition", isPop = false),
+            SonaNavMotion.resolveMotionDirection("library", "settings?section=recognition", isPop = false),
         )
         assertEquals(
             NavMotionDirection.FORWARD,
             SonaNavMotion.resolveMotionDirection(
-                "home",
+                "library",
                 "settings?section={section}",
                 targetSectionArg = "recognition",
                 isPop = false,
@@ -137,14 +100,6 @@ class SonaNavMotionTest {
     fun `returning from subpages and between subpages resolves backward slide`() {
         assertEquals(
             NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection(HOME_LIVE_ROUTE, "home", isPop = true),
-        )
-        assertEquals(
-            NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection(HOME_FILE_ROUTE, "home", isPop = true),
-        )
-        assertEquals(
-            NavMotionDirection.BACKWARD,
             SonaNavMotion.resolveMotionDirection("library/history-1", "library", isPop = true),
         )
         assertEquals(
@@ -153,26 +108,18 @@ class SonaNavMotionTest {
         )
         assertEquals(
             NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection("library/history-1", "home", isPop = true),
-        )
-        assertEquals(
-            NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection("settings?section=recognition", "home", isPop = true),
+            SonaNavMotion.resolveMotionDirection("settings?section=recognition", "library", isPop = true),
         )
         assertEquals(
             NavMotionDirection.BACKWARD,
             SonaNavMotion.resolveMotionDirection(
                 "settings?section={section}",
-                "home",
+                "library",
                 initialSectionArg = "recognition",
                 isPop = true,
             ),
         )
         // Subpage-to-subpage POP: must always be BACKWARD
-        assertEquals(
-            NavMotionDirection.BACKWARD,
-            SonaNavMotion.resolveMotionDirection("library/history-1", HOME_FILE_ROUTE, isPop = true),
-        )
         assertEquals(
             NavMotionDirection.BACKWARD,
             SonaNavMotion.resolveMotionDirection(
@@ -188,7 +135,7 @@ class SonaNavMotionTest {
     fun `identical route resolves none`() {
         assertEquals(
             NavMotionDirection.NONE,
-            SonaNavMotion.resolveMotionDirection("home", "home"),
+            SonaNavMotion.resolveMotionDirection("library", "library"),
         )
         assertEquals(
             NavMotionDirection.NONE,

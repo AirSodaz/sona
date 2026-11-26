@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 fun sonaCollapsibleTopAppBarColors(): TopAppBarColors = TopAppBarDefaults.largeTopAppBarColors(
     containerColor = MaterialTheme.colorScheme.background,
     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-    titleContentColor = MaterialTheme.colorScheme.primary,
+    titleContentColor = MaterialTheme.colorScheme.onSurface,
     navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
 )

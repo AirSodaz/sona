@@ -320,7 +320,7 @@ private fun SettingsSectionList(
             modifier = Modifier
                 .fillMaxSize()
                 .springOverscroll(scrollBehavior = scrollBehavior),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         ) {
             item {
                 InsetGroupedCard(
@@ -333,7 +333,7 @@ private fun SettingsSectionList(
                             supportingText = stringResource(section.summaryRes),
                             leadingContent = {
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     color = if (selected) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
@@ -344,7 +344,7 @@ private fun SettingsSectionList(
                                     } else {
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier.size(42.dp),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
@@ -359,11 +359,11 @@ private fun SettingsSectionList(
                             onClick = { onSectionSelected(section) },
                         )
                         if (index < SettingsSection.entries.lastIndex) {
-                            TwoLineItemDivider(startIndent = 72.dp)
+                            TwoLineItemDivider(startIndent = 74.dp)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.size(100.dp))
+                Spacer(modifier = Modifier.size(112.dp))
             }
         }
     }

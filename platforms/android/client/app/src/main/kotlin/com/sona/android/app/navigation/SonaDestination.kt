@@ -3,7 +3,6 @@ package com.sona.android.app.navigation
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.sona.android.app.R
@@ -14,7 +13,6 @@ enum class SonaDestination(
     val icon: ImageVector,
     val routePattern: String = route,
 ) {
-    HOME("home", R.string.destination_home, Icons.Rounded.Home),
     LIBRARY("library", R.string.destination_library, Icons.Rounded.FolderOpen),
     SETTINGS(
         route = "settings",

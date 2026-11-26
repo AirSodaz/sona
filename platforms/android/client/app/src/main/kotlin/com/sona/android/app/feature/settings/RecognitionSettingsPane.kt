@@ -24,11 +24,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -190,6 +194,9 @@ private fun LocalRecognitionSettings(
     modifier: Modifier = Modifier,
 ) {
     var pendingDeleteModelId by remember { mutableStateOf<String?>(null) }
+    var catalogExpanded by remember(state.installedModels.isEmpty()) {
+        mutableStateOf(state.installedModels.isEmpty() || state.downloadingModelId != null)
+    }
     val context = LocalContext.current
     var hasRequestedNotificationPermission by remember { mutableStateOf(false) }
     var pendingDownloadModelId by remember { mutableStateOf<String?>(null) }
@@ -430,8 +437,13 @@ private fun LocalRecognitionSettings(
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { catalogExpanded = !catalogExpanded }
+                .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = stringResource(R.string.local_model_catalog_heading),
@@ -444,25 +456,32 @@ private fun LocalRecognitionSettings(
                 color = MaterialTheme.colorScheme.tertiaryContainer,
             ) {
                 Text(
-                    text = stringResource(R.string.local_model_source_android_tag),
+                    text = "${state.catalogModels.size}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                 )
             }
+            Icon(
+                imageVector = if (catalogExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
-        if (state.catalogLoading) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
-            }
-        }
+        AnimatedVisibility(visible = catalogExpanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.catalogLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                    }
+                }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.catalogModels.forEach { model ->
                 val installed = state.installedModels.any { it.id == model.id }
                 val downloading = state.downloadingModelId == model.id
@@ -642,6 +661,8 @@ private fun LocalRecognitionSettings(
                         }
                     }
                 }
+            }
+        }
             }
         }
     }

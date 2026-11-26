@@ -32,7 +32,9 @@ import com.sona.android.application.recording.CloudTranscriptionRequest
 import com.sona.android.application.recording.AudioImportFailure
 import com.sona.android.application.recording.AudioImportJobPort
 import com.sona.android.application.recording.AudioImportJobState
+import com.sona.android.application.recording.AudioImportQueueState
 import com.sona.android.application.recording.AudioImportSource
+import com.sona.android.application.recording.AudioImportTaskStatus
 import com.sona.android.application.recording.ScheduleAudioImport
 import com.sona.android.application.recording.ScheduleAudioImportOutcome
 import com.sona.android.application.recording.ScheduleAudioRetranscription
@@ -116,6 +118,7 @@ data class LibraryUiState(
     val detail: LibraryDetailUiState = LibraryDetailUiState.None,
     val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
     val audioImport: AudioImportJobState = AudioImportJobState.Idle,
+    val audioImportQueue: AudioImportQueueState = AudioImportQueueState(),
     val query: HistoryWorkspaceQuery = HistoryWorkspaceQuery(),
     val projects: List<ProjectRecord> = emptyList(),
     val selectedIds: Set<String> = emptySet(),
@@ -192,6 +195,20 @@ class LibraryViewModel(
             }
         }
         viewModelScope.launch {
+            audioImportJobs.queueState.distinctUntilChanged().collect { queueState ->
+                val previousSucceeded = mutableState.value.audioImportQueue.tasks
+                    .filter { it.status == AudioImportTaskStatus.SUCCEEDED }
+                    .mapTo(mutableSetOf()) { it.jobId }
+                val newlySucceeded = queueState.tasks.any {
+                    it.status == AudioImportTaskStatus.SUCCEEDED && it.jobId !in previousSucceeded
+                }
+                mutableState.update { it.copy(audioImportQueue = queueState) }
+                if (newlySucceeded) {
+                    refresh()
+                }
+            }
+        }
+        viewModelScope.launch {
             llmConfiguration?.configuration?.collect { config ->
                 mutableState.update { it.copy(llm = it.llm.copy(configurationAvailable = config.configured)) }
             }
@@ -199,7 +216,7 @@ class LibraryViewModel(
     }
 
     fun importAudio(sourceLocator: String) {
-        if (sourceLocator.isBlank() || mutableState.value.audioImport is AudioImportJobState.Running) {
+        if (sourceLocator.isBlank()) {
             return
         }
         val schedule = scheduleAudioImport ?: run {
@@ -233,7 +250,12 @@ class LibraryViewModel(
 
     fun cancelAudioImport() {
         val running = mutableState.value.audioImport as? AudioImportJobState.Running ?: return
-        viewModelScope.launch { audioImportJobs.cancel(running.jobId) }
+        cancelAudioImportJob(running.jobId)
+    }
+
+    fun cancelAudioImportJob(jobId: String) {
+        if (jobId.isBlank()) return
+        viewModelScope.launch { audioImportJobs.cancel(jobId) }
     }
 
     fun transcribeWithCurrentEngine(item: HistoryItem) {
@@ -824,6 +846,16 @@ class LibraryViewModel(
     fun restoreSelected() = mutateSelection(library::restore)
     fun purgeSelected() = mutateSelection(library::purge)
     fun setProjectForSelected(projectId: String?) = mutateSelection { library.updateProjectAssignment(it, projectId) }
+
+    fun trashItem(historyId: String) = mutateWorkspace {
+        library.trash(listOf(historyId), System.currentTimeMillis())
+        mutableState.update { it.copy(selectedIds = it.selectedIds - historyId) }
+    }
+
+    fun restoreItem(historyId: String) = mutateWorkspace {
+        library.restore(listOf(historyId))
+        mutableState.update { it.copy(selectedIds = it.selectedIds - historyId) }
+    }
 
     fun updateTitle(historyId: String, title: String) = mutateWorkspace {
         library.updateTitle(historyId, title)

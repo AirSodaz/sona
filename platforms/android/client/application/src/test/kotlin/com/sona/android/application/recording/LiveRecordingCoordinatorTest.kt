@@ -1621,6 +1621,23 @@ class LiveRecordingCoordinatorTest {
         runCurrent()
     }
 
+    @Test
+    fun `computeNormalizedPcm16Rms computes zero for silence and bounded level for signal`() {
+        assertEquals(0f, computeNormalizedPcm16Rms(ByteArray(0)))
+        assertEquals(0f, computeNormalizedPcm16Rms(ByteArray(320)))
+
+        val loudFrame = ByteArray(320)
+        var i = 0
+        while (i + 1 < loudFrame.size) {
+            // 16384 (~0.5 full scale little-endian)
+            loudFrame[i] = 0x00
+            loudFrame[i + 1] = 0x40
+            i += 2
+        }
+        val level = computeNormalizedPcm16Rms(loudFrame)
+        assertTrue("expected positive RMS level, got $level", level > 0.5f && level <= 1f)
+    }
+
     private fun segment(id: String, text: String): TranscriptSegment = TranscriptSegment(
         id = id,
         text = text,

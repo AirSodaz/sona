@@ -33,7 +33,6 @@ internal object SonaNavMotion {
     const val EXIT_OFFSET_FRACTION = 0.08f
 
     private val ROOT_TAB_ORDER = listOf(
-        SonaDestination.HOME.route,
         SonaDestination.LIBRARY.route,
         SonaDestination.SETTINGS.route,
     )
@@ -51,9 +50,7 @@ internal object SonaNavMotion {
     fun isSubPage(route: String?, sectionArg: String? = null): Boolean {
         if (route == null) return false
         if (isSettingsSubSection(route, sectionArg)) return true
-        return route == HOME_LIVE_ROUTE ||
-            route == HOME_FILE_ROUTE ||
-            route == LIBRARY_DETAIL_ROUTE ||
+        return route == LIBRARY_DETAIL_ROUTE ||
             route.startsWith("library/")
     }
 

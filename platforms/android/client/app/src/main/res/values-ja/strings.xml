@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="destination_home">ホーム</string>
     <string name="destination_library">履歴</string>
     <string name="destination_settings">設定</string>
     <string name="settings_llm_heading">LLM</string>
@@ -44,7 +43,6 @@
     <string name="llm_error_invalid_response">プロバイダーから無効な結果が返されました</string>
     <string name="llm_error_unsupported">このタスクはプロバイダーに対応していません</string>
     <string name="llm_error_unknown">LLM タスクに失敗しました</string>
-    <string name="record_heading">リアルタイム文字起こし</string>
     <string name="engine_label">認識エンジン</string>
     <string name="record_action_description">録音を開始</string>
     <string name="record_stop_description">録音を停止</string>
@@ -95,16 +93,12 @@
     <string name="notification_permission_notice">通知が無効です。バックグラウンドでの録音状態や進捗は通知バーに表示されません</string>
     <string name="notification_permission_rationale">通知を許可すると、Sonaがバックグラウンドにある場合でも進捗確認や録音操作が可能です</string>
     <string name="action_enable_notifications">通知を有効にする</string>
-    <string name="library_heading">録音履歴</string>
-    <string name="library_refresh_description">録音履歴を更新</string>
     <string name="library_import_cancel">音声の読み込みをキャンセル</string>
     <string name="library_import_queued">音声の読み込みを待機中</string>
     <string name="library_import_staging">音声を準備中</string>
     <string name="library_import_transcoding">音声を変換中</string>
     <string name="library_import_transcribing">音声を文字起こし中</string>
     <string name="library_import_saving">読み込んだ音声を保存中</string>
-    <string name="library_import_completed">音声を読み込みました</string>
-    <string name="library_import_saved_warning">音声は保存されましたが、文字起こしに失敗しました</string>
     <string name="library_loading">録音履歴を読み込み中</string>
     <string name="library_load_failed">録音履歴を読み込めません</string>
     <string name="library_empty">録音はまだありません</string>
@@ -209,7 +203,6 @@
     <string name="local_model_delete_message">このデバイスから %1$s を削除しますか？</string>
     <string name="local_model_recommended">おすすめ</string>
     <string name="local_model_quantization_int8">INT8</string>
-    <string name="local_model_source_android_tag">モバイル最適化</string>
     <string name="local_model_in_use">使用中</string>
     <string name="local_device_tier_limited">制限あり</string>
     <string name="local_device_tier_standard">標準</string>
@@ -252,26 +245,9 @@
     <string name="recognition_live_model">ライブ録音モデル</string>
     <string name="recognition_batch_model">ファイル文字起こしモデル</string>
     <string name="recognition_model_not_selected">未設定</string>
-    <string name="home_heading">何を文字起こししますか？</string>
-    <string name="home_live_title">ライブ録音</string>
-    <string name="home_file_title">ファイル文字起こし</string>
-    <string name="home_recent_title">最近の録音</string>
-    <string name="home_view_all">すべて表示</string>
-    <string name="home_status_idle">開始できます</string>
-    <string name="home_status_preparing">準備中</string>
-    <string name="home_status_recording">録音中</string>
-    <string name="home_status_paused">一時停止中</string>
-    <string name="home_status_stopping">保存中</string>
     <string name="home_status_processing">処理中</string>
-    <string name="home_status_completed">完了</string>
-    <string name="home_status_failed">確認が必要です</string>
-    <string name="home_status_unavailable">設定が必要です</string>
-    <string name="file_workspace_heading">ファイル文字起こし</string>
     <string name="file_select_audio">音声ファイルを選択</string>
-    <string name="file_no_selection">音声ファイルが選択されていません</string>
-    <string name="file_start_transcription">文字起こしを開始</string>
     <string name="file_view_result">結果を表示</string>
-    <string name="file_select_another">別のファイルを選択</string>
     <string name="settings_sync_heading">同期</string>
     <string name="settings_sync_summary">WebDAV ボールト、ステータス、競合</string>
     <string name="settings_data_heading">データと復旧</string>
@@ -375,7 +351,6 @@
     <string name="history_sort_duration_asc">短い順</string>
     <string name="history_sort_title_asc">タイトル順</string>
     <string name="action_clear_search">検索を消去</string>
-    <string name="action_ai_actions">AI ツール</string>
     <string name="action_more_options">その他のオプション</string>
     <string name="snapshot_reason_polish">AI 推敲</string>
     <string name="snapshot_reason_translate">AI 翻訳</string>
@@ -399,4 +374,20 @@
     <plurals name="recovery_pending_notice">
         <item quantity="other">%1$d 件の中断されたタスクがあります</item>
     </plurals>
+    <string name="action_record">録音</string>
+    <string name="action_reset">リセット</string>
+    <string name="ai_workspace_empty_title">AI ツール準備完了</string>
+    <string name="ai_workspace_empty_hint">要約の生成、他言語への翻訳、文字起こしの推敲を行えます。</string>
+    <string name="detail_tab_ai">AI 要約</string>
+    <string name="detail_tab_transcript">文字起こし</string>
+    <string name="library_filter_and_sort">絞り込みと並び替え</string>
+    <string name="library_filter_date">期間</string>
+    <string name="library_filter_sort">並び順</string>
+    <string name="library_filter_source">ソース種別</string>
+    <string name="project_delete_confirm_title">プロジェクト「%1$s」を削除しますか？</string>
+    <string name="project_delete_confirm_body">このプロジェクト内の記録は受信トレイへ移動されます。</string>
+    <string name="record_jump_to_latest">最新へ移動</string>
+    <string name="record_setup_sheet_title">リアルタイム認識を設定</string>
+    <string name="record_setup_sheet_body">録音を開始する前に、ローカルモデルまたはクラウド API キーを設定してください。</string>
+    <string name="transcript_split_hint">スライダーを動かして分割位置を選択してください。</string>
 </resources>
