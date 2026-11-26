@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.FactCheck
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -45,6 +49,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +75,7 @@ import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
@@ -98,7 +104,9 @@ internal fun RecognitionSettingsPane(
     onDeleteLocalModel: (String) -> Unit,
     onRefreshRecognitionCatalog: () -> Unit,
     modifier: Modifier = Modifier,
+    extraBottomPadding: Dp = 0.dp,
 ) {
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val initialFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var focusInitialized by remember { mutableStateOf(false) }
@@ -123,7 +131,12 @@ internal fun RecognitionSettingsPane(
                 .fillMaxWidth()
                 .springOverscroll()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = 20.dp,
+                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+                )
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -414,7 +427,7 @@ private fun LocalRecognitionSettings(
                                 enabled = !busy,
                             ) {
                                 Icon(
-                                    Icons.Rounded.CheckCircle,
+                                    Icons.AutoMirrored.Rounded.FactCheck,
                                     contentDescription = stringResource(R.string.action_validate_model),
                                 )
                             }
@@ -705,7 +718,7 @@ private fun ModelSelectionDropdown(
             enabled = enabled,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(

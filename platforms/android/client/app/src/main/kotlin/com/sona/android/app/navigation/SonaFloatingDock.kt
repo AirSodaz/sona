@@ -24,9 +24,11 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +63,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sona.android.app.R
@@ -156,7 +159,9 @@ fun SonaFloatingDock(
             Row(
                 modifier = Modifier
                     .widthIn(max = SonaFloatingDockDefaults.MaxWidth)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .defaultMinSize(minHeight = SonaFloatingDockDefaults.DockHeight),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -164,7 +169,8 @@ fun SonaFloatingDock(
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .height(SonaFloatingDockDefaults.DockHeight)
+                        .fillMaxHeight()
+                        .defaultMinSize(minHeight = SonaFloatingDockDefaults.DockHeight)
                         .shadow(
                             elevation = SonaFloatingDockDefaults.Elevation,
                             shape = SonaFloatingDockDefaults.ContainerShape,
@@ -205,7 +211,11 @@ fun SonaFloatingDock(
                     val importDesc = stringResource(R.string.file_select_audio)
                     Surface(
                         modifier = Modifier
-                            .size(SonaFloatingDockDefaults.DockHeight)
+                            .fillMaxHeight()
+                            .defaultMinSize(
+                                minWidth = SonaFloatingDockDefaults.DockHeight,
+                                minHeight = SonaFloatingDockDefaults.DockHeight,
+                            )
                             .shadow(
                                 elevation = SonaFloatingDockDefaults.Elevation,
                                 shape = CircleShape,
@@ -225,7 +235,10 @@ fun SonaFloatingDock(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
                         ),
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.AudioFile,
                                 contentDescription = null,
@@ -240,6 +253,7 @@ fun SonaFloatingDock(
                     recordingState = recordingState,
                     onClick = onRecordClick,
                     onLongClick = onImportAudioClick,
+                    modifier = Modifier.fillMaxHeight(),
                 )
             }
         }
@@ -317,6 +331,7 @@ private fun SonaFloatingDockItem(
                 fontSize = 13.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -328,6 +343,7 @@ private fun RecordCaptureCapsule(
     recordingState: LiveRecordingState,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val recordingColor = LocalSonaRecordingColor.current
     val isActive = recordingState is LiveRecordingState.Preparing ||
@@ -363,8 +379,8 @@ private fun RecordCaptureCapsule(
     }
 
     Surface(
-        modifier = Modifier
-            .height(SonaFloatingDockDefaults.DockHeight)
+        modifier = modifier
+            .defaultMinSize(minHeight = SonaFloatingDockDefaults.DockHeight)
             .shadow(
                 elevation = SonaFloatingDockDefaults.Elevation,
                 shape = SonaFloatingDockDefaults.CaptureShape,
@@ -388,8 +404,8 @@ private fun RecordCaptureCapsule(
         ) { active ->
             Row(
                 modifier = Modifier
-                    .height(SonaFloatingDockDefaults.DockHeight)
-                    .padding(horizontal = 20.dp),
+                    .defaultMinSize(minHeight = SonaFloatingDockDefaults.DockHeight)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -418,6 +434,7 @@ private fun RecordCaptureCapsule(
                         text = formatRecordingTimer(elapsedMillis),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                     )
                 } else {
                     Icon(
@@ -429,6 +446,8 @@ private fun RecordCaptureCapsule(
                         text = recordActionLabel,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

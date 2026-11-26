@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_import_notification_channel">오디오 받아쓰기</string>
+    <string name="audio_import_notification_channel_description">오디오 파일 가져오기 및 오프라인 받아쓰기 진행/완료 알림</string>
+    <string name="audio_import_stage_queued">오디오 가져오기 대기 중</string>
+    <string name="audio_import_stage_staging">오디오 준비 중</string>
+    <string name="audio_import_stage_transcoding">오디오 변환 중</string>
+    <string name="audio_import_stage_transcribing">받아쓰기 중</string>
+    <string name="audio_import_stage_saving">오디오 저장 중</string>
+    <string name="audio_import_notification_completed">받아쓰기가 완료되었습니다</string>
+    <string name="audio_import_notification_failed">오디오 받아쓰기 실패</string>
+</resources>

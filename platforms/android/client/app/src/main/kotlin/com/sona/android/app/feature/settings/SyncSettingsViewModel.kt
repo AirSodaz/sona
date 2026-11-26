@@ -26,6 +26,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class SyncUiError {
+    INVALID_PAIRING_TOKEN,
+    OPERATION_FAILED,
+}
+
 data class SyncSettingsUiState(
     val status: SyncStatus = DISABLED_SYNC_STATUS,
     val conflicts: List<SyncConflict> = emptyList(),
@@ -35,9 +40,11 @@ data class SyncSettingsUiState(
     val pairingInfo: SyncPairingInfo? = null,
     val discoveredVaults: List<DiscoveredVaultSummary>? = null,
     val pairingSuccessNotice: String? = null,
+    val pairingImportedVaultId: String? = null,
     val busy: Boolean = false,
     val busyAction: String? = null,
     val error: String? = null,
+    val errorCategory: SyncUiError? = null,
 )
 
 class SyncSettingsViewModel(
@@ -83,19 +90,28 @@ class SyncSettingsViewModel(
     fun applyPairingToken(token: String): SyncPairingPayload? {
         val payload = decodeSyncPairingToken(token)
         if (payload == null) {
-            mutableState.update { it.copy(error = "Invalid pairing token format.") }
+            mutableState.update {
+                it.copy(
+                    error = "Invalid pairing token format.",
+                    errorCategory = SyncUiError.INVALID_PAIRING_TOKEN,
+                )
+            }
             return null
         }
         mutableState.update {
             it.copy(
                 error = null,
+                errorCategory = null,
                 pairingSuccessNotice = "Imported connection parameters (Vault: ${payload.vaultId})",
+                pairingImportedVaultId = payload.vaultId,
             )
         }
         return payload
     }
 
-    fun clearPairingNotice() = mutableState.update { it.copy(pairingSuccessNotice = null) }
+    fun clearPairingNotice() = mutableState.update {
+        it.copy(pairingSuccessNotice = null, pairingImportedVaultId = null)
+    }
 
     fun getPairingToken(includePassword: Boolean = false, password: String = ""): String? {
         val info = mutableState.value.pairingInfo ?: return null
@@ -195,14 +211,19 @@ class SyncSettingsViewModel(
 
     private fun launchAction(action: String? = null, block: suspend () -> Unit) {
         if (mutableState.value.busy) return
-        mutableState.update { it.copy(busy = true, busyAction = action, error = null) }
+        mutableState.update { it.copy(busy = true, busyAction = action, error = null, errorCategory = null) }
         viewModelScope.launch {
             try {
                 block()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                mutableState.update { it.copy(error = "Sync operation failed.") }
+                mutableState.update {
+                    it.copy(
+                        error = "Sync operation failed.",
+                        errorCategory = SyncUiError.OPERATION_FAILED,
+                    )
+                }
             } finally {
                 mutableState.update { it.copy(busy = false, busyAction = null) }
             }

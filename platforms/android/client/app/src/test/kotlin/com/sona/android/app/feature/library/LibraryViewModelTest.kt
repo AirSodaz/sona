@@ -101,6 +101,26 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `persistEditDraft saves recovery draft without committing unconfirmed transcript`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1")
+        viewModel.updateSegmentText("segment-1", "Draft only")
+        runCurrent()
+        viewModel.persistEditDraft()
+        runCurrent()
+
+        assertEquals("Draft only", recovery.saved.single().draftSegments.single().text)
+        assertTrue(editor.commits.isEmpty())
+        assertTrue(viewModel.state.value.editor.dirty)
+    }
+
+    @Test
     fun `edit auto saves after two seconds and keeps one edit session`() = runTest {
         val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
         val editor = FakeTranscriptEditor()

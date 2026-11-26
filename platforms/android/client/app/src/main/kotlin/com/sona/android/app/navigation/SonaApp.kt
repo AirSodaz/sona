@@ -30,6 +30,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -201,6 +203,8 @@ internal fun SonaApp(
     onLlmApiKey: (String) -> Unit = {},
     onLlmSave: () -> Unit = {},
     onLlmClear: () -> Unit = {},
+    pendingOpenHistoryId: String? = null,
+    onPendingOpenHistoryIdConsumed: () -> Unit = {},
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
     var detailExitRequestToken by remember { mutableIntStateOf(0) }
@@ -209,6 +213,11 @@ internal fun SonaApp(
     var autoStartRequestToken by remember { mutableIntStateOf(0) }
     var hasRequestedMicPermission by rememberSaveable { mutableStateOf(false) }
     var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var bottomOverlayHeightPx by remember { mutableIntStateOf(0) }
+    var miniBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val bottomOverlayPadding = with(density) { bottomOverlayHeightPx.toDp() }
+    val miniBarOverlayPadding = with(density) { miniBarHeightPx.toDp() }
 
     val recoveryPendingCount = dataRecoveryState.recovery.items.count {
         it.resolution == RecoveryResolution.PENDING
@@ -264,9 +273,26 @@ internal fun SonaApp(
             recordingState is LiveRecordingState.Stopping
         val miniBarVisible = isRecordingActive && !recordingSheetExpanded
 
+        LaunchedEffect(pendingOpenHistoryId) {
+            val targetId = pendingOpenHistoryId?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+            recordingSheetExpanded = false
+            val targetRoute = libraryDetailRoute(targetId)
+            if (isLibraryDetail && libraryState.editor.dirty) {
+                pendingDetailDestination = targetRoute
+                detailExitRequestToken += 1
+            } else {
+                navController.navigate(targetRoute) {
+                    launchSingleTop = true
+                }
+            }
+            onPendingOpenHistoryIdConsumed()
+        }
+
         val onRecordCapsuleClick = {
             recordingSheetExpanded = true
-            if (!isRecordingActive) {
+            val canAutoStart = recordingState is LiveRecordingState.Idle ||
+                recordingState is LiveRecordingState.NeedsConfiguration
+            if (canAutoStart) {
                 autoStartRequestToken += 1
             }
         }
@@ -321,7 +347,7 @@ internal fun SonaApp(
                             onOpenRecovery = {
                                 navigateToSettingsSection(SettingsSection.DATA_RECOVERY, false)
                             },
-                            extraBottomPadding = if (miniBarVisible) 76.dp else 0.dp,
+                            extraBottomPadding = bottomOverlayPadding,
                         )
                     }
                     composable(
@@ -399,7 +425,7 @@ internal fun SonaApp(
                             onSaveEdit = onSaveTranscriptEdit,
                             onDiscardEdit = onDiscardTranscriptEdit,
                             onFlushEdit = onFlushTranscriptEdit,
-                            extraBottomPadding = if (miniBarVisible) 84.dp else 0.dp,
+                            extraBottomPadding = if (miniBarVisible) miniBarOverlayPadding else 0.dp,
                         )
                     }
                     composable(
@@ -490,7 +516,10 @@ internal fun SonaApp(
                             onCloudCredentialFocusConsumed = {
                                 cloudCredentialFocusRequested = false
                             },
-                            miniBarVisible = miniBarVisible,
+                            onCloseToLibrary = {
+                                navController.popBackStack()
+                            },
+                            bottomOverlayPadding = bottomOverlayPadding,
                         )
                     }
                 }
@@ -504,7 +533,8 @@ internal fun SonaApp(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .onSizeChanged { size -> bottomOverlayHeightPx = size.height },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 AnimatedVisibility(
@@ -519,6 +549,7 @@ internal fun SonaApp(
                         onResume = onResumeRecording,
                         onStop = onStopRecording,
                         modifier = Modifier
+                            .onSizeChanged { size -> miniBarHeightPx = size.height }
                             .then(
                                 if (showFloatingDock) {
                                     Modifier.padding(horizontal = 16.dp, vertical = 2.dp)

@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,10 +68,37 @@ internal fun TranscriptEditorSheet(
     var translationValue by remember(segment.id) { mutableStateOf(TextFieldValue(segment.translation.orEmpty())) }
     var splitMode by remember(segment.id) { mutableStateOf(false) }
 
+    LaunchedEffect(segment.id, segment.text) {
+        if (textValue.text != segment.text) {
+            textValue = TextFieldValue(segment.text)
+        }
+    }
+    LaunchedEffect(segment.id, segment.translation) {
+        val externalTranslation = segment.translation.orEmpty()
+        if (translationValue.text != externalTranslation) {
+            translationValue = TextFieldValue(externalTranslation)
+        }
+    }
+
     val maxSplitIndex = (textValue.text.length - 1).coerceAtLeast(1)
     var splitIndex by remember(segment.id, textValue.text.length) {
         val initial = (textValue.text.length / 2).coerceIn(1, maxSplitIndex)
         mutableIntStateOf(initial)
+    }
+    var leftTranslation by remember(segment.id) { mutableStateOf("") }
+    var rightTranslation by remember(segment.id) { mutableStateOf("") }
+
+    LaunchedEffect(splitMode, splitIndex, translationValue.text) {
+        if (splitMode && textValue.text.length >= 2) {
+            val safe = splitIndex.coerceIn(1, textValue.text.length - 1)
+            val parts = splitTranslation(
+                value = translationValue.text,
+                sourceIndex = safe,
+                sourceLength = textValue.text.length,
+            )
+            leftTranslation = parts.first
+            rightTranslation = parts.second
+        }
     }
 
     ModalBottomSheet(
@@ -121,17 +149,6 @@ internal fun TranscriptEditorSheet(
                 val safeIndex = splitIndex.coerceIn(1, textValue.text.length - 1)
                 val leftText = textValue.text.substring(0, safeIndex).trim()
                 val rightText = textValue.text.substring(safeIndex).trim()
-                val translationParts = splitTranslation(
-                    value = translationValue.text,
-                    sourceIndex = safeIndex,
-                    sourceLength = textValue.text.length,
-                )
-                var leftTranslation by remember(safeIndex, translationValue.text) {
-                    mutableStateOf(translationParts.first)
-                }
-                var rightTranslation by remember(safeIndex, translationValue.text) {
-                    mutableStateOf(translationParts.second)
-                }
 
                 Text(
                     text = stringResource(R.string.transcript_split_hint),

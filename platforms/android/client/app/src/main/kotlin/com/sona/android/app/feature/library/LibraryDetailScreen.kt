@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -677,7 +680,6 @@ internal fun LibraryDetailScreen(
                             selected = true,
                             onClick = { projectDialogVisible = true },
                             label = { Text(assignedProject.name, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.height(28.dp),
                         )
                     }
                 }
@@ -710,7 +712,12 @@ internal fun LibraryDetailScreen(
 
             // 3. Main Content Area
             val hasAudioPlayer = playback.historyId == historyId && item?.audioAvailable == true
-            val contentBottomPadding = if (!isEditingThis && !hasAudioPlayer) extraBottomPadding else 0.dp
+            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val contentBottomPadding = when {
+                isEditingThis || hasAudioPlayer -> 0.dp
+                extraBottomPadding > 0.dp -> extraBottomPadding
+                else -> navBarBottom
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -750,12 +757,16 @@ internal fun LibraryDetailScreen(
             }
 
             // 4. Bottom Docked Workspace Bar (Simultaneous Proofread Audio Mini-Bar + Edit Bar OR Full Audio Player)
+            val bottomDockInsetsModifier = if (extraBottomPadding > 0.dp) {
+                Modifier.padding(bottom = extraBottomPadding)
+            } else {
+                Modifier.navigationBarsPadding()
+            }
             if (isEditingThis) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(bottom = extraBottomPadding),
+                        .then(bottomDockInsetsModifier),
                 ) {
                     if (hasAudioPlayer) {
                         CompactProofreadAudioBar(
@@ -779,7 +790,7 @@ internal fun LibraryDetailScreen(
                     onSeek = onSeekPlayback,
                     onSkip = onSkipPlayback,
                     onSetSpeed = onSetPlaybackSpeed,
-                    modifier = Modifier.padding(bottom = extraBottomPadding),
+                    modifier = bottomDockInsetsModifier,
                 )
             }
         }
@@ -857,7 +868,6 @@ private fun DockedAudioPlayer(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -869,6 +879,11 @@ private fun DockedAudioPlayer(
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 10.dp),
         ) {
+            val playbackDescription = stringResource(
+                R.string.playback_position_description,
+                formatMediaTime(position),
+                formatMediaTime(duration),
+            )
             Slider(
                 value = position.toFloat(),
                 onValueChange = { onSeek(it.toLong()) },
@@ -878,8 +893,7 @@ private fun DockedAudioPlayer(
                     .fillMaxWidth()
                     .height(24.dp)
                     .semantics {
-                        contentDescription =
-                            "Playback position ${formatMediaTime(position)} of ${formatMediaTime(duration)}"
+                        contentDescription = playbackDescription
                     },
             )
             Row(

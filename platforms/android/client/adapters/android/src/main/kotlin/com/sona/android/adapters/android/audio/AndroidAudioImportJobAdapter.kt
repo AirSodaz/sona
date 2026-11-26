@@ -25,6 +25,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.sona.android.adapters.android.R
 import com.sona.android.application.recording.AudioImportEngine
 import com.sona.android.application.recording.AudioImportFailure
 import com.sona.android.application.recording.AudioImportJob
@@ -314,7 +315,7 @@ class AudioImportWorker internal constructor(
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle(title)
-            .setContentText(stage.notificationText())
+            .setContentText(applicationContext.getString(stage.notificationTextRes()))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
@@ -340,10 +341,12 @@ class AudioImportWorker internal constructor(
             manager.createNotificationChannel(
                 NotificationChannel(
                     NOTIFICATION_CHANNEL_ID,
-                    "Audio transcription",
+                    applicationContext.getString(R.string.audio_import_notification_channel),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Progress and completion status for audio file transcription"
+                    description = applicationContext.getString(
+                        R.string.audio_import_notification_channel_description,
+                    )
                     setShowBadge(false)
                 },
             )
@@ -356,7 +359,7 @@ class AudioImportWorker internal constructor(
         val launchIntent = applicationContext.packageManager
             .getLaunchIntentForPackage(applicationContext.packageName)?.apply {
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra(EXTRA_HISTORY_ID, historyId)
+                putExtra(EXTRA_AUDIO_IMPORT_HISTORY_ID, historyId)
             }
         val pendingIntent = launchIntent?.let {
             PendingIntent.getActivity(
@@ -371,7 +374,7 @@ class AudioImportWorker internal constructor(
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
             .setContentTitle(title)
-            .setContentText("Transcription completed")
+            .setContentText(applicationContext.getString(R.string.audio_import_notification_completed))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
@@ -403,7 +406,7 @@ class AudioImportWorker internal constructor(
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
             .setContentTitle(title)
-            .setContentText("Transcription failed")
+            .setContentText(applicationContext.getString(R.string.audio_import_notification_failed))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
@@ -675,12 +678,12 @@ private fun List<WorkInfo>.relevantAudioImport(): WorkInfo? =
         } ?: Long.MIN_VALUE
     }
 
-private fun AudioImportStage.notificationText(): String = when (this) {
-    AudioImportStage.QUEUED -> "Audio import queued"
-    AudioImportStage.STAGING -> "Preparing audio"
-    AudioImportStage.TRANSCODING -> "Converting audio"
-    AudioImportStage.TRANSCRIBING -> "Transcribing audio"
-    AudioImportStage.SAVING -> "Saving audio"
+private fun AudioImportStage.notificationTextRes(): Int = when (this) {
+    AudioImportStage.QUEUED -> R.string.audio_import_stage_queued
+    AudioImportStage.STAGING -> R.string.audio_import_stage_staging
+    AudioImportStage.TRANSCODING -> R.string.audio_import_stage_transcoding
+    AudioImportStage.TRANSCRIBING -> R.string.audio_import_stage_transcribing
+    AudioImportStage.SAVING -> R.string.audio_import_stage_saving
 }
 
 private val SLOT_WORK_NAMES = listOf("sona-audio-import-slot-0", "sona-audio-import-slot-1")
@@ -709,4 +712,4 @@ private const val NOTIFICATION_ID = 4102
 private const val ENQUEUED_AT_TAG_PREFIX = "sona-audio-import-enqueued-at:"
 private const val COMPLETION_NOTIFICATION_ID_BASE = 5000
 private const val FAILURE_NOTIFICATION_ID_BASE = 6000
-private const val EXTRA_HISTORY_ID = "historyId"
+const val EXTRA_AUDIO_IMPORT_HISTORY_ID = "historyId"

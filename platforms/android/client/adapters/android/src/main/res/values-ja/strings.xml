@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_import_notification_channel">音声文字起こし</string>
+    <string name="audio_import_notification_channel_description">音声ファイルの取り込みと文字起こしの進捗・完了通知</string>
+    <string name="audio_import_stage_queued">音声の取り込みを待機中</string>
+    <string name="audio_import_stage_staging">音声を準備しています</string>
+    <string name="audio_import_stage_transcoding">音声を変換しています</string>
+    <string name="audio_import_stage_transcribing">文字起こししています</string>
+    <string name="audio_import_stage_saving">音声を保存しています</string>
+    <string name="audio_import_notification_completed">文字起こしが完了しました</string>
+    <string name="audio_import_notification_failed">音声文字起こしに失敗しました</string>
+</resources>

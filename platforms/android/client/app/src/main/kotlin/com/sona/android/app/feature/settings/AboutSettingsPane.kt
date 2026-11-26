@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +44,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.application.settings.AppUpdateChannel
@@ -54,8 +58,10 @@ internal fun AboutSettingsPane(
     onShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     val uriHandler = LocalUriHandler.current
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     LaunchedEffect(Unit) { onShown() }
 
     Column(
@@ -63,7 +69,12 @@ internal fun AboutSettingsPane(
             .fillMaxSize()
             .springOverscroll()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 20.dp,
+                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(

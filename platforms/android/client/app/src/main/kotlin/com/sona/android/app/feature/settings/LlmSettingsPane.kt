@@ -2,14 +2,20 @@ package com.sona.android.app.feature.settings
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 
@@ -62,16 +70,27 @@ internal fun LlmSettingsPane(
     onSave: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     var providerMenuExpanded by remember { mutableStateOf(false) }
     var apiKeyVisible by remember { mutableStateOf(false) }
     var showClearConfirmation by remember { mutableStateOf(false) }
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .widthIn(max = 720.dp)
+            .fillMaxWidth()
             .springOverscroll()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 20.dp,
+                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+            )
+            .align(Alignment.TopCenter),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Provider & Model Section Card
@@ -105,7 +124,7 @@ internal fun LlmSettingsPane(
                         label = { Text(stringResource(R.string.llm_provider)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerMenuExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
                         singleLine = true,
                     )
@@ -301,6 +320,7 @@ internal fun LlmSettingsPane(
         }
 
         Spacer(Modifier.height(16.dp))
+    }
     }
 
     if (showClearConfirmation) {

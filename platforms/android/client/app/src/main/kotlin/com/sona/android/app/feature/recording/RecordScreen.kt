@@ -94,7 +94,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -120,7 +120,6 @@ import com.sona.android.application.recording.TranscriptSegment
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val POST_NOTIFICATIONS_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 private const val WAVEFORM_HISTORY_SIZE = 36
 
 /**
@@ -326,11 +325,11 @@ internal fun RecordScreen(
         activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true
     }
     val shouldShowNotificationRationale = remember(permissionRevision, activity) {
-        activity?.shouldShowRequestPermissionRationale(POST_NOTIFICATIONS_PERMISSION) == true
+        activity?.shouldShowRequestPermissionRationale(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS) == true
     }
     val notificationPermissionGranted = remember(permissionRevision, context) {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            context.checkSelfPermission(POST_NOTIFICATIONS_PERMISSION) ==
+            context.checkSelfPermission(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
     }
 
@@ -352,7 +351,7 @@ internal fun RecordScreen(
             NotificationPermissionDecision.START_RECORDING -> onStartRecording()
             NotificationPermissionDecision.REQUEST_PERMISSION -> {
                 markNotificationPermissionRequested()
-                notificationPermissionLauncher.launch(POST_NOTIFICATIONS_PERMISSION)
+                notificationPermissionLauncher.launch(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS)
             }
         }
     }
@@ -574,7 +573,8 @@ internal fun RecordScreen(
 
                     // Active Engine Selector Pill
                     Surface(
-                        onClick = { if (!isActive) engineSheetVisible = true },
+                        onClick = { engineSheetVisible = true },
+                        enabled = !isActive,
                         shape = RoundedCornerShape(20.dp),
                         color = if (configurationMissing) {
                             MaterialTheme.colorScheme.errorContainer
@@ -1479,8 +1479,7 @@ private fun BootstrapStatus(
                     Spacer(Modifier.weight(1f))
                     FilledTonalButton(
                         onClick = onRetryBootstrap,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                        modifier = Modifier.height(30.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.action_retry),
@@ -1536,10 +1535,12 @@ private fun Context.findActivity(): Activity? {
 }
 
 private fun Context.openAppSettings() {
-    startActivity(
-        Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            "package:$packageName".toUri(),
-        ),
-    )
+    runCatching {
+        startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                "package:$packageName".toUri(),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 }

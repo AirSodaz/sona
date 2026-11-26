@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_import_notification_channel">音频转写</string>
+    <string name="audio_import_notification_channel_description">音频文件导入与离线转写的进度与完成通知</string>
+    <string name="audio_import_stage_queued">音频导入已排队</string>
+    <string name="audio_import_stage_staging">正在准备音频</string>
+    <string name="audio_import_stage_transcoding">正在转换音频</string>
+    <string name="audio_import_stage_transcribing">正在转写音频</string>
+    <string name="audio_import_stage_saving">正在保存音频</string>
+    <string name="audio_import_notification_completed">转写已完成</string>
+    <string name="audio_import_notification_failed">音频转写失败</string>
+</resources>

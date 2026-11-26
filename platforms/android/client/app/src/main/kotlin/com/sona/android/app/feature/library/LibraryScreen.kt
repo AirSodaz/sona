@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -662,18 +665,19 @@ internal fun LibraryScreen(
                                     modifier = Modifier.padding(horizontal = 20.dp),
                                 )
                             }
+                            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
-                                    .springOverscroll(),
+                                    .springOverscroll(enableTopOverscroll = false),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(
                                     start = 20.dp,
                                     end = 20.dp,
                                     top = 10.dp,
-                                    bottom = 112.dp + extraBottomPadding,
+                                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
                                 ),
                             ) {
                                 items(state.items, key = HistoryItem::historyId) { item ->
@@ -965,19 +969,12 @@ private fun SwipeableLibraryItemRow(
     val currentOnSwipeAction by rememberUpdatedState(onSwipeAction)
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
+            if (value == SwipeToDismissBoxValue.EndToStart && !operationInProgress) {
                 currentOnSwipeAction()
-                true
-            } else {
-                false
             }
+            false
         },
     )
-    LaunchedEffect(dismissState.currentValue, operationInProgress) {
-        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled && !operationInProgress) {
-            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
-        }
-    }
 
     SwipeToDismissBox(
         state = dismissState,

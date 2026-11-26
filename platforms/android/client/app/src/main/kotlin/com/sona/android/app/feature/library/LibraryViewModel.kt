@@ -783,11 +783,20 @@ class LibraryViewModel(
     }
 
     fun flushEditDraft() {
-        val session = mutableState.value.editor.takeIf { it.dirty } ?: return
+        val session = mutableStateOfOrCurrentDirtySession() ?: return
         draftSaveJob?.cancel()
         viewModelScope.launch { persistDraft(session) }
         commitEdit(closeAfterSave = false)
     }
+
+    fun persistEditDraft() {
+        val session = mutableStateOfOrCurrentDirtySession() ?: return
+        draftSaveJob?.cancel()
+        viewModelScope.launch { persistDraft(session) }
+    }
+
+    private fun mutableStateOfOrCurrentDirtySession(): TranscriptEditorUiState? =
+        mutableState.value.editor.takeIf { it.dirty }
 
     private fun applyEdit(operation: TranscriptEditOperation, debounce: Boolean = false) {
         val port = editor ?: return

@@ -1,7 +1,13 @@
 package com.sona.android.app.feature.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.os.PersistableBundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -10,14 +16,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -44,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -54,7 +65,9 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import com.sona.android.app.ui.component.InsetGroupedCard
 import com.sona.android.app.ui.component.SonaSwitch
+import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,13 +78,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sona.android.app.R
@@ -87,6 +100,7 @@ import com.sona.android.application.sync.detectProviderPresetId
 import com.sona.android.application.sync.decodeSyncPairingToken
 import com.sona.android.application.sync.encodeSyncPairingToken
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SyncSettingsPane(
     state: SyncSettingsUiState,
@@ -109,6 +123,7 @@ internal fun SyncSettingsPane(
     onChangePreset: (SyncPreset) -> Unit,
     onChangePassword: (String, String) -> Unit,
     modifier: Modifier = Modifier,
+    extraBottomPadding: Dp = 0.dp,
     onDiscoverVaults: ((WebDavSyncProvider, ((List<DiscoveredVaultSummary>) -> Unit)?) -> Unit)? = null,
     onCreateWithVaultId: ((WebDavSyncProvider, SyncPreset, String, String?, Boolean) -> Unit)? = null,
     onApplyPairingToken: ((String) -> SyncPairingPayload?)? = null,
@@ -147,7 +162,10 @@ internal fun SyncSettingsPane(
     var passwordError by remember { mutableStateOf<String?>(null) }
 
     val provider = WebDavSyncProvider(server, root, username, providerPassword)
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val clipboard = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    }
     val keyExporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
     ) { uri -> uri?.let { onExportRecoveryKey(it.toString()) } }
@@ -155,15 +173,29 @@ internal fun SyncSettingsPane(
     val activePreset = remember(selectedPresetId) {
         SYNC_PROVIDER_PRESETS.firstOrNull { it.id == selectedPresetId }
     }
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .widthIn(max = 720.dp)
+            .fillMaxWidth()
+            .springOverscroll()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 20.dp),
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 20.dp,
+                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+            )
+            .align(Alignment.TopCenter),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Pairing Success Banner
-        state.pairingSuccessNotice?.let { notice ->
+        val pairingNoticeText = state.pairingImportedVaultId?.let { vault ->
+            stringResource(R.string.sync_pairing_imported_notice, vault)
+        } ?: state.pairingSuccessNotice
+        pairingNoticeText?.let { notice ->
             OutlinedCard(
                 colors = CardDefaults.outlinedCardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
@@ -188,14 +220,23 @@ internal fun SyncSettingsPane(
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { onClearPairingNotice?.invoke() }) {
-                        Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.action_close),
+                            modifier = Modifier.size(16.dp),
+                        )
                     }
                 }
             }
         }
 
         // Global error banner
-        state.error?.let { err ->
+        val syncErrorText = when (state.errorCategory) {
+            SyncUiError.INVALID_PAIRING_TOKEN -> stringResource(R.string.sync_invalid_pairing_token)
+            SyncUiError.OPERATION_FAILED -> stringResource(R.string.sync_operation_failed)
+            null -> state.error
+        }
+        syncErrorText?.let { err ->
             OutlinedCard(
                 colors = CardDefaults.outlinedCardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
@@ -416,7 +457,7 @@ internal fun SyncSettingsPane(
                                 value = vaultId,
                                 onValueChange = { vaultId = it },
                                 label = { Text(stringResource(R.string.sync_vault_id)) },
-                                placeholder = { Text("Leave empty for auto-discovery or \"default\"") },
+                                placeholder = { Text(stringResource(R.string.sync_vault_id_placeholder)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
@@ -428,14 +469,16 @@ internal fun SyncSettingsPane(
                                 style = MaterialTheme.typography.labelMedium,
                             )
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 SyncPreset.entries.forEach { p ->
                                     FilterChip(
                                         selected = selectedPresetScope == p,
                                         onClick = { selectedPresetScope = p },
-                                        label = { Text(p.name.lowercase()) },
+                                        label = { Text(stringResource(p.labelRes())) },
                                     )
                                 }
                             }
@@ -516,11 +559,8 @@ internal fun SyncSettingsPane(
             }
 
             SyncLifecycleState.LOCKED -> {
-                Card(
+                InsetGroupedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    ),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -587,11 +627,8 @@ internal fun SyncSettingsPane(
 
             else -> {
                 // Connected Hero Card
-                Card(
+                InsetGroupedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    ),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -619,7 +656,7 @@ internal fun SyncSettingsPane(
                                     color = dotColor,
                                 ) {}
                                 Text(
-                                    text = state.status.state.name,
+                                    text = stringResource(state.status.state.labelRes()),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -710,25 +747,26 @@ internal fun SyncSettingsPane(
                 // Scope / Preset Selection
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(R.string.sync_preset), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         SyncPreset.entries.forEach { p ->
                             FilterChip(
                                 selected = state.status.preset == p,
                                 onClick = { onChangePreset(p) },
                                 enabled = !state.busy,
-                                label = { Text(p.name.lowercase()) },
+                                label = { Text(stringResource(p.labelRes())) },
                             )
                         }
                     }
                 }
 
                 // Security & Recovery Card
-                Card(
+                InsetGroupedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -801,7 +839,7 @@ internal fun SyncSettingsPane(
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(
                                             onClick = {
-                                                clipboard.setText(AnnotatedString(key))
+                                                copyToClipboard(clipboard, "Sona Recovery Key", key, sensitive = true)
                                                 onConsumeRecoveryKey()
                                             },
                                         ) {
@@ -902,17 +940,15 @@ internal fun SyncSettingsPane(
 
                 // Conflicts Center
                 if (state.conflicts.isNotEmpty()) {
-                    Card(
+                    InsetGroupedCard(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                text = "Conflict Center (${state.conflicts.size})",
+                                text = stringResource(R.string.sync_conflict_center_title, state.conflicts.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -922,8 +958,22 @@ internal fun SyncSettingsPane(
                                     Text("${conflict.entityKind} / ${conflict.kind}", style = MaterialTheme.typography.titleSmall)
                                 }
                                 state.conflictDetail?.takeIf { it.summary.id == conflict.id }?.let { detail ->
-                                    Text("Current: ${detail.current.kind} · ${detail.current.sourceDeviceId}", style = MaterialTheme.typography.bodySmall)
-                                    Text("Conflicting: ${detail.conflicting.kind} · ${detail.conflicting.sourceDeviceId}", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        text = stringResource(
+                                            R.string.sync_conflict_current_detail,
+                                            detail.current.kind,
+                                            detail.current.sourceDeviceId,
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            R.string.sync_conflict_remote_detail,
+                                            detail.conflicting.kind,
+                                            detail.conflicting.sourceDeviceId,
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_CURRENT) }) { Text(stringResource(R.string.sync_keep_current)) }
@@ -983,10 +1033,11 @@ internal fun SyncSettingsPane(
             Text(stringResource(R.string.action_refresh))
         }
     }
+    }
 
     // Modal 1: Import Pairing Token Dialog
     if (showImportPairingDialog) {
-        val invalidTokenMessage = "Invalid pairing token format."
+        val invalidTokenMessage = stringResource(R.string.sync_invalid_pairing_token)
         AlertDialog(
             onDismissRequest = { showImportPairingDialog = false },
             title = { Text(stringResource(R.string.sync_pairing_modal_title)) },
@@ -1009,7 +1060,8 @@ internal fun SyncSettingsPane(
                     )
                     OutlinedButton(
                         onClick = {
-                            val clip = clipboard.getText()?.text?.trim().orEmpty()
+                            val clip = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }
+                                ?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
                             if (clip.isNotEmpty()) {
                                 pairingTokenInput = clip
                                 pairingTokenError = null
@@ -1018,7 +1070,7 @@ internal fun SyncSettingsPane(
                     ) {
                         Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Paste from clipboard")
+                        Text(stringResource(R.string.sync_paste_from_clipboard))
                     }
                     pairingTokenError?.let { err ->
                         Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -1055,12 +1107,12 @@ internal fun SyncSettingsPane(
                     },
                     enabled = pairingTokenInput.isNotBlank(),
                 ) {
-                    Text("Import")
+                    Text(stringResource(R.string.sync_action_import))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showImportPairingDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -1091,20 +1143,20 @@ internal fun SyncSettingsPane(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = "Use this pairing code to quickly connect your second device without re-entering server parameters.",
+                        text = stringResource(R.string.sync_pair_device_desc),
                         style = MaterialTheme.typography.bodySmall,
                     )
 
                     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             state.pairingInfo?.serverUrl?.let {
-                                Text("Server: $it", style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.sync_pair_summary_server, it), style = MaterialTheme.typography.bodySmall)
                             }
                             state.pairingInfo?.username?.let {
-                                Text("Username: $it", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.sync_pair_summary_username, it), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                             }
                             state.status.vaultId?.let {
-                                Text("Vault ID: $it", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                                Text(stringResource(R.string.sync_pair_summary_vault, it), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                             }
                         }
                     }
@@ -1121,13 +1173,13 @@ internal fun SyncSettingsPane(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = {
-                                clipboard.setText(AnnotatedString(pairingToken))
+                                copyToClipboard(clipboard, "Sona Pairing Code", pairingToken, sensitive = false)
                                 copiedNotice = true
                             },
                         ) {
                             Icon(if (copiedNotice) Icons.Rounded.Check else Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (copiedNotice) "Copied" else stringResource(R.string.sync_copy_pairing_token))
+                            Text(stringResource(if (copiedNotice) R.string.sync_copied else R.string.sync_copy_pairing_token))
                         }
                     }
 
@@ -1140,7 +1192,7 @@ internal fun SyncSettingsPane(
             },
             confirmButton = {
                 TextButton(onClick = { showPairDeviceModal = false }) {
-                    Text("Close")
+                    Text(stringResource(R.string.action_close))
                 }
             },
         )
@@ -1178,7 +1230,11 @@ internal fun SyncSettingsPane(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(v.vaultId, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
-                                Text("Preset: ${v.preset.name.lowercase()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = stringResource(R.string.sync_preset_value, stringResource(v.preset.labelRes())),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -1220,7 +1276,7 @@ internal fun SyncSettingsPane(
             },
             dismissButton = {
                 TextButton(onClick = { discoveredVaultsToResolve = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -1245,7 +1301,7 @@ internal fun SyncSettingsPane(
             },
             dismissButton = {
                 TextButton(onClick = { showDisconnectConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -1275,9 +1331,47 @@ private fun SecretField(
         trailingIcon = {
             val image = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                Icon(image, contentDescription = if (passwordVisible) "Hide password" else "Show password")
+                Icon(
+                    image,
+                    contentDescription = stringResource(
+                        if (passwordVisible) R.string.action_hide_password else R.string.action_show_password,
+                    ),
+                )
             }
         },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@StringRes
+private fun SyncPreset.labelRes(): Int = when (this) {
+    SyncPreset.CONTENT -> R.string.sync_preset_content
+    SyncPreset.STANDARD -> R.string.sync_preset_standard
+    SyncPreset.FULL -> R.string.sync_preset_full
+}
+
+@StringRes
+private fun SyncLifecycleState.labelRes(): Int = when (this) {
+    SyncLifecycleState.DISABLED -> R.string.sync_state_disabled
+    SyncLifecycleState.LOCKED -> R.string.sync_state_locked
+    SyncLifecycleState.IDLE -> R.string.sync_state_idle
+    SyncLifecycleState.SYNCING -> R.string.sync_state_syncing
+    SyncLifecycleState.PAUSED -> R.string.sync_state_paused
+    SyncLifecycleState.ERROR -> R.string.sync_state_error
+}
+
+private fun copyToClipboard(
+    clipboard: ClipboardManager?,
+    label: String,
+    text: String,
+    sensitive: Boolean,
+) {
+    val clip = ClipData.newPlainText(label, text).apply {
+        if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            description.extras = PersistableBundle().apply {
+                putBoolean("android.content.extra.IS_SENSITIVE", true)
+            }
+        }
+    }
+    clipboard?.setPrimaryClip(clip)
 }

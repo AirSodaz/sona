@@ -81,6 +81,7 @@ class SyncSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Sync operation failed.", viewModel.state.value.error)
+        assertEquals(SyncUiError.OPERATION_FAILED, viewModel.state.value.errorCategory)
         assertFalse(viewModel.state.value.toString().contains("bearer-secret"))
     }
 
@@ -107,6 +108,7 @@ class SyncSettingsViewModelTest {
         assertNotNull(payload)
         assertEquals("https://dav.example", payload?.serverUrl)
         assertEquals("vault-9", payload?.vaultId)
+        assertEquals("vault-9", viewModel.state.value.pairingImportedVaultId)
         assertNotNull(viewModel.state.value.pairingSuccessNotice)
     }
 
