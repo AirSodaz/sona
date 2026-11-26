@@ -633,8 +633,7 @@ Runs the shared local HTTP API server
 Core Endpoints:
   GET  /health                  Health check and status
   GET  /info                    Server info, model list, and capabilities
-  POST /v1/transcriptions       Sona native batch transcription
-  POST /v1/audio/transcriptions OpenAI-compatible audio transcription
+  POST /v1/transcriptions       Submit batch transcription
   GET  /v1/transcriptions/jobs  List transcription jobs
   WS   /v1/streaming              Real-time streaming
 
