@@ -78,6 +78,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -153,6 +154,7 @@ internal fun LibraryDetailScreen(
     onSaveEdit: () -> Unit,
     onDiscardEdit: () -> Unit,
     onFlushEdit: () -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     val resolvedDetail = detail.forHistory(historyId)
     val fallbackTitle = stringResource(R.string.library_detail_heading)
@@ -707,11 +709,14 @@ internal fun LibraryDetailScreen(
             }
 
             // 3. Main Content Area
+            val hasAudioPlayer = playback.historyId == historyId && item?.audioAvailable == true
+            val contentBottomPadding = if (!isEditingThis && !hasAudioPlayer) extraBottomPadding else 0.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = contentBottomPadding),
             ) {
                 if (selectedTab == DetailWorkspaceTab.AI_SUMMARY && !isEditingThis) {
                     AiWorkspacePane(
@@ -745,12 +750,12 @@ internal fun LibraryDetailScreen(
             }
 
             // 4. Bottom Docked Workspace Bar (Simultaneous Proofread Audio Mini-Bar + Edit Bar OR Full Audio Player)
-            val hasAudioPlayer = playback.historyId == historyId && item?.audioAvailable == true
             if (isEditingThis) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        .padding(bottom = extraBottomPadding),
                 ) {
                     if (hasAudioPlayer) {
                         CompactProofreadAudioBar(
@@ -774,6 +779,7 @@ internal fun LibraryDetailScreen(
                     onSeek = onSeekPlayback,
                     onSkip = onSkipPlayback,
                     onSetSpeed = onSetPlaybackSpeed,
+                    modifier = Modifier.padding(bottom = extraBottomPadding),
                 )
             }
         }
@@ -1018,6 +1024,9 @@ private fun DockedEditToolbar(
                 color = statusColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(horizontal = 6.dp),
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.settings.AppLanguage
@@ -81,35 +83,54 @@ internal fun AiWorkspacePane(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            val buttonPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
             FilledTonalButton(
                 onClick = onSummarize,
                 enabled = actionsEnabled,
                 shape = RoundedCornerShape(18.dp),
+                contentPadding = buttonPadding,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Rounded.AutoAwesome, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.llm_summarize), maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.llm_summarize),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             FilledTonalButton(
                 onClick = { translatePickerExpanded = !translatePickerExpanded },
                 enabled = actionsEnabled,
                 shape = RoundedCornerShape(18.dp),
+                contentPadding = buttonPadding,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Rounded.Translate, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.llm_translate), maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.llm_translate),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             FilledTonalButton(
                 onClick = onPolish,
                 enabled = actionsEnabled,
                 shape = RoundedCornerShape(18.dp),
+                contentPadding = buttonPadding,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Rounded.AutoFixHigh, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.llm_polish), maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.llm_polish),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
 

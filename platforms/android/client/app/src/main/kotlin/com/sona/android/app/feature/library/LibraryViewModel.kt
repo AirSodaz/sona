@@ -177,6 +177,7 @@ class LibraryViewModel(
     private val undoStack = ArrayDeque<List<TranscriptSegment>>()
     private val redoStack = ArrayDeque<List<TranscriptSegment>>()
     private val editMutex = Mutex()
+    private val dismissedFailedImportJobIds = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
@@ -196,13 +197,21 @@ class LibraryViewModel(
         }
         viewModelScope.launch {
             audioImportJobs.queueState.distinctUntilChanged().collect { queueState ->
+                queueState.tasks
+                    .filter { it.status != AudioImportTaskStatus.FAILED }
+                    .forEach { dismissedFailedImportJobIds.remove(it.jobId) }
+                val visibleQueueState = queueState.copy(
+                    tasks = queueState.tasks.filterNot {
+                        it.status == AudioImportTaskStatus.FAILED && it.jobId in dismissedFailedImportJobIds
+                    },
+                )
                 val previousSucceeded = mutableState.value.audioImportQueue.tasks
                     .filter { it.status == AudioImportTaskStatus.SUCCEEDED }
                     .mapTo(mutableSetOf()) { it.jobId }
-                val newlySucceeded = queueState.tasks.any {
+                val newlySucceeded = visibleQueueState.tasks.any {
                     it.status == AudioImportTaskStatus.SUCCEEDED && it.jobId !in previousSucceeded
                 }
-                mutableState.update { it.copy(audioImportQueue = queueState) }
+                mutableState.update { it.copy(audioImportQueue = visibleQueueState) }
                 if (newlySucceeded) {
                     refresh()
                 }
@@ -256,6 +265,37 @@ class LibraryViewModel(
     fun cancelAudioImportJob(jobId: String) {
         if (jobId.isBlank()) return
         viewModelScope.launch { audioImportJobs.cancel(jobId) }
+    }
+
+    fun dismissAudioImportFailure(jobId: String?) {
+        if (!jobId.isNullOrBlank()) {
+            dismissedFailedImportJobIds += jobId
+            mutableState.update { state ->
+                val currentImport = state.audioImport
+                val nextImport = if (currentImport is AudioImportJobState.Failed && currentImport.jobId == jobId) {
+                    AudioImportJobState.Idle
+                } else {
+                    currentImport
+                }
+                state.copy(
+                    audioImport = nextImport,
+                    audioImportQueue = state.audioImportQueue.copy(
+                        tasks = state.audioImportQueue.tasks.filterNot {
+                            it.jobId == jobId && it.status == AudioImportTaskStatus.FAILED
+                        },
+                    ),
+                )
+            }
+            viewModelScope.launch { audioImportJobs.cancel(jobId) }
+        } else {
+            mutableState.update { state ->
+                if (state.audioImport is AudioImportJobState.Failed) {
+                    state.copy(audioImport = AudioImportJobState.Idle)
+                } else {
+                    state
+                }
+            }
+        }
     }
 
     fun transcribeWithCurrentEngine(item: HistoryItem) {
@@ -579,7 +619,7 @@ class LibraryViewModel(
                 editSessionId = UUID.randomUUID().toString(),
                 baseSegments = segments,
                 draftSegments = segments,
-                editingSegmentId = segmentId ?: segments.firstOrNull()?.id,
+                editingSegmentId = segmentId,
             ))
         }
     }
@@ -836,7 +876,7 @@ class LibraryViewModel(
             editSessionId = recovered.editSessionId,
             baseSegments = recovered.baseSegments,
             draftSegments = recovered.draftSegments,
-            editingSegmentId = recovered.draftSegments.firstOrNull()?.id,
+            editingSegmentId = null,
             dirty = recovered.draftSegments != recovered.baseSegments,
             recoveredDraft = true,
         )) }

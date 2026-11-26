@@ -767,6 +767,7 @@ class LiveRecordingCoordinator(
         var persistenceFailure: RecordingFailure? = null
         var streamingStatus: StreamingStatus = StreamingStatus.Connected
         var inputStatus: AudioInputStatus = AudioInputStatus.Active
+        @Volatile
         var isPaused: Boolean = false
         var pausedAtMillis: Long = 0
         var totalPausedMillis: Long = 0

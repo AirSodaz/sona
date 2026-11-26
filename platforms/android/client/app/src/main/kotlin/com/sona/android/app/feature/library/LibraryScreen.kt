@@ -76,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -91,6 +92,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.BuildConfig
 import com.sona.android.app.R
@@ -145,9 +147,11 @@ internal fun LibraryScreen(
     onDeleteProject: (String) -> Unit,
     onImportAudioClick: () -> Unit,
     onCancelAudioImportJob: (String) -> Unit,
+    onDismissFailedImport: (String?) -> Unit = {},
     onConfigureRecognition: () -> Unit,
     recoveryPendingCount: Int,
     onOpenRecovery: () -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     val listState = rememberLazyListState()
     var purgeConfirmationVisible by remember { mutableStateOf(false) }
@@ -585,6 +589,7 @@ internal fun LibraryScreen(
                     AudioImportTaskCard(
                         task = task,
                         onCancel = { onCancelAudioImportJob(task.jobId) },
+                        onDismiss = { onDismissFailedImport(task.jobId) },
                         onConfigure = onConfigureRecognition,
                     )
                 }
@@ -614,6 +619,16 @@ internal fun LibraryScreen(
                                 TextButton(onClick = onConfigureRecognition) {
                                     Text(stringResource(R.string.action_configure))
                                 }
+                            }
+                            IconButton(
+                                onClick = { onDismissFailedImport(legacyFailed.jobId) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.action_close),
+                                    modifier = Modifier.size(18.dp),
+                                )
                             }
                         }
                     }
@@ -658,7 +673,7 @@ internal fun LibraryScreen(
                                     start = 20.dp,
                                     end = 20.dp,
                                     top = 10.dp,
-                                    bottom = 112.dp,
+                                    bottom = 112.dp + extraBottomPadding,
                                 ),
                             ) {
                                 items(state.items, key = HistoryItem::historyId) { item ->
@@ -671,6 +686,7 @@ internal fun LibraryScreen(
                                         inTrash = state.query.scope == HistoryScope.Trash,
                                         selected = item.historyId in state.selectedIds,
                                         selectionActive = state.selectedIds.isNotEmpty(),
+                                        operationInProgress = state.operationInProgress,
                                         onClick = {
                                             if (state.selectedIds.isEmpty()) {
                                                 onOpenItem(item.historyId)
@@ -847,6 +863,7 @@ private fun ScopePillChip(
 private fun AudioImportTaskCard(
     task: AudioImportTask,
     onCancel: () -> Unit,
+    onDismiss: () -> Unit,
     onConfigure: () -> Unit,
 ) {
     val isFailed = task.status == AudioImportTaskStatus.FAILED
@@ -894,11 +911,20 @@ private fun AudioImportTaskCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (isFailed && task.failure == AudioImportFailure.CONFIGURATION) {
-                    TextButton(onClick = onConfigure) {
-                        Text(stringResource(R.string.action_configure))
+                if (isFailed) {
+                    if (task.failure == AudioImportFailure.CONFIGURATION) {
+                        TextButton(onClick = onConfigure) {
+                            Text(stringResource(R.string.action_configure))
+                        }
                     }
-                } else if (!isFailed) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.action_close),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                } else {
                     IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
@@ -931,20 +957,27 @@ private fun SwipeableLibraryItemRow(
     inTrash: Boolean,
     selected: Boolean,
     selectionActive: Boolean,
+    operationInProgress: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeAction: () -> Unit,
 ) {
+    val currentOnSwipeAction by rememberUpdatedState(onSwipeAction)
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
-                onSwipeAction()
+                currentOnSwipeAction()
                 true
             } else {
                 false
             }
         },
     )
+    LaunchedEffect(dismissState.currentValue, operationInProgress) {
+        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled && !operationInProgress) {
+            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,

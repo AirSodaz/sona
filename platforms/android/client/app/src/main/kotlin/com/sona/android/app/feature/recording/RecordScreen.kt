@@ -85,6 +85,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -271,6 +272,10 @@ internal fun RecordScreen(
     configuredProviders: Set<OnlineAsrProvider>,
     recognitionSettings: RecognitionSettingsUiState,
     autoStartRequestToken: Int = 0,
+    hasRequestedMicPermission: Boolean = false,
+    hasRequestedNotificationPermission: Boolean = false,
+    onMicPermissionRequested: () -> Unit = {},
+    onNotificationPermissionRequested: () -> Unit = {},
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
     onPauseRecording: () -> Unit = {},
@@ -288,8 +293,19 @@ internal fun RecordScreen(
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var hasRequestedPermission by rememberSaveable { mutableStateOf(false) }
-    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var localHasRequestedPermission by rememberSaveable { mutableStateOf(false) }
+    var localHasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    val effectiveHasRequestedPermission = hasRequestedMicPermission || localHasRequestedPermission
+    val effectiveHasRequestedNotificationPermission =
+        hasRequestedNotificationPermission || localHasRequestedNotificationPermission
+    val markMicPermissionRequested = {
+        localHasRequestedPermission = true
+        onMicPermissionRequested()
+    }
+    val markNotificationPermissionRequested = {
+        localHasRequestedNotificationPermission = true
+        onNotificationPermissionRequested()
+    }
     var permissionRevision by remember { mutableIntStateOf(0) }
     var permissionIssue by remember { mutableStateOf<MicrophonePermissionDecision?>(null) }
     var displayedSegments by remember { mutableStateOf(emptyList<TranscriptSegment>()) }
@@ -321,7 +337,7 @@ internal fun RecordScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
-        hasRequestedNotificationPermission = true
+        markNotificationPermissionRequested()
         permissionRevision += 1
         onStartRecording()
     }
@@ -330,12 +346,12 @@ internal fun RecordScreen(
             NotificationPermissionPolicy.decide(
                 requiresRuntimePermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
                 isGranted = notificationPermissionGranted,
-                hasRequestedBefore = hasRequestedNotificationPermission,
+                hasRequestedBefore = effectiveHasRequestedNotificationPermission,
             )
         ) {
             NotificationPermissionDecision.START_RECORDING -> onStartRecording()
             NotificationPermissionDecision.REQUEST_PERMISSION -> {
-                hasRequestedNotificationPermission = true
+                markNotificationPermissionRequested()
                 notificationPermissionLauncher.launch(POST_NOTIFICATIONS_PERMISSION)
             }
         }
@@ -343,7 +359,7 @@ internal fun RecordScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        hasRequestedPermission = true
+        markMicPermissionRequested()
         permissionRevision += 1
         if (granted) {
             permissionIssue = null
@@ -370,7 +386,7 @@ internal fun RecordScreen(
                     PackageManager.PERMISSION_GRANTED
                 if (isGranted) {
                     permissionIssue = null
-                } else if (hasRequestedPermission) {
+                } else if (effectiveHasRequestedPermission) {
                     permissionIssue = MicrophonePermissionPolicy.decide(
                         isGranted = false,
                         hasRequestedBefore = true,
@@ -386,6 +402,8 @@ internal fun RecordScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val latestRecordingState by rememberUpdatedState(recordingState)
+
     LaunchedEffect(recordingState) {
         when (recordingState) {
             is LiveRecordingState.Preparing -> {
@@ -394,29 +412,26 @@ internal fun RecordScreen(
             }
             is LiveRecordingState.Recording -> {
                 displayedSegments = recordingState.segments
-                if (!recordingState.isPaused) {
-                    if (waveformBars.size >= WAVEFORM_HISTORY_SIZE) {
-                        waveformBars.removeAt(0)
-                    }
-                    waveformBars.add(recordingState.rmsLevel)
-                }
             }
             else -> Unit
         }
     }
 
-    // Gentle live decay ticks while recording without new frames
+    // Uniform-cadence waveform sampler reading the latest recording RMS level
     LaunchedEffect(
         recordingState is LiveRecordingState.Recording && !recordingState.isPaused,
     ) {
-        val active = recordingState is LiveRecordingState.Recording && !recordingState.isPaused
-        while (active) {
-            delay(85)
-            val currentLevel = (recordingState as? LiveRecordingState.Recording)?.rmsLevel ?: 0f
+        val active = latestRecordingState is LiveRecordingState.Recording &&
+            !(latestRecordingState as LiveRecordingState.Recording).isPaused
+        if (!active) return@LaunchedEffect
+        while (true) {
+            val current = latestRecordingState as? LiveRecordingState.Recording ?: break
+            if (current.isPaused) break
             if (waveformBars.size >= WAVEFORM_HISTORY_SIZE) {
                 waveformBars.removeAt(0)
             }
-            waveformBars.add(currentLevel)
+            waveformBars.add(current.rmsLevel)
+            delay(75)
         }
     }
 
@@ -449,14 +464,14 @@ internal fun RecordScreen(
             when (
                 MicrophonePermissionPolicy.decide(
                     isGranted = permissionGranted,
-                    hasRequestedBefore = hasRequestedPermission,
+                    hasRequestedBefore = effectiveHasRequestedPermission,
                     shouldShowRationale = shouldShowRationale,
                 )
             ) {
                 MicrophonePermissionDecision.START_RECORDING ->
                     startAfterOptionalNotificationPermission()
                 MicrophonePermissionDecision.REQUEST_PERMISSION -> {
-                    hasRequestedPermission = true
+                    markMicPermissionRequested()
                     permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
                 MicrophonePermissionDecision.SHOW_RATIONALE -> {
@@ -502,7 +517,7 @@ internal fun RecordScreen(
             onRetryBootstrap = onRetryBootstrap,
             onRetryPermission = {
                 setupSheetVisible = false
-                hasRequestedPermission = true
+                markMicPermissionRequested()
                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
             onOpenAppSettings = {
@@ -695,7 +710,7 @@ internal fun RecordScreen(
                         onViewCompleted = onViewCompleted,
                         showNotificationNotice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             !notificationPermissionGranted &&
-                            hasRequestedNotificationPermission,
+                            effectiveHasRequestedNotificationPermission,
                         onOpenNotificationSettings = { SonaNotificationChannels.openNotificationSettings(context) },
                         shouldShowNotificationRationale = shouldShowNotificationRationale,
                     )

@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.ui.component.SonaBackButton
@@ -128,6 +129,7 @@ internal fun SettingsScreen(
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
     onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
+    miniBarVisible: Boolean = false,
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -196,6 +198,7 @@ internal fun SettingsScreen(
                 SettingsSectionList(
                     selectedSection = selectedSection,
                     showSelection = isTwoPane,
+                    extraBottomPadding = if (miniBarVisible) 76.dp else 0.dp,
                     onSectionSelected = { section ->
                         if (section != SettingsSection.RECOGNITION) {
                             consumeCloudCredentialFocusSession()
@@ -270,6 +273,7 @@ internal fun SettingsScreen(
                     onDiscardRecovery = onDiscardRecovery,
                     onClearResolvedRecovery = onClearResolvedRecovery,
                     onLlmProvider = onLlmProvider, onLlmModel = onLlmModel, onLlmBaseUrl = onLlmBaseUrl, onLlmPath = onLlmPath, onLlmVersion = onLlmVersion, onLlmApiKey = onLlmApiKey, onLlmSave = onLlmSave, onLlmClear = onLlmClear,
+                    extraBottomPadding = if (miniBarVisible) 80.dp else 0.dp,
                 )
             }
         },
@@ -303,6 +307,7 @@ private fun SettingsSectionList(
     selectedSection: SettingsSection,
     showSelection: Boolean,
     onSectionSelected: (SettingsSection) -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -363,7 +368,7 @@ private fun SettingsSectionList(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.size(112.dp))
+                Spacer(modifier = Modifier.size(112.dp + extraBottomPadding))
             }
         }
     }
@@ -431,8 +436,14 @@ private fun SettingsDetailPane(
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
     onLlmProvider: (String) -> Unit, onLlmModel: (String) -> Unit, onLlmBaseUrl: (String) -> Unit, onLlmPath: (String) -> Unit, onLlmVersion: (String) -> Unit, onLlmApiKey: (String) -> Unit, onLlmSave: () -> Unit, onLlmClear: () -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(bottom = extraBottomPadding),
+    ) {
         SonaTopAppBar(
             title = stringResource(section.labelRes),
             navigationIcon = {

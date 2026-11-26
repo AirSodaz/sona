@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,6 +150,7 @@ internal fun SonaApp(
     onImportAudio: (String) -> Unit,
     onCancelAudioImport: () -> Unit,
     onCancelAudioImportJob: (String) -> Unit = { onCancelAudioImport() },
+    onDismissFailedAudioImport: (String?) -> Unit = {},
     onTranscribeWithCurrentEngine: (HistoryItem) -> Unit,
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
@@ -205,6 +207,8 @@ internal fun SonaApp(
     var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
     var recordingSheetExpanded by remember { mutableStateOf(false) }
     var autoStartRequestToken by remember { mutableIntStateOf(0) }
+    var hasRequestedMicPermission by rememberSaveable { mutableStateOf(false) }
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
 
     val recoveryPendingCount = dataRecoveryState.recovery.items.count {
         it.resolution == RecoveryResolution.PENDING
@@ -258,6 +262,7 @@ internal fun SonaApp(
         val isRecordingActive = recordingState is LiveRecordingState.Preparing ||
             recordingState is LiveRecordingState.Recording ||
             recordingState is LiveRecordingState.Stopping
+        val miniBarVisible = isRecordingActive && !recordingSheetExpanded
 
         val onRecordCapsuleClick = {
             recordingSheetExpanded = true
@@ -310,11 +315,13 @@ internal fun SonaApp(
                             onDeleteProject = onDeleteHistoryProject,
                             onImportAudioClick = { audioPicker.launch(arrayOf("audio/*")) },
                             onCancelAudioImportJob = onCancelAudioImportJob,
+                            onDismissFailedImport = onDismissFailedAudioImport,
                             onConfigureRecognition = onConfigureRecognition,
                             recoveryPendingCount = recoveryPendingCount,
                             onOpenRecovery = {
                                 navigateToSettingsSection(SettingsSection.DATA_RECOVERY, false)
                             },
+                            extraBottomPadding = if (miniBarVisible) 76.dp else 0.dp,
                         )
                     }
                     composable(
@@ -392,6 +399,7 @@ internal fun SonaApp(
                             onSaveEdit = onSaveTranscriptEdit,
                             onDiscardEdit = onDiscardTranscriptEdit,
                             onFlushEdit = onFlushTranscriptEdit,
+                            extraBottomPadding = if (miniBarVisible) 84.dp else 0.dp,
                         )
                     }
                     composable(
@@ -482,6 +490,7 @@ internal fun SonaApp(
                             onCloudCredentialFocusConsumed = {
                                 cloudCredentialFocusRequested = false
                             },
+                            miniBarVisible = miniBarVisible,
                         )
                     }
                 }
@@ -568,6 +577,10 @@ internal fun SonaApp(
                     configuredProviders = cloudTranscriptionState.configuredProviders,
                     recognitionSettings = recognitionSettingsState,
                     autoStartRequestToken = autoStartRequestToken,
+                    hasRequestedMicPermission = hasRequestedMicPermission,
+                    hasRequestedNotificationPermission = hasRequestedNotificationPermission,
+                    onMicPermissionRequested = { hasRequestedMicPermission = true },
+                    onNotificationPermissionRequested = { hasRequestedNotificationPermission = true },
                     onRetryBootstrap = onRetryBootstrap,
                     onStartRecording = onStartRecording,
                     onPauseRecording = onPauseRecording,

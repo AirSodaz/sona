@@ -235,6 +235,7 @@ class MainActivity : AppCompatActivity() {
                 onImportAudio = libraryViewModel::importAudio,
                 onCancelAudioImport = libraryViewModel::cancelAudioImport,
                 onCancelAudioImportJob = libraryViewModel::cancelAudioImportJob,
+                onDismissFailedAudioImport = libraryViewModel::dismissAudioImportFailure,
                 onTranscribeWithCurrentEngine = libraryViewModel::transcribeWithCurrentEngine,
                 onCloudProviderSelected = cloudTranscriptionViewModel::selectProvider,
                 onCloudApiKeyInputChanged = cloudTranscriptionViewModel::onApiKeyInputChanged,

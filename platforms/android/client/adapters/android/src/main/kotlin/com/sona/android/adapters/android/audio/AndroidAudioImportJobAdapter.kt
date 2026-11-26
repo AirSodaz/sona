@@ -119,6 +119,7 @@ class AndroidAudioImportJobAdapter private constructor(
         mutex.withLock {
             workManager.value.cancelAllWorkByTag(jobId)
             recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
+            workManager.value.pruneWork()
             reconcileAndScheduleLocked()
         }
     }
