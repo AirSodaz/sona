@@ -12,7 +12,7 @@ Sona is a good fit if you want to:
 
 - capture meetings, lectures, interviews, or notes with `Live Record` inside the unified `Create` workspace
 - transcribe existing audio or video files or direct network stream URLs (HTTP/HTTPS/RTMP/RTSP/m3u8) with `Batch Import`, featuring queue dashboards, sliding VAD streaming, and real-time cancellation
-- use the `Tools` workbench to access `Live Subtitles` (floating system/mic captions), `Voice Typing` (global dictation into applications), `API Server` (local headless REST), `MCP Server` (AI Agent bridge), and `Emby Subtitle Assistant` (closed-loop stream transcription & subtitle synchronization)
+- use the `Tools` workbench to access `Live Subtitles` (floating system/mic captions), `Voice Typing` (global dictation into applications), `API Server` (local headless REST), `Automation` (watched-folder transcription), `MCP Agents` (AI Agent bridge), `Sona CLI` (PATH & shell completions), and `Media Server Subtitle Assistant` (closed-loop Emby & Jellyfin stream transcription and subtitle synchronization)
 - enable non-blocking `Real-Time Bilingual Translation` across live recording, live captions, batch processing, and voice typing
 - quickly adjust recognition language, subtitle modes, and hotwords using the compact `Preset Popover Card`
 - organize saved recordings and imports with `Project Center`, `Projects`, and `Inbox`
@@ -24,7 +24,7 @@ Sona is a good fit if you want to:
 - use `End-to-End Encrypted Cloud Sync` (WebDAV & S3-compatible object storage E2EE) to synchronize transcripts, vocabularies, and settings across desktop and Android devices
 - quickly find configuration options with client-side `Settings Search`, and manage models with the resumable `Download Notification Center` showing real-time speeds
 
-If you mainly came for `Live Caption` or `Voice Typing`, jump straight to the `Tools Workbench`. If you want to transcribe media files or live network streams, use `Create > Batch Import`. If you want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you need media server subtitle automation, explore `Tools > Emby Subtitle Assistant`.
+If you mainly came for `Live Caption` or `Voice Typing`, jump straight to the `Tools Workbench`. If you want to transcribe media files or live network streams, use `Create > Batch Import`. If you want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you need media server subtitle automation, explore `Tools > Media Server Subtitle Assistant`.
 
 ## 2. Install And Launch
 
@@ -99,7 +99,7 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - `Live Caption` is the `System Audio Captions` toggle on the `Live Record` page, and it is useful when you mainly want a floating subtitle window for system audio.
 - You can turn it on without starting a recording first. If you later start `Live Record`, both can run in parallel.
-- `Settings > Subtitle Settings` controls caption startup behavior, always-on-top, click-through, font size, width, font/background color, and background transparency.
+- `Tools > Live Subtitles` controls caption startup behavior, always-on-top, click-through, font size, width, font/background color, and background transparency.
 
 ### Result
 
@@ -157,7 +157,7 @@ Use `Batch Import` when you have audio or video files or remote network stream U
 
 `Tools` is one of the three top-level modes in Sona's main navigation (`Create`, `Projects`, `Tools`), centralizing standalone services and integration panels into a unified master-detail workbench.
 
-The Tools workbench contains 5 dedicated feature panels:
+The Tools workbench contains 7 dedicated feature panels:
 
 ### 1. Live Subtitles (Subtitles)
 - Floating desktop caption overlay for system audio or microphone capture.
@@ -174,19 +174,30 @@ The Tools workbench contains 5 dedicated feature panels:
 - Bind IP address, TCP port (default `14200`), Bearer token authentication, and IP whitelist controls.
 - Hero metrics card displaying active uptime, memory, processing counters, and a one-click copy endpoint action.
 
-### 4. MCP Server
-- Standard Model Context Protocol bridge connecting external AI Agents (Claude Desktop, Cursor, OpenCode) directly to Sona desktop's transcription engine and history database.
+### 4. Automation
+- Watched-folder rules that automatically detect new audio or video files (with optional recursive subfolder scanning) and transcribe them in the background.
+- Supports two destination modes per rule:
+  - **Save to Project**: Route transcripts into `Inbox` or a specific project and inherit that project's automated pipeline.
+  - **Export Only**: Transcribe and export directly to a target directory (`TXT`, `SRT`, `VTT`, `MD`, or `JSON`) with optional rule-level polish and translation, without keeping history entries.
+- Provides immediate `Scan Now` triggers and inline failure inspection with single-file or rule-level retry actions.
+
+### 5. MCP Agents
+- Standard Model Context Protocol bridge connecting external AI Agents (Claude Desktop, Cursor, OpenCode, Codex) directly to Sona desktop's transcription engine and history database.
 - Daemon process start/restart controls, live ping probe, and IPC latency indicators.
 - See the dedicated [MCP Guide](mcp.md) for full protocol and tool reference.
 
-### 5. Emby Subtitle Assistant
-- Closed-loop integration connecting Emby media servers directly to Sona's transcription and translation pipeline:
-  1. **Server Connection**: Authenticate with your Emby server URL, admin username, and password.
-  2. **Plugin Verification**: Automatically detects whether the Emby `SubtitleManager` plugin is installed, providing repository links and installation guides.
-  3. **Media Library Browsing**: Browse movies and series seasons with tri-state selection checkboxes, episode accordions, and sync status filters.
+### 6. Sona CLI
+- Manage standalone `sona-cli` and `sona-mcp` terminal integration directly from the desktop app.
+- Inspect and toggle system `PATH` integration (detecting active, shadowed, or multi-environment PATH entries), install/uninstall standalone shell completion scripts (`PowerShell`, `Zsh`, `Bash`, `Fish`), and copy common CLI command snippets.
+
+### 7. Media Server Subtitle Assistant (Emby & Jellyfin)
+- Closed-loop integration connecting Emby and Jellyfin media servers directly to Sona's transcription and translation pipeline:
+  1. **Multi-Server Connection**: Manage multiple Emby or Jellyfin server profiles and authenticate with your server URL and credentials.
+  2. **Plugin Verification**: Automatically detects whether the Emby `SubtitleManager` plugin is installed (for Emby servers), providing repository links and installation guides.
+  3. **Media Library Browsing**: Browse movies and series seasons with tri-state selection checkboxes, episode accordions, and missing-subtitle filters.
   4. **Processing Overrides**: Customize dedicated ASR models, language hints, audio track priorities, and subtitle modes (replace original, separate tracks, or bilingual).
-  5. **Automated Batch Queue**: Pulls audio streams in the background, executes batch ASR and streaming translation, and automatically uploads the resulting SRT subtitles back to Emby.
-  6. **Re-sync**: Edit transcripts in Sona and push updated subtitles back to Emby with one-click re-sync actions in context menus.
+  5. **Automated Batch Queue**: Pulls audio streams in the background, executes batch ASR and streaming translation, and automatically uploads the resulting SRT subtitles back to your media server.
+  6. **Re-sync**: Edit transcripts in Sona and push updated subtitles back to the server with one-click re-sync actions in context menus.
 
 ## 7. Transcript Editing And Playback
 After Sona creates transcript segments, the editor becomes the main place to review text, speaker attribution, playback timing, and saved revisions.
@@ -287,7 +298,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - You can turn `AI Summary` off in `Settings > LLM Service`. This hides the panel and prevents new summaries from being generated, but existing summary sidecar data is kept.
 - If `AI Summary` is not fully configured yet, you can still open the summary editor and write or revise the text manually.
 - Sona keeps one current summary record per transcript. Changing templates changes the next generation target or project default; it does not create a separate saved summary for every template.
-- Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
+- Translation supports over 130 target languages, including `Chinese (Simplified)`, `Chinese (Traditional)`, `English`, `Japanese`, `Korean`, `French`, `German`, `Spanish`, and more.
 - `Re-transcribe` is only available when the current transcript came from a saved project item.
 - Summary output is editable in the editor. You can revise it directly, let Sona auto-save it, and use the panel's copy button when you need it elsewhere.
 - If a polish, translation, or re-transcription pass changes more than you wanted, use `Version Snapshots` from the transcript header to restore selected changed rows or revert the whole transcript.
@@ -306,7 +317,7 @@ Export is available when the transcript contains at least one segment.
 2. In the `Export Transcript` modal, enter a `Filename`.
 3. Choose an `Export Directory`.
 4. Pick an output format:
-   `SubRip (.srt)`, `WebVTT (.vtt)`, `JSON (.json)`, or `Plain Text (.txt)`.
+   `SubRip (.srt)`, `WebVTT (.vtt)`, `JSON (.json)`, `Plain Text (.txt)`, or `Markdown (.md)`.
 5. Choose an export mode:
    `Original`, `Translation`, or `Bilingual`.
 6. Click `Export`.
@@ -390,44 +401,36 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - Section `9. Export Transcript` above lists the formats and modes Sona currently supports.
 
 ### Settings Areas To Review
-Sona provides 14 structured settings areas, and features a client-side search bar at the top of the modal for instant cross-tab filtering and navigation:
+Sona provides 10 structured settings areas organized into four groups (`General`, `Audio`, `Intelligence`, and `Infrastructure`), and features a client-side search bar at the top of the modal for instant cross-tab filtering and navigation (standalone services such as `Live Subtitles`, `Voice Typing`, `Automation`, `API Server`, and `MCP Agents` now live in the `Tools` workbench, with legacy settings links redirecting there):
 
-- `Settings > Dashboard`
-  global content overview, speaker coverage, and LLM usage trends
 - `Settings > General`
   theme, app language, font, tray behavior, update checks, plus `Diagnostics` and `Backup & Restore`
-- `Settings > Input Device`
-  microphone selection, system audio selection, microphone boost, `Keep Microphone Active`, mute during recording
-- `Settings > Subtitle Settings`
-  live caption configuration (includes migration banner and deep link to `Tools > Subtitles`)
-- `Settings > Voice Typing`
-  global dictation configuration and readiness checker (includes migration banner and deep link to `Tools > Voice Typing`)
-- `Settings > Model Settings`
-  `Live Record Model`, `Batch Import Model`, CTC forced alignment, diarization sensitivity, `Batch VAD Segmentation`, model download notification center with resumable downloads and live transfer speeds, and cache cleanup
-- `Settings > Vocabulary`
-  organized into three dedicated sub-tabs: `Recognition` (text replacement and hotword sets), `Prompts` (polish context presets and summary templates), and `Speakers` (speaker profile voiceprints and sample enrollment)
-- `Settings > Automation`
-  watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running (includes migration banner and deep link to `Tools > Automation`)
-- `Settings > Storage Management`
-  storage paths, custom FFmpeg binary path, disk analysis, audio retention cleanup policies, and WebView cache cleanup
-- `Settings > Cloud Sync`
-  End-to-End Encrypted (E2EE) cross-device vault supporting WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.), Vault ID pairing, master password, emergency recovery keys, sync scopes, and conflict center
-- `Settings > API Server`
-  local HTTP API server host, port, Bearer token, IP whitelist (includes migration banner to `Tools > API Server`)
-- `Settings > LLM Service`
-  feature model bindings, reasoning options, and provider credentials
+- `Settings > Dashboard`
+  global content overview, speaker coverage, and LLM usage trends
 - `Settings > Shortcuts`
   live recording, playback, search, project navigation, and editor shortcuts
 - `Settings > About`
   version metadata, build channel indicator (`dev`, `ci`, `nightly`, `stable`), licenses, logs, and debug tools
+- `Settings > Input Device`
+  microphone selection, system audio selection, microphone boost, `Keep Microphone Active`, mute during recording, and FFmpeg decoder toggle / custom FFmpeg executable path
+- `Settings > Model Settings`
+  `Live Record Model`, `Batch Import Model`, CTC forced alignment, diarization sensitivity, `Batch VAD Segmentation`, model download notification center with resumable downloads and live transfer speeds, and cache cleanup
+- `Settings > Vocabulary`
+  organized into three dedicated sub-tabs: `Unified Dictionary` (`Recognition` text replacement and hotword sets), `Prompts` (polish context presets and summary templates), and `Speakers` (speaker profile voiceprints and sample enrollment)
+- `Settings > LLM Service`
+  feature model bindings, reasoning options, and provider credentials
+- `Settings > Storage Management`
+  storage paths, disk usage analysis, audio retention cleanup policies, and WebView cache cleanup
+- `Settings > Cloud Sync`
+  End-to-End Encrypted (E2EE) cross-device vault supporting WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.), Vault ID pairing, master password, emergency recovery keys, sync scopes, and conflict center
 
 ### `Voice Typing`
 
 - `Voice Typing` is useful when you want to dictate directly into chat apps, documents, forms, or other applications.
-- Open `Settings > Voice Typing`, turn on `Voice Typing`, choose a global shortcut, and pick either `Push to Talk (Hold)` or `Toggle (Press once)`.
+- Open `Tools > Voice Typing`, turn on `Voice Typing`, choose a global shortcut, and pick either `Push to Talk (Hold)` or `Toggle (Press once)`.
 - `Push to Talk (Hold)` is better for short bursts. `Toggle (Press once)` is better for longer dictation sessions.
 - `Voice Typing` depends on the same offline live transcription setup, so you also need a working `Live Record Model`, any required `VAD` model, and an available input device.
-- The same page also shows whether the current blocker is the shortcut, model, VAD, input device, or background warm-up state.
+- The same panel also shows whether the current blocker is the shortcut, model, VAD, input device, or background warm-up state.
 - `Settings > Input Device > Keep Microphone Active` is off by default. Turn it on if you want lower voice typing latency by leaving the microphone warm while idle; leave it off if you prefer Sona to release the microphone whenever you are not recording, dictating, or previewing input.
 
 ### Cloud Sync (End-to-End Encrypted)
@@ -450,12 +453,13 @@ Sona features a dedicated multi-device sync architecture designed around privacy
 
 ### Storage Management
 
-Manage disk consumption and external binaries in `Settings > Storage Management`:
+Manage disk consumption in `Settings > Storage Management`:
 
 - **Directory Overview**: View and inspect paths for application data, offline models, and temporary caches with quick links to system file explorers.
-- **Custom FFmpeg Path**: If your system lacks a global FFmpeg or requires a specific decoder version for proprietary video/audio containers, specify the binary path directly here.
 - **Audio Retention Policy**: Configure automatic retention periods for recorded audio files (`Keep Forever`, `Delete Immediately`, `7 days`, `30 days`, `90 days`, `180 days`, `365 days`). When expired, raw audio is purged while text transcripts and summaries are preserved.
 - **WebView Cache Cleanup**: Clear internal WebView cache and storage with a single click.
+
+To configure FFmpeg decoding or specify a custom FFmpeg executable path for proprietary containers, go to `Settings > Input Device`.
 
 ### Message Center And Cancellation
 
@@ -547,14 +551,14 @@ The header `Message Center` acts as the operational hub for global background ta
 
 ### `Live Caption` does not appear
 
-- Go back to the `Live Record` page and make sure `Live Caption` is turned on there. `Settings > Subtitle Settings` only controls the window behavior and appearance.
+- Go back to the `Live Record` page and make sure `Live Caption` is turned on there. `Tools > Live Subtitles` controls the window behavior, appearance, and overlay toggle.
 - If you only want floating system-audio subtitles, you do not need to start recording first. Turning on `Live Caption` is enough.
 - `Live Caption` depends on the same offline live transcription setup, so make sure a `Live Record Model` is configured.
 
 ### Voice Typing does not work
 
-- Turn on `Voice Typing` in `Settings > Voice Typing`.
-- Confirm the page shows the shortcut, model, VAD, input device, and readiness state you expect.
+- Turn on `Voice Typing` in `Tools > Voice Typing`.
+- Confirm the panel shows the shortcut, model, VAD, input device, and readiness state you expect.
 - Make sure a live transcription model is configured, because Voice Typing depends on the same offline transcription setup.
 
 ### Where do I recover interrupted batch or automation work
@@ -595,7 +599,7 @@ The header `Message Center` acts as the operational hub for global background ta
 ### What if media import fails or reports a missing decoder?
 
 - Ensure the file is not corrupted and uses a standard media container.
-- If decoding proprietary or unusual audio/video formats fails, install FFmpeg on your system or specify a custom FFmpeg binary path under `Settings > Storage Management > Custom FFmpeg Path`.
+- If decoding proprietary or unusual audio/video formats fails, enable FFmpeg decoding and install FFmpeg or specify a custom FFmpeg binary path under `Settings > Input Device`.
 
 ### I want to build or develop Sona
 

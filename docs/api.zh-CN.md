@@ -6,23 +6,23 @@ Sona 提供了一个隐私优先的本地 HTTP API 服务，旨在用于外部�
 
 ## 配置与服务启用
 
-API 服务目前通过桌面 GUI 客户端启动：
+API 服务支持以下两种启动方式：
 
-### 1. GUI 客户端设置
-在主界面打开 **设置 -> API 服务** 并配置：
+### 1. GUI 客户端工作台
+在主界面打开 **工具 -> API 服务**（通过 **设置 -> API 服务** 进入也会引导跳转至此）并配置：
 - **启用 API 服务**: 切换服务开启/关闭。
 - **监听地址**: 绑定 IP（例如：`127.0.0.1` 仅限本机访问；`0.0.0.0` 绑定所有网络设备，允许局域网或公网外部访问）。
 - **端口**: API 服务运行的 TCP 端口（默认：`14200`）。
 - **安全密钥**: 用于保护接口的可选 Bearer 令牌。点击 **生成** 可以获得安全的随机密钥，点击 **复制** 写入剪贴板。
 
-### 命令行无头模式
+### 2. 命令行无头模式
 独立的 `sona-cli` 也可以通过同一个 API server adapter 启动本地 HTTP 服务：
 
 ```bash
 sona-cli serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 ```
 
-CLI 服务支持使用已安装离线模型进行本地 REST 转写。`serve` 路由不提供 Online ASR 或 WebSocket 流式转写；直接在线转写请使用 `sona-cli transcribe` 或 `sona-cli transcribe-live`。
+CLI `serve` 支持使用已安装离线模型进行本地 REST 批量转写、WebSocket 实时流式转写（`/v1/streaming`），以及通过环境变量（如 `GROQ_API_KEY`、`SONA_VOLCENGINE_ASR_API_KEY` 等）配置的 Online ASR 批量转写。由于 `sona-cli` 刻意保持无状态且不接入 Online LLM，`/v1/llm/polish` 与 `/v1/llm/translate` 仅在桌面 GUI 宿主中可用。
 
 GPU 硬件加速通过 GUI 模型设置作为服务级默认值配置。Windows 上 `auto` 会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。批量和流式 API 请求不支持按请求覆盖 GPU 配置。
 

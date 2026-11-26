@@ -69,7 +69,11 @@ When the Sona desktop client is not currently running:
 | `-32602` | Invalid Params | Missing or malformed method arguments or `_meta` validation error |
 | `-32603` | Internal Error | Unhandled internal server error |
 | `-32000` | Host / Client Error | Desktop client offline, database query failure, or concurrent edit conflict |
+| `-32002` | Server Not Initialized | Method called before MCP `initialize` handshake completed |
+| `-32020` | Header Mismatch | Request headers do not match declared MCP transport expectations |
+| `-32021` | Missing Required Client Capability | Client lacks a capability required by the requested operation |
 | `-32022` | Unsupported Protocol | Requested protocol version in `_meta` is not supported by the server |
+| `-32800` | Request Cancelled | Operation was cancelled via MCP cancellation or client abort |
 
 ---
 
@@ -115,6 +119,14 @@ Initiates microphone or system audio capture and real-time live transcription in
   - `project_id` (*string*, optional): Assign active workspace project for the new recording.
   - `device_name` (*string*, optional): Specific audio input device name.
 - **Returns**: `{ "historyId": string, "startedAt": number }`.
+
+#### `sona_control_recording`
+
+Unified controller for the active recording lifecycle: pause, resume, stop (save), or discard.
+
+- **Parameters**:
+  - `action` (*string*, required, enum: `['pause', 'resume', 'stop', 'discard']`): Recording lifecycle action to execute.
+- **Returns**: `{ "success": true }` for `pause`/`resume`, or `{ "historyId": string, "durationSeconds": number, "segmentCount": number }` for `stop`/`discard`.
 
 #### `sona_stop_recording`
 
@@ -186,6 +198,15 @@ Lists historical transcript version snapshots for a history record.
   - `history_id` (*string*, required): Target history record ID.
 - **Returns**: Array of snapshot metadata records (`[{ "id": string, "historyId": string, "reason": string, "createdAt": number, "segmentCount": number }]`).
 
+#### `sona_revert_transcript_snapshot`
+
+Rolls back transcript segments to a previous historical version snapshot.
+
+- **Parameters**:
+  - `history_id` (*string*, required): Target history record ID.
+  - `snapshot_id` (*string*, required): Target snapshot ID to revert back to.
+- **Returns**: Restored snapshot summary / transcript payload.
+
 ---
 
 ### 4. Summary & Metadata Management
@@ -239,9 +260,20 @@ Performs full-text search, project filtering, and time-range queries across save
 - **Parameters**:
   - `query` (*string*, optional): Keyword search string.
   - `project_id` (*string*, optional): Filter items belonging to a specific workspace project.
-  - `limit` (*number*, optional, default: `50`): Maximum records to return.
+  - `limit` (*number*, optional, default: `20`): Maximum records to return.
   - `offset` (*number*, optional, default: `0`): Pagination offset.
 - **Returns**: Array of history summaries (`[{ "id", "title", "previewText", "timestamp", "duration", "projectId" }]`).
+
+#### `sona_update_history_meta`
+
+Updates a history item's title, project assignment, or icon metadata.
+
+- **Parameters**:
+  - `history_id` (*string*, required): History item record ID.
+  - `title` (*string*, optional): New title for the history item.
+  - `project_id` (*string*, optional): Project ID to assign the item to (`null` or `""` to unassign).
+  - `icon` (*string*, optional): Optional icon identifier.
+- **Returns**: `{ "success": true }`.
 
 #### `sona_delete_history`
 
@@ -258,7 +290,8 @@ Lists items currently in the trash / recycle bin.
 
 - **Parameters**:
   - `query` (*string*, optional): Search filter for trashed items.
-  - `limit` (*number*, optional, default: `50`): Maximum items to return.
+  - `limit` (*number*, optional, default: `20`): Maximum items to return.
+  - `offset` (*number*, optional, default: `0`): Pagination offset.
 - **Returns**: Array of trashed item summaries.
 
 #### `sona_restore_history`
@@ -301,7 +334,8 @@ Exports transcript content to a target file in SRT, VTT, Markdown, TXT, or JSON 
 - **Parameters**:
   - `history_id` (*string*, required): History record ID.
   - `output_path` (*string*, required): Target file path.
-  - `format` (*string*, required): Format identifier (`srt`, `vtt`, `markdown`, `txt`, `json`).
+  - `format` (*string*, required): Format identifier (`srt`, `vtt`, `markdown`, `md`, `txt`, `json`).
+  - `mode` (*string*, optional, default: `'original'`): Export mode (`'original'`, `'translation'`, `'bilingual'`).
 - **Returns**: `{ "success": true, "path": string }`.
 
 ---
@@ -331,11 +365,11 @@ Creates a new workspace project folder.
 Modifies an existing workspace project.
 
 - **Parameters**:
-  - `id` (*string*, required): Target project ID.
+  - `project_id` (*string*, required; `id` accepted as alias): Target project ID.
   - `name` (*string*, optional): New project name.
   - `description` (*string*, optional): New description.
-  - `color` (*string*, optional): New color.
-  - `icon` (*string*, optional): New icon.
+  - `color` (*string*, optional): New color hex code.
+  - `icon` (*string*, optional): New icon name.
 - **Returns**: Updated project object.
 
 #### `sona_delete_project`
@@ -343,8 +377,8 @@ Modifies an existing workspace project.
 Deletes a workspace project.
 
 - **Parameters**:
-  - `id` (*string*, required): Project ID to delete.
-  - `cascade_action` (*string*, optional, default: `"keep"`): Handling of associated history items (`"keep"` or `"delete"`).
+  - `project_id` (*string*, required; `id` accepted as alias): Project ID to delete.
+  - `cascade_action` (*string*, optional, default: `"moveToInbox"`): Handling of associated history items (`"moveToInbox"` or `"trash"`).
 - **Returns**: `{ "success": true }`.
 
 #### `sona_set_active_project`
@@ -394,6 +428,7 @@ Starts downloading a preset model by identifier.
 - **Parameters**:
   - `model_id` (*string*, required): Preset model identifier (e.g. `whisper-turbo`, `sensevoice`).
   - `mirror` (*string*, optional): Download mirror override (`huggingface`, `modelscope`).
+  - `download_id` (*string*, optional): Custom download ID to identify this download task.
 - **Returns**: `{ "downloadId": string, "status": "downloading" }`.
 
 #### `sona_cancel_download`
@@ -402,6 +437,14 @@ Aborts an in-flight model download.
 
 - **Parameters**:
   - `download_id` (*string*, required): Active download ID.
+- **Returns**: `{ "success": true }`.
+
+#### `sona_delete_preset_model`
+
+Physically deletes an installed local preset model from disk to free storage space.
+
+- **Parameters**:
+  - `model_id` (*string*, required): Preset model ID to delete from disk.
 - **Returns**: `{ "success": true }`.
 
 ---
@@ -429,6 +472,15 @@ Lists active cloud synchronization conflicts between local and remote versions.
 
 - **Parameters**: None.
 - **Returns**: Array of active conflict summary items (`[{ "conflictId": string, "historyId": string, "localUpdatedAt": number, "remoteUpdatedAt": number }]`).
+
+#### `sona_resolve_sync_conflict`
+
+Resolves an unresolved E2EE sync conflict between local and remote versions.
+
+- **Parameters**:
+  - `conflict_id` (*string*, required): Conflict ID from `sona://sync/conflicts`.
+  - `resolution` (*string*, required, enum: `['keep_current', 'use_conflicting', 'keep_both']`): Resolution strategy (`'keep_current'` retains local, `'use_conflicting'` overwrites with remote, `'keep_both'` forks both copies).
+- **Returns**: `{ "success": true }`.
 ---
 
 ## Public Resources Reference
@@ -444,6 +496,8 @@ Lists active cloud synchronization conflicts between local and remote versions.
 | `sona://models` | Sona Model Catalog | `application/json` | Installed and available local models snapshot |
 | `sona://sync/status` | Sona Sync Status | `application/json` | Cloud sync status, connection, and conflict summary |
 | `sona://trash` | Sona Trash Items | `application/json` | List of deleted history items currently in trash |
+| `sona://audio/devices` | Sona Audio Devices | `application/json` | Available microphone and system audio loopback capture devices |
+| `sona://sync/conflicts` | Sona Sync Conflicts | `application/json` | Unresolved E2EE sync conflicts requiring manual intervention |
 
 ### Resource Templates
 
@@ -452,6 +506,7 @@ Lists active cloud synchronization conflicts between local and remote versions.
 | `sona://history/{history_id}` | Sona History Transcript | `text/plain` | Plain text transcript of a specific history item |
 | `sona://history/{history_id}/summary` | Sona History Summary | `text/markdown` | Persisted Markdown AI summary of a specific history item |
 | `sona://history/{history_id}/translation` | Sona History Translation | `text/plain` | Concatenated segment translation text for a specific item |
+| `sona://history/{history_id}/snapshots` | Sona History Snapshots | `application/json` | Version snapshot history and metadata for a specific history item |
 
 ---
 

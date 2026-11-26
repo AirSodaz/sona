@@ -16,7 +16,7 @@
 - **👥 Speaker Profiles & Review**: Build local speaker profiles with CTC forced alignment and real-time speaker identification, adjust speaker badges, enroll voice samples in-situ, and batch-review suggested or anonymous speaker groups before export.
 - **✨ LLM Assistant**: Polish (clean, verbatim, and formal directive modes), translate, and summarize transcripts using OpenAI, Anthropic, Gemini, DeepSeek, or Ollama.
 - **🗣️ Live Caption, Voice Typing & Real-Time Translation**: Floating system captions, system-wide dictation into other applications, and non-blocking real-time bilingual translation for live transcription and captions.
-- **🛠️ Tools Workbench & Emby Integration**: Integrated Tools workbench hosting Live Subtitles, Voice Typing, HTTP API Server, MCP Server, and Emby Subtitle Assistant with closed-loop stream transcription and subtitle synchronization.
+- **🛠️ Tools Workbench & Media Server Integration**: Integrated Tools workbench hosting Live Subtitles, Voice Typing, HTTP API Server, Watched-Folder Automation, MCP Agents, Sona CLI management, and Media Server Subtitle Assistant (Emby & Jellyfin) with closed-loop stream transcription and subtitle synchronization.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON, Markdown) with bilingual support and clipboard copy.
 - **🛟 Recovery, Backup & Storage**: Resume interrupted tasks via the Message Center, export lightweight backups, manage storage directories, set custom FFmpeg paths, and configure audio retention cleanup policies.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp, supporting both offline batch and streaming inference), **Confucius4-R2T2**, **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
@@ -29,7 +29,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, the unified `Create` workspace (`Live Record` & `Batch Import` with stream URLs), `Project Center` / `Inbox`, `Tools` workbench (Subtitles, Voice Typing, API Server, MCP, Emby Subtitle Assistant), transcript editing, speaker review, version snapshots, real-time translation, LLM features, export, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, the unified `Create` workspace (`Live Record` & `Batch Import` with stream URLs), `Project Center` / `Inbox`, `Tools` workbench (Subtitles, Voice Typing, API Server, Automation, MCP, Sona CLI, Emby & Jellyfin Subtitle Assistant), transcript editing, speaker review, version snapshots, real-time translation, LLM features, export, and troubleshooting.
 
 ## 📚 Documentation
 

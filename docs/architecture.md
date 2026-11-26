@@ -109,11 +109,15 @@ All static and dynamic `@tauri-apps/*` imports live under `src/services/tauri/pl
 The desktop frontend organizes application interaction into three primary modes:
 - `create`: Unified creation workspace combining live microphone/desktop recording and batch media/stream imports with accordion decks and focus synchronization.
 - `projects`: Multi-project workspace management, Notion-style automated pipelines, Inbox, and Trash.
-- `tools`: Unified Tools workbench hosting sub-panels for Live Subtitles, Voice Typing, HTTP API Server, MCP Server, and Emby Subtitle Assistant.
+- `tools`: Unified Tools workbench hosting sub-panels for Live Subtitles, Voice Typing, HTTP API Server, Automation, MCP Agents, Sona CLI, and Media Server Subtitle Assistant (Emby & Jellyfin).
 
 Desktop native integrations under `platforms/desktop/src/integrations/` encapsulate external protocols and host drivers:
-- `emby`: Closed-loop Emby media server client, SubtitleManager plugin detection/upload, and background streaming audio fetch.
 - `asr`: Shared streaming and batch transcription execution state, cancellation guards, and sliding VAD frame dispatch.
+- `audio`: Desktop audio capture, buffering, and recording runtime integration.
+- `emby` / `media_server`: Closed-loop Emby and Jellyfin media server clients, SubtitleManager plugin detection/upload, and background streaming audio fetch.
+- `llm`: Desktop LLM provider orchestration and streaming task execution.
+- `models`: Local ASR/VAD/punctuation/translation model lifecycle and lease management.
+- `translation`: On-device ONNX NMT translation pool and streaming translation scheduler integration.
 The UniFFI surface is exactly two layers: an `#[uniffi::export]` free function in `lib.rs` delegates straight into the matching `*_bridge` module. The former `SonaCoreFacade` type in `facade.rs` forwarded every call a second time without adding behaviour and has been merged into `lib.rs`. Do not reintroduce an intermediate forwarding type; `scripts/multisurface-contracts.test.js` enforces this, allowing only `release_application_context` to call the composition root directly.
 
 Desktop and UniFFI share the SQLite composition type `SqliteApplicationContext` from `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error mapping. The stateless CLI does not depend on this composition type. There is no separate shared application-composition crate yet.

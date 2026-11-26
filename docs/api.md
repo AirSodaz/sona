@@ -8,8 +8,8 @@ Sona exposes a privacy-first, local HTTP API server designed for external headle
 
 The API Server can be started in two ways:
 
-### 1. GUI Client Settings
-Navigate to **Settings -> API Server** (or **API 服务** in Chinese) and configure:
+### 1. GUI Client Workbench
+Navigate to **Tools -> API Server** (or **工具 -> API 服务** in Chinese; opening **Settings -> API Server** redirects here) and configure:
 - **Enable API Server**: Toggle activation.
 - **Host**: Bind IP address (e.g., `127.0.0.1` restricts access to the local machine; `0.0.0.0` binds to all network interfaces for LAN/WAN access).
 - **Port**: TCP port for the server (default: `14200`).
@@ -22,7 +22,7 @@ The same API server adapter is available from the standalone CLI:
 sona-cli serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 ```
 
-The CLI server supports local REST transcription with installed offline models. The `serve` routes do not expose Online ASR or WebSocket streaming; use `sona-cli transcribe` or `sona-cli transcribe-live` for direct online transcription.
+The CLI `serve` command supports local REST batch transcription, WebSocket real-time streaming (`/v1/streaming`), and Online ASR batch transcription (reading provider API keys from environment variables such as `GROQ_API_KEY` or `SONA_VOLCENGINE_ASR_API_KEY`). Note that `/v1/llm/polish` and `/v1/llm/translate` are only wired on the desktop GUI host because `sona-cli` intentionally excludes Online LLM.
 
 ---
 

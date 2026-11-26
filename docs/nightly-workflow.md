@@ -39,32 +39,37 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
   2. Generates the nightly version string: `${base_version}-nightly.${github.run_number}`.
   3. Computes the build date in `YYYY-MM-DD` format (UTC).
 
-### 3. `build-tauri`
-* **Runs on**: Matrix platforms (`macos-latest`, `ubuntu-22.04`, `windows-latest`)
-* **Purpose**: Compiles the Sona application, signs the bundle, and generates signatures.
-* **Matrix Targets**:
-  - **macOS**: `macos-latest` (builds `aarch64-apple-darwin` and `x86_64-apple-darwin` targets).
-  - **Linux**: `ubuntu-22.04` (compiles `.deb` and `.AppImage`; `.rpm` is excluded in pre-release builds due to version constraints).
-  - **Windows**: `windows-latest` (builds x64 and `aarch64-pc-windows-msvc` NSIS installers; `.msi` is excluded in pre-release builds).
-  - **Android**: Compiles `app-arm64-v8a` and `app-x86_64` debug and unsigned release APKs.
+### 3. `android-client`
+* **Calls**: [.github/workflows/android-client.yml](../.github/workflows/android-client.yml) (`ubuntu-22.04`)
+* **Purpose**: Compiles and verifies the Android client APKs for `arm64-v8a` and `x86_64`.
 * **Key Steps**:
-  1. **Dependencies**: Installs native dependencies (e.g., GTK/Webkit2gtk on Linux).
-  2. **Rust & Node Setup**: Configures Rust toolchain, enables `corepack`, and installs dependencies via `pnpm`.
-  3. **Channel Patching**: Invokes `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` to update Tauri configuration with the nightly channel and version.
-  4. **Sherpa-Onnx Libs**: Downloads and extracts the correct prebuilt `sherpa-onnx` shared libraries for each target platform.
-  5. **Tauri Build**: Builds Sona via `node platforms/desktop/scripts/tauri.js build`. Signs binaries using the provided signing key.
-  6. **Asset Renaming**: Renames macOS build artifacts to append the architecture (`aarch64` or `x64`) to prevent conflicts in the release upload.
-  7. **Artifact Upload**: Uploads generated binaries and update signatures (`.sig` files) as workflow run artifacts.
+  1. Sets up Java 17, Android SDK (`platforms;android-37.0`, `ndk;29.0.14206865`), Rust Android targets (`aarch64-linux-android`, `x86_64-linux-android`), `sccache`, and `sherpa-onnx` libraries.
+  2. Runs `pnpm run verify:android-client` with `SONA_ANDROID_CHANNEL=nightly`, `SONA_ANDROID_VERSION_NAME=${{ needs.prepare.outputs.version }}`, and `SONA_ANDROID_VERSION_CODE=${{ github.run_number }}`.
+  3. Uploads `app-arm64-v8a-debug.apk`, `app-x86_64-debug.apk`, `app-arm64-v8a-release-unsigned.apk`, and `app-x86_64-release-unsigned.apk`.
 
-### 4. `publish-nightly`
-* **Runs on**: `ubuntu-latest`
-* **Purpose**: Update the git tag, generate update metadata, and publish the release.
+### 4. `build-tauri`
+* **Calls**: [.github/workflows/desktop-client.yml](../.github/workflows/desktop-client.yml) (`macos-latest`, `ubuntu-22.04`, `windows-latest`)
+* **Purpose**: Compiles the Sona desktop application, verifies bundles, signs installers, and generates update signatures.
+* **Matrix Targets**:
+  - **macOS**: `macos-latest` (`aarch64-apple-darwin` and `x86_64-apple-darwin` with `--features llama-metal`).
+  - **Linux**: `ubuntu-22.04` (`x86_64-unknown-linux-gnu` with `--features llama-vulkan`, compiling `.deb` and `.AppImage`; `.rpm` is excluded for pre-release versions by `patch-channel.js`).
+  - **Windows**: `windows-latest` (`x86_64-pc-windows-msvc` with `--features llama-vulkan`, and CPU-only `aarch64-pc-windows-msvc`; `.msi` is excluded for pre-release versions by `patch-channel.js`).
 * **Key Steps**:
-  1. **Download Artifacts**: Pulls down all files built by `build-tauri`.
+  1. **Dependencies & Toolchains**: Installs native dependencies (Vulkan SDK when `llama-vulkan` is enabled, GTK/WebKit2GTK + `clang`/`mold` on Linux), Rust toolchain, `sccache`, Node.js/pnpm, and Windows MSVC build environment.
+  2. **Channel Patching**: Invokes `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` to update Tauri configuration, Cargo workspace version, and nightly icons.
+  3. **Native Libs**: Sets up prebuilt `sherpa-onnx` (`setup-sherpa-onnx`) and `llama.cpp` (`setup-llama-cpp-prebuilt`) libraries for each target platform.
+  4. **Tauri Build & Verify**: Builds Sona via `node platforms/desktop/scripts/tauri.js build`, signs updater bundles, and runs `verify-tauri-bundle.js`.
+  5. **Asset Renaming & Upload**: Renames macOS `.app.tar.gz` / `.sig` artifacts with architecture suffixes (`aarch64` or `x64`) and uploads release artifacts.
+
+### 5. `publish-nightly`
+* **Runs on**: `ubuntu-latest`
+* **Purpose**: Verify artifacts, update the git tag, generate desktop and Android update metadata, and publish the release.
+* **Key Steps**:
+  1. **Download & Verify Artifacts**: Pulls all files built by `build-tauri` and `android-client`, verifying all four expected Android APKs are present.
   2. **Changelog Generation**: Generates a git commit log between the previous nightly tag SHA and the current commit.
   3. **Move Tag**: Updates the `nightly` Git tag via the GitHub API to point to the current commit.
-  4. **Build `updater.json`**: Reads the updater signatures (`.sig` files) and constructs a Tauri-compatible `updater.json` containing the URLs to the newly uploaded nightly assets and their signatures.
-  5. **Create/Update Release**: Uses `ncipollo/release-action` to update the existing pre-release named `nightly` with the new binaries and the generated `updater.json`.
+  4. **Build Update Manifests**: Reads the desktop `.sig` files to construct `updater.json`, and invokes `scripts/android-update-manifest.js generate --channel nightly` to construct `android-update.json`.
+  5. **Create/Update Release**: Uses `ncipollo/release-action` to update the existing pre-release named `nightly` with the new desktop/Android binaries, `updater.json`, and `android-update.json`.
 
 ---
 
