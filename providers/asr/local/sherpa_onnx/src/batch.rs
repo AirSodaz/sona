@@ -808,10 +808,13 @@ mod tests {
     }
     #[test]
     fn test_is_same_model_target() {
-        let temp_dir = std::env::temp_dir().join("test_is_same_model_target");
-        let _ = std::fs::create_dir_all(&temp_dir);
+        let temp_dir = std::env::temp_dir().join(format!(
+            "test_is_same_model_target_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
         let model_file = temp_dir.join("model.onnx");
-        let _ = std::fs::write(&model_file, b"test");
+        std::fs::write(&model_file, b"test").unwrap();
 
         // Same path directly
         assert!(is_same_model_target(&temp_dir, &temp_dir));
@@ -820,13 +823,18 @@ mod tests {
         assert!(is_same_model_target(&temp_dir, &model_file));
         assert!(is_same_model_target(&model_file, &temp_dir));
 
-        // Distinct files in the same directory must NOT be considered the same target
+        // Distinct files in the same directory must NOT be considered the same target,
+        // regardless of lexicographical or directory iteration order.
         let other_file = temp_dir.join("other_model.onnx");
-        let _ = std::fs::write(&other_file, b"test2");
+        let earlier_file = temp_dir.join("a_other_model.onnx");
+        std::fs::write(&other_file, b"test2").unwrap();
+        std::fs::write(&earlier_file, b"test3").unwrap();
         assert!(!is_same_model_target(&model_file, &other_file));
         assert!(!is_same_model_target(&temp_dir, &other_file));
+        assert!(!is_same_model_target(&temp_dir, &earlier_file));
         // Different paths
-        let other_dir = std::env::temp_dir().join("test_other_model");
+        let other_dir =
+            std::env::temp_dir().join(format!("test_other_model_{}", uuid::Uuid::new_v4()));
         assert!(!is_same_model_target(&temp_dir, &other_dir));
 
         let _ = std::fs::remove_dir_all(&temp_dir);

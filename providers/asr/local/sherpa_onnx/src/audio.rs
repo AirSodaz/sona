@@ -46,22 +46,37 @@ pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
         return Ok(path.to_path_buf());
     }
 
+    for preferred_name in ["model.onnx", "model.int8.onnx", "model.fp16.onnx"] {
+        let candidate = path.join(preferred_name);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
     let entries = std::fs::read_dir(path).map_err(|error| {
         AsrPortError::new(
             AsrPortErrorKind::FileSystem,
             format!("Failed to read model directory {}: {error}", path.display()),
         )
     })?;
-    entries
+    let mut onnx_files = entries
         .flatten()
-        .find(|entry| entry.path().extension().is_some_and(|ext| ext == "onnx"))
         .map(|entry| entry.path())
-        .ok_or_else(|| {
-            AsrPortError::new(
-                AsrPortErrorKind::Model,
-                format!("No .onnx file found in model directory {}", path.display()),
-            )
+        .filter(|entry_path| {
+            entry_path.is_file()
+                && entry_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("onnx"))
         })
+        .collect::<Vec<_>>();
+    onnx_files.sort();
+    onnx_files.into_iter().next().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::Model,
+            format!("No .onnx file found in model directory {}", path.display()),
+        )
+    })
 }
 
 fn mono_pcm16_wav_spec(sample_rate: u32) -> WavSpec {
@@ -491,6 +506,32 @@ mod tests {
             resolve_model_onnx_path(&root).unwrap(),
             root.join("model.onnx")
         );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn resolves_model_onnx_path_deterministically_with_multiple_onnx_files() {
+        let root = std::env::temp_dir().join(format!("sona-model-multi-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+
+        let a_other = root.join("a_other.onnx");
+        let z_other = root.join("z_other.onnx");
+        fs::write(&z_other, "z").unwrap();
+        fs::write(&a_other, "a").unwrap();
+        assert_eq!(resolve_model_onnx_path(&root).unwrap(), a_other);
+
+        let model_fp16 = root.join("model.fp16.onnx");
+        fs::write(&model_fp16, "fp16").unwrap();
+        assert_eq!(resolve_model_onnx_path(&root).unwrap(), model_fp16);
+
+        let model_int8 = root.join("model.int8.onnx");
+        fs::write(&model_int8, "int8").unwrap();
+        assert_eq!(resolve_model_onnx_path(&root).unwrap(), model_int8);
+
+        let model_fp32 = root.join("model.onnx");
+        fs::write(&model_fp32, "fp32").unwrap();
+        assert_eq!(resolve_model_onnx_path(&root).unwrap(), model_fp32);
 
         fs::remove_dir_all(root).unwrap();
     }
