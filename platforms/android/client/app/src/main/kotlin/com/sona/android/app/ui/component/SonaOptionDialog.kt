@@ -1,5 +1,6 @@
 package com.sona.android.app.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,7 +59,10 @@ fun <T> SonaSingleChoiceDialog(
     hasSelection: Boolean = true,
     dismissText: String = stringResource(R.string.action_cancel),
 ) {
-    if (options.isEmpty()) return
+    if (options.isEmpty()) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -74,29 +79,45 @@ fun <T> SonaSingleChoiceDialog(
             ) {
                 options.forEach { option ->
                     val selected = hasSelection && option.value == selectedValue
+                    val onOptionClick = {
+                        onSelect(option.value)
+                        onDismiss()
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .selectable(
-                                selected = selected,
-                                enabled = option.enabled,
-                                role = Role.RadioButton,
-                                onClick = {
-                                    onSelect(option.value)
-                                    onDismiss()
+                            .then(
+                                if (hasSelection) {
+                                    Modifier.selectable(
+                                        selected = selected,
+                                        enabled = option.enabled,
+                                        role = Role.RadioButton,
+                                        onClick = onOptionClick,
+                                    )
+                                } else {
+                                    Modifier.clickable(
+                                        enabled = option.enabled,
+                                        role = Role.Button,
+                                        onClick = onOptionClick,
+                                    )
                                 },
                             )
-                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                            .padding(
+                                horizontal = if (hasSelection) 4.dp else 12.dp,
+                                vertical = 8.dp,
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(
-                            selected = selected,
-                            onClick = null,
-                            enabled = option.enabled,
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        if (hasSelection) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = null,
+                                enabled = option.enabled,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = option.label,
@@ -125,7 +146,8 @@ fun <T> SonaSingleChoiceDialog(
                 }
             }
         },
-        confirmButton = {
+        confirmButton = {},
+        dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(dismissText)
             }

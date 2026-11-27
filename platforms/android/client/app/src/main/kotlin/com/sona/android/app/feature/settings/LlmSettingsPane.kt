@@ -122,7 +122,11 @@ internal fun LlmSettingsPane(
                     ) {
                         SonaOptionSettingRow(
                             headline = stringResource(R.string.llm_provider),
-                            selectedValueText = llmProviderDisplayName(state.providerId),
+                            selectedValueText = if (state.providerId.isBlank()) {
+                                stringResource(R.string.status_loading)
+                            } else {
+                                llmProviderDisplayName(state.providerId)
+                            },
                             onClick = { providerDialogVisible = true },
                             enabled = state.providers.isNotEmpty() && !state.saving,
                         )
@@ -147,6 +151,7 @@ internal fun LlmSettingsPane(
                     OutlinedTextField(
                         value = state.model,
                         onValueChange = onModel,
+                        enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_model)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -155,6 +160,7 @@ internal fun LlmSettingsPane(
                     OutlinedTextField(
                         value = state.baseUrl,
                         onValueChange = onBaseUrl,
+                        enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_base_url)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -163,6 +169,7 @@ internal fun LlmSettingsPane(
                     OutlinedTextField(
                         value = state.apiPath,
                         onValueChange = onPath,
+                        enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_api_path)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -171,6 +178,7 @@ internal fun LlmSettingsPane(
                     OutlinedTextField(
                         value = state.apiVersion,
                         onValueChange = onVersion,
+                        enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_api_version)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -217,6 +225,7 @@ internal fun LlmSettingsPane(
                     OutlinedTextField(
                         value = state.apiKeyInput,
                         onValueChange = onApiKey,
+                        enabled = !state.saving,
                         label = {
                             Text(
                                 stringResource(
@@ -310,6 +319,7 @@ internal fun LlmSettingsPane(
             if (state.hasApiKey || state.configured) {
                 OutlinedButton(
                     onClick = { showClearConfirmation = true },
+                    enabled = !state.saving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
