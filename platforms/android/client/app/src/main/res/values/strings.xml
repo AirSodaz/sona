@@ -254,6 +254,7 @@
     <string name="playback_pause">Pause</string>
     <string name="playback_back_five">Back 5 seconds</string>
     <string name="playback_forward_five">Forward 5 seconds</string>
+    <string name="playback_speed">Playback speed</string>
     <string name="playback_failed">Audio playback is unavailable.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_configure">Open settings</string>

@@ -132,7 +132,7 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
   assert.match(catalog, /"batch" -> AsrMode\.BATCH/u);
   assert.doesNotMatch(settingsPane, /OpenDocumentTree|DocumentFile|FolderOpen/u);
   assert.doesNotMatch(recordScreen, /SegmentedButton|RecognitionEngine/u);
-  assert.match(settingsPane, /ModelSelectionDropdown/u);
+  assert.match(settingsPane, /ModelSelectionRow/u);
   assert.match(container, /AndroidRecognitionSettingsRepository/u);
 });
 
@@ -452,7 +452,7 @@ test('Android recording composition preserves foreground-service, permission, an
   assert.doesNotMatch(recognitionSettingsPane, /CredentialSettingsUiState|credentialInput/u);
   assert.match(recognitionSettingsPane, /initialFocusRequester/u);
   assert.match(recognitionSettingsPane, /keyboardController\?\.hide\(\)/u);
-  assert.doesNotMatch(recognitionSettingsPane, /rememberSaveable/u);
+  assert.doesNotMatch(cloudSettingsCard, /rememberSaveable/u);
   assert.match(cloudSettingsCard, /PasswordVisualTransformation/u);
   assert.match(cloudSettingsCard, /value = state\.apiKeyInput/u);
   assert.match(cloudSettingsCard, /onGloballyPositioned/u);

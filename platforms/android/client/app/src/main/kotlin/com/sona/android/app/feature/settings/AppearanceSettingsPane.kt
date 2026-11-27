@@ -11,32 +11,26 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaOptionItem
+import com.sona.android.app.ui.component.SonaOptionSettingRow
+import com.sona.android.app.ui.component.SonaSingleChoiceDialog
 import com.sona.android.app.ui.component.SonaSwitch
 import com.sona.android.app.ui.component.springOverscroll
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,21 +70,10 @@ internal fun AppearanceSettingsPane(
             InsetGroupedCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.language_label),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    LanguageSelector(
-                        selectedLanguage = appLanguage,
-                        onLanguageChanged = onAppLanguageChanged,
-                    )
-                }
+                LanguageSelector(
+                    selectedLanguage = appLanguage,
+                    onLanguageChanged = onAppLanguageChanged,
+                )
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val enabled = state.isLoaded && !state.operationInProgress
@@ -150,55 +133,36 @@ internal fun AppearanceSettingsPane(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageSelector(
     selectedLanguage: AppLanguage,
     onLanguageChanged: (AppLanguage) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            value = stringResource(selectedLanguage.labelRes),
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium
+    var dialogVisible by rememberSaveable { mutableStateOf(false) }
+    val languageOptions = AppLanguage.entries.map { language ->
+        SonaOptionItem(
+            value = language,
+            label = stringResource(language.labelRes),
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            AppLanguage.entries.forEach { language ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(language.labelRes)) },
-                    onClick = {
-                        expanded = false
-                        if (language != selectedLanguage) {
-                            onLanguageChanged(language)
-                        }
-                    },
-                    leadingIcon = {
-                        if (language == selectedLanguage) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Spacer(Modifier.size(24.dp))
-                        }
-                    },
-                )
-            }
-        }
+    }
+
+    SonaOptionSettingRow(
+        headline = stringResource(R.string.language_label),
+        selectedValueText = stringResource(selectedLanguage.labelRes),
+        onClick = { dialogVisible = true },
+    )
+
+    if (dialogVisible) {
+        SonaSingleChoiceDialog(
+            title = stringResource(R.string.language_label),
+            options = languageOptions,
+            selectedValue = selectedLanguage,
+            onSelect = { language ->
+                if (language != selectedLanguage) {
+                    onLanguageChanged(language)
+                }
+            },
+            onDismiss = { dialogVisible = false },
+        )
     }
 }
