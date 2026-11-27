@@ -198,7 +198,7 @@ fn sync_tray_macos_icon(#[allow(unused_variables)] app: &tauri::AppHandle) {
     }
 }
 
-fn sync_tray_status_and_tooltip(app: &tauri::AppHandle, _tray_state: &TrayState) {
+fn sync_tray_status_and_tooltip(app: &tauri::AppHandle) {
     let app_handle = app.clone();
     if let Err(err) = app.run_on_main_thread(move || {
         let Some(tray_state) = app_handle.try_state::<TrayState>() else {
@@ -256,14 +256,14 @@ pub fn set_agent_connected(app: &tauri::AppHandle, connected: bool) {
         tray_state
             .agent_connected
             .store(connected, Ordering::SeqCst);
-        sync_tray_status_and_tooltip(app, &tray_state);
+        sync_tray_status_and_tooltip(app);
     }
 }
 
 pub fn set_recording_active(app: &tauri::AppHandle, active: bool) {
     if let Some(tray_state) = app.try_state::<TrayState>() {
         let previous = tray_state.is_recording.swap(active, Ordering::SeqCst);
-        sync_tray_status_and_tooltip(app, &tray_state);
+        sync_tray_status_and_tooltip(app);
         if previous != active {
             sync_tray_macos_icon(app);
         }
@@ -580,7 +580,7 @@ pub(crate) async fn update_tray_menu(
             tray.set_menu(Some(built.menu)).map_err(|e| e.to_string())?;
         }
 
-        sync_tray_status_and_tooltip(&app, &tray_state);
+        sync_tray_status_and_tooltip(&app);
     }
     Ok(())
 }

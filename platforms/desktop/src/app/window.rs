@@ -136,15 +136,6 @@ pub fn create_main_window<R: Runtime>(
         .visible(!start_silently)
         .build()?;
 
-    if start_silently {
-        #[cfg(target_os = "macos")]
-        if let Err(error) = app.set_activation_policy(tauri::ActivationPolicy::Accessory) {
-            log::warn!(
-                "[Window] Failed to set macOS Accessory activation policy on silent startup: {error}"
-            );
-        }
-    }
-
     // Paint the frame before the first visible frame is composited so the
     // caption never flashes the wrong color on startup. A failure here is not
     // fatal: the window still works, it just keeps the default frame.

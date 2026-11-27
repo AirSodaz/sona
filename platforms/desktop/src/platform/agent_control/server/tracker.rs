@@ -81,13 +81,14 @@ impl ActiveConnectionTracker {
     }
 
     pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
-        let next_generation = {
-            let mut guard = self.state.lock();
-            guard.generation = guard.generation.wrapping_add(1);
-            guard.active_in_gen = 0;
-            guard.generation
-        };
-        let _ = self.disconnect_tx.send_replace(next_generation);
+        // Publish the watch update under the same lock as `state.generation` so a concurrent
+        // `on_connected` cannot observe the new generation before `disconnect_tx` advances.
+        let mut guard = self.state.lock();
+        guard.generation = guard.generation.wrapping_add(1);
+        guard.active_in_gen = 0;
+        let _ = self.disconnect_tx.send_replace(guard.generation);
+        drop(guard);
+
         if let Some(app) = app_handle {
             crate::app::tray::set_agent_connected(app, false);
         }
@@ -97,6 +98,8 @@ impl ActiveConnectionTracker {
 pub fn disconnect_all_agents(app_handle: &tauri::AppHandle) {
     if let Some(tracker) = app_handle.try_state::<ActiveConnectionTracker>() {
         tracker.disconnect_all(Some(app_handle));
+    } else {
+        crate::app::tray::set_agent_connected(app_handle, false);
     }
     if let Some(facade) = app_handle.try_state::<AgentControlFacade>() {
         let facade_clone = facade.inner().clone();
@@ -108,7 +111,6 @@ pub fn disconnect_all_agents(app_handle: &tauri::AppHandle) {
                 .await;
         });
     }
-    crate::app::tray::set_agent_connected(app_handle, false);
 }
 
 pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
