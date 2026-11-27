@@ -113,7 +113,7 @@ class UniffiLlmAdapter internal constructor(
         return segments.map { it.copy(text = byId[it.id].orEmpty()) }
     }
 
-    private fun config() = FfiLlmConfig(configuration.providerId, strategy(configuration.strategy), configuration.baseUrl, secretFactory(apiKey), configuration.model, configuration.apiPath, configuration.apiVersion, null, null, null, null, null, 60uL)
+    private fun config() = FfiLlmConfig(configuration.providerId, strategy(configuration.strategy), configuration.baseUrl, secretFactory(apiKey), configuration.model, configuration.apiPath, configuration.apiVersion, configuration.appId, configuration.apiRegion, null, null, null, 60uL)
 
     private suspend fun <T> callLlm(block: suspend () -> T): T = try {
         block()

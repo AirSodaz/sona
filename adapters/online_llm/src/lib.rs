@@ -103,6 +103,9 @@ impl LlmTranslationPort for OnlineLlmAdapter {
         let config = &request.config;
         match config.strategy {
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate => {
+                if request.texts.is_empty() {
+                    return Ok(Vec::new());
+                }
                 let target_language = request.target_language;
                 let base_url = LlmApiUrl::parse(&config.base_url)?;
                 let response = post_json_request(
@@ -131,6 +134,9 @@ impl LlmTranslationPort for OnlineLlmAdapter {
                     .collect())
             }
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree => {
+                if request.texts.is_empty() {
+                    return Ok(Vec::new());
+                }
                 let target_language = request.target_language;
                 let base_url = LlmApiUrl::parse(&config.base_url)?;
                 let client = base_url.client(config.timeout_seconds)?;

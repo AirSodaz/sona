@@ -464,4 +464,31 @@ class UniffiLlmAdapterTest {
         assertEquals("OPEN_AI_COMPATIBLE_CUSTOM_PATH", resolveLlmStrategy("open_ai_compatible_custom_path"))
         assertEquals("OPEN_AI_COMPATIBLE", resolveLlmStrategy("custom_unknown_provider"))
     }
+
+    @Test
+    fun `translate forwards appId and apiRegion into FfiLlmConfig`() = runTest {
+        val bindings = FakeUniffiLlmBindings()
+        bindings.translateResponse = {
+            FfiLlmTaskFinal(
+                taskId = "t-tr",
+                taskType = FfiLlmTaskType.TRANSLATE,
+                resultJson = """[{"id":"s1","translation":"你好"}]""",
+            )
+        }
+        val config = LlmConfig(
+            providerId = "baidu_translate",
+            strategy = "BAIDU_TRANSLATE",
+            baseUrl = "https://fanyi-api.baidu.com/api/trans/vip/translate",
+            model = "default",
+            configured = true,
+            appId = "baidu-app-id",
+            apiRegion = "eastasia",
+        )
+        val adapter = createAdapter(bindings, config = config, apiKey = "baidu-secret")
+        adapter.translate("rec-1", listOf(sampleSegment("s1", "Hello")), "zh-CN", null) {}
+
+        val req = checkNotNull(bindings.translateRequest)
+        assertEquals("baidu-app-id", req.config.appId)
+        assertEquals("eastasia", req.config.apiRegion)
+    }
 }

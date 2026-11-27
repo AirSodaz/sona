@@ -709,6 +709,14 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 sona_core::llm::tasks::LlmProviderStrategy::from_provider(&provider)
             });
 
+            let base_url = if api_host.trim().is_empty()
+                && let sona_core::domain::LlmProvider::Builtin(builtin) = &provider
+            {
+                builtin.default_api_host().to_string()
+            } else {
+                api_host.to_string()
+            };
+
             let timeout = services
                 .config
                 .get_setting("llmRequestTimeoutSeconds")
@@ -743,7 +751,7 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
             let cfg = sona_core::llm::requests::LlmConfig {
                 strategy,
                 provider,
-                base_url: api_host.to_string(),
+                base_url,
                 api_key: api_key.to_string(),
                 model: model_str.to_string(),
                 api_path,

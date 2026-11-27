@@ -90,7 +90,11 @@ async fn deepl_sends_auth_header_and_batch_texts() {
     assert_eq!(res, vec!["你好", "世界"]);
     let raw_req = handle.join().unwrap();
     assert!(raw_req.contains("POST /v2/translate HTTP/1.1"));
-    assert!(raw_req.to_ascii_lowercase().contains("authorization: deepl-auth-key test-deepl-key:fx"));
+    assert!(
+        raw_req
+            .to_ascii_lowercase()
+            .contains("authorization: deepl-auth-key test-deepl-key:fx")
+    );
     assert!(raw_req.contains("\"target_lang\":\"ZH-HANS\""));
     assert!(raw_req.contains("\"source_lang\":\"EN\""));
 }
@@ -120,8 +124,16 @@ async fn microsoft_translator_sends_key_region_and_query() {
     assert_eq!(res, vec!["你好", "谢谢"]);
     let raw_req = handle.join().unwrap();
     assert!(raw_req.contains("/translate?api-version=3.0&to=zh-Hans"));
-    assert!(raw_req.to_ascii_lowercase().contains("ocp-apim-subscription-key: ms-key"));
-    assert!(raw_req.to_ascii_lowercase().contains("ocp-apim-subscription-region: eastasia"));
+    assert!(
+        raw_req
+            .to_ascii_lowercase()
+            .contains("ocp-apim-subscription-key: ms-key")
+    );
+    assert!(
+        raw_req
+            .to_ascii_lowercase()
+            .contains("ocp-apim-subscription-region: eastasia")
+    );
 }
 
 #[tokio::test]
@@ -166,7 +178,11 @@ async fn deeplx_appends_translate_path_and_optional_bearer_token() {
     assert_eq!(res, vec!["你好"]);
     let raw_req = handle.join().unwrap();
     assert!(raw_req.contains("POST /translate HTTP/1.1"));
-    assert!(raw_req.to_ascii_lowercase().contains("authorization: bearer dlx-token"));
+    assert!(
+        raw_req
+            .to_ascii_lowercase()
+            .contains("authorization: bearer dlx-token")
+    );
 }
 
 #[tokio::test]
@@ -240,4 +256,104 @@ async fn youdao_translate_signs_v3_request() {
     assert!(raw_req.contains("appKey=yd-app-key"));
     assert!(raw_req.contains("signType=v3"));
     assert!(raw_req.contains("to=zh-CHS"));
+}
+
+#[tokio::test]
+async fn translate_batch_short_circuits_empty_texts_without_http_call() {
+    for provider in [
+        BuiltinLlmProvider::GoogleTranslate,
+        BuiltinLlmProvider::GoogleTranslateFree,
+        BuiltinLlmProvider::Deepl,
+        BuiltinLlmProvider::MicrosoftTranslator,
+        BuiltinLlmProvider::LibreTranslate,
+        BuiltinLlmProvider::Deeplx,
+        BuiltinLlmProvider::BaiduTranslate,
+        BuiltinLlmProvider::YoudaoTranslate,
+    ] {
+        // An empty base_url would fail LlmApiUrl::parse if any HTTP path were entered.
+        let cfg = base_config(provider, String::new());
+        let res = OnlineLlmAdapter
+            .translate_batch(LlmTranslationRequest {
+                config: cfg,
+                texts: Vec::new(),
+                target_language: "zh-CN".into(),
+                source_language: None,
+            })
+            .await
+            .unwrap();
+        assert!(res.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn batch_providers_reject_mismatched_translation_counts() {
+    // DeepL: 2 inputs, 1 translation returned
+    let deepl_body = json!({ "translations": [{ "text": "你好" }] }).to_string();
+    let (deepl_url, _) = spawn_mock_server(deepl_body);
+    let mut deepl_cfg = base_config(BuiltinLlmProvider::Deepl, deepl_url);
+    deepl_cfg.api_key = "k:fx".to_string();
+    let err = OnlineLlmAdapter
+        .translate_batch(LlmTranslationRequest {
+            config: deepl_cfg,
+            texts: vec!["Hello".into(), "World".into()],
+            target_language: "zh-CN".into(),
+            source_language: None,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, LlmPortErrorKind::Protocol);
+
+    // Microsoft Translator: 2 inputs, empty translations array in second entry
+    let ms_body = json!([
+        { "translations": [{ "text": "你好" }] },
+        { "translations": [] }
+    ])
+    .to_string();
+    let (ms_url, _) = spawn_mock_server(ms_body);
+    let mut ms_cfg = base_config(BuiltinLlmProvider::MicrosoftTranslator, ms_url);
+    ms_cfg.api_key = "ms-key".to_string();
+    let err = OnlineLlmAdapter
+        .translate_batch(LlmTranslationRequest {
+            config: ms_cfg,
+            texts: vec!["Hello".into(), "World".into()],
+            target_language: "zh-CN".into(),
+            source_language: None,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, LlmPortErrorKind::Protocol);
+
+    // LibreTranslate: 2 inputs, 1 element returned
+    let lt_body = json!({ "translatedText": ["你好"] }).to_string();
+    let (lt_url, _) = spawn_mock_server(lt_body);
+    let lt_cfg = base_config(BuiltinLlmProvider::LibreTranslate, lt_url);
+    let err = OnlineLlmAdapter
+        .translate_batch(LlmTranslationRequest {
+            config: lt_cfg,
+            texts: vec!["Hello".into(), "World".into()],
+            target_language: "zh-CN".into(),
+            source_language: None,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, LlmPortErrorKind::Protocol);
+}
+
+#[tokio::test]
+async fn youdao_translate_maps_permission_and_rate_limit_errors() {
+    let body = json!({ "errorCode": "401" }).to_string();
+    let (url, _) = spawn_mock_server(body);
+    let mut cfg = base_config(BuiltinLlmProvider::YoudaoTranslate, url);
+    cfg.app_id = Some("yd-app".to_string());
+    cfg.api_key = "yd-secret".to_string();
+    let err = OnlineLlmAdapter
+        .translate_batch(LlmTranslationRequest {
+            config: cfg,
+            texts: vec!["hello".into()],
+            target_language: "zh-CN".into(),
+            source_language: None,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, LlmPortErrorKind::Permission);
 }

@@ -269,6 +269,10 @@ impl BuiltinLlmProvider {
         )
     }
 
+    pub fn requires_app_id(&self) -> bool {
+        matches!(self, Self::BaiduTranslate | Self::YoudaoTranslate)
+    }
+
     pub fn is_translation_only(&self) -> bool {
         matches!(
             self,

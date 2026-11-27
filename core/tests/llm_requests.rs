@@ -572,7 +572,11 @@ fn new_translation_only_strategies_reject_polish_and_summary() {
         })
         .unwrap_err();
         assert_eq!(polish_err.field, "strategy");
-        assert!(polish_err.reason.contains("does not support transcript polishing"));
+        assert!(
+            polish_err
+                .reason
+                .contains("does not support transcript polishing")
+        );
 
         let summary_err = validate_summarize_transcript_request(&SummarizeTranscriptRequest {
             task_id: "s-1".to_string(),
@@ -587,6 +591,10 @@ fn new_translation_only_strategies_reject_polish_and_summary() {
         })
         .unwrap_err();
         assert_eq!(summary_err.field, "strategy");
-        assert!(summary_err.reason.contains("does not support transcript summaries"));
+        assert!(
+            summary_err
+                .reason
+                .contains("does not support transcript summaries")
+        );
     }
 }

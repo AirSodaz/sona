@@ -24,10 +24,7 @@ fn primary_subtag(normalized: &str) -> &str {
 }
 
 fn is_simplified_chinese(normalized: &str) -> bool {
-    matches!(
-        normalized,
-        "zh" | "zh-cn" | "zh-hans" | "zh-chs" | "zh-sg"
-    )
+    matches!(normalized, "zh" | "zh-cn" | "zh-hans" | "zh-chs" | "zh-sg")
 }
 
 fn is_traditional_chinese(normalized: &str) -> bool {
@@ -143,7 +140,11 @@ pub fn resolve_deepl_base_url(base_url: &str, api_key: &str) -> String {
 
 fn ensure_endpoint_suffix(base_url: &str, suffix: &str) -> Result<LlmApiUrl, LlmPortError> {
     let parsed = LlmApiUrl::parse(base_url)?;
-    let path = parsed.reqwest_url().path().trim_end_matches('/').to_string();
+    let path = parsed
+        .reqwest_url()
+        .path()
+        .trim_end_matches('/')
+        .to_string();
     let expected = format!("/{}", suffix.trim_start_matches('/'));
     if path.ends_with(&expected) {
         Ok(parsed)
@@ -162,6 +163,23 @@ fn require_non_empty<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str,
                 format!("{field} cannot be empty"),
             )
         })
+}
+
+fn ensure_translation_count(
+    provider_name: &str,
+    expected: usize,
+    actual: usize,
+) -> Result<(), LlmPortError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            format!(
+                "Invalid {provider_name} response: expected {expected} translations, received {actual}"
+            ),
+        ))
+    }
 }
 
 fn current_unix_seconds() -> u64 {
@@ -293,6 +311,7 @@ async fn translate_deepl(
     let resolved_host = resolve_deepl_base_url(&config.base_url, api_key);
     let url = ensure_endpoint_suffix(&resolved_host, "v2/translate")?;
 
+    let expected_len = texts.len();
     let mut payload = serde_json::Map::new();
     payload.insert("text".to_string(), json!(texts));
     payload.insert(
@@ -320,7 +339,9 @@ async fn translate_deepl(
             format!("Invalid DeepL response: {e}"),
         )
     })?;
-    Ok(parsed.translations.into_iter().map(|t| t.text).collect())
+    let results: Vec<String> = parsed.translations.into_iter().map(|t| t.text).collect();
+    ensure_translation_count("DeepL", expected_len, results.len())?;
+    Ok(results)
 }
 
 #[derive(Deserialize)]
@@ -362,6 +383,7 @@ async fn translate_microsoft(
         headers.push(("Ocp-Apim-Subscription-Region", region.to_string()));
     }
 
+    let expected_len = texts.len();
     let body = Value::Array(
         texts
             .into_iter()
@@ -376,7 +398,8 @@ async fn translate_microsoft(
         )
     })?;
 
-    Ok(parsed
+    ensure_translation_count("Microsoft Translator", expected_len, parsed.len())?;
+    parsed
         .into_iter()
         .map(|entry| {
             entry
@@ -384,9 +407,14 @@ async fn translate_microsoft(
                 .into_iter()
                 .next()
                 .map(|t| t.text)
-                .unwrap_or_default()
+                .ok_or_else(|| {
+                    LlmPortError::new(
+                        LlmPortErrorKind::Protocol,
+                        "Invalid Microsoft Translator response: missing translation entry",
+                    )
+                })
         })
-        .collect())
+        .collect()
 }
 
 async fn translate_libre_translate(
@@ -403,7 +431,8 @@ async fn translate_libre_translate(
         .unwrap_or_else(|| "auto".to_string());
     let target = map_libre_translate_lang(target_language);
 
-    let single_item = texts.len() == 1;
+    let expected_len = texts.len();
+    let single_item = expected_len == 1;
     let mut payload = serde_json::Map::new();
     if single_item {
         payload.insert("q".to_string(), json!(texts[0]));
@@ -433,8 +462,8 @@ async fn translate_libre_translate(
         )
     })?;
 
-    if let Some(single) = translated.as_str() {
-        Ok(vec![single.to_string()])
+    let results = if let Some(single) = translated.as_str() {
+        vec![single.to_string()]
     } else if let Some(arr) = translated.as_array() {
         arr.iter()
             .map(|item| {
@@ -445,13 +474,15 @@ async fn translate_libre_translate(
                     )
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?
     } else {
-        Err(LlmPortError::new(
+        return Err(LlmPortError::new(
             LlmPortErrorKind::Protocol,
             "Invalid LibreTranslate response format",
-        ))
-    }
+        ));
+    };
+    ensure_translation_count("LibreTranslate", expected_len, results.len())?;
+    Ok(results)
 }
 
 #[derive(Deserialize)]
@@ -471,7 +502,12 @@ async fn translate_deeplx_single(
     source_language: Option<&str>,
 ) -> Result<String, LlmPortError> {
     let parsed_base = LlmApiUrl::parse(&config.base_url)?;
-    let url = if parsed_base.reqwest_url().path().trim_matches('/').is_empty() {
+    let url = if parsed_base
+        .reqwest_url()
+        .path()
+        .trim_matches('/')
+        .is_empty()
+    {
         parsed_base.join("translate")?
     } else {
         parsed_base
@@ -668,7 +704,9 @@ async fn translate_youdao_single(
     if parsed.error_code != "0" {
         let kind = match parsed.error_code.as_str() {
             "108" | "202" | "101" => LlmPortErrorKind::Authentication,
+            "401" => LlmPortErrorKind::Permission,
             "411" | "412" => LlmPortErrorKind::RateLimited,
+            "102" | "206" => LlmPortErrorKind::InvalidRequest,
             _ => LlmPortErrorKind::Protocol,
         };
         return Err(LlmPortError::new(
@@ -689,6 +727,9 @@ async fn translate_youdao_single(
 pub async fn execute_translation_batch(
     request: &LlmTranslationRequest,
 ) -> Result<Vec<String>, LlmPortError> {
+    if request.texts.is_empty() {
+        return Ok(Vec::new());
+    }
     let config = &request.config;
     let target = &request.target_language;
     let source = request.source_language.as_deref();
@@ -770,7 +811,10 @@ mod tests {
 
         let long_cjk = "一二三四五六七八九十甲乙丙丁戊己庚辛壬癸子";
         assert_eq!(long_cjk.chars().count(), 21);
-        assert_eq!(youdao_sign_input(long_cjk), "一二三四五六七八九十21乙丙丁戊己庚辛壬癸子");
+        assert_eq!(
+            youdao_sign_input(long_cjk),
+            "一二三四五六七八九十21乙丙丁戊己庚辛壬癸子"
+        );
     }
 
     #[test]
