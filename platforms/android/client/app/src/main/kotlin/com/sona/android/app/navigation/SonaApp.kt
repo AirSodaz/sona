@@ -341,7 +341,6 @@ internal fun SonaApp(
                             onCreateProject = onCreateHistoryProject,
                             onRenameProject = onRenameHistoryProject,
                             onDeleteProject = onDeleteHistoryProject,
-                            onImportAudioClick = { audioPicker.launch(arrayOf("audio/*")) },
                             onCancelAudioImportJob = onCancelAudioImportJob,
                             onDismissFailedImport = onDismissFailedAudioImport,
                             onConfigureRecognition = onConfigureRecognition,

@@ -125,7 +125,10 @@ data class LibraryUiState(
     val snapshots: List<TranscriptSnapshot> = emptyList(),
     val snapshotDetail: TranscriptSnapshotDetail? = null,
     val workspaceCount: Long = 0,
+    val allCount: Long = 0,
+    val inboxCount: Long = 0,
     val trashCount: Long = 0,
+    val projectCounts: Map<String, Long> = emptyMap(),
     val operationInProgress: Boolean = false,
     val operationError: Boolean = false,
     val playback: AudioPlaybackState = AudioPlaybackState(),
@@ -344,6 +347,7 @@ class LibraryViewModel(
                 if (generation != listGeneration) return@launch
                 nextOffset = page.items.size
                 failedListOperation = null
+                val allScopeCount = page.counts.inbox + page.counts.byProjectId.values.sum()
                 mutableState.update {
                     it.copy(
                         items = page.items.distinctBy(HistoryItem::historyId),
@@ -352,7 +356,10 @@ class LibraryViewModel(
                         isRefreshing = false,
                         listError = null,
                         workspaceCount = page.filteredItemCount,
+                        allCount = allScopeCount,
+                        inboxCount = page.counts.inbox,
                         trashCount = page.counts.trash,
+                        projectCounts = page.counts.byProjectId,
                     )
                 }
                 runCatching { projects.listProjects() }.getOrNull()?.let { loaded ->

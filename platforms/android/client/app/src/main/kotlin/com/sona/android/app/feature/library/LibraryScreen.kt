@@ -70,6 +70,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -86,6 +87,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -97,10 +99,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.sona.android.app.BuildConfig
 import com.sona.android.app.R
 import com.sona.android.app.feature.recording.formatRecordingTimer
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
+import com.sona.android.app.ui.component.SonaCollapsibleTopAppBar
 import com.sona.android.app.ui.component.springOverscroll
 import com.sona.android.application.library.HistoryDateFilter
 import com.sona.android.application.library.HistoryFilterType
@@ -148,7 +150,6 @@ internal fun LibraryScreen(
     onCreateProject: (String) -> Unit,
     onRenameProject: (String, String) -> Unit,
     onDeleteProject: (String) -> Unit,
-    onImportAudioClick: () -> Unit,
     onCancelAudioImportJob: (String) -> Unit,
     onDismissFailedImport: (String?) -> Unit = {},
     onConfigureRecognition: () -> Unit,
@@ -340,11 +341,20 @@ internal fun LibraryScreen(
             }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val isSelecting = state.selectedIds.isNotEmpty()
+    val hasActiveFilter = state.query.query.isNotBlank() || activeFilterCount > 0
+
+    LaunchedEffect(state.items.isEmpty()) {
+        if (state.items.isEmpty()) {
+            scrollBehavior.state.heightOffset = 0f
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(
@@ -352,9 +362,9 @@ internal fun LibraryScreen(
                 .fillMaxSize()
                 .widthIn(max = 840.dp),
         ) {
-            // 1. Contextual Selection Bar OR M3 Expressive Brand + Search Pill Header
+            // 1. Contextual Selection Bar OR Collapsible Top Bar + Search Pill Header
             AnimatedContent(
-                targetState = state.selectedIds.isNotEmpty(),
+                targetState = isSelecting,
                 label = "libraryHeaderMode",
             ) { selecting ->
                 if (selecting) {
@@ -364,6 +374,7 @@ internal fun LibraryScreen(
                         shape = RoundedCornerShape(24.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                     ) {
                         Row(
@@ -436,44 +447,25 @@ internal fun LibraryScreen(
                     }
                 } else {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                text = BuildConfig.APP_NAME,
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (state.workspaceCount > 0) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                ) {
-                                    Text(
-                                        text = "${state.workspaceCount}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    )
-                                }
-                            }
-                        }
-
-                        LibrarySearchPill(
-                            query = state.query.query,
-                            onQueryChange = onSearchChanged,
-                            activeFilterCount = activeFilterCount,
-                            onOpenFilters = { filterSheetVisible = true },
+                        SonaCollapsibleTopAppBar(
+                            title = stringResource(R.string.destination_library),
+                            scrollBehavior = scrollBehavior,
                         )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(top = 8.dp, bottom = 8.dp),
+                        ) {
+                            LibrarySearchPill(
+                                query = state.query.query,
+                                onQueryChange = onSearchChanged,
+                                activeFilterCount = activeFilterCount,
+                                onOpenFilters = { filterSheetVisible = true },
+                            )
+                        }
                     }
                 }
             }
@@ -486,23 +478,33 @@ internal fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 item(key = "scope-all") {
+                    val selected = state.query.scope == HistoryScope.All
                     ScopePillChip(
                         label = stringResource(R.string.history_scope_all),
-                        selected = state.query.scope == HistoryScope.All,
+                        count = if (selected && hasActiveFilter) state.workspaceCount else state.allCount,
+                        selected = selected,
                         onClick = { onScopeChanged(HistoryScope.All) },
                     )
                 }
                 item(key = "scope-inbox") {
+                    val selected = state.query.scope == HistoryScope.Inbox
                     ScopePillChip(
                         label = stringResource(R.string.history_scope_inbox),
-                        selected = state.query.scope == HistoryScope.Inbox,
+                        count = if (selected && hasActiveFilter) state.workspaceCount else state.inboxCount,
+                        selected = selected,
                         onClick = { onScopeChanged(HistoryScope.Inbox) },
                     )
                 }
                 items(state.projects, key = ProjectRecord::id) { project ->
+                    val selected = state.query.scope == HistoryScope.Project(project.id)
                     ScopePillChip(
                         label = project.name,
-                        selected = state.query.scope == HistoryScope.Project(project.id),
+                        count = if (selected && hasActiveFilter) {
+                            state.workspaceCount
+                        } else {
+                            state.projectCounts[project.id]
+                        },
+                        selected = selected,
                         onClick = { onScopeChanged(HistoryScope.Project(project.id)) },
                         onLongClick = {
                             renameProjectName = project.name
@@ -511,14 +513,11 @@ internal fun LibraryScreen(
                     )
                 }
                 item(key = "scope-trash") {
-                    val trashLabel = if (state.trashCount > 0) {
-                        "${stringResource(R.string.history_scope_trash)} (${state.trashCount})"
-                    } else {
-                        stringResource(R.string.history_scope_trash)
-                    }
+                    val selected = state.query.scope == HistoryScope.Trash
                     ScopePillChip(
-                        label = trashLabel,
-                        selected = state.query.scope == HistoryScope.Trash,
+                        label = stringResource(R.string.history_scope_trash),
+                        count = if (selected && hasActiveFilter) state.workspaceCount else state.trashCount,
+                        selected = selected,
                         onClick = { onScopeChanged(HistoryScope.Trash) },
                     )
                 }
@@ -646,77 +645,90 @@ internal fun LibraryScreen(
                     .fillMaxWidth()
                     .weight(1f),
             ) {
-                when {
-                    state.isInitialLoading -> LibraryLoading(modifier = Modifier.fillMaxSize())
-                    state.items.isEmpty() && state.listError != null -> LibraryEmptyError(
-                        onRetry = onRetry,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    state.items.isEmpty() -> LibraryEmpty(
-                        isTrash = state.query.scope == HistoryScope.Trash,
-                        onImportAudioClick = onImportAudioClick,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    else -> {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            if (state.listError != null) {
-                                LibraryInlineError(
-                                    onRetry = onRetry,
-                                    modifier = Modifier.padding(horizontal = 20.dp),
-                                )
-                            }
-                            val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .springOverscroll(enableTopOverscroll = false),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(
-                                    start = 20.dp,
-                                    end = 20.dp,
-                                    top = 10.dp,
-                                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-                                ),
-                            ) {
-                                items(state.items, key = HistoryItem::historyId) { item ->
-                                    val projectName = item.projectId?.let { pid ->
-                                        state.projects.firstOrNull { it.id == pid }?.name
-                                    }
-                                    SwipeableLibraryItemRow(
-                                        item = item,
-                                        projectName = projectName,
-                                        inTrash = state.query.scope == HistoryScope.Trash,
-                                        selected = item.historyId in state.selectedIds,
-                                        selectionActive = state.selectedIds.isNotEmpty(),
-                                        operationInProgress = state.operationInProgress,
-                                        onClick = {
-                                            if (state.selectedIds.isEmpty()) {
-                                                onOpenItem(item.historyId)
-                                            } else {
-                                                onToggleSelection(item.historyId)
-                                            }
-                                        },
-                                        onLongClick = { onToggleSelection(item.historyId) },
-                                        onSwipeAction = {
-                                            if (state.query.scope == HistoryScope.Trash) {
-                                                onRestoreItem(item.historyId)
-                                            } else {
-                                                onTrashItem(item.historyId)
-                                            }
-                                        },
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (isSelecting) {
+                                Modifier
+                            } else {
+                                Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+                            },
+                        ),
+                ) {
+                    when {
+                        state.isInitialLoading -> LibraryLoading(modifier = Modifier.fillMaxSize())
+                        state.items.isEmpty() && state.listError != null -> LibraryEmptyError(
+                            onRetry = onRetry,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        state.items.isEmpty() -> LibraryEmpty(
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        else -> {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                if (state.listError != null) {
+                                    LibraryInlineError(
+                                        onRetry = onRetry,
+                                        modifier = Modifier.padding(horizontal = 20.dp),
                                     )
                                 }
-                                if (state.isLoadingMore) {
-                                    item(key = "library-loading-more") {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(20.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .springOverscroll(
+                                            scrollBehavior = scrollBehavior,
+                                            enableTopOverscroll = false,
+                                        ),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(
+                                        start = 20.dp,
+                                        end = 20.dp,
+                                        top = 10.dp,
+                                        bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+                                    ),
+                                ) {
+                                    items(state.items, key = HistoryItem::historyId) { item ->
+                                        val projectName = item.projectId?.let { pid ->
+                                            state.projects.firstOrNull { it.id == pid }?.name
+                                        }
+                                        SwipeableLibraryItemRow(
+                                            item = item,
+                                            projectName = projectName,
+                                            inTrash = state.query.scope == HistoryScope.Trash,
+                                            selected = item.historyId in state.selectedIds,
+                                            selectionActive = state.selectedIds.isNotEmpty(),
+                                            operationInProgress = state.operationInProgress,
+                                            onClick = {
+                                                if (state.selectedIds.isEmpty()) {
+                                                    onOpenItem(item.historyId)
+                                                } else {
+                                                    onToggleSelection(item.historyId)
+                                                }
+                                            },
+                                            onLongClick = { onToggleSelection(item.historyId) },
+                                            onSwipeAction = {
+                                                if (state.query.scope == HistoryScope.Trash) {
+                                                    onRestoreItem(item.historyId)
+                                                } else {
+                                                    onTrashItem(item.historyId)
+                                                }
+                                            },
+                                        )
+                                    }
+                                    if (state.isLoadingMore) {
+                                        item(key = "library-loading-more") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(20.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                            }
                                         }
                                     }
                                 }
@@ -821,6 +833,7 @@ private fun LibrarySearchPill(
 @Composable
 private fun ScopePillChip(
     label: String,
+    count: Long? = null,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -854,12 +867,41 @@ private fun ScopePillChip(
                 onLongClick = onLongClick,
             ),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-        )
+        val showCount = count != null && count > 0
+        Row(
+            modifier = Modifier.padding(
+                start = 14.dp,
+                end = if (showCount) 10.dp else 14.dp,
+                top = 7.dp,
+                bottom = 7.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            )
+            if (showCount) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    },
+                    contentColor = contentColor,
+                ) {
+                    Text(
+                        text = "$count",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1328,8 +1370,6 @@ internal fun LibraryLoading(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LibraryEmpty(
-    isTrash: Boolean,
-    onImportAudioClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -1363,16 +1403,6 @@ private fun LibraryEmpty(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            if (!isTrash) {
-                FilledTonalButton(
-                    onClick = onImportAudioClick,
-                    shape = RoundedCornerShape(20.dp),
-                ) {
-                    Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.file_select_audio))
-                }
-            }
         }
     }
 }
