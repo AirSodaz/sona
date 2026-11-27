@@ -61,6 +61,7 @@ class DataRecoveryViewModelTest {
 
         assertEquals(0, files.stageCalls)
         assertTrue(backup.confirmations.isEmpty())
+        assertEquals(DataRecoveryErrorCategory.BLOCKED, viewModel.state.value.errorCategory)
     }
 
     @Test
@@ -75,6 +76,7 @@ class DataRecoveryViewModelTest {
         assertEquals(listOf("/cache/import.tar.bz2"), files.cleaned)
         assertNull(viewModel.state.value.preparedBackup)
         assertEquals("Data operation failed.", viewModel.state.value.error)
+        assertEquals(DataRecoveryErrorCategory.OPERATION_FAILED, viewModel.state.value.errorCategory)
         assertFalse(viewModel.state.value.toString().contains("private archive path"))
     }
 

@@ -2,16 +2,17 @@ package com.sona.android.app.feature.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -49,11 +50,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
+import com.sona.android.app.navigation.SonaNavMotion
+import com.sona.android.app.navigation.sonaSubPageEnterFromLeft
+import com.sona.android.app.navigation.sonaSubPageEnterFromRight
+import com.sona.android.app.navigation.sonaSubPageExitToLeft
+import com.sona.android.app.navigation.sonaSubPageExitToRight
 import com.sona.android.app.ui.component.SonaBackButton
 import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
@@ -127,7 +133,17 @@ internal fun SettingsScreen(
     onResumeAllRecovery: () -> Unit,
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
-    onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
+    onLlmProvider: (String) -> Unit = {},
+    onLlmModel: (String) -> Unit = {},
+    onLlmBaseUrl: (String) -> Unit = {},
+    onLlmPath: (String) -> Unit = {},
+    onLlmVersion: (String) -> Unit = {},
+    onLlmApiKey: (String) -> Unit = {},
+    onLlmSave: () -> Unit = {},
+    onLlmClear: () -> Unit = {},
+    onReturnedToSettingsList: () -> Unit = {},
+    onCloseToLibrary: (() -> Unit)? = null,
+    bottomOverlayPadding: Dp = 0.dp,
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -145,6 +161,7 @@ internal fun SettingsScreen(
     val currentOnCloudCredentialFocusConsumed by rememberUpdatedState(
         onCloudCredentialFocusConsumed,
     )
+    val currentOnReturnedToSettingsList by rememberUpdatedState(onReturnedToSettingsList)
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
@@ -152,7 +169,10 @@ internal fun SettingsScreen(
     val detailPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] ==
         PaneAdaptedValue.Expanded
     val isTwoPane = listPaneVisible && detailPaneVisible
+    val showingSinglePaneList = !isTwoPane &&
+        navigator.currentDestination?.pane == ListDetailPaneScaffoldRole.List
     val canNavigateBack = !listPaneVisible && navigator.canNavigateBack()
+    val showDetailBack = canNavigateBack || (isTwoPane && initialSection != null && onCloseToLibrary != null)
     val consumeCloudCredentialFocusSession = {
         if (cloudCredentialFocusSessionActive) {
             cloudCredentialFocusSessionActive = false
@@ -161,7 +181,17 @@ internal fun SettingsScreen(
     }
     val navigateBack: () -> Unit = {
         consumeCloudCredentialFocusSession()
-        scope.launch { navigator.navigateBack() }
+        if (canNavigateBack) {
+            scope.launch { navigator.navigateBack() }
+        } else {
+            onCloseToLibrary?.invoke()
+        }
+    }
+
+    LaunchedEffect(showingSinglePaneList) {
+        if (showingSinglePaneList) {
+            currentOnReturnedToSettingsList()
+        }
     }
 
     LaunchedEffect(requestCloudCredentialFocus) {
@@ -192,10 +222,15 @@ internal fun SettingsScreen(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         navigator = navigator,
         listPane = {
-            AnimatedPane {
+            AnimatedPane(
+                enterTransition = sonaSubPageEnterFromLeft(),
+                exitTransition = sonaSubPageExitToLeft(),
+                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+            ) {
                 SettingsSectionList(
                     selectedSection = selectedSection,
                     showSelection = isTwoPane,
+                    extraBottomPadding = bottomOverlayPadding,
                     onSectionSelected = { section ->
                         if (section != SettingsSection.RECOGNITION) {
                             consumeCloudCredentialFocusSession()
@@ -209,10 +244,14 @@ internal fun SettingsScreen(
             }
         },
         detailPane = {
-            AnimatedPane {
+            AnimatedPane(
+                enterTransition = sonaSubPageEnterFromRight(),
+                exitTransition = sonaSubPageExitToRight(),
+                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+            ) {
                 SettingsDetailPane(
                     section = selectedSection,
-                    showBack = canNavigateBack,
+                    showBack = showDetailBack,
                     bootstrapState = bootstrapState,
                     appearanceState = appearanceState,
                     cloudTranscriptionState = cloudTranscriptionState,
@@ -232,7 +271,7 @@ internal fun SettingsScreen(
                     onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                     onSaveCloudApiKey = onSaveCloudApiKey,
                     onClearCloudApiKey = onClearCloudApiKey,
-                        onSelectModel = onSelectModel,
+                    onSelectModel = onSelectModel,
                     onDownloadLocalModel = onDownloadLocalModel,
                     onValidateLocalModel = onValidateLocalModel,
                     onDeleteLocalModel = onDeleteLocalModel,
@@ -269,7 +308,15 @@ internal fun SettingsScreen(
                     onResumeAllRecovery = onResumeAllRecovery,
                     onDiscardRecovery = onDiscardRecovery,
                     onClearResolvedRecovery = onClearResolvedRecovery,
-                    onLlmProvider = onLlmProvider, onLlmModel = onLlmModel, onLlmBaseUrl = onLlmBaseUrl, onLlmPath = onLlmPath, onLlmVersion = onLlmVersion, onLlmApiKey = onLlmApiKey, onLlmSave = onLlmSave, onLlmClear = onLlmClear,
+                    onLlmProvider = onLlmProvider,
+                    onLlmModel = onLlmModel,
+                    onLlmBaseUrl = onLlmBaseUrl,
+                    onLlmPath = onLlmPath,
+                    onLlmVersion = onLlmVersion,
+                    onLlmApiKey = onLlmApiKey,
+                    onLlmSave = onLlmSave,
+                    onLlmClear = onLlmClear,
+                    extraBottomPadding = bottomOverlayPadding,
                 )
             }
         },
@@ -303,6 +350,7 @@ private fun SettingsSectionList(
     selectedSection: SettingsSection,
     showSelection: Boolean,
     onSectionSelected: (SettingsSection) -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -316,11 +364,17 @@ private fun SettingsSectionList(
             title = stringResource(R.string.destination_settings),
             scrollBehavior = scrollBehavior,
         )
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .springOverscroll(scrollBehavior = scrollBehavior),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 12.dp,
+                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+            ),
         ) {
             item {
                 InsetGroupedCard(
@@ -333,7 +387,7 @@ private fun SettingsSectionList(
                             supportingText = stringResource(section.summaryRes),
                             leadingContent = {
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     color = if (selected) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
@@ -344,7 +398,7 @@ private fun SettingsSectionList(
                                     } else {
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier.size(42.dp),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
@@ -359,11 +413,10 @@ private fun SettingsSectionList(
                             onClick = { onSectionSelected(section) },
                         )
                         if (index < SettingsSection.entries.lastIndex) {
-                            TwoLineItemDivider(startIndent = 72.dp)
+                            TwoLineItemDivider(startIndent = 74.dp)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.size(100.dp))
             }
         }
     }
@@ -430,9 +483,21 @@ private fun SettingsDetailPane(
     onResumeAllRecovery: () -> Unit,
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
-    onLlmProvider: (String) -> Unit, onLlmModel: (String) -> Unit, onLlmBaseUrl: (String) -> Unit, onLlmPath: (String) -> Unit, onLlmVersion: (String) -> Unit, onLlmApiKey: (String) -> Unit, onLlmSave: () -> Unit, onLlmClear: () -> Unit,
+    onLlmProvider: (String) -> Unit,
+    onLlmModel: (String) -> Unit,
+    onLlmBaseUrl: (String) -> Unit,
+    onLlmPath: (String) -> Unit,
+    onLlmVersion: (String) -> Unit,
+    onLlmApiKey: (String) -> Unit,
+    onLlmSave: () -> Unit,
+    onLlmClear: () -> Unit,
+    extraBottomPadding: Dp = 0.dp,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         SonaTopAppBar(
             title = stringResource(section.labelRes),
             navigationIcon = {
@@ -447,6 +512,7 @@ private fun SettingsDetailPane(
                 appLanguage = appLanguage,
                 onAppLanguageChanged = onAppLanguageChanged,
                 onDynamicColorChanged = onDynamicColorChanged,
+                extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )
             SettingsSection.RECOGNITION -> RecognitionSettingsPane(
@@ -463,9 +529,22 @@ private fun SettingsDetailPane(
                 onValidateLocalModel = onValidateLocalModel,
                 onDeleteLocalModel = onDeleteLocalModel,
                 onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
+                extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )
-            SettingsSection.LLM -> LlmSettingsPane(llmState, onLlmProvider, onLlmModel, onLlmBaseUrl, onLlmPath, onLlmVersion, onLlmApiKey, onLlmSave, onLlmClear, Modifier.weight(1f))
+            SettingsSection.LLM -> LlmSettingsPane(
+                state = llmState,
+                onProvider = onLlmProvider,
+                onModel = onLlmModel,
+                onBaseUrl = onLlmBaseUrl,
+                onPath = onLlmPath,
+                onVersion = onLlmVersion,
+                onApiKey = onLlmApiKey,
+                onSave = onLlmSave,
+                onClear = onLlmClear,
+                extraBottomPadding = extraBottomPadding,
+                modifier = Modifier.weight(1f),
+            )
             SettingsSection.SYNC -> SyncSettingsPane(
                 state = syncState,
                 onRefresh = onRefreshSync,
@@ -491,6 +570,7 @@ private fun SettingsDetailPane(
                 onApplyPairingToken = onApplySyncPairingToken,
                 onClearPairingNotice = onClearSyncPairingNotice,
                 onGetPairingToken = onGetSyncPairingToken,
+                extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )
             SettingsSection.DATA_RECOVERY -> DataRecoveryPane(
@@ -504,12 +584,14 @@ private fun SettingsDetailPane(
                 onResumeAll = onResumeAllRecovery,
                 onDiscard = onDiscardRecovery,
                 onClearResolved = onClearResolvedRecovery,
+                extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )
             SettingsSection.ABOUT -> AboutSettingsPane(
                 state = aboutState,
                 onShown = onAboutShown,
                 onCheckForUpdates = onCheckForUpdates,
+                extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )
         }

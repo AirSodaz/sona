@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_import_notification_channel">Audio transcription</string>
+    <string name="audio_import_notification_channel_description">Progress and completion status for audio file transcription</string>
+    <string name="audio_import_stage_queued">Audio import queued</string>
+    <string name="audio_import_stage_staging">Preparing audio</string>
+    <string name="audio_import_stage_transcoding">Converting audio</string>
+    <string name="audio_import_stage_transcribing">Transcribing audio</string>
+    <string name="audio_import_stage_saving">Saving audio</string>
+    <string name="audio_import_notification_completed">Transcription completed</string>
+    <string name="audio_import_notification_failed">Transcription failed</string>
+</resources>

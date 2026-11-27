@@ -127,14 +127,14 @@ class SonaAppContainer(context: Context) {
         recoveryCoordinator,
         audioImportJobs,
         unavailableReason = { job ->
-        when (val engine = job.engine) {
-            is AudioImportEngine.Local -> if (
-                localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
-            ) RecoveryUnavailableReason.MODEL_MISSING else null
-            is AudioImportEngine.Online -> if (
-                batchCredentialRepository.load(engine.provider) == null
-            ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
-        }
+            when (val engine = job.engine) {
+                is AudioImportEngine.Local -> if (
+                    localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
+                ) RecoveryUnavailableReason.MODEL_MISSING else null
+                is AudioImportEngine.Online -> if (
+                    batchCredentialRepository.load(engine.provider) == null
+                ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
+            }
         },
         transcriptHistory = history,
     )
@@ -154,8 +154,10 @@ class SonaAppContainer(context: Context) {
         private suspend fun adapter(): UniffiLlmAdapter {
             val config = llmConfigurationRepository.configuration.first()
             check(config.configured) { "LLM configuration is missing." }
-            val key = llmConfigurationRepository.loadApiKey()
-            check(!key.isNullOrBlank()) { "LLM API key is missing." }
+            val key = llmConfigurationRepository.loadApiKey().orEmpty()
+            if (config.requiresApiKey()) {
+                check(key.isNotBlank()) { "LLM API key is missing." }
+            }
             return UniffiLlmAdapter(config, key)
         }
         override suspend fun summarize(historyId: String, segments: List<com.sona.android.application.recording.TranscriptSegment>, template: com.sona.android.application.llm.LlmSummaryTemplate, observer: com.sona.android.application.llm.LlmTaskObserver) = adapter().summarize(historyId, segments, template, observer)

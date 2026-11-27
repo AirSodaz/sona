@@ -83,7 +83,12 @@ class UniffiLlmAdapter internal constructor(
     ) : this(configuration, apiKey, GeneratedUniffiLlmBindings)
     override suspend fun summarize(historyId: String, segments: List<TranscriptSegment>, template: LlmSummaryTemplate, observer: LlmTaskObserver): LlmSummary {
         val taskId = "android-summary-$historyId"
-        val final = callLlm { bindings.runSummary(FfiSummarizeTranscriptRequest(taskId, config(), FfiSummaryTemplateConfig(template.id, template.name, template.instructions), segments.map { FfiSummarySegmentInput(it.id, it.text, it.startSeconds.toFloat(), it.endSeconds.toFloat(), it.isFinal) }, 1200uL), observer(taskId, observer)) }
+        val request = FfiSummarizeTranscriptRequest(taskId, config(), FfiSummaryTemplateConfig(template.id, template.name, template.instructions), segments.map { FfiSummarySegmentInput(it.id, it.text, it.startSeconds.toFloat(), it.endSeconds.toFloat(), it.isFinal) }, 1200uL)
+        val final = try {
+            callLlm { bindings.runSummary(request, observer(taskId, observer)) }
+        } finally {
+            request.destroy()
+        }
         val value = runCatching { json.parseToJsonElement(final.resultJson).jsonObject }
             .getOrElse { throw LlmTaskException(mapLlmFailure(it), it) }
         val content = value["content"]?.jsonPrimitive?.content.orEmpty()
@@ -97,7 +102,12 @@ class UniffiLlmAdapter internal constructor(
 
     override suspend fun translate(historyId: String, segments: List<TranscriptSegment>, targetLanguage: String, targetLanguageName: String?, observer: LlmTaskObserver): List<TranscriptSegment> {
         val taskId = "android-translate-$historyId"
-        val final = callLlm { bindings.runTranslate(FfiTranslateSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, targetLanguage, targetLanguageName, null, null, null), observer(taskId, observer)) }
+        val request = FfiTranslateSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, targetLanguage, targetLanguageName, null, null, null)
+        val final = try {
+            callLlm { bindings.runTranslate(request, observer(taskId, observer)) }
+        } finally {
+            request.destroy()
+        }
         val byId = runCatching { json.parseToJsonElement(final.resultJson).jsonArray.associate { it.jsonObject["id"]!!.jsonPrimitive.content to it.jsonObject["translation"]!!.jsonPrimitive.content } }
             .getOrElse { throw LlmTaskException(mapLlmFailure(it), it) }
         if (byId.size != segments.size || segments.any { it.id !in byId || byId[it.id].isNullOrBlank() }) throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)
@@ -106,7 +116,12 @@ class UniffiLlmAdapter internal constructor(
 
     override suspend fun polish(historyId: String, segments: List<TranscriptSegment>, observer: LlmTaskObserver): List<TranscriptSegment> {
         val taskId = "android-polish-$historyId"
-        val final = callLlm { bindings.runPolish(FfiPolishSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, null, null, null), observer(taskId, observer)) }
+        val request = FfiPolishSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, null, null, null)
+        val final = try {
+            callLlm { bindings.runPolish(request, observer(taskId, observer)) }
+        } finally {
+            request.destroy()
+        }
         val byId = runCatching { json.parseToJsonElement(final.resultJson).jsonArray.associate { it.jsonObject["id"]!!.jsonPrimitive.content to it.jsonObject["text"]!!.jsonPrimitive.content } }
             .getOrElse { throw LlmTaskException(mapLlmFailure(it), it) }
         if (byId.size != segments.size || segments.any { it.id !in byId || byId[it.id].isNullOrBlank() }) throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)

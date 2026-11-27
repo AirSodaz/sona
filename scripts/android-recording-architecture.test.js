@@ -402,9 +402,14 @@ test('Android recording composition preserves foreground-service, permission, an
   assert.doesNotMatch(activity, /Manifest\.permission\.RECORD_AUDIO/u);
   assert.doesNotMatch(activity, /onAppBackground|ProcessLifecycleOwner|Lifecycle\.Event\.ON_STOP/u);
 
+  const notificationChannels = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'notification',
+    'SonaNotificationChannels.kt',
+  );
   assert.match(recordScreen, /rememberLauncherForActivityResult/u);
   assert.match(recordScreen, /ActivityResultContracts\.RequestPermission/u);
-  assert.match(recordScreen, /android\.permission\.POST_NOTIFICATIONS/u);
+  assert.match(recordScreen, /PERMISSION_POST_NOTIFICATIONS|android\.permission\.POST_NOTIFICATIONS/u);
+  assert.match(notificationChannels, /android\.permission\.POST_NOTIFICATIONS/u);
   assert.match(recordScreen, /onConfigureCredential/u);
   assert.match(permissionPolicy, /SHOW_RATIONALE/u);
   assert.match(permissionPolicy, /OPEN_APP_SETTINGS/u);

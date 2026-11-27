@@ -93,30 +93,35 @@ test('Android composition owns library loading and detail navigation', () => {
   assert.match(screen, /LazyColumn/u);
   assert.match(screen, /HistoryItemStatus\.DRAFT/u);
   assert.match(screen, /item\.title\.ifBlank/u);
-  assert.doesNotMatch(screen, /OpenDocument|onImportAudio|AudioImportStatus/u);
+  assert.doesNotMatch(screen, /OpenDocument/u);
 });
 
-test('Android home owns both workspaces and only previews three recent records', () => {
+test('Android app launches into library with global floating capture dock and file import', () => {
   const destination = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation', 'SonaDestination.kt',
   );
   const navigation = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation', 'SonaApp.kt',
   );
-  const fileWorkspace = clientSource(
-    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'home',
-    'FileTranscriptionScreen.kt',
+  const dock = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation', 'SonaFloatingDock.kt',
+  );
+  const libraryScreen = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'library',
+    'LibraryScreen.kt',
   );
 
-  assert.match(destination, /HOME\("home"/u);
+  assert.match(destination, /LIBRARY\("library"/u);
+  assert.match(destination, /SETTINGS\(/u);
+  assert.doesNotMatch(destination, /HOME\(/u);
   assert.doesNotMatch(destination, /RECORD\(/u);
-  assert.match(navigation, /startDestination = SonaDestination\.HOME\.route/u);
-  assert.match(navigation, /HOME_LIVE_ROUTE = "home\/live"/u);
-  assert.match(navigation, /HOME_FILE_ROUTE = "home\/file"/u);
-  assert.match(fileWorkspace, /ActivityResultContracts\.OpenDocument/u);
-  assert.match(fileWorkspace, /onStart: \(String\) -> Unit/u);
-  assert.match(fileWorkspace, /AudioImportJobState\.Running/u);
-  assert.match(fileWorkspace, /AudioImportJobState\.Completed/u);
+  assert.match(navigation, /startDestination = SonaDestination\.LIBRARY\.route/u);
+  assert.match(navigation, /ActivityResultContracts\.OpenDocument/u);
+  assert.match(navigation, /onImportAudio/u);
+  assert.match(dock, /onRecordClick/u);
+  assert.match(dock, /onImportAudioClick/u);
+  assert.match(libraryScreen, /AudioImportTaskStatus/u);
+  assert.match(libraryScreen, /AudioImportJobState\.Failed/u);
 });
 
 test('Android public beta data capabilities stay behind typed application ports', () => {

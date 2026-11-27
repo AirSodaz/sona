@@ -57,6 +57,8 @@ interface MicrophoneCaptureSession : AutoCloseable {
     val events: Flow<MicrophoneCaptureEvent>
 
     suspend fun start()
+    suspend fun pause() {}
+    suspend fun resume() {}
     suspend fun stop()
     suspend fun finish(): CapturedAudio
 }

@@ -10,6 +10,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -44,6 +46,7 @@ class AndroidMicrophoneCaptureSession internal constructor(
     private enum class State {
         NEW,
         STARTED,
+        PAUSED,
         STOPPING,
         STOPPED,
         CLOSED,
@@ -51,6 +54,8 @@ class AndroidMicrophoneCaptureSession internal constructor(
 
     private val lifecycleMutex = Mutex()
     private val backendLifecycleLock = Any()
+    private val pauseLock = ReentrantLock()
+    private val pauseCondition = pauseLock.newCondition()
     private val readerDispatcher = readerDispatcher
     private val frameChannel = Channel<Pcm16Frame>(capacity = FRAME_QUEUE_CAPACITY)
     private val eventChannel = Channel<MicrophoneCaptureEvent>(capacity = Channel.UNLIMITED)
@@ -63,6 +68,7 @@ class AndroidMicrophoneCaptureSession internal constructor(
     override val events: Flow<MicrophoneCaptureEvent> = eventChannel.receiveAsFlow()
 
     @Volatile private var stopRequested = false
+    @Volatile private var pauseRequested = false
     private var state = State.NEW
     private var readerTask: ReaderTask? = null
     private var backendStarted = false
@@ -93,6 +99,33 @@ class AndroidMicrophoneCaptureSession internal constructor(
         }
     }
 
+    override suspend fun pause() {
+        lifecycleMutex.withLock {
+            if (state != State.STARTED) {
+                return@withLock
+            }
+            pauseLock.withLock {
+                pauseRequested = true
+            }
+            state = State.PAUSED
+            pauseBackend()?.let { throw it }
+        }
+    }
+
+    override suspend fun resume() {
+        lifecycleMutex.withLock {
+            if (state != State.PAUSED) {
+                return@withLock
+            }
+            resumeBackend()?.let { throw it }
+            pauseLock.withLock {
+                pauseRequested = false
+                state = State.STARTED
+                pauseCondition.signalAll()
+            }
+        }
+    }
+
     override suspend fun stop(): Unit = withContext(NonCancellable) {
         var failure: Throwable? = null
         lifecycleMutex.withLock {
@@ -100,7 +133,11 @@ class AndroidMicrophoneCaptureSession internal constructor(
                 return@withLock
             }
 
-            stopRequested = true
+            pauseLock.withLock {
+                stopRequested = true
+                pauseRequested = false
+                pauseCondition.signalAll()
+            }
             state = State.STOPPING
             readerTask?.cancelIfQueued()
             failure = stopBackend()
@@ -162,6 +199,10 @@ class AndroidMicrophoneCaptureSession internal constructor(
         val assembler = PcmFrameAssembler(FRAME_SIZE_BYTES)
         try {
             while (!stopRequested) {
+                if (pauseRequested) {
+                    awaitResumedOrStopped()
+                    continue
+                }
                 val bytesRead = try {
                     backend.read(readBuffer)
                 } catch (_: Exception) {
@@ -178,6 +219,13 @@ class AndroidMicrophoneCaptureSession internal constructor(
                     break
                 }
                 if (bytesRead == 0) {
+                    if (pauseRequested) {
+                        awaitResumedOrStopped()
+                    }
+                    continue
+                }
+                if (pauseRequested) {
+                    awaitResumedOrStopped()
                     continue
                 }
 
@@ -221,6 +269,44 @@ class AndroidMicrophoneCaptureSession internal constructor(
         stopRequested = true
         stopBackend()
     }
+
+    private fun awaitResumedOrStopped() {
+        pauseLock.withLock {
+            while (pauseRequested && !stopRequested) {
+                pauseCondition.await()
+            }
+        }
+    }
+
+    private suspend fun pauseBackend(): Throwable? =
+        controlContext.execute {
+            synchronized(backendLifecycleLock) {
+                if (!backendStarted || backendStopAttempted || backendClosed) {
+                    return@synchronized null
+                }
+                try {
+                    backend.pause()
+                    null
+                } catch (error: Throwable) {
+                    error
+                }
+            }
+        }
+
+    private suspend fun resumeBackend(): Throwable? =
+        controlContext.execute {
+            synchronized(backendLifecycleLock) {
+                if (!backendStarted || backendStopAttempted || backendClosed) {
+                    return@synchronized null
+                }
+                try {
+                    backend.resume()
+                    null
+                } catch (error: Throwable) {
+                    error
+                }
+            }
+        }
 
     private suspend fun stopBackend(): Throwable? =
         controlContext.execute { stopBackendOnControlThread() }

@@ -1,6 +1,7 @@
 package com.sona.android.adapters.uniffi.recording
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class UniffiLocalAsrModelCatalogAdapterTest {
@@ -24,6 +25,18 @@ class UniffiLocalAsrModelCatalogAdapterTest {
         val recommended = sources.filter { it.isRecommended }
         assertEquals(1, recommended.size)
         assertEquals("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17", recommended.first().id)
+    }
+
+    @Test
+    fun `android model source display names and descriptions omit int8 labels`() {
+        val sources = AndroidModelSourceRepository().loadSources() + AndroidModelSourceRepository.FALLBACK_SOURCES
+        for (source in sources) {
+            assertFalse("Name should not contain int8: ${source.name}", source.name.contains("int8", ignoreCase = true))
+            assertFalse(
+                "Description should not contain int8: ${source.description}",
+                source.description?.contains("int8", ignoreCase = true) == true,
+            )
+        }
     }
 
     @Test

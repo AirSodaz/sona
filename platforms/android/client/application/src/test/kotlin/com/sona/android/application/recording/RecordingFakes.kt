@@ -145,6 +145,14 @@ class RecordingFakes {
                     startFailure?.let { throw it }
                 }
 
+                override suspend fun pause() {
+                    calls += "microphone.pause"
+                }
+
+                override suspend fun resume() {
+                    calls += "microphone.resume"
+                }
+
                 override suspend fun stop() {
                     calls += "microphone.stop"
                     try {

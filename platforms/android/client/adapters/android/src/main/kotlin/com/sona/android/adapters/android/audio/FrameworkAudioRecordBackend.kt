@@ -92,6 +92,7 @@ class FrameworkAudioRecordBackend internal constructor(
     private var listener: AudioInputEventListener? = null
     private var generation = 0L
     private var started = false
+    private var paused = false
     private var stopping = false
     private var closed = false
     private var registeredCallback: PlatformRecordingCallback? = null
@@ -151,11 +152,17 @@ class FrameworkAudioRecordBackend internal constructor(
         if (isExpectedStop()) {
             return END_OF_STREAM
         }
+        if (isPaused()) {
+            return 0
+        }
         val bytesRead = try {
             record.read(buffer)
         } catch (_: Exception) {
             if (isExpectedStop()) {
                 return END_OF_STREAM
+            }
+            if (isPaused()) {
+                return 0
             }
             throw AudioCaptureReadException()
         }
@@ -163,9 +170,28 @@ class FrameworkAudioRecordBackend internal constructor(
             if (isExpectedStop()) {
                 return END_OF_STREAM
             }
+            if (isPaused()) {
+                return 0
+            }
             throw AudioCaptureReadException()
         }
         return bytesRead
+    }
+
+    override fun pause() = synchronized(lifecycleLock) {
+        if (closed || stopping || !started || paused) {
+            return@synchronized
+        }
+        paused = true
+        record.stop()
+    }
+
+    override fun resume() = synchronized(lifecycleLock) {
+        if (closed || stopping || !started || !paused) {
+            return@synchronized
+        }
+        record.start()
+        paused = false
     }
 
     override fun stop() = synchronized(lifecycleLock) {
@@ -180,8 +206,9 @@ class FrameworkAudioRecordBackend internal constructor(
         }
         stopping = true
         generation += 1
-        shouldStop = started
+        shouldStop = started && !paused
         started = false
+        paused = false
         callback = registeredCallback
         registeredCallback = null
 
@@ -266,6 +293,10 @@ class FrameworkAudioRecordBackend internal constructor(
 
     private fun isExpectedStop(): Boolean = synchronized(lifecycleLock) {
         stopping || closed
+    }
+
+    private fun isPaused(): Boolean = synchronized(lifecycleLock) {
+        paused
     }
 
     companion object {

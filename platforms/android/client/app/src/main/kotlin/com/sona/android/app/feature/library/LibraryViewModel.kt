@@ -32,7 +32,9 @@ import com.sona.android.application.recording.CloudTranscriptionRequest
 import com.sona.android.application.recording.AudioImportFailure
 import com.sona.android.application.recording.AudioImportJobPort
 import com.sona.android.application.recording.AudioImportJobState
+import com.sona.android.application.recording.AudioImportQueueState
 import com.sona.android.application.recording.AudioImportSource
+import com.sona.android.application.recording.AudioImportTaskStatus
 import com.sona.android.application.recording.ScheduleAudioImport
 import com.sona.android.application.recording.ScheduleAudioImportOutcome
 import com.sona.android.application.recording.ScheduleAudioRetranscription
@@ -116,13 +118,17 @@ data class LibraryUiState(
     val detail: LibraryDetailUiState = LibraryDetailUiState.None,
     val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
     val audioImport: AudioImportJobState = AudioImportJobState.Idle,
+    val audioImportQueue: AudioImportQueueState = AudioImportQueueState(),
     val query: HistoryWorkspaceQuery = HistoryWorkspaceQuery(),
     val projects: List<ProjectRecord> = emptyList(),
     val selectedIds: Set<String> = emptySet(),
     val snapshots: List<TranscriptSnapshot> = emptyList(),
     val snapshotDetail: TranscriptSnapshotDetail? = null,
     val workspaceCount: Long = 0,
+    val allCount: Long = 0,
+    val inboxCount: Long = 0,
     val trashCount: Long = 0,
+    val projectCounts: Map<String, Long> = emptyMap(),
     val operationInProgress: Boolean = false,
     val operationError: Boolean = false,
     val playback: AudioPlaybackState = AudioPlaybackState(),
@@ -174,6 +180,7 @@ class LibraryViewModel(
     private val undoStack = ArrayDeque<List<TranscriptSegment>>()
     private val redoStack = ArrayDeque<List<TranscriptSegment>>()
     private val editMutex = Mutex()
+    private val dismissedFailedImportJobIds = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
@@ -192,6 +199,28 @@ class LibraryViewModel(
             }
         }
         viewModelScope.launch {
+            audioImportJobs.queueState.distinctUntilChanged().collect { queueState ->
+                queueState.tasks
+                    .filter { it.status != AudioImportTaskStatus.FAILED }
+                    .forEach { dismissedFailedImportJobIds.remove(it.jobId) }
+                val visibleQueueState = queueState.copy(
+                    tasks = queueState.tasks.filterNot {
+                        it.status == AudioImportTaskStatus.FAILED && it.jobId in dismissedFailedImportJobIds
+                    },
+                )
+                val previousSucceeded = mutableState.value.audioImportQueue.tasks
+                    .filter { it.status == AudioImportTaskStatus.SUCCEEDED }
+                    .mapTo(mutableSetOf()) { it.jobId }
+                val newlySucceeded = visibleQueueState.tasks.any {
+                    it.status == AudioImportTaskStatus.SUCCEEDED && it.jobId !in previousSucceeded
+                }
+                mutableState.update { it.copy(audioImportQueue = visibleQueueState) }
+                if (newlySucceeded) {
+                    refresh()
+                }
+            }
+        }
+        viewModelScope.launch {
             llmConfiguration?.configuration?.collect { config ->
                 mutableState.update { it.copy(llm = it.llm.copy(configurationAvailable = config.configured)) }
             }
@@ -199,7 +228,7 @@ class LibraryViewModel(
     }
 
     fun importAudio(sourceLocator: String) {
-        if (sourceLocator.isBlank() || mutableState.value.audioImport is AudioImportJobState.Running) {
+        if (sourceLocator.isBlank()) {
             return
         }
         val schedule = scheduleAudioImport ?: run {
@@ -233,7 +262,43 @@ class LibraryViewModel(
 
     fun cancelAudioImport() {
         val running = mutableState.value.audioImport as? AudioImportJobState.Running ?: return
-        viewModelScope.launch { audioImportJobs.cancel(running.jobId) }
+        cancelAudioImportJob(running.jobId)
+    }
+
+    fun cancelAudioImportJob(jobId: String) {
+        if (jobId.isBlank()) return
+        viewModelScope.launch { audioImportJobs.cancel(jobId) }
+    }
+
+    fun dismissAudioImportFailure(jobId: String?) {
+        if (!jobId.isNullOrBlank()) {
+            dismissedFailedImportJobIds += jobId
+            mutableState.update { state ->
+                val currentImport = state.audioImport
+                val nextImport = if (currentImport is AudioImportJobState.Failed && currentImport.jobId == jobId) {
+                    AudioImportJobState.Idle
+                } else {
+                    currentImport
+                }
+                state.copy(
+                    audioImport = nextImport,
+                    audioImportQueue = state.audioImportQueue.copy(
+                        tasks = state.audioImportQueue.tasks.filterNot {
+                            it.jobId == jobId && it.status == AudioImportTaskStatus.FAILED
+                        },
+                    ),
+                )
+            }
+            viewModelScope.launch { audioImportJobs.cancel(jobId) }
+        } else {
+            mutableState.update { state ->
+                if (state.audioImport is AudioImportJobState.Failed) {
+                    state.copy(audioImport = AudioImportJobState.Idle)
+                } else {
+                    state
+                }
+            }
+        }
     }
 
     fun transcribeWithCurrentEngine(item: HistoryItem) {
@@ -282,6 +347,7 @@ class LibraryViewModel(
                 if (generation != listGeneration) return@launch
                 nextOffset = page.items.size
                 failedListOperation = null
+                val allScopeCount = page.counts.inbox + page.counts.byProjectId.values.sum()
                 mutableState.update {
                     it.copy(
                         items = page.items.distinctBy(HistoryItem::historyId),
@@ -290,7 +356,10 @@ class LibraryViewModel(
                         isRefreshing = false,
                         listError = null,
                         workspaceCount = page.filteredItemCount,
+                        allCount = allScopeCount,
+                        inboxCount = page.counts.inbox,
                         trashCount = page.counts.trash,
+                        projectCounts = page.counts.byProjectId,
                     )
                 }
                 runCatching { projects.listProjects() }.getOrNull()?.let { loaded ->
@@ -390,6 +459,12 @@ class LibraryViewModel(
             try {
                 val segments = library.loadTranscript(historyId)
                 if (generation != detailGeneration) return@launch
+                val currentEditor = mutableState.value.editor
+                if (currentEditor.active && currentEditor.historyId != historyId && !currentEditor.dirty) {
+                    undoStack.clear()
+                    redoStack.clear()
+                    mutableState.update { it.copy(editor = TranscriptEditorUiState()) }
+                }
                 mutableState.update {
                     it.copy(
                         detail = LibraryDetailUiState.Ready(historyId, segments),
@@ -557,7 +632,7 @@ class LibraryViewModel(
                 editSessionId = UUID.randomUUID().toString(),
                 baseSegments = segments,
                 draftSegments = segments,
-                editingSegmentId = segmentId ?: segments.firstOrNull()?.id,
+                editingSegmentId = segmentId,
             ))
         }
     }
@@ -721,11 +796,20 @@ class LibraryViewModel(
     }
 
     fun flushEditDraft() {
-        val session = mutableState.value.editor.takeIf { it.dirty } ?: return
+        val session = mutableStateOfOrCurrentDirtySession() ?: return
         draftSaveJob?.cancel()
         viewModelScope.launch { persistDraft(session) }
         commitEdit(closeAfterSave = false)
     }
+
+    fun persistEditDraft() {
+        val session = mutableStateOfOrCurrentDirtySession() ?: return
+        draftSaveJob?.cancel()
+        viewModelScope.launch { persistDraft(session) }
+    }
+
+    private fun mutableStateOfOrCurrentDirtySession(): TranscriptEditorUiState? =
+        mutableState.value.editor.takeIf { it.dirty }
 
     private fun applyEdit(operation: TranscriptEditOperation, debounce: Boolean = false) {
         val port = editor ?: return
@@ -805,6 +889,10 @@ class LibraryViewModel(
     }
 
     private suspend fun restoreDraft(historyId: String, current: List<TranscriptSegment>) {
+        val currentEditor = mutableState.value.editor
+        if (currentEditor.active && currentEditor.historyId == historyId && currentEditor.baseSegments == current) {
+            return
+        }
         val recovered = runCatching { editRecovery?.load(historyId) }.getOrNull() ?: return
         if (recovered.baseSegments != current) return
         undoStack.clear()
@@ -814,7 +902,7 @@ class LibraryViewModel(
             editSessionId = recovered.editSessionId,
             baseSegments = recovered.baseSegments,
             draftSegments = recovered.draftSegments,
-            editingSegmentId = recovered.draftSegments.firstOrNull()?.id,
+            editingSegmentId = null,
             dirty = recovered.draftSegments != recovered.baseSegments,
             recoveredDraft = true,
         )) }
@@ -824,6 +912,16 @@ class LibraryViewModel(
     fun restoreSelected() = mutateSelection(library::restore)
     fun purgeSelected() = mutateSelection(library::purge)
     fun setProjectForSelected(projectId: String?) = mutateSelection { library.updateProjectAssignment(it, projectId) }
+
+    fun trashItem(historyId: String) = mutateWorkspace {
+        library.trash(listOf(historyId), System.currentTimeMillis())
+        mutableState.update { it.copy(selectedIds = it.selectedIds - historyId) }
+    }
+
+    fun restoreItem(historyId: String) = mutateWorkspace {
+        library.restore(listOf(historyId))
+        mutableState.update { it.copy(selectedIds = it.selectedIds - historyId) }
+    }
 
     fun updateTitle(historyId: String, title: String) = mutateWorkspace {
         library.updateTitle(historyId, title)

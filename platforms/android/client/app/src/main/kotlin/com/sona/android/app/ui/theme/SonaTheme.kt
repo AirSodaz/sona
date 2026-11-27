@@ -25,8 +25,12 @@ fun SonaTheme(
         else -> SonaLightColorScheme
     }
 
+    val recordingColor = if (darkTheme) SonaRecordingRedDark else SonaRecordingRed
+    val recordingContainer = if (darkTheme) SonaRecordingContainerDark else SonaRecordingContainerLight
+
     CompositionLocalProvider(
-        LocalSonaRecordingColor provides (if (darkTheme) SonaDarkColorScheme.error else SonaLightColorScheme.error)
+        LocalSonaRecordingColor provides recordingColor,
+        LocalSonaRecordingContainerColor provides recordingContainer,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

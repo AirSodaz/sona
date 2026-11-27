@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.sona.android.adapters.android.credential.AndroidKeyStoreCredentialCipher
 import com.sona.android.adapters.android.credential.AndroidKeyStoreCredentialPolicy
+import com.sona.android.adapters.android.credential.CredentialCipherException
+import com.sona.android.adapters.android.credential.CredentialCipherFailureKind
 import com.sona.android.adapters.android.credential.CredentialEnvelope
 import com.sona.android.adapters.android.credential.CredentialEnvelopeState
 import com.sona.android.adapters.android.credential.CredentialRecord
@@ -21,14 +23,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class AndroidLlmConfigurationRepository private constructor(
     private val dataStore: DataStore<androidx.datastore.preferences.core.Preferences>,
     private val cipher: AndroidKeyStoreCredentialCipher,
     private val providerLoader: () -> List<LlmProvider>,
 ) : LlmConfigurationPort {
+    private val operations = Mutex()
     override val providers: Flow<List<LlmProvider>> = kotlinx.coroutines.flow.flow { emit(providerLoader()) }
     override val configuration: Flow<LlmConfig> = dataStore.data.map { preferences ->
         LlmConfig(
@@ -43,43 +47,106 @@ class AndroidLlmConfigurationRepository private constructor(
     }
 
     override suspend fun save(config: LlmConfig, apiKey: String) {
-        require(config.validate(apiKey))
-        val bytes = apiKey.encodeToByteArray()
-        try {
-            val envelope = cipher.encrypt(bytes).toRecord()
-            dataStore.edit { preferences ->
-                preferences[PROVIDER] = config.providerId
-                preferences[STRATEGY] = config.strategy
-                preferences[BASE_URL] = config.baseUrl.trim()
-                preferences[MODEL] = config.model.trim()
-                config.apiPath?.let { preferences[API_PATH] = it } ?: preferences.remove(API_PATH)
-                config.apiVersion?.let { preferences[API_VERSION] = it } ?: preferences.remove(API_VERSION)
-                preferences[CONFIGURED] = "true"
-                preferences[KEY_FORMAT] = envelope.formatVersion.toString()
-                preferences[KEY_IV] = envelope.ivBase64.orEmpty()
-                preferences[KEY_CIPHERTEXT] = envelope.ciphertextBase64.orEmpty()
+        val normalizedConfig = config.copy(
+            baseUrl = config.baseUrl.trim(),
+            model = config.model.trim(),
+        )
+        require(normalizedConfig.validate(apiKey))
+        operations.withLock {
+            if (apiKey.isNotBlank()) {
+                val bytes = apiKey.encodeToByteArray()
+                try {
+                    val envelope = try {
+                        cipher.encrypt(bytes)
+                    } catch (error: CredentialCipherException) {
+                        if (error.kind != CredentialCipherFailureKind.PERMANENT) throw error
+                        cipher.deleteKey()
+                        val retryBytes = apiKey.encodeToByteArray()
+                        try {
+                            cipher.encrypt(retryBytes)
+                        } finally {
+                            retryBytes.fill(0)
+                        }
+                    }.toRecord()
+                    dataStore.edit { preferences ->
+                        writeCommonFields(preferences, normalizedConfig)
+                        preferences[KEY_FORMAT] = envelope.formatVersion.toString()
+                        preferences[KEY_IV] = envelope.ivBase64.orEmpty()
+                        preferences[KEY_CIPHERTEXT] = envelope.ciphertextBase64.orEmpty()
+                    }
+                } finally {
+                    bytes.fill(0)
+                }
+            } else {
+                dataStore.edit { preferences ->
+                    writeCommonFields(preferences, normalizedConfig)
+                    preferences.remove(KEY_FORMAT)
+                    preferences.remove(KEY_IV)
+                    preferences.remove(KEY_CIPHERTEXT)
+                }
+                cipher.deleteKey()
             }
-        } finally {
-            bytes.fill(0)
         }
     }
 
-    override suspend fun loadApiKey(): String? {
+    private fun writeCommonFields(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        config: LlmConfig,
+    ) {
+        preferences[PROVIDER] = config.providerId
+        preferences[STRATEGY] = config.strategy
+        preferences[BASE_URL] = config.baseUrl
+        preferences[MODEL] = config.model
+        config.apiPath?.let { preferences[API_PATH] = it } ?: preferences.remove(API_PATH)
+        config.apiVersion?.let { preferences[API_VERSION] = it } ?: preferences.remove(API_VERSION)
+        preferences[CONFIGURED] = "true"
+    }
+
+    override suspend fun loadApiKey(): String? = operations.withLock {
         val preferences = dataStore.data.first()
         val record = CredentialRecord(
             formatVersion = preferences[KEY_FORMAT]?.toIntOrNull(),
             ivBase64 = preferences[KEY_IV],
             ciphertextBase64 = preferences[KEY_CIPHERTEXT],
         )
-        val envelope = (CredentialEnvelope.inspect(record) as? CredentialEnvelopeState.Supported)?.envelope ?: return null
-        val plaintext = cipher.decrypt(envelope)
-        return try {
-            Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(plaintext)).toString()
-        } catch (_: Exception) { null } finally { plaintext.fill(0) }
+        val envelope = (CredentialEnvelope.inspect(record) as? CredentialEnvelopeState.Supported)?.envelope
+            ?: return@withLock null
+        val plaintext = try {
+            cipher.decrypt(envelope)
+        } catch (error: CredentialCipherException) {
+            if (error.kind == CredentialCipherFailureKind.PERMANENT) {
+                cleanupInvalidKeySlot()
+                return@withLock null
+            }
+            throw error
+        }
+        try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(plaintext))
+                .toString()
+        } catch (_: Exception) {
+            null
+        } finally {
+            plaintext.fill(0)
+        }
     }
 
     override suspend fun clear() {
-        dataStore.edit { preferences -> preferences.clear() }
+        operations.withLock {
+            dataStore.edit { preferences -> preferences.clear() }
+            cipher.deleteKey()
+        }
+    }
+
+    private suspend fun cleanupInvalidKeySlot() {
+        dataStore.edit { preferences ->
+            preferences.remove(CONFIGURED)
+            preferences.remove(KEY_FORMAT)
+            preferences.remove(KEY_IV)
+            preferences.remove(KEY_CIPHERTEXT)
+        }
         cipher.deleteKey()
     }
 

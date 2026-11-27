@@ -5,12 +5,14 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.ui.unit.IntRect
 import androidx.navigation.NavBackStackEntry
 
 /**
@@ -33,7 +35,6 @@ internal object SonaNavMotion {
     const val EXIT_OFFSET_FRACTION = 0.08f
 
     private val ROOT_TAB_ORDER = listOf(
-        SonaDestination.HOME.route,
         SonaDestination.LIBRARY.route,
         SonaDestination.SETTINGS.route,
     )
@@ -51,9 +52,7 @@ internal object SonaNavMotion {
     fun isSubPage(route: String?, sectionArg: String? = null): Boolean {
         if (route == null) return false
         if (isSettingsSubSection(route, sectionArg)) return true
-        return route == HOME_LIVE_ROUTE ||
-            route == HOME_FILE_ROUTE ||
-            route == LIBRARY_DETAIL_ROUTE ||
+        return route == LIBRARY_DETAIL_ROUTE ||
             route.startsWith("library/")
     }
 
@@ -63,6 +62,24 @@ internal object SonaNavMotion {
         val baseRoute = route.substringBefore('?').substringBefore('/')
         return ROOT_TAB_ORDER.contains(baseRoute)
     }
+
+    fun isPeerTabTransition(
+        initialRoute: String?,
+        targetRoute: String?,
+        initialSectionArg: String? = null,
+        targetSectionArg: String? = null,
+    ): Boolean {
+        if (initialRoute == targetRoute && initialSectionArg == targetSectionArg) {
+            return false
+        }
+        return isRootTab(initialRoute, initialSectionArg) &&
+            isRootTab(targetRoute, targetSectionArg)
+    }
+
+    fun boundsTweenSpec(): FiniteAnimationSpec<IntRect> = tween(
+        durationMillis = SLIDE_DURATION,
+        easing = SonaMotionEasing,
+    )
 
     fun rootTabIndex(route: String?, sectionArg: String? = null): Int {
         if (!isRootTab(route, sectionArg)) return -1
@@ -137,158 +154,167 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.resolveMotionDire
     )
 }
 
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.isPeerTabTransition(): Boolean {
+    val initialRoute = initialState.destination.route
+    val targetRoute = targetState.destination.route
+    val initialSection = initialState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    val targetSection = targetState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    return SonaNavMotion.isPeerTabTransition(
+        initialRoute = initialRoute,
+        targetRoute = targetRoute,
+        initialSectionArg = initialSection,
+        targetSectionArg = targetSection,
+    )
+}
+
+internal fun sonaSlideFadeEnter(offsetFraction: Float): EnterTransition =
+    slideInHorizontally(
+        initialOffsetX = { fullWidth -> (fullWidth * offsetFraction).toInt() },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    ) + fadeIn(
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.FADE_IN_DURATION,
+            easing = LinearOutSlowInEasing,
+        ),
+    )
+
+internal fun sonaSlideFadeExit(
+    offsetFraction: Float,
+    fadeDurationMillis: Int = SonaNavMotion.FADE_OUT_DURATION,
+): ExitTransition =
+    slideOutHorizontally(
+        targetOffsetX = { fullWidth -> (fullWidth * offsetFraction).toInt() },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    ) + fadeOut(
+        animationSpec = tween(
+            durationMillis = fadeDurationMillis,
+            easing = FastOutLinearInEasing,
+        ),
+    )
+
+internal fun sonaSubPageEnterFromRight(): EnterTransition =
+    sonaSlideFadeEnter(SonaNavMotion.ENTER_OFFSET_FRACTION)
+
+internal fun sonaSubPageEnterFromLeft(): EnterTransition =
+    sonaSlideFadeEnter(-SonaNavMotion.EXIT_OFFSET_FRACTION)
+
+internal fun sonaSubPageExitToLeft(): ExitTransition =
+    sonaSlideFadeExit(-SonaNavMotion.EXIT_OFFSET_FRACTION, SonaNavMotion.FADE_OUT_DURATION)
+
+internal fun sonaSubPageExitToRight(
+    fadeDurationMillis: Int = SonaNavMotion.POP_EXIT_FADE_DURATION,
+): ExitTransition =
+    sonaSlideFadeExit(SonaNavMotion.ENTER_OFFSET_FRACTION, fadeDurationMillis)
+
+private fun peerTabEnterTransition(direction: NavMotionDirection): EnterTransition = when (direction) {
+    NavMotionDirection.FORWARD -> slideInHorizontally(
+        initialOffsetX = { fullWidth -> fullWidth },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    )
+    NavMotionDirection.BACKWARD -> slideInHorizontally(
+        initialOffsetX = { fullWidth -> -fullWidth },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    )
+    NavMotionDirection.NONE -> EnterTransition.None
+}
+
+private fun peerTabExitTransition(direction: NavMotionDirection): ExitTransition = when (direction) {
+    NavMotionDirection.FORWARD -> slideOutHorizontally(
+        targetOffsetX = { fullWidth -> -fullWidth },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    )
+    NavMotionDirection.BACKWARD -> slideOutHorizontally(
+        targetOffsetX = { fullWidth -> fullWidth },
+        animationSpec = tween(
+            durationMillis = SonaNavMotion.SLIDE_DURATION,
+            easing = SonaMotionEasing,
+        ),
+    )
+    NavMotionDirection.NONE -> ExitTransition.None
+}
+
 /**
  * Forward enter:
- * - FORWARD: slides in from right (+100% -> 0%)
- * - BACKWARD: slides in from left (-100% -> 0%)
+ * - Peer root tabs: full-width horizontal translation without fade
+ * - Sub-pages: proportional horizontal slide (+18% -> 0%) + fade in
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaEnterTransition(): EnterTransition {
-    return when (resolveMotionDirection(isPop = false)) {
-        NavMotionDirection.FORWARD -> {
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> (fullWidth * SonaNavMotion.ENTER_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_IN_DURATION,
-                    easing = LinearOutSlowInEasing,
-                ),
-            )
-        }
-        NavMotionDirection.BACKWARD -> {
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> -(fullWidth * SonaNavMotion.ENTER_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_IN_DURATION,
-                    easing = LinearOutSlowInEasing,
-                ),
-            )
-        }
+    val direction = resolveMotionDirection(isPop = false)
+    if (isPeerTabTransition()) {
+        return peerTabEnterTransition(direction)
+    }
+    return when (direction) {
+        NavMotionDirection.FORWARD -> sonaSubPageEnterFromRight()
+        NavMotionDirection.BACKWARD -> sonaSlideFadeEnter(-SonaNavMotion.ENTER_OFFSET_FRACTION)
         NavMotionDirection.NONE -> EnterTransition.None
     }
 }
 
 /**
  * Forward exit:
- * - FORWARD: slides out to left with subtle recession (-8% offset + fade out)
- * - BACKWARD: slides out to right (+8% offset + fade out)
+ * - Peer root tabs: full-width horizontal translation without fade
+ * - Sub-pages: subtle recession (-8% offset) + fade out
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaExitTransition(): ExitTransition {
-    return when (resolveMotionDirection(isPop = false)) {
-        NavMotionDirection.FORWARD -> {
-            slideOutHorizontally(
-                targetOffsetX = { fullWidth -> -(fullWidth * SonaNavMotion.EXIT_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_OUT_DURATION,
-                    easing = FastOutLinearInEasing,
-                ),
-            )
-        }
-        NavMotionDirection.BACKWARD -> {
-            slideOutHorizontally(
-                targetOffsetX = { fullWidth -> (fullWidth * SonaNavMotion.EXIT_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_OUT_DURATION,
-                    easing = FastOutLinearInEasing,
-                ),
-            )
-        }
+    val direction = resolveMotionDirection(isPop = false)
+    if (isPeerTabTransition()) {
+        return peerTabExitTransition(direction)
+    }
+    return when (direction) {
+        NavMotionDirection.FORWARD -> sonaSubPageExitToLeft()
+        NavMotionDirection.BACKWARD -> sonaSlideFadeExit(SonaNavMotion.EXIT_OFFSET_FRACTION)
         NavMotionDirection.NONE -> ExitTransition.None
     }
 }
 
 /**
  * Pop enter:
- * - BACKWARD: previous screen enters from left subtle recession (-8% -> 0% + fade in)
- * - FORWARD: previous screen enters from right (+8% -> 0% + fade in)
+ * - Peer root tabs: full-width horizontal translation without fade
+ * - Sub-pages: previous screen enters from left subtle recession (-8% -> 0%) + fade in
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopEnterTransition(): EnterTransition {
-    return when (resolveMotionDirection(isPop = true)) {
-        NavMotionDirection.BACKWARD -> {
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> -(fullWidth * SonaNavMotion.EXIT_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_IN_DURATION,
-                    easing = LinearOutSlowInEasing,
-                ),
-            )
-        }
-        NavMotionDirection.FORWARD -> {
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> (fullWidth * SonaNavMotion.EXIT_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.FADE_IN_DURATION,
-                    easing = LinearOutSlowInEasing,
-                ),
-            )
-        }
+    val direction = resolveMotionDirection(isPop = true)
+    if (isPeerTabTransition()) {
+        return peerTabEnterTransition(direction)
+    }
+    return when (direction) {
+        NavMotionDirection.BACKWARD -> sonaSubPageEnterFromLeft()
+        NavMotionDirection.FORWARD -> sonaSlideFadeEnter(SonaNavMotion.EXIT_OFFSET_FRACTION)
         NavMotionDirection.NONE -> EnterTransition.None
     }
 }
 
 /**
  * Pop exit:
- * - BACKWARD: exiting screen slides out to right with proportional exit (+18% offset + fade out)
- * - FORWARD: exiting screen slides out to left (-18% offset + fade out)
+ * - Peer root tabs: full-width horizontal translation without fade
+ * - Sub-pages: exiting screen slides out to right (+18% offset) + fade out
  */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopExitTransition(): ExitTransition {
-    return when (resolveMotionDirection(isPop = true)) {
-        NavMotionDirection.BACKWARD -> {
-            slideOutHorizontally(
-                targetOffsetX = { fullWidth -> (fullWidth * SonaNavMotion.ENTER_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.POP_EXIT_FADE_DURATION,
-                    easing = FastOutLinearInEasing,
-                ),
-            )
-        }
-        NavMotionDirection.FORWARD -> {
-            slideOutHorizontally(
-                targetOffsetX = { fullWidth -> -(fullWidth * SonaNavMotion.ENTER_OFFSET_FRACTION).toInt() },
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.SLIDE_DURATION,
-                    easing = SonaMotionEasing,
-                ),
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = SonaNavMotion.POP_EXIT_FADE_DURATION,
-                    easing = FastOutLinearInEasing,
-                ),
-            )
-        }
+    val direction = resolveMotionDirection(isPop = true)
+    if (isPeerTabTransition()) {
+        return peerTabExitTransition(direction)
+    }
+    return when (direction) {
+        NavMotionDirection.BACKWARD -> sonaSubPageExitToRight()
+        NavMotionDirection.FORWARD -> sonaSlideFadeExit(
+            offsetFraction = -SonaNavMotion.ENTER_OFFSET_FRACTION,
+            fadeDurationMillis = SonaNavMotion.POP_EXIT_FADE_DURATION,
+        )
         NavMotionDirection.NONE -> ExitTransition.None
     }
 }

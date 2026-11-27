@@ -1,7 +1,6 @@
 package com.sona.android.app.ui.component
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -57,6 +56,8 @@ fun Modifier.springOverscroll(
     enabled: Boolean = true,
     maxOverscroll: Dp = 80.dp,
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    enableTopOverscroll: Boolean = true,
+    enableBottomOverscroll: Boolean = true,
 ): Modifier = composed {
     if (!enabled) return@composed this
 
@@ -65,22 +66,26 @@ fun Modifier.springOverscroll(
     val coroutineScope = rememberCoroutineScope()
     val displacement = remember { Animatable(0f) }
 
-    val connection = remember(maxPx, scrollBehavior) {
+    val connection = remember(maxPx, scrollBehavior, enableTopOverscroll, enableBottomOverscroll) {
         object : NestedScrollConnection {
+            var targetDisplacement = 0f
+
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                val current = displacement.value
+                val current = targetDisplacement
                 if (current == 0f) return Offset.Zero
 
                 // When pulled down (>0) and dragging back up (<0)
                 if (current > 0f && available.y < 0f) {
                     val consumed = available.y.coerceAtLeast(-current)
-                    coroutineScope.launch { displacement.snapTo(current + consumed) }
+                    targetDisplacement = current + consumed
+                    coroutineScope.launch { displacement.snapTo(targetDisplacement) }
                     return Offset(0f, consumed)
                 }
                 // When pulled up (<0) and dragging back down (>0)
                 if (current < 0f && available.y > 0f) {
                     val consumed = available.y.coerceAtMost(-current)
-                    coroutineScope.launch { displacement.snapTo(current + consumed) }
+                    targetDisplacement = current + consumed
+                    coroutineScope.launch { displacement.snapTo(targetDisplacement) }
                     return Offset(0f, consumed)
                 }
                 return Offset.Zero
@@ -94,6 +99,12 @@ fun Modifier.springOverscroll(
                 if (source != NestedScrollSource.UserInput || available.y == 0f) {
                     return Offset.Zero
                 }
+                if (available.y > 0f && !enableTopOverscroll) {
+                    return Offset.Zero
+                }
+                if (available.y < 0f && !enableBottomOverscroll) {
+                    return Offset.Zero
+                }
                 // If scrolling downwards at the top while the top app bar is collapsed/expanding,
                 // allow the top app bar to fully expand before initiating downward overscroll stretch.
                 val topBarIsCollapsed = scrollBehavior != null && (scrollBehavior.state.collapsedFraction > 0.001f)
@@ -102,23 +113,27 @@ fun Modifier.springOverscroll(
                 }
 
                 val updated = calculateDampedOverscroll(
-                    currentDisplacement = displacement.value,
+                    currentDisplacement = targetDisplacement,
                     delta = available.y,
                     maxDisplacement = maxPx,
                 )
+                targetDisplacement = updated
                 coroutineScope.launch { displacement.snapTo(updated) }
                 // Never starve parent NestedScrollConnections (such as TopAppBarScrollBehavior)
                 return Offset.Zero
             }
+
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (displacement.value != 0f) {
+                if (targetDisplacement != 0f || displacement.value != 0f) {
+                    targetDisplacement = 0f
                     displacement.animateTo(0f, animationSpec = SonaOverscrollSpringSpec)
                 }
                 return Velocity.Zero
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                if (displacement.value != 0f) {
+                if (targetDisplacement != 0f || displacement.value != 0f) {
+                    targetDisplacement = 0f
                     displacement.animateTo(0f, animationSpec = SonaOverscrollSpringSpec)
                 }
                 return Velocity.Zero

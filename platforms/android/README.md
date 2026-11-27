@@ -205,30 +205,27 @@ CPU count, total memory, and free app storage determine local-runtime support an
 the recommended inference thread count; downloads are disabled below the minimum
 capability threshold.
 
-Recording is foreground-only. The first start requests microphone permission;
-a denial can be retried after the rationale, while a permanent denial offers a
-shortcut to the app's system settings and permission is checked again when the
-activity resumes. `ProcessLifecycleOwner` stops and saves an active recording
-when the application enters the background. Activity recreation such as device
-rotation does not stop it. After a successful stop, the recording screen keeps
-the saved result (including any audio-only warning) visible and allows another
-recording.
+Recording runs inside `RecordingForegroundService` with
+`FOREGROUND_SERVICE_TYPE_MICROPHONE` and notification controls (Pause, Resume,
+Stop). The first start requests microphone permission; a denial can be retried
+after the rationale, while a permanent denial offers a shortcut to the app's
+system settings and permission is checked again when the activity resumes.
+Activity recreation such as device rotation does not stop an active recording,
+and minimizing the recording sheet keeps a floating mini-bar and dock timer
+visible while browsing Library or Settings. After a successful stop, the
+recording screen keeps the saved result (including any audio-only warning)
+visible and allows another recording.
 
-The Home screen is the task center for live recording and single-file
-transcription. Both task cards show their current model and running state, and
-the screen previews the three most recent records. Each task opens its own
-workspace; active work is resumed there rather than stopped from Home.
-
-The Library screen reads recording history through a platform-neutral
-application port backed by the existing UniFFI history query functions. It
-shows draft and completed recordings newest-first, refreshes when the screen is
-opened or a recording completes, and loads additional pages as the user
-scrolls. File selection and import status live only in the file transcription
-workspace, so Library remains a results browser. Drafts remain visible instead
-of being silently removed. Selecting a
-row opens a transcript detail destination that loads the canonical persisted
-segments and presents a localized loading, empty, or retry state without
-exposing binding or database error text.
+The app launches into the Library screen paired with a floating bottom dock
+providing navigation (`Library` and `Settings`), quick audio-file import, and a
+global Record capsule. Library reads recording history through a
+platform-neutral application port backed by the existing UniFFI history query
+functions. It shows draft and completed recordings newest-first, refreshes when
+the screen is opened or a recording completes, and loads additional pages as
+the user scrolls. Drafts remain visible instead of being silently removed.
+Selecting a row opens a transcript detail destination that loads the canonical
+persisted segments and presents a localized loading, empty, or retry state
+without exposing binding or database error text.
 
 A recording detail can be re-transcribed through the current batch model slot.
 The recording's persisted audio file is sent to the selected online provider or

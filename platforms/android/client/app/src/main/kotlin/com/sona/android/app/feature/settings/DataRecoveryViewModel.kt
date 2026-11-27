@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class DataRecoveryErrorCategory {
+    BLOCKED,
+    OPERATION_FAILED,
+}
+
 data class DataRecoveryUiState(
     val recovery: RecoverySnapshot = RecoverySnapshot(1, null, emptyList()),
     val preparedBackup: PreparedBackupImport? = null,
@@ -26,6 +31,7 @@ data class DataRecoveryUiState(
     val busy: Boolean = false,
     val restoreGeneration: Int = 0,
     val error: String? = null,
+    val errorCategory: DataRecoveryErrorCategory? = null,
 )
 
 class DataRecoveryViewModel(
@@ -107,14 +113,26 @@ class DataRecoveryViewModel(
     private fun launchAction(requireIdle: Boolean = false, block: suspend () -> Unit) {
         if (mutableState.value.busy) return
         if (requireIdle && mutableState.value.blockers.isNotEmpty()) {
-            mutableState.update { it.copy(error = "Stop active work before using backups.") }
+            mutableState.update {
+                it.copy(
+                    error = "Stop active work before using backups.",
+                    errorCategory = DataRecoveryErrorCategory.BLOCKED,
+                )
+            }
             return
         }
-        mutableState.update { it.copy(busy = true, error = null) }
+        mutableState.update { it.copy(busy = true, error = null, errorCategory = null) }
         viewModelScope.launch {
             try { block() }
             catch (error: CancellationException) { throw error }
-            catch (_: Exception) { mutableState.update { it.copy(error = "Data operation failed.") } }
+            catch (_: Exception) {
+                mutableState.update {
+                    it.copy(
+                        error = "Data operation failed.",
+                        errorCategory = DataRecoveryErrorCategory.OPERATION_FAILED,
+                    )
+                }
+            }
             finally { mutableState.update { it.copy(busy = false) } }
         }
     }

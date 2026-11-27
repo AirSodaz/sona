@@ -1,5 +1,6 @@
 package com.sona.android.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -7,9 +8,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.os.LocaleListCompat
+import kotlinx.coroutines.launch
+import com.sona.android.adapters.android.audio.EXTRA_AUDIO_IMPORT_HISTORY_ID
 import com.sona.android.app.composition.SonaAppContainer
 import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
 import com.sona.android.app.feature.library.LibraryViewModel
@@ -35,9 +41,11 @@ class MainActivity : AppCompatActivity() {
     private val container: SonaAppContainer by lazy {
         (application as SonaApplication).container
     }
+    private var pendingOpenHistoryId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        consumeOpenHistoryIntent(intent)
         enableEdgeToEdge()
         setContent {
             val bootstrapViewModel: SonaBootstrapViewModel = viewModel(
@@ -197,10 +205,14 @@ class MainActivity : AppCompatActivity() {
                 onTrashLibrarySelection = libraryViewModel::trashSelected,
                 onRestoreLibrarySelection = libraryViewModel::restoreSelected,
                 onPurgeLibrarySelection = libraryViewModel::purgeSelected,
+                onTrashLibraryItem = libraryViewModel::trashItem,
+                onRestoreLibraryItem = libraryViewModel::restoreItem,
                 onMoveSelectedToProject = libraryViewModel::setProjectForSelected,
                 onUpdateHistoryTitle = libraryViewModel::updateTitle,
                 onUpdateHistoryProject = libraryViewModel::updateItemProject,
                 onCreateHistoryProject = libraryViewModel::createProject,
+                onRenameHistoryProject = libraryViewModel::renameProject,
+                onDeleteHistoryProject = libraryViewModel::deleteProject,
                 onLoadTranscriptSnapshot = libraryViewModel::loadSnapshot,
                 onSummarizeLibrary = libraryViewModel::summarizeCurrent,
                 onTranslateLibrary = libraryViewModel::translateCurrent,
@@ -226,10 +238,14 @@ class MainActivity : AppCompatActivity() {
                 onRedoTranscriptEdit = libraryViewModel::redoEdit,
                 onSaveTranscriptEdit = libraryViewModel::saveEdit,
                 onDiscardTranscriptEdit = libraryViewModel::discardEdit,
-                onFlushTranscriptEdit = libraryViewModel::flushEditDraft,
+                onFlushTranscriptEdit = libraryViewModel::persistEditDraft,
+                pendingOpenHistoryId = pendingOpenHistoryId,
+                onPendingOpenHistoryIdConsumed = { pendingOpenHistoryId = null },
                 onTranscribeWithCloud = libraryViewModel::transcribeWithCloud,
                 onImportAudio = libraryViewModel::importAudio,
                 onCancelAudioImport = libraryViewModel::cancelAudioImport,
+                onCancelAudioImportJob = libraryViewModel::cancelAudioImportJob,
+                onDismissFailedAudioImport = libraryViewModel::dismissAudioImportFailure,
                 onTranscribeWithCurrentEngine = libraryViewModel::transcribeWithCurrentEngine,
                 onCloudProviderSelected = cloudTranscriptionViewModel::selectProvider,
                 onCloudApiKeyInputChanged = cloudTranscriptionViewModel::onApiKeyInputChanged,
@@ -276,9 +292,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeOpenHistoryIntent(intent)
+    }
+
     override fun onResume() {
         super.onResume()
-        container.syncWork.scheduleImmediate()
+        lifecycleScope.launch {
+            val syncState = runCatching { container.syncOperations.status().state }.getOrNull()
+            if (syncState != null && syncState !in setOf(
+                    SyncLifecycleState.DISABLED,
+                    SyncLifecycleState.LOCKED,
+                    SyncLifecycleState.PAUSED,
+                    SyncLifecycleState.SYNCING,
+                )
+            ) {
+                container.syncWork.scheduleImmediate()
+            }
+        }
+    }
+
+    private fun consumeOpenHistoryIntent(intent: Intent?) {
+        val historyId = intent?.getStringExtra(EXTRA_AUDIO_IMPORT_HISTORY_ID)
+            ?.takeIf(String::isNotBlank)
+            ?: return
+        pendingOpenHistoryId = historyId
+        intent.removeExtra(EXTRA_AUDIO_IMPORT_HISTORY_ID)
     }
 
     private fun currentAppLanguage(): AppLanguage = AppLanguage.fromLanguageTags(

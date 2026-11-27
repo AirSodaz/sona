@@ -32,6 +32,13 @@ import com.sona.android.application.media.AudioPlaybackState
 import com.sona.android.application.recovery.TranscriptEditDraft
 import com.sona.android.application.recovery.TranscriptEditRecoveryPort
 import com.sona.android.application.recording.ActiveBatchCredential
+import com.sona.android.application.recording.AudioImportFailure
+import com.sona.android.application.recording.AudioImportJob
+import com.sona.android.application.recording.AudioImportJobPort
+import com.sona.android.application.recording.AudioImportJobState
+import com.sona.android.application.recording.AudioImportQueueState
+import com.sona.android.application.recording.AudioImportTask
+import com.sona.android.application.recording.AudioImportTaskStatus
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
@@ -71,6 +78,7 @@ class LibraryViewModelTest {
         viewModel.loadTranscript("history-1")
         advanceUntilIdle()
         viewModel.startEditing("history-1")
+        assertEquals(null, viewModel.state.value.editor.editingSegmentId)
         viewModel.updateSegmentText("segment-1", "Edited")
         runCurrent()
         assertEquals("Edited", viewModel.state.value.editor.draftSegments.single().text)
@@ -90,6 +98,26 @@ class LibraryViewModelTest {
         assertEquals("Edited", editor.committed?.editedSegments?.single()?.text)
         assertFalse(viewModel.state.value.editor.active)
         assertEquals(listOf("history-1"), recovery.discarded)
+    }
+
+    @Test
+    fun `persistEditDraft saves recovery draft without committing unconfirmed transcript`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1")
+        viewModel.updateSegmentText("segment-1", "Draft only")
+        runCurrent()
+        viewModel.persistEditDraft()
+        runCurrent()
+
+        assertEquals("Draft only", recovery.saved.single().draftSegments.single().text)
+        assertTrue(editor.commits.isEmpty())
+        assertTrue(viewModel.state.value.editor.dirty)
     }
 
     @Test
@@ -557,6 +585,80 @@ class LibraryViewModelTest {
         assertEquals(TranscriptExportMode.BILINGUAL, exporter.request?.mode)
         assertEquals(listOf("/cache/sona-transcript.vtt" to "content://destination"), files.published)
         assertEquals(listOf("/cache/sona-transcript.vtt"), files.cleaned)
+    }
+
+    @Test
+    fun `dismissAudioImportFailure hides failed task and cancels underlying job`() = runTest {
+        val queueFlow = MutableStateFlow(
+            AudioImportQueueState(
+                tasks = listOf(
+                    AudioImportTask(
+                        jobId = "job-1",
+                        displayName = "broken.wav",
+                        status = AudioImportTaskStatus.FAILED,
+                        failure = AudioImportFailure.UNSUPPORTED_AUDIO,
+                    ),
+                ),
+            ),
+        )
+        val cancelledIds = mutableListOf<String>()
+        val importJobs = object : AudioImportJobPort {
+            override val state = MutableStateFlow<AudioImportJobState>(
+                AudioImportJobState.Failed("job-1", AudioImportFailure.UNSUPPORTED_AUDIO),
+            )
+            override val queueState = queueFlow
+            override suspend fun enqueue(job: AudioImportJob) = Unit
+            override suspend fun cancel(jobId: String) {
+                cancelledIds += jobId
+            }
+        }
+        val viewModel = LibraryViewModel(
+            library = FakeLibraryPort(),
+            transcribeRecordingWithCloud = TranscribeRecordingWithCloud(
+                credentials = { null },
+                transcription = { throw AssertionError("must not transcribe") },
+                history = FakeHistoryPort(),
+            ),
+            audioImportJobs = importJobs,
+            projects = FakeProjectWorkspace,
+            exporter = TranscriptExportPort { error("must not export") },
+            files = FakeFileTransfer,
+        )
+        runCurrent()
+        assertEquals(1, viewModel.state.value.audioImportQueue.tasks.size)
+
+        viewModel.dismissAudioImportFailure("job-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.audioImportQueue.tasks.isEmpty())
+        assertEquals(AudioImportJobState.Idle, viewModel.state.value.audioImport)
+        assertEquals(listOf("job-1"), cancelledIds)
+    }
+
+    @Test
+    fun `reloading the same transcript preserves active editing state and undo history`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1", "segment-1")
+        viewModel.updateSegmentText("segment-1", "Edited in memory")
+        runCurrent()
+
+        viewModel.loadTranscript("history-1")
+        runCurrent()
+
+        assertTrue(viewModel.state.value.editor.active)
+        assertTrue(viewModel.state.value.editor.dirty)
+        assertTrue(viewModel.state.value.editor.undoAvailable)
+        assertEquals("segment-1", viewModel.state.value.editor.editingSegmentId)
+        assertEquals("Edited in memory", viewModel.state.value.editor.draftSegments.single().text)
+
+        viewModel.undoEdit()
+        assertEquals("Hello", viewModel.state.value.editor.draftSegments.single().text)
     }
 
     private fun libraryViewModel(

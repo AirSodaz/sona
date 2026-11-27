@@ -12,6 +12,7 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.lerp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 
@@ -21,10 +22,10 @@ import androidx.compose.ui.unit.sp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun sonaCollapsibleTopAppBarColors(): TopAppBarColors = TopAppBarDefaults.largeTopAppBarColors(
+fun sonaCollapsibleTopAppBarColors(): TopAppBarColors = TopAppBarDefaults.topAppBarColors(
     containerColor = MaterialTheme.colorScheme.background,
     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-    titleContentColor = MaterialTheme.colorScheme.primary,
+    titleContentColor = MaterialTheme.colorScheme.onSurface,
     navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
 )
@@ -47,7 +48,17 @@ fun SonaCollapsibleTopAppBar(
     colors: TopAppBarColors = sonaCollapsibleTopAppBarColors(),
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
 ) {
-    val collapsedFraction = scrollBehavior?.state?.collapsedFraction ?: 0f
+    val collapsedFraction = (scrollBehavior?.state?.collapsedFraction ?: 0f).coerceIn(0f, 1f)
+    val expandedStyle = MaterialTheme.typography.headlineLarge.copy(
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
+        fontWeight = FontWeight.Bold,
+    )
+    val collapsedStyle = MaterialTheme.typography.titleLarge.copy(
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
 
     LargeTopAppBar(
         title = {
@@ -55,17 +66,7 @@ fun SonaCollapsibleTopAppBar(
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = if (collapsedFraction > 0.45f) {
-                    MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                } else {
-                    MaterialTheme.typography.headlineLarge.copy(
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
+                style = lerp(expandedStyle, collapsedStyle, collapsedFraction),
             )
         },
         modifier = modifier,

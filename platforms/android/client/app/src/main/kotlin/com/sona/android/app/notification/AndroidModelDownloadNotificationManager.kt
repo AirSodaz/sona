@@ -40,7 +40,7 @@ class AndroidModelDownloadNotificationManager(
             )
         }
         val builder = NotificationCompat.Builder(appContext, SonaNotificationChannels.CHANNEL_TASKS)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification_recording)
             .setContentTitle(model.displayName)
             .setContentIntent(contentIntent)
             .setOnlyAlertOnce(true)

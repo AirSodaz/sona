@@ -81,6 +81,7 @@ class SyncSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Sync operation failed.", viewModel.state.value.error)
+        assertEquals(SyncUiError.OPERATION_FAILED, viewModel.state.value.errorCategory)
         assertFalse(viewModel.state.value.toString().contains("bearer-secret"))
     }
 
@@ -99,6 +100,35 @@ class SyncSettingsViewModelTest {
     }
 
     @Test
+    fun `discoverVaults callback runs after busy resets so create and join succeed`() = runTest {
+        val sync = FakeSyncPort()
+        val scheduler = FakeScheduler()
+        val viewModel = SyncSettingsViewModel(sync, scheduler, FakeFiles)
+        val provider = WebDavSyncProvider("https://dav.example", "Sona", "u", "p")
+
+        viewModel.discoverVaults(provider) { vaults ->
+            if (vaults.isEmpty()) {
+                viewModel.create(provider, SyncPreset.STANDARD, "master", "default", true)
+            }
+        }
+        advanceUntilIdle()
+
+        assertEquals(1, sync.createCalls)
+        assertEquals(1, scheduler.periodic)
+
+        sync.discovered = listOf(DiscoveredVaultSummary("vault-1", SyncPreset.STANDARD))
+        viewModel.discoverVaults(provider) { vaults ->
+            if (vaults.size == 1) {
+                viewModel.join(provider, vaults[0].vaultId, "master")
+            }
+        }
+        advanceUntilIdle()
+
+        assertEquals(1, sync.joinCalls)
+        assertEquals(2, scheduler.periodic)
+    }
+
+    @Test
     fun `applyPairingToken decodes and populates notice`() = runTest {
         val viewModel = SyncSettingsViewModel(FakeSyncPort(), FakeScheduler(), FakeFiles)
         val token = encodeSyncPairingToken("https://dav.example", "Sona", "alice", "vault-9")
@@ -107,6 +137,7 @@ class SyncSettingsViewModelTest {
         assertNotNull(payload)
         assertEquals("https://dav.example", payload?.serverUrl)
         assertEquals("vault-9", payload?.vaultId)
+        assertEquals("vault-9", viewModel.state.value.pairingImportedVaultId)
         assertNotNull(viewModel.state.value.pairingSuccessNotice)
     }
 
@@ -123,6 +154,8 @@ class SyncSettingsViewModelTest {
     private class FakeSyncPort : SyncPort {
         var current = status(SyncLifecycleState.IDLE)
         var runCalls = 0
+        var createCalls = 0
+        var joinCalls = 0
         var failure: Exception? = null
         override suspend fun status(): SyncStatus = failure?.let { throw it } ?: current
         var discovered = emptyList<DiscoveredVaultSummary>()
@@ -135,7 +168,10 @@ class SyncSettingsViewModelTest {
             masterPassword: String,
             vaultId: String?,
             createRecoveryKey: Boolean,
-        ) = SyncCreateResult(vaultId ?: "vault", "device", if (createRecoveryKey) "recovery-key" else null, current)
+        ): SyncCreateResult {
+            createCalls += 1
+            return SyncCreateResult(vaultId ?: "vault", "device", if (createRecoveryKey) "recovery-key" else null, current)
+        }
         override suspend fun setPaused(paused: Boolean): SyncStatus = status(
             if (paused) SyncLifecycleState.PAUSED else SyncLifecycleState.IDLE,
         ).also { current = it }
@@ -145,7 +181,10 @@ class SyncSettingsViewModelTest {
         }
         override suspend fun testProvider(provider: WebDavSyncProvider) = "WebDAV"
         override suspend fun previewJoin(provider: WebDavSyncProvider, vaultId: String, masterPassword: String) = SyncJoinPreview(0, 0, 0)
-        override suspend fun join(provider: WebDavSyncProvider, vaultId: String, masterPassword: String) = SyncRunResult(0, 0, 0, 0, 0)
+        override suspend fun join(provider: WebDavSyncProvider, vaultId: String, masterPassword: String): SyncRunResult {
+            joinCalls += 1
+            return SyncRunResult(0, 0, 0, 0, 0)
+        }
         override suspend fun unlock(providerPassword: String, masterPassword: String) = current
         override suspend fun unlockWithRecovery(providerPassword: String, recoveryKey: String) = current
         override suspend fun lock() = Unit
