@@ -1970,6 +1970,10 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
+    const filterBtn = screen.getByRole('button', { name: 'Filter' });
+    expect(filterBtn.className).toContain('btn-ghost');
+    expect(filterBtn.className).not.toContain('btn-secondary');
+
     openFilterMenu();
     screen.getByText('Refine the current workspace view by type or time.');
 
@@ -1993,6 +1997,10 @@ describe('ProjectsView', () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
+
+    const filterBtn = screen.getByRole('button', { name: 'Filter' });
+    expect(filterBtn.className).toContain('btn-ghost');
+    expect(filterBtn.className).not.toContain('btn-secondary');
 
     openFilterMenu();
     expect(screen.getByRole('dialog', { name: 'Filter' })).toBeTruthy();

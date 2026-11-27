@@ -98,7 +98,7 @@ export function ProjectsToolbar({
 
         <div className="projects-filter-menu" ref={filterMenuRef}>
           <Button
-            tier="secondary"
+            tier="ghost"
             size="md"
             active={isFilterMenuOpen}
             className={`projects-filter-trigger ${hasActiveFilters ? 'has-active' : ''}`}

@@ -1,4 +1,4 @@
-import { Mic, Monitor, Pause, Play, Square } from 'lucide-react';
+import { Mic, Monitor, Pause, Play } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -327,6 +327,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     isTransitioning,
   ]);
 
+  const isPrimaryLocked = isAgentRecording && !isRecording;
+  const agentLockedLabel = t('live.agent_recording_locked', {
+    defaultValue: 'AI Agent recording in progress',
+  });
+
   return (
     <div className={`live-record-container ${className}`}>
       <div className="live-record-main-content">
@@ -343,73 +348,82 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         <RecordingTimer elapsedMs={recordingElapsedMs} isRecording={isRecording} />
 
-        <div className="record-controls">
-          {!isRecording ? (
+        <div
+          className={`record-controls ${isRecording ? 'is-recording' : ''} ${isPaused ? 'is-paused' : ''}`}
+        >
+          <div
+            className={`record-pause-slot ${isRecording ? 'is-open' : ''}`}
+            aria-hidden={!isRecording}
+          >
             <Tooltip
-              content={
-                isAgentRecording
-                  ? t('live.agent_recording_locked', {
-                      defaultValue: 'AI Agent recording in progress',
-                    })
+              content={isPaused ? t('live.resume') : t('live.pause')}
+              placement="bottom"
+              disabled={!isRecording}
+            >
+              <button
+                type="button"
+                className={`control-button pause ${isPaused ? 'is-paused' : ''}`}
+                onClick={handleTogglePause}
+                disabled={!isRecording || isInitializing || isTransitioning}
+                tabIndex={isRecording ? 0 : -1}
+                aria-label={isPaused ? t('live.resume') : t('live.pause')}
+              >
+                <span className="control-button-pause-icons" aria-hidden="true">
+                  <span className={`control-button-pause-icon ${!isPaused ? 'is-visible' : ''}`}>
+                    <Pause size={24} fill="currentColor" />
+                  </span>
+                  <span className={`control-button-play-icon ${isPaused ? 'is-visible' : ''}`}>
+                    <Play size={24} fill="currentColor" />
+                  </span>
+                </span>
+              </button>
+            </Tooltip>
+          </div>
+
+          <Tooltip
+            content={
+              isRecording
+                ? t('live.stop')
+                : isPrimaryLocked
+                  ? agentLockedLabel
                   : isInitializing
                     ? 'Initializing...'
                     : t('live.start_recording')
-              }
-              placement="bottom"
-              triggerDisabled={isInitializing || isTransitioning || isAgentRecording}
+            }
+            placement="bottom"
+          >
+            <div
+              className={`record-primary-slot ${isPrimaryLocked ? 'is-locked' : ''}`.trim()}
+              tabIndex={isPrimaryLocked ? 0 : undefined}
+              role={isPrimaryLocked ? 'group' : undefined}
+              aria-label={isPrimaryLocked ? agentLockedLabel : undefined}
             >
               <button
                 ref={startButtonRef}
-                className="control-button start"
+                type="button"
+                className={[
+                  'control-button',
+                  isRecording ? 'stop' : 'start',
+                  isInitializing || isTransitioning ? 'is-preparing' : '',
+                  isPaused ? 'is-paused' : '',
+                  isPrimaryLocked ? 'is-locked' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={handleToggleRecording}
-                disabled={isInitializing || isTransitioning || isAgentRecording}
+                disabled={isInitializing || isTransitioning || isPrimaryLocked}
                 aria-label={
-                  isAgentRecording
-                    ? t('live.agent_recording_locked', {
-                        defaultValue: 'AI Agent recording in progress',
-                      })
-                    : t('live.start_recording')
-                }
-                style={
-                  isAgentRecording
-                    ? { opacity: 0.5, cursor: 'not-allowed' }
-                    : isInitializing || isTransitioning
-                      ? { opacity: 0.7, cursor: 'wait' }
-                      : {}
+                  isRecording
+                    ? t('live.stop')
+                    : isPrimaryLocked
+                      ? agentLockedLabel
+                      : t('live.start_recording')
                 }
               >
                 <div className="control-button-inner" />
               </button>
-            </Tooltip>
-          ) : (
-            <>
-              <Tooltip content={isPaused ? t('live.resume') : t('live.pause')} placement="bottom">
-                <button
-                  className="control-button pause"
-                  onClick={handleTogglePause}
-                  disabled={isInitializing || isTransitioning}
-                  aria-label={isPaused ? t('live.resume') : t('live.pause')}
-                >
-                  {isPaused ? (
-                    <Play size={24} fill="currentColor" aria-hidden="true" />
-                  ) : (
-                    <Pause size={24} fill="currentColor" aria-hidden="true" />
-                  )}
-                </button>
-              </Tooltip>
-
-              <Tooltip content={t('live.stop')} placement="bottom">
-                <button
-                  className="control-button stop"
-                  onClick={handleToggleRecording}
-                  disabled={isInitializing || isTransitioning}
-                  aria-label={t('live.stop')}
-                >
-                  <Square size={28} fill="white" color="white" aria-hidden="true" />
-                </button>
-              </Tooltip>
-            </>
-          )}
+            </div>
+          </Tooltip>
         </div>
 
         {!isRecording && (

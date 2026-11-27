@@ -11,6 +11,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptStore as useCanonicalTranscriptStore } from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
@@ -365,6 +366,7 @@ describe('LiveRecord', () => {
         title: '',
         icon: null,
       });
+      useTranscriptRuntimeStore.setState({ isAgentRecording: false });
       useOnboardingStore.setState({
         persistedState: { version: 1, status: 'pending' },
         currentStep: 'microphone',
@@ -378,15 +380,22 @@ describe('LiveRecord', () => {
   });
 
   it('should start recording when Start button is clicked', async () => {
-    render(<LiveRecord />);
+    const { container } = render(<LiveRecord />);
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+    const pauseSlot = container.querySelector('.record-pause-slot');
+    expect(pauseSlot?.className).not.toContain('is-open');
+    expect(pauseSlot?.getAttribute('aria-hidden')).toBe('true');
 
     await act(async () => {
       fireEvent.click(startBtn);
       await vi.advanceTimersByTimeAsync(100);
     });
 
-    expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
+    const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+    expect(stopBtn).toBe(startBtn);
+    expect(stopBtn.className).toContain('stop');
+    expect(pauseSlot?.className).toContain('is-open');
+    expect(pauseSlot?.getAttribute('aria-hidden')).toBe('false');
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     expect(useTranscriptStore.getState().isRecording).toBe(true);
     expect(useTranscriptStore.getState().sourceHistoryId).toEqual(expect.any(String));
@@ -396,6 +405,98 @@ describe('LiveRecord', () => {
       'system:mic',
       expect.any(String)
     );
+  });
+
+  it('shows preparing transition class and toggles pause animation state without remounting primary button', async () => {
+    let resolveStart: (() => void) | undefined;
+    mockStart.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStart = resolve;
+        })
+    );
+
+    const { container } = render(<LiveRecord />);
+    const primaryBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+    await act(async () => {
+      fireEvent.click(primaryBtn);
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).toContain('is-preparing');
+    expect((primaryBtn as HTMLButtonElement).style.opacity).toBe('');
+
+    await act(async () => {
+      resolveStart?.();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(primaryBtn.className).toContain('stop');
+    expect(primaryBtn.className).not.toContain('is-preparing');
+    expect(primaryBtn.className).not.toContain('is-paused');
+
+    const pauseBtn = screen.getByRole('button', { name: /live.pause/i });
+    await act(async () => {
+      fireEvent.click(pauseBtn);
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).toContain('is-paused');
+    expect(container.querySelector('.control-button-play-icon')?.className).toContain('is-visible');
+    expect(container.querySelector('.control-button-pause-icon')?.className).not.toContain(
+      'is-visible'
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).not.toContain('is-paused');
+    expect(container.querySelector('.control-button-pause-icon')?.className).toContain(
+      'is-visible'
+    );
+  });
+
+  it('closes the pause tooltip when recording stops and exposes locked focus slot for agent recording', async () => {
+    const { container } = render(<LiveRecord />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    const pauseBtn = screen.getByRole('button', { name: /live.pause/i });
+    fireEvent.focus(pauseBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('live.pause');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    act(() => {
+      useTranscriptRuntimeStore.setState({ isAgentRecording: true });
+    });
+
+    const lockedSlot = container.querySelector('.record-primary-slot') as HTMLElement | null;
+    expect(lockedSlot).not.toBeNull();
+    expect(lockedSlot?.className).toContain('is-locked');
+    expect(lockedSlot?.getAttribute('tabindex')).toBe('0');
+    expect(lockedSlot?.getAttribute('role')).toBe('group');
+    expect(lockedSlot?.getAttribute('aria-label')).toBe('live.agent_recording_locked');
+
+    if (lockedSlot) {
+      fireEvent.focus(lockedSlot);
+    }
+    expect(screen.getByRole('tooltip').textContent).toBe('live.agent_recording_locked');
+
+    act(() => {
+      useTranscriptRuntimeStore.setState({ isAgentRecording: false });
+    });
   });
 
   it('pauses native recording by flushing the current final segment and blocks later partials until resume', async () => {
