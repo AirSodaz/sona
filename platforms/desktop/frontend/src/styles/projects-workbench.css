@@ -801,16 +801,10 @@
 .projects-workbench .projects-filter-trigger {
   min-inline-size: 36px;
   min-block-size: 36px;
-  padding: 0 12px;
-  border-color: var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
+  padding: 0 10px;
 }
 
-.projects-workbench .projects-filter-trigger:hover:not(:disabled),
-.projects-workbench .projects-filter-trigger:is(.active, .is-active):not(:disabled) {
-  border-color: var(--color-border-hover);
-  background: var(--color-bg-hover);
+.projects-workbench .projects-filter-trigger.has-active:not(:disabled) {
   color: var(--color-text-primary);
 }
 

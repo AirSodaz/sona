@@ -41,6 +41,7 @@ describe('locale resources', () => {
       'common.copy',
       'common.paste',
       'common.select_all',
+      'common.more_options',
       'editor.context_menu_label',
       'editor.bold',
       'editor.italic',

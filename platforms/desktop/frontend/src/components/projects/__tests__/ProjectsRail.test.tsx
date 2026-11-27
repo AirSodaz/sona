@@ -150,4 +150,21 @@ describe('ProjectsRail', () => {
         .querySelector('.projects-rail-active-badge')
     ).not.toBeNull();
   });
+
+  it('uses localized common.more_options label for rail item menu buttons', () => {
+    render(
+      <ProjectsRail
+        {...defaultProps}
+        t={(key, options) =>
+          key === 'common.more_options'
+            ? '更多选项'
+            : typeof options?.defaultValue === 'string'
+              ? options.defaultValue
+              : key
+        }
+      />
+    );
+
+    expect(screen.getAllByRole('button', { name: '更多选项' })).toHaveLength(2);
+  });
 });

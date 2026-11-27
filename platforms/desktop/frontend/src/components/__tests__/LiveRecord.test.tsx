@@ -378,15 +378,22 @@ describe('LiveRecord', () => {
   });
 
   it('should start recording when Start button is clicked', async () => {
-    render(<LiveRecord />);
+    const { container } = render(<LiveRecord />);
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+    const pauseSlot = container.querySelector('.record-pause-slot');
+    expect(pauseSlot?.className).not.toContain('is-open');
+    expect(pauseSlot?.getAttribute('aria-hidden')).toBe('true');
 
     await act(async () => {
       fireEvent.click(startBtn);
       await vi.advanceTimersByTimeAsync(100);
     });
 
-    expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
+    const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+    expect(stopBtn).toBe(startBtn);
+    expect(stopBtn.className).toContain('stop');
+    expect(pauseSlot?.className).toContain('is-open');
+    expect(pauseSlot?.getAttribute('aria-hidden')).toBe('false');
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     expect(useTranscriptStore.getState().isRecording).toBe(true);
     expect(useTranscriptStore.getState().sourceHistoryId).toEqual(expect.any(String));
@@ -395,6 +402,58 @@ describe('LiveRecord', () => {
       null,
       'system:mic',
       expect.any(String)
+    );
+  });
+
+  it('shows preparing transition class and toggles pause animation state without remounting primary button', async () => {
+    let resolveStart: (() => void) | undefined;
+    mockStart.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStart = resolve;
+        })
+    );
+
+    const { container } = render(<LiveRecord />);
+    const primaryBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+    await act(async () => {
+      fireEvent.click(primaryBtn);
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).toContain('is-preparing');
+    expect((primaryBtn as HTMLButtonElement).style.opacity).toBe('');
+
+    await act(async () => {
+      resolveStart?.();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(primaryBtn.className).toContain('stop');
+    expect(primaryBtn.className).not.toContain('is-preparing');
+    expect(primaryBtn.className).not.toContain('is-paused');
+
+    const pauseBtn = screen.getByRole('button', { name: /live.pause/i });
+    await act(async () => {
+      fireEvent.click(pauseBtn);
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).toContain('is-paused');
+    expect(container.querySelector('.control-button-play-icon')?.className).toContain('is-visible');
+    expect(container.querySelector('.control-button-pause-icon')?.className).not.toContain(
+      'is-visible'
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+      await Promise.resolve();
+    });
+
+    expect(primaryBtn.className).not.toContain('is-paused');
+    expect(container.querySelector('.control-button-pause-icon')?.className).toContain(
+      'is-visible'
     );
   });
 
