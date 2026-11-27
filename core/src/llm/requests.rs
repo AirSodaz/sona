@@ -24,6 +24,10 @@ pub struct LlmConfig {
     pub model: String,
     pub api_path: Option<String>,
     pub api_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_region: Option<String>,
     #[cfg_attr(
         feature = "specta",
         specta(type = Option<specta_typescript::Number>)
@@ -48,6 +52,10 @@ struct RawLlmConfig {
     model: String,
     api_path: Option<String>,
     api_version: Option<String>,
+    #[serde(default)]
+    app_id: Option<String>,
+    #[serde(default)]
+    api_region: Option<String>,
     temperature: Option<f32>,
     reasoning_enabled: Option<bool>,
     reasoning_level: Option<String>,
@@ -70,6 +78,8 @@ impl<'de> Deserialize<'de> for LlmConfig {
             model: raw.model,
             api_path: raw.api_path,
             api_version: raw.api_version,
+            app_id: raw.app_id,
+            api_region: raw.api_region,
             temperature: raw.temperature,
             reasoning_enabled: raw.reasoning_enabled,
             reasoning_level: raw.reasoning_level,
@@ -88,6 +98,8 @@ impl Default for LlmConfig {
             model: String::new(),
             api_path: None,
             api_version: None,
+            app_id: None,
+            api_region: None,
             temperature: None,
             reasoning_enabled: None,
             reasoning_level: None,
@@ -157,17 +169,8 @@ pub fn validate_polish_segments_request(
 ) -> Result<(), LlmRequestValidationError> {
     validate_task_request(&request.task_id, &request.config)?;
 
-    if matches!(
-        request.config.strategy,
-        LlmProviderStrategy::GoogleTranslate
-            | LlmProviderStrategy::GoogleTranslateFree
-            | LlmProviderStrategy::LocalNmt
-    ) {
-        let name = if request.config.strategy == LlmProviderStrategy::LocalNmt {
-            "Local NMT"
-        } else {
-            "Google Translate"
-        };
+    if request.config.strategy.is_translation_only() {
+        let name = request.config.strategy.translation_only_display_name();
         return Err(LlmRequestValidationError::new(
             "strategy",
             format!("{name} does not support transcript polishing"),

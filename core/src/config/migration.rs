@@ -1990,11 +1990,25 @@ fn normalize_provider(value: Option<&Value>) -> String {
     normalize_provider_str(provider)
 }
 
+fn is_translation_only_provider(provider: &str) -> bool {
+    matches!(
+        provider,
+        "google_translate"
+            | "google_translate_free"
+            | "deepl"
+            | "microsoft_translator"
+            | "libre_translate"
+            | "deeplx"
+            | "baidu_translate"
+            | "youdao_translate"
+    )
+}
+
 fn normalize_provider_str(provider: &str) -> String {
     if is_custom_provider_id(provider) {
         return provider.to_string();
     }
-    if provider == "google_translate" || provider == "google_translate_free" {
+    if is_translation_only_provider(provider) {
         return provider.to_string();
     }
     if provider == "openai_compatible" || provider == "open_ai_compatible" {
@@ -2049,22 +2063,18 @@ fn provider_defaults(
         return defaults;
     }
 
-    if provider == "google_translate_free" {
+    if is_translation_only_provider(provider) {
         let mut defaults = Map::new();
-        defaults.insert(
-            "apiHost".to_string(),
-            json!("https://translate.googleapis.com/translate_a/single"),
-        );
-        defaults.insert("apiKey".to_string(), json!(""));
-        return defaults;
-    }
-
-    if provider == "google_translate" {
-        let mut defaults = Map::new();
-        defaults.insert(
-            "apiHost".to_string(),
-            json!("https://translation.googleapis.com/language/translate/v2"),
-        );
+        let default_host = match provider {
+            "google_translate_free" => "https://translate.googleapis.com/translate_a/single",
+            "google_translate" => "https://translation.googleapis.com/language/translate/v2",
+            "deepl" => "https://api-free.deepl.com",
+            "microsoft_translator" => "https://api.cognitive.microsofttranslator.com",
+            "baidu_translate" => "https://fanyi-api.baidu.com/api/trans/vip/translate",
+            "youdao_translate" => "https://openapi.youdao.com/api",
+            _ => "",
+        };
+        defaults.insert("apiHost".to_string(), json!(default_host));
         defaults.insert("apiKey".to_string(), json!(""));
         return defaults;
     }
@@ -2104,7 +2114,14 @@ fn sanitize_provider_setting(
 
     let mut merged = defaults;
     if let Some(setting_object) = setting.and_then(|value| value.as_object().cloned()) {
-        for key in ["apiHost", "apiKey", "apiPath", "apiVersion"] {
+        for key in [
+            "apiHost",
+            "apiKey",
+            "apiPath",
+            "apiVersion",
+            "appId",
+            "apiRegion",
+        ] {
             if let Some(value) = setting_object.get(key) {
                 merged.insert(key.to_string(), value.clone());
             }
@@ -2426,10 +2443,7 @@ fn normalize_stored_selections(
                 .and_then(|m| m.get("provider"))
                 .and_then(Value::as_str);
             if matches!(key, "polishModelId" | "summaryModelId")
-                && matches!(
-                    model_provider,
-                    Some("google_translate" | "google_translate_free")
-                )
+                && model_provider.is_some_and(is_translation_only_provider)
             {
                 continue;
             }
@@ -2523,7 +2537,7 @@ fn bootstrap_missing_model_selections(
         "/selections/translationModelId",
         json!(model_id.clone()),
     );
-    if provider != "google_translate" && provider != "google_translate_free" {
+    if !is_translation_only_provider(&provider) {
         set_pointer(&mut settings, "/selections/polishModelId", json!(model_id));
     }
     settings
@@ -2570,7 +2584,7 @@ fn ensure_summary_model_selection(mut settings: Value) -> Value {
     else {
         return settings;
     };
-    if provider != "google_translate" && provider != "google_translate_free" {
+    if !is_translation_only_provider(&provider) {
         set_pointer(
             &mut settings,
             "/selections/summaryModelId",

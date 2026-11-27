@@ -12,16 +12,26 @@ import type {
 
 export interface LlmProviderDefinition {
   id: LlmProvider;
+  category?: 'llm' | 'translation';
   labelKey: string;
   labelDefault: string;
   strategy: LlmProviderStrategy;
   defaultApiHost: string;
+  apiHostPlaceholder?: string;
   defaultApiPath?: string;
   defaultApiVersion?: string;
   supportsModelListing: boolean;
   requiresApiKey: boolean;
+  requiresAppId?: boolean;
+  supportsRegion?: boolean;
   apiHostLabelKey?: string;
   apiHostLabelDefault?: string;
+  appIdLabelKey?: string;
+  appIdLabelDefault?: string;
+  apiKeyLabelKey?: string;
+  apiKeyLabelDefault?: string;
+  apiRegionLabelKey?: string;
+  apiRegionLabelDefault?: string;
   modelLabelKey?: string;
   modelLabelDefault?: string;
   editableApiHost?: boolean;
@@ -61,6 +71,7 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
   ...nonLocalManifestDefinitions,
   {
     id: 'google_translate_free',
+    category: 'translation',
     labelKey: 'settings.llm_providers.google_translate_free',
     labelDefault: 'Google Translate (Free)',
     strategy: 'google_translate_free',
@@ -71,6 +82,7 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
   },
   {
     id: 'google_translate',
+    category: 'translation',
     labelKey: 'settings.llm_providers.google_translate',
     labelDefault: 'Google Translate (API)',
     strategy: 'google_translate',
@@ -78,6 +90,91 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
     supportsModelListing: false,
     requiresApiKey: true,
     editableApiHost: false,
+  },
+  {
+    id: 'deepl',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.deepl',
+    labelDefault: 'DeepL',
+    strategy: 'deepl',
+    defaultApiHost: 'https://api-free.deepl.com',
+    apiHostPlaceholder: 'https://api-free.deepl.com',
+    supportsModelListing: false,
+    requiresApiKey: true,
+    editableApiHost: true,
+  },
+  {
+    id: 'microsoft_translator',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.microsoft_translator',
+    labelDefault: 'Microsoft Translator',
+    strategy: 'microsoft_translator',
+    defaultApiHost: 'https://api.cognitive.microsofttranslator.com',
+    apiHostPlaceholder: 'https://api.cognitive.microsofttranslator.com',
+    supportsModelListing: false,
+    requiresApiKey: true,
+    supportsRegion: true,
+    apiRegionLabelKey: 'settings.llm.api_region',
+    apiRegionLabelDefault: 'Region (Optional)',
+    editableApiHost: true,
+  },
+  {
+    id: 'libre_translate',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.libre_translate',
+    labelDefault: 'LibreTranslate',
+    strategy: 'libre_translate',
+    defaultApiHost: '',
+    apiHostPlaceholder: 'http://127.0.0.1:5000',
+    supportsModelListing: false,
+    requiresApiKey: false,
+    editableApiHost: true,
+  },
+  {
+    id: 'deeplx',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.deeplx',
+    labelDefault: 'DeepLX',
+    strategy: 'deeplx',
+    defaultApiHost: '',
+    apiHostPlaceholder: 'http://127.0.0.1:1188/translate',
+    supportsModelListing: false,
+    requiresApiKey: false,
+    editableApiHost: true,
+  },
+  {
+    id: 'baidu_translate',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.baidu_translate',
+    labelDefault: 'Baidu Translate',
+    strategy: 'baidu_translate',
+    defaultApiHost: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
+    apiHostPlaceholder: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
+    supportsModelListing: false,
+    requiresApiKey: true,
+    requiresAppId: true,
+    appIdLabelKey: 'settings.llm.app_id',
+    appIdLabelDefault: 'App ID',
+    apiKeyLabelKey: 'settings.llm.secret_key',
+    apiKeyLabelDefault: 'Secret Key',
+    editableApiHost: true,
+  },
+  {
+    id: 'youdao_translate',
+    category: 'translation',
+    labelKey: 'settings.llm_providers.youdao_translate',
+    labelDefault: 'Youdao Translate',
+    strategy: 'youdao_translate',
+    defaultApiHost: 'https://openapi.youdao.com/api',
+    apiHostPlaceholder: 'https://openapi.youdao.com/api',
+    supportsModelListing: false,
+    requiresApiKey: true,
+    requiresAppId: true,
+    appIdLabelKey: 'settings.llm.app_key',
+    appIdLabelDefault: 'App Key',
+    apiKeyLabelKey: 'settings.llm.app_secret',
+    apiKeyLabelDefault: 'App Secret',
+    editableApiHost: true,
   },
 ];
 
@@ -238,6 +335,13 @@ export function getProviderDefinition(
   });
 }
 
+export function isTranslationOnlyProvider(
+  provider: LlmProvider,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
+): boolean {
+  return getProviderDefinition(provider, customProviders).category === 'translation';
+}
+
 export function createProviderSetting(
   provider: LlmProvider,
   customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
@@ -248,6 +352,8 @@ export function createProviderSetting(
     apiKey: '',
     apiPath: definition.defaultApiPath,
     apiVersion: definition.defaultApiVersion,
+    ...(definition.requiresAppId ? { appId: '' } : {}),
+    ...(definition.supportsRegion ? { apiRegion: '' } : {}),
   };
 }
 
@@ -289,6 +395,8 @@ export function buildLlmConfig(
     model: '',
     apiPath: setting.apiPath,
     apiVersion: setting.apiVersion,
+    appId: setting.appId,
+    apiRegion: setting.apiRegion,
     temperature: DEFAULT_LLM_TEMPERATURE,
   };
 }

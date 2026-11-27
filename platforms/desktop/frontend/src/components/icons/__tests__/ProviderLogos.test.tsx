@@ -78,6 +78,12 @@ describe('ProviderLogo', () => {
       'cerebras',
       'google_translate',
       'google_translate_free',
+      'deepl',
+      'microsoft_translator',
+      'libre_translate',
+      'deeplx',
+      'baidu_translate',
+      'youdao_translate',
       // New LLM providers
       'amazon_bedrock',
       'cloudflare_workers_ai',

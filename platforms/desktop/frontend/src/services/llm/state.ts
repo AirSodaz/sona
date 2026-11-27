@@ -12,7 +12,12 @@ import type {
   LlmSettings,
   ReasoningEffortLevel,
 } from '../../types/transcript';
-import { createCustomProviderId, createProviderSetting, DEFAULT_LLM_PROVIDER } from './providers';
+import {
+  createCustomProviderId,
+  createProviderSetting,
+  DEFAULT_LLM_PROVIDER,
+  isTranslationOnlyProvider,
+} from './providers';
 
 // Persisted settings store feature selections as keyed ids so we can keep one shared
 // model library while still letting polish / translation / summary pick independently.
@@ -117,6 +122,8 @@ export function sanitizeProviderSetting(
     apiKey: setting?.apiKey ?? defaults.apiKey,
     apiPath: setting?.apiPath ?? defaults.apiPath,
     apiVersion: setting?.apiVersion ?? defaults.apiVersion,
+    appId: setting?.appId ?? defaults.appId,
+    apiRegion: setting?.apiRegion ?? defaults.apiRegion,
   };
 }
 
@@ -211,7 +218,9 @@ export function updateProviderSetting(
     existingSetting.apiHost !== nextSetting.apiHost ||
     existingSetting.apiKey !== nextSetting.apiKey ||
     existingSetting.apiPath !== nextSetting.apiPath ||
-    existingSetting.apiVersion !== nextSetting.apiVersion;
+    existingSetting.apiVersion !== nextSetting.apiVersion ||
+    existingSetting.appId !== nextSetting.appId ||
+    existingSetting.apiRegion !== nextSetting.apiRegion;
   const currentDiscovery = current.modelDiscovery ?? {};
   return {
     ...current,
@@ -534,8 +543,7 @@ export function setFeatureModelSelection(
         current.models[modelId] &&
         !(
           (feature === 'polish' || feature === 'summary') &&
-          (current.models[modelId].provider === 'google_translate' ||
-            current.models[modelId].provider === 'google_translate_free')
+          isTranslationOnlyProvider(current.models[modelId].provider, current.customProviders)
         )
           ? modelId
           : undefined,

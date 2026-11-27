@@ -12,7 +12,7 @@ import type {
   LlmSettings,
   ReasoningEffortLevel,
 } from '../../types/transcript';
-import { isCustomProviderId, normalizeProvider } from './providers';
+import { isCustomProviderId, isTranslationOnlyProvider, normalizeProvider } from './providers';
 import {
   addLlmModel,
   normalizeTemperature,
@@ -236,8 +236,7 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
     polishModelId:
       typeof selections.polishModelId === 'string' &&
       models[selections.polishModelId] &&
-      models[selections.polishModelId].provider !== 'google_translate' &&
-      models[selections.polishModelId].provider !== 'google_translate_free'
+      !isTranslationOnlyProvider(models[selections.polishModelId].provider)
         ? selections.polishModelId
         : undefined,
     translationModelId:
@@ -247,8 +246,7 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
     summaryModelId:
       typeof selections.summaryModelId === 'string' &&
       models[selections.summaryModelId] &&
-      models[selections.summaryModelId].provider !== 'google_translate' &&
-      models[selections.summaryModelId].provider !== 'google_translate_free'
+      !isTranslationOnlyProvider(models[selections.summaryModelId].provider)
         ? selections.summaryModelId
         : undefined,
     polishTemperature: normalizeTemperature(selections.polishTemperature),
@@ -310,9 +308,7 @@ function supportsSummaryModel(modelEntry: LlmModelEntry | undefined): boolean {
     return false;
   }
 
-  return (
-    modelEntry.provider !== 'google_translate' && modelEntry.provider !== 'google_translate_free'
-  );
+  return !isTranslationOnlyProvider(modelEntry.provider);
 }
 
 type LegacyBootstrapModel = {
@@ -508,6 +504,8 @@ function normalizeStoredProviders(
         apiKey: setting.apiKey,
         apiPath: setting.apiPath,
         apiVersion: setting.apiVersion,
+        appId: setting.appId,
+        apiRegion: setting.apiRegion,
       },
       customProviders
     );
@@ -530,10 +528,7 @@ function bootstrapMissingModelSelections(
 
     // Legacy single-model setups powered both polish and translation. Summary is filled
     // separately below so translation-only providers do not accidentally unlock it.
-    if (
-      legacyModel.provider !== 'google_translate' &&
-      legacyModel.provider !== 'google_translate_free'
-    ) {
+    if (!isTranslationOnlyProvider(legacyModel.provider)) {
       return setFeatureModelSelection(
         setFeatureModelSelection(nextSettings, 'polish', migratedModelId),
         'translation',

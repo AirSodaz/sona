@@ -5,6 +5,7 @@ import {
   buildLlmConfig,
   DEFAULT_LLM_TEMPERATURE,
   getProviderDefinition,
+  isTranslationOnlyProvider,
   listProviderDefinitions,
 } from '../../../services/llm/providers';
 import {
@@ -102,8 +103,7 @@ export function FeatureCard({
 
     const active = currentLlmState.activeProvider;
     if (
-      active !== 'google_translate' &&
-      active !== 'google_translate_free' &&
+      !isTranslationOnlyProvider(active, currentLlmState.customProviders) &&
       isProviderConfiguredForConfig(config, active, currentLlmState.providers[active])
     ) {
       return active;
@@ -113,8 +113,7 @@ export function FeatureCard({
     return (
       definitions.find(
         (definition) =>
-          definition.id !== 'google_translate' &&
-          definition.id !== 'google_translate_free' &&
+          definition.category !== 'translation' &&
           isProviderConfiguredForConfig(
             config,
             definition.id,
@@ -133,15 +132,14 @@ export function FeatureCard({
     const raw = modelEntry?.provider || configuredProvider;
     if (
       featureId !== 'translation' &&
-      (raw === 'google_translate' || raw === 'google_translate_free')
+      isTranslationOnlyProvider(raw, currentLlmState.customProviders)
     ) {
-      return configuredProvider === 'google_translate' ||
-        configuredProvider === 'google_translate_free'
+      return isTranslationOnlyProvider(configuredProvider, currentLlmState.customProviders)
         ? 'open_ai'
         : configuredProvider;
     }
     return raw;
-  }, [configuredProvider, featureId, modelEntry?.provider]);
+  }, [configuredProvider, currentLlmState.customProviders, featureId, modelEntry?.provider]);
   const isAutoNmtSelected =
     featureId === 'translation' &&
     modelEntry?.provider === 'local' &&
@@ -182,7 +180,7 @@ export function FeatureCard({
   useEffect(() => {
     if (isAutoNmtSelected || modelEntry?.model?.startsWith('opus-mt-')) return;
     if (!modelEntryId || !selectedModel || !selectedProvider) return;
-    if (selectedProvider === 'google_translate' || selectedProvider === 'google_translate_free') {
+    if (isTranslationOnlyProvider(selectedProvider, latestLlmStateRef.current.customProviders)) {
       return;
     }
     if (modelEntryHasReasoning && modelEntryHasTemp) {
@@ -347,7 +345,7 @@ export function FeatureCard({
     if (typeof explicit === 'boolean') {
       return explicit;
     }
-    if (provider === 'google_translate' || provider === 'google_translate_free') {
+    if (isTranslationOnlyProvider(provider, currentLlmState.customProviders)) {
       return false;
     }
     if (provider === 'local' && featureId === 'translation') {
@@ -421,11 +419,8 @@ export function FeatureCard({
 
   const providerOptions = useMemo(() => {
     const filtered = listProviderDefinitions(currentLlmState.customProviders).filter((p) => {
-      // Google Translate providers only support translation feature
-      if (
-        (p.id === 'google_translate' || p.id === 'google_translate_free') &&
-        featureId !== 'translation'
-      ) {
+      // Dedicated translation providers only support translation feature
+      if (p.category === 'translation' && featureId !== 'translation') {
         return false;
       }
 
@@ -461,9 +456,9 @@ export function FeatureCard({
 
   const fetchModelCandidates = useCallback(
     async (provider: LlmProvider) => {
-      // Google Translate providers only support translation feature
+      // Dedicated translation providers only support translation feature
       if (
-        (provider === 'google_translate' || provider === 'google_translate_free') &&
+        isTranslationOnlyProvider(provider, latestLlmStateRef.current.customProviders) &&
         featureId !== 'translation'
       ) {
         setModelCandidates([]);
@@ -564,23 +559,23 @@ export function FeatureCard({
   useEffect(() => {
     if (
       featureId !== 'translation' &&
-      (localProvider === 'google_translate' || localProvider === 'google_translate_free')
+      isTranslationOnlyProvider(localProvider, currentLlmState.customProviders)
     ) {
       setLocalProvider(selectedProvider);
     }
-  }, [featureId, localProvider, selectedProvider]);
+  }, [currentLlmState.customProviders, featureId, localProvider, selectedProvider]);
 
   useEffect(() => {
     if (
       featureId !== 'translation' &&
-      (modelEntry?.provider === 'google_translate' ||
-        modelEntry?.provider === 'google_translate_free')
+      modelEntry?.provider &&
+      isTranslationOnlyProvider(modelEntry.provider, currentLlmState.customProviders)
     ) {
       applyTrackedLlmSettings(
         setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
       );
     }
-  }, [applyTrackedLlmSettings, featureId, modelEntry?.provider]);
+  }, [applyTrackedLlmSettings, currentLlmState.customProviders, featureId, modelEntry?.provider]);
 
   useEffect(() => {
     if (localProvider === 'local' && hasLoadedCandidates && !isLoadingCandidates) {
@@ -629,9 +624,9 @@ export function FeatureCard({
     if (!trimmedModel) {
       return;
     }
-    // Google Translate providers only support translation feature
+    // Dedicated translation providers only support translation feature
     if (
-      (providerToSave === 'google_translate' || providerToSave === 'google_translate_free') &&
+      isTranslationOnlyProvider(providerToSave, latestLlmStateRef.current.customProviders) &&
       featureId !== 'translation'
     ) {
       return;
@@ -669,8 +664,7 @@ export function FeatureCard({
     if (
       !providerSetting ||
       isAutoNmt ||
-      providerToSave === 'google_translate' ||
-      providerToSave === 'google_translate_free'
+      isTranslationOnlyProvider(providerToSave, nextState.customProviders)
     ) {
       return;
     }
@@ -701,19 +695,17 @@ export function FeatureCard({
 
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
-    if (
-      featureId !== 'translation' &&
-      (p === 'google_translate' || p === 'google_translate_free')
-    ) {
+    const isTranslationOnly = isTranslationOnlyProvider(
+      p,
+      latestLlmStateRef.current.customProviders
+    );
+    if (featureId !== 'translation' && isTranslationOnly) {
       return;
     }
     setLocalProvider(p);
     setHasLoadedCandidates(false);
     lastFetchedProviderRef.current = null;
-    if (
-      featureId === 'translation' &&
-      (p === 'google_translate' || p === 'google_translate_free')
-    ) {
+    if (featureId === 'translation' && isTranslationOnly) {
       setLocalModelName('default');
       commitModelChange(p, 'default');
     } else if (featureId === 'translation' && p === 'local') {
@@ -911,151 +903,155 @@ export function FeatureCard({
           )}
         </div>
 
-        {localProvider !== 'google_translate' && supportsReasoning && (
-          <div className="feature-card-row feature-card-row-reasoning">
-            <div className="feature-reasoning-header">
-              <div className="feature-reasoning-label-group">
-                <div className="feature-reasoning-title-line">
-                  <BrainCircuit size={16} className="feature-reasoning-icon" />
-                  <span className="feature-reasoning-title">
-                    {t('settings.llm.reasoning_mode')}
-                  </span>
-                </div>
-                <span className="feature-reasoning-hint">
-                  {t('settings.llm.reasoning_mode_hint', {
-                    defaultValue:
-                      'Enable chain-of-thought deep reasoning for complex logic and multi-step tasks',
-                  })}
-                </span>
-              </div>
-              <div className="feature-field-toggle">
-                <label
-                  className="settings-toggle-label feature-switch-label"
-                  htmlFor={`feature-reasoning-toggle-${featureId}`}
-                >
-                  <input
-                    id={`feature-reasoning-toggle-${featureId}`}
-                    type="checkbox"
-                    checked={reasoningEnabled}
-                    onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
-                  />
-                  <span className="feature-switch-track">
-                    <span className="feature-switch-thumb" />
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {reasoningEnabled && (
-              <div className="feature-reasoning-panel">
-                {reasoningMode?.type === 'none' ? (
-                  <div className="feature-builtin-reasoning-callout">
-                    <Sparkles size={14} className="feature-builtin-icon" />
-                    <span>
-                      {t('settings.llm.builtin_reasoning', {
-                        defaultValue: 'Built-in deep thinking (no configuration required)',
-                      })}
+        {!isTranslationOnlyProvider(localProvider, currentLlmState.customProviders) &&
+          supportsReasoning && (
+            <div className="feature-card-row feature-card-row-reasoning">
+              <div className="feature-reasoning-header">
+                <div className="feature-reasoning-label-group">
+                  <div className="feature-reasoning-title-line">
+                    <BrainCircuit size={16} className="feature-reasoning-icon" />
+                    <span className="feature-reasoning-title">
+                      {t('settings.llm.reasoning_mode')}
                     </span>
                   </div>
-                ) : reasoningMode?.type === 'budget' ? (
-                  <div className="feature-reasoning-budget-section">
-                    <div className="feature-reasoning-sublabel-group">
-                      <label
-                        className="settings-label"
-                        htmlFor={`feature-reasoning-budget-${featureId}`}
-                      >
-                        {t('settings.llm.reasoning_budget', {
-                          defaultValue: 'Thinking Token Budget',
-                        })}
-                      </label>
-                      <span className="feature-field-subhint">
-                        {t('settings.llm.reasoning_budget_hint', {
-                          defaultValue: 'Maximum tokens allowed per thinking step',
-                        })}
-                      </span>
-                    </div>
-                    <div className="feature-token-input-wrapper">
-                      <input
-                        id={`feature-reasoning-budget-${featureId}`}
-                        type="number"
-                        className="settings-input feature-token-input"
-                        min={reasoningMode.min_budget}
-                        max={reasoningMode.max_budget}
-                        step={1024}
-                        value={reasoningBudget ?? reasoningMode.default_budget}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          if (!Number.isNaN(val) && val > 0) {
-                            handleReasoningBudgetChange(val);
-                          }
-                        }}
-                      />
-                      <span className="feature-token-unit">Tokens</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="feature-reasoning-level-section">
-                    <div className="feature-reasoning-sublabel-group">
-                      <label
-                        className="settings-label"
-                        htmlFor={`feature-reasoning-level-${featureId}`}
-                      >
-                        {t('settings.llm.reasoning_level')}
-                      </label>
-                      <span className="feature-field-subhint">
-                        {t('settings.llm.reasoning_level_hint', {
-                          defaultValue: 'Adjust reasoning depth and detail of the thinking process',
-                        })}
-                      </span>
-                    </div>
-                    <div className="feature-reasoning-level-controls">
-                      <div
-                        className="feature-segmented-pills"
-                        role="radiogroup"
-                        aria-label={t('settings.llm.reasoning_level')}
-                      >
-                        {supportedLevels.map((lvl) => {
-                          const isSelected =
-                            (supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
-                              ? reasoningLevel
-                              : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')) === lvl;
-                          return (
-                            <button
-                              key={lvl}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              className={`feature-segmented-pill${isSelected ? ' is-active' : ''}`}
-                              onClick={() => handleReasoningLevelChange(lvl)}
-                            >
-                              {t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl })}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="feature-field reasoning-level-wrapper visually-hidden">
-                        <Dropdown
-                          id={`feature-reasoning-level-${featureId}`}
-                          value={
-                            supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
-                              ? reasoningLevel
-                              : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
-                          }
-                          onChange={(val) => handleReasoningLevelChange(val)}
-                          options={supportedLevels.map((lvl) => ({
-                            value: lvl,
-                            label: t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl }),
-                          }))}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  <span className="feature-reasoning-hint">
+                    {t('settings.llm.reasoning_mode_hint', {
+                      defaultValue:
+                        'Enable chain-of-thought deep reasoning for complex logic and multi-step tasks',
+                    })}
+                  </span>
+                </div>
+                <div className="feature-field-toggle">
+                  <label
+                    className="settings-toggle-label feature-switch-label"
+                    htmlFor={`feature-reasoning-toggle-${featureId}`}
+                  >
+                    <input
+                      id={`feature-reasoning-toggle-${featureId}`}
+                      type="checkbox"
+                      checked={reasoningEnabled}
+                      onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
+                    />
+                    <span className="feature-switch-track">
+                      <span className="feature-switch-thumb" />
+                    </span>
+                  </label>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {reasoningEnabled && (
+                <div className="feature-reasoning-panel">
+                  {reasoningMode?.type === 'none' ? (
+                    <div className="feature-builtin-reasoning-callout">
+                      <Sparkles size={14} className="feature-builtin-icon" />
+                      <span>
+                        {t('settings.llm.builtin_reasoning', {
+                          defaultValue: 'Built-in deep thinking (no configuration required)',
+                        })}
+                      </span>
+                    </div>
+                  ) : reasoningMode?.type === 'budget' ? (
+                    <div className="feature-reasoning-budget-section">
+                      <div className="feature-reasoning-sublabel-group">
+                        <label
+                          className="settings-label"
+                          htmlFor={`feature-reasoning-budget-${featureId}`}
+                        >
+                          {t('settings.llm.reasoning_budget', {
+                            defaultValue: 'Thinking Token Budget',
+                          })}
+                        </label>
+                        <span className="feature-field-subhint">
+                          {t('settings.llm.reasoning_budget_hint', {
+                            defaultValue: 'Maximum tokens allowed per thinking step',
+                          })}
+                        </span>
+                      </div>
+                      <div className="feature-token-input-wrapper">
+                        <input
+                          id={`feature-reasoning-budget-${featureId}`}
+                          type="number"
+                          className="settings-input feature-token-input"
+                          min={reasoningMode.min_budget}
+                          max={reasoningMode.max_budget}
+                          step={1024}
+                          value={reasoningBudget ?? reasoningMode.default_budget}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!Number.isNaN(val) && val > 0) {
+                              handleReasoningBudgetChange(val);
+                            }
+                          }}
+                        />
+                        <span className="feature-token-unit">Tokens</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="feature-reasoning-level-section">
+                      <div className="feature-reasoning-sublabel-group">
+                        <label
+                          className="settings-label"
+                          htmlFor={`feature-reasoning-level-${featureId}`}
+                        >
+                          {t('settings.llm.reasoning_level')}
+                        </label>
+                        <span className="feature-field-subhint">
+                          {t('settings.llm.reasoning_level_hint', {
+                            defaultValue:
+                              'Adjust reasoning depth and detail of the thinking process',
+                          })}
+                        </span>
+                      </div>
+                      <div className="feature-reasoning-level-controls">
+                        <div
+                          className="feature-segmented-pills"
+                          role="radiogroup"
+                          aria-label={t('settings.llm.reasoning_level')}
+                        >
+                          {supportedLevels.map((lvl) => {
+                            const isSelected =
+                              (supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                                ? reasoningLevel
+                                : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')) === lvl;
+                            return (
+                              <button
+                                key={lvl}
+                                type="button"
+                                role="radio"
+                                aria-checked={isSelected}
+                                className={`feature-segmented-pill${isSelected ? ' is-active' : ''}`}
+                                onClick={() => handleReasoningLevelChange(lvl)}
+                              >
+                                {t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl })}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="feature-field reasoning-level-wrapper visually-hidden">
+                          <Dropdown
+                            id={`feature-reasoning-level-${featureId}`}
+                            value={
+                              supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                                ? reasoningLevel
+                                : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
+                            }
+                            onChange={(val) => handleReasoningLevelChange(val)}
+                            options={supportedLevels.map((lvl) => ({
+                              value: lvl,
+                              label: t(`settings.llm.reasoning_level_${lvl}`, {
+                                defaultValue: lvl,
+                              }),
+                            }))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
         {supportsTemperature && (
           <div className="feature-card-row feature-card-row-secondary">

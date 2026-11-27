@@ -109,6 +109,8 @@ export function SettingsLLMServiceTab({
     useState<CustomLlmProviderStrategy>('openai_compatible');
   const [setupApiHost, setSetupApiHost] = useState('');
   const [setupApiKey, setSetupApiKey] = useState('');
+  const [setupAppId, setSetupAppId] = useState('');
+  const [setupApiRegion, setSetupApiRegion] = useState('');
   const [customProviderName, setCustomProviderName] = useState('');
   const [customProviderStrategy, setCustomProviderStrategy] =
     useState<CustomLlmProviderStrategy>('openai_compatible');
@@ -118,6 +120,8 @@ export function SettingsLLMServiceTab({
   const handleCloseAddProvider = useCallback(() => {
     setIsAddProviderOpen(false);
     setProviderToAdd(null);
+    setSetupAppId('');
+    setSetupApiRegion('');
     setCustomProviderName('');
     setProviderSearch('');
   }, []);
@@ -193,6 +197,8 @@ export function SettingsLLMServiceTab({
     setProviderToAdd(null);
     setSetupApiHost('');
     setSetupApiKey('');
+    setSetupAppId('');
+    setSetupApiRegion('');
     setCustomProviderName('');
     setProviderSearch('');
     setIsAddProviderOpen(true);
@@ -205,6 +211,8 @@ export function SettingsLLMServiceTab({
     setProviderToAdd(provider);
     setSetupApiHost(setting.apiHost);
     setSetupApiKey(setting.apiKey);
+    setSetupAppId(setting.appId ?? '');
+    setSetupApiRegion(setting.apiRegion ?? '');
   };
 
   const handleAddProvider = () => {
@@ -217,11 +225,15 @@ export function SettingsLLMServiceTab({
     const nextLlmSettings = updateProviderSetting(seeded, providerToAdd, {
       apiHost: effectiveHost,
       apiKey: setupApiKey.trim(),
+      ...(selectedProviderDefinition?.requiresAppId ? { appId: setupAppId.trim() } : {}),
+      ...(selectedProviderDefinition?.supportsRegion ? { apiRegion: setupApiRegion.trim() } : {}),
     });
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
     setExpandedProvider(providerToAdd);
     setIsAddProviderOpen(false);
     setProviderToAdd(null);
+    setSetupAppId('');
+    setSetupApiRegion('');
     setProviderSearch('');
   };
 
@@ -274,6 +286,8 @@ export function SettingsLLMServiceTab({
     setProviderToAdd(nextLlmSettings.activeProvider);
     setSetupApiHost(setting.apiHost);
     setSetupApiKey(setting.apiKey);
+    setSetupAppId('');
+    setSetupApiRegion('');
     setCustomProviderName('');
     setCustomProviderStrategy('openai_compatible');
   };
@@ -622,6 +636,7 @@ export function SettingsLLMServiceTab({
                   ? (selectedProviderDefinition?.editableApiHost !== false &&
                       !setupApiHost.trim() &&
                       !selectedProviderDefinition?.defaultApiHost) ||
+                    (selectedProviderDefinition?.requiresAppId && !setupAppId.trim()) ||
                     (selectedProviderDefinition?.requiresApiKey && !setupApiKey.trim())
                   : !customProviderName.trim()
               }
@@ -658,8 +673,8 @@ export function SettingsLLMServiceTab({
                 const providers = availableProviderDefinitions
                   .filter((def) =>
                     category === 'translation'
-                      ? def.id === 'google_translate' || def.id === 'google_translate_free'
-                      : def.id !== 'google_translate' && def.id !== 'google_translate_free'
+                      ? def.category === 'translation'
+                      : def.category !== 'translation'
                   )
                   .filter((def) => {
                     if (!query) return true;
@@ -816,23 +831,74 @@ export function SettingsLLMServiceTab({
                       id="setup-provider-host"
                       className="settings-input"
                       value={setupApiHost}
+                      placeholder={
+                        selectedProviderDefinition?.apiHostPlaceholder ||
+                        selectedProviderDefinition?.defaultApiHost ||
+                        ''
+                      }
                       onChange={(event) => setSetupApiHost(event.target.value)}
                       autoFocus
                     />
                   </div>
                 ) : null}
-                {selectedProviderDefinition?.requiresApiKey && (
+                {selectedProviderDefinition?.requiresAppId && (
+                  <div className="shared-form-field layout-vertical">
+                    <label className="shared-form-field-label" htmlFor="setup-provider-app-id">
+                      {selectedProviderDefinition.appIdLabelKey
+                        ? t(selectedProviderDefinition.appIdLabelKey, {
+                            defaultValue: selectedProviderDefinition.appIdLabelDefault,
+                          })
+                        : t('settings.llm.app_id', { defaultValue: 'App ID' })}
+                    </label>
+                    <input
+                      id="setup-provider-app-id"
+                      className="settings-input"
+                      value={setupAppId}
+                      onChange={(event) => setSetupAppId(event.target.value)}
+                    />
+                  </div>
+                )}
+                {(selectedProviderDefinition?.requiresApiKey ||
+                  (selectedProviderDefinition?.category === 'translation' &&
+                    providerToAdd !== 'google_translate_free')) && (
                   <div className="shared-form-field layout-vertical">
                     <label className="shared-form-field-label" htmlFor="setup-provider-key">
-                      {t('settings.llm.api_key')}
+                      {selectedProviderDefinition.apiKeyLabelKey
+                        ? t(selectedProviderDefinition.apiKeyLabelKey, {
+                            defaultValue: selectedProviderDefinition.apiKeyLabelDefault,
+                          })
+                        : t('settings.llm.api_key')}
                     </label>
                     <input
                       id="setup-provider-key"
                       className="settings-input"
                       type="password"
                       value={setupApiKey}
+                      placeholder={
+                        selectedProviderDefinition.requiresApiKey
+                          ? ''
+                          : t('settings.llm.optional_api_key', { defaultValue: 'Optional' })
+                      }
                       onChange={(event) => setSetupApiKey(event.target.value)}
                       autoFocus={selectedProviderDefinition?.editableApiHost === false}
+                    />
+                  </div>
+                )}
+                {selectedProviderDefinition?.supportsRegion && (
+                  <div className="shared-form-field layout-vertical">
+                    <label className="shared-form-field-label" htmlFor="setup-provider-region">
+                      {selectedProviderDefinition.apiRegionLabelKey
+                        ? t(selectedProviderDefinition.apiRegionLabelKey, {
+                            defaultValue: selectedProviderDefinition.apiRegionLabelDefault,
+                          })
+                        : t('settings.llm.api_region', { defaultValue: 'Region (Optional)' })}
+                    </label>
+                    <input
+                      id="setup-provider-region"
+                      className="settings-input"
+                      value={setupApiRegion}
+                      placeholder="eastasia"
+                      onChange={(event) => setSetupApiRegion(event.target.value)}
                     />
                   </div>
                 )}

@@ -1596,4 +1596,82 @@ describe('SettingsLLMServiceTab', () => {
     // Spinner indicator must not be in DOM after loading finishes
     expect(document.querySelector('.feature-card-loading-indicator')).toBeNull();
   });
+
+  it('lists all new translation providers in the Add Provider modal and validates required fields', async () => {
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' }));
+    });
+
+    for (const label of [
+      'DeepL',
+      'Microsoft Translator',
+      'LibreTranslate',
+      'DeepLX',
+      'Baidu Translate',
+      'Youdao Translate',
+    ]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+
+    // LibreTranslate: empty default host -> disabled until host is provided, no API key required
+    await act(async () => {
+      fireEvent.click(screen.getByText('LibreTranslate'));
+    });
+    const saveButton = screen.getByRole('button', {
+      name: 'settings.llm.save_provider',
+    }) as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+
+    const hostInput = screen.getByLabelText('settings.llm.base_url') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(hostInput, { target: { value: 'http://127.0.0.1:5000' } });
+    });
+    expect(saveButton.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          activeProvider: 'libre_translate',
+          providers: expect.objectContaining({
+            libre_translate: expect.objectContaining({
+              apiHost: 'http://127.0.0.1:5000',
+            }),
+          }),
+        }),
+      })
+    );
+
+    // Baidu Translate: requires both App ID and Secret Key
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Baidu Translate'));
+    });
+
+    const saveBaiduButton = screen.getByRole('button', {
+      name: 'settings.llm.save_provider',
+    }) as HTMLButtonElement;
+    expect(saveBaiduButton.disabled).toBe(true);
+
+    const appIdInput = document.getElementById('setup-provider-app-id') as HTMLInputElement;
+    const secretInput = document.getElementById('setup-provider-key') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(appIdInput, { target: { value: 'baidu-app-id' } });
+    });
+    expect(saveBaiduButton.disabled).toBe(true);
+
+    await act(async () => {
+      fireEvent.change(secretInput, { target: { value: 'baidu-secret' } });
+    });
+    expect(saveBaiduButton.disabled).toBe(false);
+  });
 });

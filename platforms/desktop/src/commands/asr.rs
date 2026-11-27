@@ -628,7 +628,7 @@ pub async fn test_online_asr_provider(
 }
 
 enum ResolvedTranslationTarget {
-    Online(sona_core::llm::requests::LlmConfig),
+    Online(Box<sona_core::llm::requests::LlmConfig>),
     LocalLlama(String),
     LocalOnnx,
 }
@@ -709,6 +709,14 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 sona_core::llm::tasks::LlmProviderStrategy::from_provider(&provider)
             });
 
+            let base_url = if api_host.trim().is_empty()
+                && let sona_core::domain::LlmProvider::Builtin(builtin) = &provider
+            {
+                builtin.default_api_host().to_string()
+            } else {
+                api_host.to_string()
+            };
+
             let timeout = services
                 .config
                 .get_setting("llmRequestTimeoutSeconds")
@@ -725,6 +733,14 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 .and_then(|s| s.get("apiVersion"))
                 .and_then(|v| v.as_str())
                 .map(String::from);
+            let app_id = provider_settings
+                .and_then(|s| s.get("appId"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let api_region = provider_settings
+                .and_then(|s| s.get("apiRegion"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
             let temperature = llm_settings
                 .as_ref()
                 .and_then(|s| s.get("selections"))
@@ -735,17 +751,19 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
             let cfg = sona_core::llm::requests::LlmConfig {
                 strategy,
                 provider,
-                base_url: api_host.to_string(),
+                base_url,
                 api_key: api_key.to_string(),
                 model: model_str.to_string(),
                 api_path,
                 api_version,
+                app_id,
+                api_region,
                 temperature,
                 reasoning_enabled: None,
                 reasoning_level: None,
                 timeout_seconds: timeout,
             };
-            ResolvedTranslationTarget::Online(cfg)
+            ResolvedTranslationTarget::Online(Box::new(cfg))
         }
         None => {
             let engine_str = services
@@ -775,7 +793,7 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                         strategy: sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree,
                         ..Default::default()
                     };
-                    ResolvedTranslationTarget::Online(cfg)
+                    ResolvedTranslationTarget::Online(Box::new(cfg))
                 }
                 _ => ResolvedTranslationTarget::LocalOnnx,
             }
@@ -824,7 +842,7 @@ pub(crate) fn build_live_translation_coordinator(
         ResolvedTranslationTarget::Online(cfg) => {
             let engine =
                 crate::integrations::translation::TranslationEngineFactory::create_online_engine(
-                    services, cfg,
+                    services, *cfg,
                 );
             (engine, 500)
         }

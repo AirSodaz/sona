@@ -240,17 +240,8 @@ pub fn split_summary_segments(
 pub fn validate_summary_strategy(
     strategy: super::LlmProviderStrategy,
 ) -> Result<(), super::LlmTaskError> {
-    if matches!(
-        strategy,
-        super::LlmProviderStrategy::GoogleTranslate
-            | super::LlmProviderStrategy::GoogleTranslateFree
-            | super::LlmProviderStrategy::LocalNmt
-    ) {
-        let name = if strategy == super::LlmProviderStrategy::LocalNmt {
-            "Local NMT"
-        } else {
-            "Google Translate"
-        };
+    if strategy.is_translation_only() {
+        let name = strategy.translation_only_display_name();
         return Err(super::LlmTaskError::InvalidRequest {
             reason: format!("{name} does not support transcript summaries"),
         });

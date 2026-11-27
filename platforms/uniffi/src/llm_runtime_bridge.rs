@@ -249,6 +249,8 @@ mod tests {
             model: "test-model".to_string(),
             api_path: None,
             api_version: None,
+            app_id: None,
+            api_region: None,
             temperature: None,
             reasoning_enabled: None,
             reasoning_level: None,

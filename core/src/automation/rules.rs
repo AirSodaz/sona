@@ -406,9 +406,17 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         .and_then(|setting| string_field(setting, "apiKey"))
         .map(str::trim)
         .unwrap_or("");
+    let app_id = provider_setting
+        .and_then(|setting| string_field(setting, "appId"))
+        .map(str::trim)
+        .unwrap_or("");
 
-    let (default_api_host, requires_api_key) = match &provider {
-        LlmProvider::Builtin(b) => (b.default_api_host().to_string(), b.requires_api_key()),
+    let (default_api_host, requires_api_key, requires_app_id) = match &provider {
+        LlmProvider::Builtin(b) => (
+            b.default_api_host().to_string(),
+            b.requires_api_key(),
+            b.requires_app_id(),
+        ),
         LlmProvider::Custom(c) => {
             let strategy = settings
                 .get("customProviders")
@@ -420,7 +428,7 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
                     s,
                     "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
                 ) {
-                    (String::new(), true)
+                    (String::new(), true, false)
                 } else {
                     return false;
                 }
@@ -432,8 +440,9 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
 
     let has_api_host = !api_host.is_empty() || !default_api_host.is_empty();
     let has_api_key = !requires_api_key || !api_key.is_empty();
+    let has_app_id = !requires_app_id || !app_id.is_empty();
 
-    has_api_host && has_api_key
+    has_api_host && has_api_key && has_app_id
 }
 
 fn is_batch_asr_configured(
@@ -522,4 +531,86 @@ fn is_batch_asr_configured(
 
 fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::automation::{AutomationRuleExportConfig, AutomationRuleStageConfig};
+    use serde_json::json;
+
+    fn translation_rule() -> AutomationRule {
+        AutomationRule {
+            name: "Translate".to_string(),
+            save_history: false,
+            project_id: String::new(),
+            watch_directory: "/watch".to_string(),
+            recursive: false,
+            stage_config: AutomationRuleStageConfig {
+                auto_polish: false,
+                auto_translate: true,
+            },
+            export_config: AutomationRuleExportConfig {
+                directory: "/export".to_string(),
+                mode: "translation".to_string(),
+            },
+        }
+    }
+
+    fn translation_config(provider_id: &str, provider_setting: Value) -> Value {
+        json!({
+            "asr": { "selections": { "batch": { "engine": "local", "modelPath": "/models/asr" } } },
+            "llmSettings": {
+                "providers": {
+                    (provider_id): provider_setting
+                },
+                "models": {
+                    "tr-model": {
+                        "id": "tr-model",
+                        "provider": provider_id,
+                        "model": "default"
+                    }
+                },
+                "selections": {
+                    "translationModelId": "tr-model"
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn translation_rule_validation_requires_app_id_for_baidu_and_youdao() {
+        let rule = translation_rule();
+        let env = AutomationRuleActivationEnvironment {
+            watch_directory_exists: true,
+            export_directory_ready: true,
+            batch_model_path_exists: true,
+        };
+
+        for provider_id in ["baidu_translate", "youdao_translate"] {
+            let missing_app_id = translation_config(
+                provider_id,
+                json!({ "apiHost": "", "apiKey": "secret-key", "appId": "" }),
+            );
+            let res = validate_rule_activation(&rule, &missing_app_id, &[], env);
+            assert!(
+                !res.valid,
+                "{provider_id} without appId must fail automation validation"
+            );
+            assert_eq!(
+                res.code.as_deref(),
+                Some("automation.translation_model_missing")
+            );
+
+            let complete = translation_config(
+                provider_id,
+                json!({ "apiHost": "", "apiKey": "secret-key", "appId": "my-app-id" }),
+            );
+            let res_ok = validate_rule_activation(&rule, &complete, &[], env);
+            assert!(
+                res_ok.valid,
+                "{provider_id} with appId and apiKey must pass automation validation"
+            );
+        }
+    }
 }

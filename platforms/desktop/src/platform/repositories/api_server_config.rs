@@ -214,18 +214,36 @@ pub fn resolve_feature_llm_config_from_app_config(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
 
+            let app_id = provider_settings
+                .and_then(|s| s.get("appId"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let api_region = provider_settings
+                .and_then(|s| s.get("apiRegion"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+
             let provider: Result<sona_core::domain::LlmProvider, _> =
                 serde_json::from_value(serde_json::Value::String(provider_str.to_string()));
             if let Ok(prov) = provider {
                 let strategy = sona_core::llm::tasks::LlmProviderStrategy::from_provider(&prov);
+                let base_url = if api_host.trim().is_empty()
+                    && let sona_core::domain::LlmProvider::Builtin(builtin) = &prov
+                {
+                    builtin.default_api_host().to_string()
+                } else {
+                    api_host.to_string()
+                };
                 return Some(sona_core::llm::requests::LlmConfig {
                     strategy,
                     provider: prov,
-                    base_url: api_host.to_string(),
+                    base_url,
                     api_key: api_key.to_string(),
                     model: model_str.to_string(),
                     api_path: None,
                     api_version: None,
+                    app_id,
+                    api_region,
                     temperature: None,
                     reasoning_enabled: None,
                     reasoning_level: None,
@@ -522,5 +540,53 @@ mod tests {
 
         let ffmpeg_path = load_ffmpeg_path(&provider);
         assert_eq!(ffmpeg_path, None);
+    }
+
+    #[test]
+    fn resolve_feature_llm_config_falls_back_to_default_host_and_preserves_translation_fields() {
+        let config = serde_json::json!({
+            "llmSettings": {
+                "providers": {
+                    "baidu_translate": {
+                        "apiHost": "",
+                        "apiKey": "baidu-secret",
+                        "appId": "baidu-app"
+                    },
+                    "microsoft_translator": {
+                        "apiKey": "ms-key",
+                        "apiRegion": "eastasia"
+                    }
+                },
+                "models": {
+                    "tr-baidu": {
+                        "id": "tr-baidu",
+                        "provider": "baidu_translate",
+                        "model": "default"
+                    },
+                    "tr-ms": {
+                        "id": "tr-ms",
+                        "provider": "microsoft_translator",
+                        "model": "default"
+                    }
+                },
+                "selections": {
+                    "translationModelId": "tr-baidu"
+                }
+            }
+        });
+
+        let baidu = resolve_feature_llm_config_from_app_config(&config, "translation").unwrap();
+        assert_eq!(
+            baidu.base_url,
+            "https://fanyi-api.baidu.com/api/trans/vip/translate"
+        );
+        assert_eq!(baidu.app_id.as_deref(), Some("baidu-app"));
+        assert_eq!(baidu.api_key, "baidu-secret");
+
+        let mut ms_config = config;
+        ms_config["llmSettings"]["selections"]["translationModelId"] = serde_json::json!("tr-ms");
+        let ms = resolve_feature_llm_config_from_app_config(&ms_config, "translation").unwrap();
+        assert_eq!(ms.base_url, "https://api.cognitive.microsofttranslator.com");
+        assert_eq!(ms.api_region.as_deref(), Some("eastasia"));
     }
 }

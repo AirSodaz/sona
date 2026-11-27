@@ -20,6 +20,8 @@ data class LlmConfig(
     val apiPath: String? = null,
     val apiVersion: String? = null,
     val configured: Boolean = false,
+    val appId: String? = null,
+    val apiRegion: String? = null,
 ) {
     fun validate(apiKey: String?): Boolean = providerId.isNotBlank() &&
         strategy.isNotBlank() &&

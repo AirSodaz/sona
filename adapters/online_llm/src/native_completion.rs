@@ -16,6 +16,9 @@ pub async fn execute_native_completion(
                 .generate(&client, request)
                 .await
         }
+        strategy if strategy.is_online_translation_api() => {
+            crate::translation_providers::execute_translation_completion(request).await
+        }
         _ => crate::aimux_adapter::execute_aimux_completion(request).await,
     }
 }

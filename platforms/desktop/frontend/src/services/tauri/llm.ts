@@ -126,6 +126,12 @@ function defaultStrategy(provider: CoreLlmProvider): CoreLlmProviderStrategy {
     case 'copilot':
     case 'google_translate':
     case 'google_translate_free':
+    case 'deepl':
+    case 'microsoft_translator':
+    case 'libre_translate':
+    case 'deeplx':
+    case 'baidu_translate':
+    case 'youdao_translate':
       return provider.Builtin;
     case 'volcengine':
       return 'open_ai_compatible_custom_path';
@@ -148,6 +154,8 @@ function normalizeConfig(config: LlmConfig, path: string): CoreLlmConfig {
     model: config.model,
     apiPath: config.apiPath ?? null,
     apiVersion: config.apiVersion ?? null,
+    appId: config.appId ?? null,
+    apiRegion: config.apiRegion ?? null,
     temperature: nullableFiniteNumber(config.temperature, `${path}.temperature`),
     reasoningEnabled: config.reasoningEnabled ?? null,
     reasoningLevel: config.reasoningLevel ?? null,

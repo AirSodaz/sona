@@ -6,6 +6,7 @@ mod models_dev;
 pub mod native_completion;
 pub mod provider_discovery;
 mod providers;
+pub mod translation_providers;
 mod transport;
 
 use async_trait::async_trait;
@@ -99,13 +100,14 @@ impl LlmTranslationPort for OnlineLlmAdapter {
         &self,
         request: LlmTranslationRequest,
     ) -> Result<Vec<String>, LlmPortError> {
-        let config = request.config;
-        let target_language = request.target_language;
-        let base_url = LlmApiUrl::parse(&config.base_url)?;
-        let client = base_url.client(config.timeout_seconds)?;
-
+        let config = &request.config;
         match config.strategy {
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate => {
+                if request.texts.is_empty() {
+                    return Ok(Vec::new());
+                }
+                let target_language = request.target_language;
+                let base_url = LlmApiUrl::parse(&config.base_url)?;
                 let response = post_json_request(
                     &base_url,
                     vec![("x-goog-api-key", config.api_key.clone())],
@@ -132,6 +134,12 @@ impl LlmTranslationPort for OnlineLlmAdapter {
                     .collect())
             }
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree => {
+                if request.texts.is_empty() {
+                    return Ok(Vec::new());
+                }
+                let target_language = request.target_language;
+                let base_url = LlmApiUrl::parse(&config.base_url)?;
+                let client = base_url.client(config.timeout_seconds)?;
                 let mut indexed = Vec::with_capacity(request.texts.len());
                 for (index, text) in request.texts.into_iter().enumerate() {
                     let fetch_client = client.clone();
@@ -161,9 +169,12 @@ impl LlmTranslationPort for OnlineLlmAdapter {
                     .map(|(_, translation)| translation)
                     .collect())
             }
+            strategy if strategy.is_online_translation_api() => {
+                translation_providers::execute_translation_batch(&request).await
+            }
             _ => Err(LlmPortError::new(
                 sona_core::ports::llm::LlmPortErrorKind::Unsupported,
-                "Direct translation is only available for Google Translate providers",
+                "Direct translation is only available for translation API providers",
             )),
         }
     }

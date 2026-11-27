@@ -113,7 +113,7 @@ class UniffiLlmAdapter internal constructor(
         return segments.map { it.copy(text = byId[it.id].orEmpty()) }
     }
 
-    private fun config() = FfiLlmConfig(configuration.providerId, strategy(configuration.strategy), configuration.baseUrl, secretFactory(apiKey), configuration.model, configuration.apiPath, configuration.apiVersion, null, null, null, 60uL)
+    private fun config() = FfiLlmConfig(configuration.providerId, strategy(configuration.strategy), configuration.baseUrl, secretFactory(apiKey), configuration.model, configuration.apiPath, configuration.apiVersion, configuration.appId, configuration.apiRegion, null, null, null, 60uL)
 
     private suspend fun <T> callLlm(block: suspend () -> T): T = try {
         block()
@@ -155,6 +155,12 @@ fun resolveLlmStrategy(providerId: String): String = when (providerId.lowercase(
     "copilot" -> "COPILOT"
     "google_translate" -> "GOOGLE_TRANSLATE"
     "google_translate_free" -> "GOOGLE_TRANSLATE_FREE"
+    "deepl" -> "DEEPL"
+    "microsoft_translator" -> "MICROSOFT_TRANSLATOR"
+    "libre_translate" -> "LIBRE_TRANSLATE"
+    "deeplx" -> "DEEPLX"
+    "baidu_translate" -> "BAIDU_TRANSLATE"
+    "youdao_translate" -> "YOUDAO_TRANSLATE"
     "open_ai_compatible_custom_path" -> "OPEN_AI_COMPATIBLE_CUSTOM_PATH"
     else -> {
         val candidate = providerId.uppercase().replace('-', '_')

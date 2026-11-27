@@ -158,9 +158,10 @@ export function isLlmConfigComplete(llmConfig: LlmConfig | null): llmConfig is L
   const hasApiHost =
     definition.id === 'local' || Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(llmConfig.apiKey?.trim());
+  const hasAppId = !definition.requiresAppId || Boolean(llmConfig.appId?.trim());
   const hasModel = Boolean(llmConfig.model?.trim());
 
-  return hasApiHost && hasApiKey && hasModel;
+  return hasApiHost && hasApiKey && hasAppId && hasModel;
 }
 
 export function isProviderConfigComplete(
@@ -175,8 +176,9 @@ export function isProviderConfigComplete(
   const hasApiHost =
     definition.id === 'local' || Boolean(setting?.apiHost?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(setting?.apiKey?.trim());
+  const hasAppId = !definition.requiresAppId || Boolean(setting?.appId?.trim());
 
-  return hasApiHost && hasApiKey;
+  return hasApiHost && hasApiKey && hasAppId;
 }
 
 export function isFeatureLlmConfigComplete(
