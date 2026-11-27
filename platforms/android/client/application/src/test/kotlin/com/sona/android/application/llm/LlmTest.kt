@@ -9,9 +9,11 @@ class LlmTest {
     @Test fun `configuration requires valid endpoint model and key`() {
         val config = LlmConfig()
         assertTrue(config.validate("secret"))
+        assertTrue(config.copy(baseUrl = "  https://api.openai.com  ").validate("secret"))
         assertFalse(config.validate(null))
         assertFalse(config.copy(baseUrl = "ftp://example.test").validate("secret"))
         assertFalse(config.copy(model = " ").validate("secret"))
+        assertTrue(LlmConfig(providerId = "ollama", strategy = "OLLAMA", baseUrl = "http://127.0.0.1:11434").validate(null))
     }
 
     @Test fun `progress clamps to valid percentage`() {

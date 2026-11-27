@@ -23,11 +23,23 @@ data class LlmConfig(
     val appId: String? = null,
     val apiRegion: String? = null,
 ) {
-    fun validate(apiKey: String?): Boolean = providerId.isNotBlank() &&
-        strategy.isNotBlank() &&
-        (baseUrl.startsWith("https://") || baseUrl.startsWith("http://")) &&
-        model.isNotBlank() &&
-        !apiKey.isNullOrBlank()
+    fun requiresApiKey(): Boolean =
+        providerId.lowercase() !in KEYLESS_PROVIDERS &&
+            strategy.uppercase() !in KEYLESS_STRATEGIES
+
+    fun validate(apiKey: String?): Boolean {
+        val trimmedBaseUrl = baseUrl.trim()
+        return providerId.isNotBlank() &&
+            strategy.isNotBlank() &&
+            (trimmedBaseUrl.startsWith("https://") || trimmedBaseUrl.startsWith("http://")) &&
+            model.isNotBlank() &&
+            (!requiresApiKey() || !apiKey.isNullOrBlank())
+    }
+
+    private companion object {
+        val KEYLESS_PROVIDERS = setOf("ollama", "local", "google_translate_free")
+        val KEYLESS_STRATEGIES = setOf("OLLAMA", "GOOGLE_TRANSLATE_FREE")
+    }
 }
 
 data class LlmTaskProgress(val completedChunks: Long, val totalChunks: Long) {

@@ -47,38 +47,59 @@ class AndroidLlmConfigurationRepository private constructor(
     }
 
     override suspend fun save(config: LlmConfig, apiKey: String) {
-        require(config.validate(apiKey))
+        val normalizedConfig = config.copy(
+            baseUrl = config.baseUrl.trim(),
+            model = config.model.trim(),
+        )
+        require(normalizedConfig.validate(apiKey))
         operations.withLock {
-            val bytes = apiKey.encodeToByteArray()
-            try {
-                val envelope = try {
-                    cipher.encrypt(bytes)
-                } catch (error: CredentialCipherException) {
-                    if (error.kind != CredentialCipherFailureKind.PERMANENT) throw error
-                    cipher.deleteKey()
-                    val retryBytes = apiKey.encodeToByteArray()
-                    try {
-                        cipher.encrypt(retryBytes)
-                    } finally {
-                        retryBytes.fill(0)
+            if (apiKey.isNotBlank()) {
+                val bytes = apiKey.encodeToByteArray()
+                try {
+                    val envelope = try {
+                        cipher.encrypt(bytes)
+                    } catch (error: CredentialCipherException) {
+                        if (error.kind != CredentialCipherFailureKind.PERMANENT) throw error
+                        cipher.deleteKey()
+                        val retryBytes = apiKey.encodeToByteArray()
+                        try {
+                            cipher.encrypt(retryBytes)
+                        } finally {
+                            retryBytes.fill(0)
+                        }
+                    }.toRecord()
+                    dataStore.edit { preferences ->
+                        writeCommonFields(preferences, normalizedConfig)
+                        preferences[KEY_FORMAT] = envelope.formatVersion.toString()
+                        preferences[KEY_IV] = envelope.ivBase64.orEmpty()
+                        preferences[KEY_CIPHERTEXT] = envelope.ciphertextBase64.orEmpty()
                     }
-                }.toRecord()
-                dataStore.edit { preferences ->
-                    preferences[PROVIDER] = config.providerId
-                    preferences[STRATEGY] = config.strategy
-                    preferences[BASE_URL] = config.baseUrl.trim()
-                    preferences[MODEL] = config.model.trim()
-                    config.apiPath?.let { preferences[API_PATH] = it } ?: preferences.remove(API_PATH)
-                    config.apiVersion?.let { preferences[API_VERSION] = it } ?: preferences.remove(API_VERSION)
-                    preferences[CONFIGURED] = "true"
-                    preferences[KEY_FORMAT] = envelope.formatVersion.toString()
-                    preferences[KEY_IV] = envelope.ivBase64.orEmpty()
-                    preferences[KEY_CIPHERTEXT] = envelope.ciphertextBase64.orEmpty()
+                } finally {
+                    bytes.fill(0)
                 }
-            } finally {
-                bytes.fill(0)
+            } else {
+                dataStore.edit { preferences ->
+                    writeCommonFields(preferences, normalizedConfig)
+                    preferences.remove(KEY_FORMAT)
+                    preferences.remove(KEY_IV)
+                    preferences.remove(KEY_CIPHERTEXT)
+                }
+                cipher.deleteKey()
             }
         }
+    }
+
+    private fun writeCommonFields(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        config: LlmConfig,
+    ) {
+        preferences[PROVIDER] = config.providerId
+        preferences[STRATEGY] = config.strategy
+        preferences[BASE_URL] = config.baseUrl
+        preferences[MODEL] = config.model
+        config.apiPath?.let { preferences[API_PATH] = it } ?: preferences.remove(API_PATH)
+        config.apiVersion?.let { preferences[API_VERSION] = it } ?: preferences.remove(API_VERSION)
+        preferences[CONFIGURED] = "true"
     }
 
     override suspend fun loadApiKey(): String? = operations.withLock {

@@ -196,7 +196,7 @@ internal fun LlmSettingsPane(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    if (state.hasApiKey) {
+                    if (state.hasApiKey || state.configured) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Rounded.CheckCircle,
@@ -307,7 +307,7 @@ internal fun LlmSettingsPane(
             )
         }
 
-        if (state.hasApiKey) {
+        if (state.hasApiKey || state.configured) {
             OutlinedButton(
                 onClick = { showClearConfirmation = true },
                 modifier = Modifier.fillMaxWidth(),

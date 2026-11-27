@@ -235,18 +235,38 @@ internal fun LibraryDetailScreen(
     }
 
     if (exitPending) {
+        val exitErrorMessage = when (editor.error) {
+            TranscriptEditorError.INVALID_EDIT -> stringResource(R.string.transcript_edit_invalid)
+            TranscriptEditorError.SAVE_FAILED -> stringResource(R.string.transcript_edit_save_failed)
+            TranscriptEditorError.STALE_TRANSCRIPT -> stringResource(R.string.transcript_edit_conflict)
+            null -> null
+        }
         AlertDialog(
             onDismissRequest = { exitPending = false },
             title = { Text(stringResource(R.string.transcript_unsaved_title)) },
-            text = { Text(stringResource(R.string.transcript_unsaved_body)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.transcript_unsaved_body))
+                    if (exitErrorMessage != null) {
+                        Text(
+                            text = exitErrorMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(enabled = !editor.saving, onClick = onSaveEdit) {
+                TextButton(
+                    enabled = !editor.saving && editor.error != TranscriptEditorError.STALE_TRANSCRIPT,
+                    onClick = onSaveEdit,
+                ) {
                     Text(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
+                    TextButton(enabled = !editor.saving, onClick = {
                         onDiscardEdit()
                         exitPending = false
                         onNavigateBack()
@@ -548,6 +568,7 @@ internal fun LibraryDetailScreen(
                         item.status == HistoryItemStatus.COMPLETE && item.deletedAtEpochMillis == null
                     ) {
                         IconButton(
+                            enabled = !isEditingThis || !editor.saving,
                             onClick = {
                                 if (!isEditingThis) {
                                     selectedTab = DetailWorkspaceTab.TRANSCRIPT

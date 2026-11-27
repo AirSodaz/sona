@@ -181,9 +181,14 @@ class AndroidAudioTranscoder private constructor(
             val trackFormat = extractor.getTrackFormat(trackIndex)
             val durationUs = trackFormat.getLongOrDefault(MediaFormat.KEY_DURATION, -1L)
             validateDuration(durationUs)
+            val requiredOutputBytes = if (durationUs > 0) {
+                estimatedOutputBytes(durationUs) * 2L
+            } else {
+                maxOf(source.length() * 4L, MIN_FREE_BYTES)
+            }
             ensureStorage(
                 directory,
-                estimatedOutputBytes(durationUs) * 2L + MIN_FREE_BYTES,
+                requiredOutputBytes + MIN_FREE_BYTES,
             )
             val mime = trackFormat.getString(MediaFormat.KEY_MIME)
                 ?: throw AudioImportPortException(AudioImportFailure.UNSUPPORTED_AUDIO)
@@ -358,7 +363,7 @@ private class PcmProcessorChain(format: MediaFormat) {
             processor.putChannelMixingMatrix(
                 ChannelMixingMatrix.createForConstantPower(channelCount, 1),
             )
-            processor.configure(AudioProcessor.AudioFormat(sampleRate, channelCount, encoding))
+            processor.configure(AudioProcessor.AudioFormat(sampleRate, channelCount, C.ENCODING_PCM_16BIT))
             processor.flush()
         }
         sonic.setOutputSampleRateHz(16_000)

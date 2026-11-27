@@ -279,6 +279,23 @@ class FrameworkAudioRecordBackendTest {
         backend.close()
     }
 
+    @Test
+    fun `pause stops platform audio record and resume restarts it`() {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val record = FakePlatformAudioRecord(readResult = -3, calls = calls)
+        val backend = FrameworkAudioRecordBackend(record, apiLevel = 23, monitor = null)
+
+        backend.start()
+        backend.pause()
+        assertEquals(0, backend.read(ByteArray(640)))
+        backend.resume()
+        backend.pause()
+        backend.stop()
+        backend.close()
+
+        assertEquals(listOf("start", "stop", "start", "stop", "release"), calls)
+    }
+
     private fun policy(apiLevel: Int) = FrameworkAudioRecordConstructionPolicy.create(
         minBufferSizeBytes = 640,
         apiLevel = apiLevel,

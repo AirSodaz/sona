@@ -25,6 +25,7 @@ data class LlmSettingsUiState(
     val apiVersion: String = "",
     val apiKeyInput: String = "",
     val hasApiKey: Boolean = false,
+    val configured: Boolean = false,
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: Boolean = false,
@@ -40,6 +41,7 @@ data class LlmSettingsUiState(
             "apiVersion=$apiVersion, " +
             "apiKeyInput=<redacted>, " +
             "hasApiKey=$hasApiKey, " +
+            "configured=$configured, " +
             "saving=$saving, " +
             "saved=$saved, " +
             "error=$error)"
@@ -67,6 +69,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
                     baseUrl = initialConfig.baseUrl,
                     apiPath = initialConfig.apiPath ?: initialProvider?.apiPath.orEmpty(),
                     apiVersion = initialConfig.apiVersion ?: initialProvider?.apiVersion.orEmpty(),
+                    configured = initialConfig.configured,
                 )
             }
             mutableState.update { it.copy(hasApiKey = !repository.loadApiKey().isNullOrBlank()) }
@@ -82,7 +85,8 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
                         baseUrl = config.baseUrl,
                         apiPath = config.apiPath ?: provider?.apiPath.orEmpty(),
                         apiVersion = config.apiVersion ?: provider?.apiVersion.orEmpty(),
-                        hasApiKey = config.configured || storedKeyPresent,
+                        hasApiKey = storedKeyPresent || (config.configured && config.requiresApiKey()),
+                        configured = config.configured,
                     )
                 }
             }
@@ -112,28 +116,38 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
         val current = state.value
         if (current.saving) return
         val effectiveKey = current.apiKeyInput.ifBlank { apiKeyDraft }
-        if (current.model.isBlank() || current.baseUrl.isBlank() || (effectiveKey.isBlank() && !current.hasApiKey)) {
+        val candidateConfig = LlmConfig(
+            providerId = current.providerId,
+            strategy = current.strategy,
+            baseUrl = current.baseUrl.trim(),
+            model = current.model.trim(),
+            apiPath = current.apiPath.ifBlank { null },
+            apiVersion = current.apiVersion.ifBlank { null },
+            configured = true,
+        )
+        val requiresKey = candidateConfig.requiresApiKey()
+        if (current.model.isBlank() || current.baseUrl.isBlank() || (requiresKey && effectiveKey.isBlank() && !current.hasApiKey)) {
             mutableState.update { it.copy(error = true) }
             return
         }
         viewModelScope.launch {
             mutableState.update { it.copy(saving = true, error = false) }
             try {
-                repository.save(
-                    LlmConfig(
-                        providerId = current.providerId,
-                        strategy = current.strategy,
-                        baseUrl = current.baseUrl,
-                        model = current.model,
-                        apiPath = current.apiPath.ifBlank { null },
-                        apiVersion = current.apiVersion.ifBlank { null },
-                        configured = true,
-                    ),
-                    effectiveKey.ifBlank { repository.loadApiKey().orEmpty() },
-                )
+                val resolvedKey = when {
+                    effectiveKey.isNotBlank() -> effectiveKey
+                    current.hasApiKey -> repository.loadApiKey().orEmpty()
+                    else -> ""
+                }
+                repository.save(candidateConfig, resolvedKey)
                 apiKeyDraft = ""
                 mutableState.update {
-                    it.copy(apiKeyInput = "", saving = false, hasApiKey = true, saved = true)
+                    it.copy(
+                        apiKeyInput = "",
+                        saving = false,
+                        hasApiKey = resolvedKey.isNotBlank(),
+                        configured = true,
+                        saved = true,
+                    )
                 }
             } catch (error: CancellationException) {
                 throw error

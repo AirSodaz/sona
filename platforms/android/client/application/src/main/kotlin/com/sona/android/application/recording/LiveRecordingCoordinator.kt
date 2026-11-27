@@ -460,6 +460,19 @@ class LiveRecordingCoordinator(
             if (session.isPaused) return
             session.isPaused = true
             session.pausedAtMillis = monotonicClock.elapsedRealtimeMillis()
+            try {
+                session.microphone.pause()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                recordCompletionWarning(
+                    session,
+                    RecordingFailure(
+                        category = RecordingFailureCategory.AUDIO,
+                        message = "Microphone capture could not pause cleanly.",
+                    ),
+                )
+            }
             session.publicationMutex.withLock {
                 mutableState.update { current ->
                     if (current is LiveRecordingState.Recording) {
@@ -476,6 +489,25 @@ class LiveRecordingCoordinator(
         commandMutex.withLock {
             val session = activeSession ?: return
             if (!session.isPaused) return
+            val resumeFailed = try {
+                session.microphone.resume()
+                false
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                recordCompletionWarning(
+                    session,
+                    RecordingFailure(
+                        category = RecordingFailureCategory.AUDIO,
+                        message = "Recording saved after microphone capture failed to resume.",
+                    ),
+                )
+                true
+            }
+            if (resumeFailed) {
+                scope.launch { stop() }
+                return
+            }
             session.totalPausedMillis += (monotonicClock.elapsedRealtimeMillis() - session.pausedAtMillis)
                 .coerceAtLeast(0)
             session.isPaused = false

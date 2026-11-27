@@ -1638,6 +1638,23 @@ class LiveRecordingCoordinatorTest {
         assertTrue("expected positive RMS level, got $level", level > 0.5f && level <= 1f)
     }
 
+    @Test
+    fun `pause and resume delegate to microphone capture session`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = createCoordinator(fakes, backgroundScope)
+        coordinator.start()
+
+        coordinator.pause()
+        assertTrue((coordinator.state.value as LiveRecordingState.Recording).isPaused)
+        assertEquals(1, fakes.calls.count { it == "microphone.pause" })
+
+        coordinator.resume()
+        assertFalse((coordinator.state.value as LiveRecordingState.Recording).isPaused)
+        assertEquals(1, fakes.calls.count { it == "microphone.resume" })
+
+        coordinator.stop()
+    }
+
     private fun segment(id: String, text: String): TranscriptSegment = TranscriptSegment(
         id = id,
         text = text,

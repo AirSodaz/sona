@@ -79,10 +79,18 @@ class SyncSettingsViewModel(
         mutableState.update { it.copy(status = result.status, recoveryKey = result.recoveryKey, pairingInfo = pairing) }
     }
 
-    fun discoverVaults(provider: WebDavSyncProvider, onResult: ((List<DiscoveredVaultSummary>) -> Unit)? = null) = launchAction("discover") {
-        val vaults = sync.discoverVaults(provider)
-        mutableState.update { it.copy(discoveredVaults = vaults) }
-        onResult?.invoke(vaults)
+    fun discoverVaults(
+        provider: WebDavSyncProvider,
+        onResult: ((List<DiscoveredVaultSummary>) -> Unit)? = null,
+    ) {
+        var discovered = emptyList<DiscoveredVaultSummary>()
+        launchAction(
+            action = "discover",
+            onCompleted = { onResult?.invoke(discovered) },
+        ) {
+            discovered = sync.discoverVaults(provider)
+            mutableState.update { it.copy(discoveredVaults = discovered) }
+        }
     }
 
     fun clearDiscoveredVaults() = mutableState.update { it.copy(discoveredVaults = null) }
@@ -209,12 +217,18 @@ class SyncSettingsViewModel(
         mutableState.update { it.copy(status = status, conflicts = sync.listConflicts(), pairingInfo = pairing) }
     }
 
-    private fun launchAction(action: String? = null, block: suspend () -> Unit) {
+    private fun launchAction(
+        action: String? = null,
+        onCompleted: (() -> Unit)? = null,
+        block: suspend () -> Unit,
+    ) {
         if (mutableState.value.busy) return
         mutableState.update { it.copy(busy = true, busyAction = action, error = null, errorCategory = null) }
         viewModelScope.launch {
+            var succeeded = false
             try {
                 block()
+                succeeded = true
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -226,6 +240,9 @@ class SyncSettingsViewModel(
                 }
             } finally {
                 mutableState.update { it.copy(busy = false, busyAction = null) }
+            }
+            if (succeeded) {
+                onCompleted?.invoke()
             }
         }
     }

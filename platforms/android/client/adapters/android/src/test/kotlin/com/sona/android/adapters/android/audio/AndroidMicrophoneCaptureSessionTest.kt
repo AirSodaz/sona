@@ -388,6 +388,36 @@ class AndroidMicrophoneCaptureSessionTest {
         assertEquals(1, writer.closeCalls.get())
     }
 
+    @Test
+    fun `pause stops backend and WAV writing until resume and stop while paused finishes cleanly`() =
+        runBlocking {
+            val backend = ScriptedAudioCaptureBackend(bufferSizeBytes = 640)
+            val writer = RecordingPcmWriter()
+            val session = session(backend, writer)
+            backend.enqueueData(ByteArray(640) { 1 })
+
+            session.start()
+            waitUntil { writer.bytesWritten == 640L }
+
+            session.pause()
+            assertEquals(1, backend.pauseCalls.get())
+            backend.enqueueData(ByteArray(640) { 2 })
+            delay(100)
+            assertEquals(640L, writer.bytesWritten)
+
+            session.resume()
+            assertEquals(1, backend.resumeCalls.get())
+            waitUntil { writer.bytesWritten == 1_280L }
+
+            session.pause()
+            assertEquals(2, backend.pauseCalls.get())
+            withTimeout(5_000) { session.stop() }
+
+            assertEquals(1_280L, writer.bytesWritten)
+            assertEquals(2, session.frames.toList().size)
+            session.close()
+        }
+
     private fun session(
         backend: ScriptedAudioCaptureBackend,
         writer: RecordingPcmWriter,
@@ -421,6 +451,8 @@ private class ScriptedAudioCaptureBackend(
 ) : AudioCaptureBackend, AudioInputMonitoringBackend {
     private val actions = LinkedBlockingQueue<ReadAction>()
     val activeReads = AtomicInteger()
+    val pauseCalls = AtomicInteger()
+    val resumeCalls = AtomicInteger()
     val stopCalls = AtomicInteger()
     val closeCalls = AtomicInteger()
     val readBuffers = Collections.synchronizedSet(mutableSetOf<ByteArray>())
@@ -452,6 +484,17 @@ private class ScriptedAudioCaptureBackend(
 
     override fun start() {
         check(startCalls.incrementAndGet() == 1)
+    }
+
+    override fun pause() {
+        lifecycleCalls += "pause"
+        pauseCalls.incrementAndGet()
+        actions.offer(ReadAction.Data(ByteArray(0)))
+    }
+
+    override fun resume() {
+        lifecycleCalls += "resume"
+        resumeCalls.incrementAndGet()
     }
 
     override fun read(buffer: ByteArray): Int {

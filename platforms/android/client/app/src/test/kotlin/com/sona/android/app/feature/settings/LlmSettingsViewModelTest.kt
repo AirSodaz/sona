@@ -235,7 +235,29 @@ class LlmSettingsViewModelTest {
             assertEquals("OLLAMA", state.strategy)
             assertEquals("http://192.168.1.100:11434", state.baseUrl)
             assertEquals("llama3.2", state.model)
-            assertTrue(state.hasApiKey)
+            assertTrue(state.configured)
+            assertFalse(state.hasApiKey)
+        }
+
+    @Test
+    fun `ollama can save without an api key`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val repository = FakeLlmConfigurationPort(initialProviders = defaultProviders)
+            val viewModel = LlmSettingsViewModel(repository)
+            advanceUntilIdle()
+
+            viewModel.provider("ollama")
+            viewModel.model("llama3.2")
+            viewModel.save()
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.saved)
+            assertTrue(state.configured)
+            assertFalse(state.hasApiKey)
+            assertFalse(state.error)
+            assertEquals("ollama", repository.savedConfig?.providerId)
+            assertEquals("", repository.savedApiKey)
         }
     @Test
     fun `known provider IDs resolve to localized string resources`() {

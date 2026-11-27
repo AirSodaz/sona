@@ -7,6 +7,10 @@ interface AudioCaptureBackend : AutoCloseable {
 
     fun start()
 
+    fun pause() {}
+
+    fun resume() {}
+
     fun read(buffer: ByteArray): Int
 
     fun stop()

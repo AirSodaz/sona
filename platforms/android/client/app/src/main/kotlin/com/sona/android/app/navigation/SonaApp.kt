@@ -291,7 +291,9 @@ internal fun SonaApp(
         val onRecordCapsuleClick = {
             recordingSheetExpanded = true
             val canAutoStart = recordingState is LiveRecordingState.Idle ||
-                recordingState is LiveRecordingState.NeedsConfiguration
+                recordingState is LiveRecordingState.NeedsConfiguration ||
+                recordingState is LiveRecordingState.Completed ||
+                recordingState is LiveRecordingState.Failed
             if (canAutoStart) {
                 autoStartRequestToken += 1
             }
