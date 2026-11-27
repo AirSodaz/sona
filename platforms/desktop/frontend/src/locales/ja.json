@@ -3016,6 +3016,10 @@
     }
   },
   "tray": {
+    "status_label": "ステータス: {{status}}",
+    "status_idle": "待機中",
+    "status_recording": "録音中",
+    "status_agent_connected": "Agent 接続中",
     "show": "メインウィンドウを表示",
     "live_caption": "Live Caption",
     "settings": "設定",

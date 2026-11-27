@@ -25,6 +25,7 @@ import {
   setAppSetting,
   setLogLevel,
   setMinimizeToTray,
+  updateTrayMenu,
 } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import { replaceAutomationRuntimeRules } from '../automation';
@@ -388,11 +389,42 @@ describe('tauri boundary wrappers', () => {
           await openLogFolder();
           await setMinimizeToTray(false);
           await setLogLevel('debug');
+          await updateTrayMenu({
+            showText: 'Show Main Window',
+            settingsText: 'Settings',
+            updatesText: 'Check for Updates',
+            quitText: 'Quit',
+            captionText: 'Live Caption',
+            captionChecked: false,
+            disconnectAgentText: 'Disconnect Agent',
+            stopRecordingText: 'Stop Recording',
+            statusLabelText: 'Status: {{status}}',
+            statusIdleText: 'Idle',
+            statusRecordingText: 'Recording',
+            statusAgentConnectedText: 'Agent Connected',
+          });
         },
         expected: [
           [TauriCommand.app.openLogFolder],
           [TauriCommand.app.setMinimizeToTray, { enabled: false }],
           [TauriCommand.app.setLogLevel, { level: 'debug' }],
+          [
+            TauriCommand.app.updateTrayMenu,
+            {
+              showText: 'Show Main Window',
+              settingsText: 'Settings',
+              updatesText: 'Check for Updates',
+              quitText: 'Quit',
+              captionText: 'Live Caption',
+              captionChecked: false,
+              disconnectAgentText: 'Disconnect Agent',
+              stopRecordingText: 'Stop Recording',
+              statusLabelText: 'Status: {{status}}',
+              statusIdleText: 'Idle',
+              statusRecordingText: 'Recording',
+              statusAgentConnectedText: 'Agent Connected',
+            },
+          ],
         ],
       },
       {

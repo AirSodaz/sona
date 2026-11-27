@@ -995,7 +995,14 @@ pub fn focus_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     {
         use tauri::Manager;
-        if let Some(window) = app.get_webview_window(label) {
+        if label == crate::app::window::MAIN_WINDOW_LABEL {
+            if app.get_webview_window(label).is_some() {
+                crate::app::window::show_main_window(app);
+                Ok(())
+            } else {
+                Err(format!("Window '{}' not found", label))
+            }
+        } else if let Some(window) = app.get_webview_window(label) {
             let _ = window.show();
             let _ = window.set_focus();
             Ok(())

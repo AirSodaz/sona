@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { flushConfigPersistence } from './configPersistenceService';
 import { documentMutationCoordinator } from './task/documentMutationCoordinator';
 import { forceExit, hasActiveApiServerJobs, hasActiveDownloads } from './tauri/app';
+import { focusWindow } from './tauri/system';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 type TranscriptQuitTaskSnapshot = Pick<
@@ -104,6 +105,8 @@ export async function runGuardedQuit(onExit: () => Promise<void>): Promise<boole
   const shouldWarn = await shouldWarnBeforeQuit();
 
   if (shouldWarn) {
+    // Restore the main window (and macOS Dock icon) only when confirmation is needed.
+    await focusWindow('main').catch(() => {});
     const confirmed = await useDialogStore.getState().confirm(i18n.t('tray.quit_warning_message'), {
       title: i18n.t('tray.quit_warning_title'),
       variant: 'warning',

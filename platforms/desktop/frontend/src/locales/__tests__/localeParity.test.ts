@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import { describe, expect, it } from 'vitest';
 import en from '../en.json';
 import ja from '../ja.json';
@@ -144,5 +145,22 @@ describe('locale resources', () => {
       .map(([key, value]) => `${key}: ${value}`);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('preserves {{status}} placeholder in tray.status_label when interpolated for Rust', async () => {
+    const instance = i18next.createInstance();
+    await instance.init({
+      lng: 'en',
+      interpolation: { escapeValue: false },
+      resources: {
+        en: { translation: en },
+        zh: { translation: zh },
+      },
+    });
+
+    expect(instance.t('tray.status_label', { status: '{{status}}' })).toBe('Status: {{status}}');
+    expect(instance.t('tray.status_label', { lng: 'zh', status: '{{status}}' })).toBe(
+      '状态：{{status}}'
+    );
   });
 });

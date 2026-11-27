@@ -73,17 +73,27 @@ pub async fn update_tray_menu(
     caption_checked: bool,
     disconnect_agent_text: Option<String>,
     stop_recording_text: Option<String>,
+    status_label_text: Option<String>,
+    status_idle_text: Option<String>,
+    status_recording_text: Option<String>,
+    status_agent_connected_text: Option<String>,
 ) -> Result<(), String> {
     crate::app::tray::update_tray_menu(
         app,
-        show_text,
-        settings_text,
-        updates_text,
-        quit_text,
-        caption_text,
-        caption_checked,
-        disconnect_agent_text,
-        stop_recording_text,
+        crate::app::tray::TrayMenuUpdate {
+            show_text,
+            settings_text,
+            updates_text,
+            quit_text,
+            caption_text,
+            caption_checked,
+            disconnect_agent_text,
+            stop_recording_text,
+            status_label_text,
+            status_idle_text,
+            status_recording_text,
+            status_agent_connected_text,
+        },
     )
     .await
 }

@@ -3016,6 +3016,10 @@
     }
   },
   "tray": {
+    "status_label": "状态：{{status}}",
+    "status_idle": "空闲",
+    "status_recording": "正在录音",
+    "status_agent_connected": "Agent 已连接",
     "show": "显示主窗口",
     "live_caption": "实时字幕",
     "settings": "设置",

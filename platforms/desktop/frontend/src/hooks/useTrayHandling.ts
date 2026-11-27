@@ -27,27 +27,37 @@ export function useTrayHandling(
 
   const callbacksRef = useRef({ setIsSettingsOpen, setSettingsInitialTab });
   callbacksRef.current = { setIsSettingsOpen, setSettingsInitialTab };
+  const trayUpdateSeqRef = useRef(0);
+  const trayUpdateChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  // Update tray menu language when locale changes or caption state changes
+  // Serialize tray menu updates so rapid locale/caption transitions never resolve out of order.
   useEffect(() => {
     if (!i18n.language) return;
-    const updateTray = async () => {
-      try {
-        await updateTrayMenu({
-          showText: t('tray.show'),
-          settingsText: t('tray.settings'),
-          updatesText: t('tray.check_updates'),
-          quitText: t('tray.quit'),
-          captionText: t('tray.live_caption'),
-          captionChecked: isCaptionMode,
-          disconnectAgentText: t('tray.disconnect_agent'),
-          stopRecordingText: t('tray.stop_recording'),
-        });
-      } catch (err) {
-        logger.warn('Failed to update tray menu language:', err);
-      }
+    const seq = ++trayUpdateSeqRef.current;
+    const request = {
+      showText: t('tray.show'),
+      settingsText: t('tray.settings'),
+      updatesText: t('tray.check_updates'),
+      quitText: t('tray.quit'),
+      captionText: t('tray.live_caption'),
+      captionChecked: isCaptionMode,
+      disconnectAgentText: t('tray.disconnect_agent'),
+      stopRecordingText: t('tray.stop_recording'),
+      // Pass template text with placeholder unexpanded so Rust formats live state transitions
+      statusLabelText: t('tray.status_label', { status: '{{status}}' }),
+      statusIdleText: t('tray.status_idle'),
+      statusRecordingText: t('tray.status_recording'),
+      statusAgentConnectedText: t('tray.status_agent_connected'),
     };
-    updateTray();
+
+    trayUpdateChainRef.current = trayUpdateChainRef.current
+      .then(async () => {
+        if (seq !== trayUpdateSeqRef.current) return;
+        await updateTrayMenu(request);
+      })
+      .catch((err) => {
+        logger.warn('Failed to update tray menu language:', err);
+      });
   }, [i18n.language, t, isCaptionMode]);
 
   useEffect(() => {

@@ -77,6 +77,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         std::env::args(),
         initial_config.as_ref(),
     );
+    #[cfg(target_os = "macos")]
+    if start_silently {
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+    }
 
     let dashboard_state = crate::platform::dashboard::DesktopDashboardState::new(dashboard_service);
     let sqlite_state = crate::platform::database::DesktopSqliteState::new(sqlite_context);
@@ -227,11 +231,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             crate::app::window::parse_launch_visibility_from_args(&urls),
             Some(crate::app::window::LaunchVisibility::Silent)
         );
-        if !should_stay_silent && let Some(window) = deep_link_app_handle.get_webview_window("main")
-        {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
+        if !should_stay_silent {
+            crate::app::window::show_main_window(&deep_link_app_handle);
         }
     });
 

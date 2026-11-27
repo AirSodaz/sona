@@ -3016,6 +3016,10 @@
     }
   },
   "tray": {
+    "status_label": "상태: {{status}}",
+    "status_idle": "대기 중",
+    "status_recording": "녹음 중",
+    "status_agent_connected": "Agent 연결됨",
     "show": "메인 창 보기",
     "live_caption": "실시간 자막",
     "settings": "설정",
