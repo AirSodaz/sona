@@ -209,7 +209,7 @@ internal fun SonaApp(
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
     var detailExitRequestToken by remember { mutableIntStateOf(0) }
     var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
-    var recordingSheetExpanded by remember { mutableStateOf(false) }
+    var recordingSheetExpanded by rememberSaveable { mutableStateOf(false) }
     var autoStartRequestToken by remember { mutableIntStateOf(0) }
     var hasRequestedMicPermission by rememberSaveable { mutableStateOf(false) }
     var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
@@ -497,7 +497,10 @@ internal fun SonaApp(
                                 val item = dataRecoveryState.recovery.items.firstOrNull { it.id == itemId }
                                 val transcriptHistoryId = item?.historyId
                                 if (item?.source == RecoverySource.TRANSCRIPT_EDIT && transcriptHistoryId != null) {
-                                    navController.navigate(libraryDetailRoute(transcriptHistoryId))
+                                    navController.navigate(libraryDetailRoute(transcriptHistoryId)) {
+                                        popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
+                                        launchSingleTop = true
+                                    }
                                 } else {
                                     onResumeRecovery(itemId)
                                 }
@@ -515,6 +518,14 @@ internal fun SonaApp(
                             onLlmClear = onLlmClear,
                             onCloudCredentialFocusConsumed = {
                                 cloudCredentialFocusRequested = false
+                            },
+                            onReturnedToSettingsList = {
+                                if (currentSectionArg != null) {
+                                    navController.navigate(SonaDestination.SETTINGS.route) {
+                                        popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
+                                        launchSingleTop = true
+                                    }
+                                }
                             },
                             onCloseToLibrary = {
                                 navController.popBackStack()

@@ -57,6 +57,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -316,7 +317,12 @@ private fun SonaFloatingDockItem(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.alpha(if (isSelected) 1f else 0.86f * pillScale),
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = pillScale
+                    scaleY = pillScale
+                }
+                .alpha(if (isSelected) 1f else 0.86f),
         ) {
             Icon(
                 imageVector = destination.icon,

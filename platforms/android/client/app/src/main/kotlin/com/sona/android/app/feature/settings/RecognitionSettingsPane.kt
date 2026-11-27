@@ -207,8 +207,13 @@ private fun LocalRecognitionSettings(
     modifier: Modifier = Modifier,
 ) {
     var pendingDeleteModelId by remember { mutableStateOf<String?>(null) }
-    var catalogExpanded by remember(state.installedModels.isEmpty()) {
+    var catalogExpanded by remember {
         mutableStateOf(state.installedModels.isEmpty() || state.downloadingModelId != null)
+    }
+    LaunchedEffect(state.downloadingModelId) {
+        if (state.downloadingModelId != null) {
+            catalogExpanded = true
+        }
     }
     val context = LocalContext.current
     var hasRequestedNotificationPermission by remember { mutableStateOf(false) }

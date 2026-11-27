@@ -365,7 +365,10 @@ internal fun LibraryDetailScreen(
                         }
                     }
                     FilledTonalButton(
-                        onClick = { projectCreatorVisible = true },
+                        onClick = {
+                            projectDialogVisible = false
+                            projectCreatorVisible = true
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.history_create_project))

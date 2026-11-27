@@ -635,6 +635,32 @@ class LibraryViewModelTest {
         assertEquals(listOf("job-1"), cancelledIds)
     }
 
+    @Test
+    fun `reloading the same transcript preserves active editing state and undo history`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1", "segment-1")
+        viewModel.updateSegmentText("segment-1", "Edited in memory")
+        runCurrent()
+
+        viewModel.loadTranscript("history-1")
+        runCurrent()
+
+        assertTrue(viewModel.state.value.editor.active)
+        assertTrue(viewModel.state.value.editor.dirty)
+        assertTrue(viewModel.state.value.editor.undoAvailable)
+        assertEquals("segment-1", viewModel.state.value.editor.editingSegmentId)
+        assertEquals("Edited in memory", viewModel.state.value.editor.draftSegments.single().text)
+
+        viewModel.undoEdit()
+        assertEquals("Hello", viewModel.state.value.editor.draftSegments.single().text)
+    }
+
     private fun libraryViewModel(
         port: HistoryWorkspacePort,
         transcribe: TranscribeRecordingWithCloud = TranscribeRecordingWithCloud(

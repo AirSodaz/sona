@@ -47,17 +47,22 @@ import com.sona.android.adapters.android.recovery.RecoveryCoordinator
 import com.sona.android.adapters.android.data.isFileWithinRoot
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -71,6 +76,8 @@ class AndroidAudioImportJobAdapter private constructor(
     private val recovery: RecoveryCoordinator,
 ) : AudioImportJobPort {
     private val mutex = Mutex()
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     companion object {
         fun create(context: Context, recovery: RecoveryCoordinator): AndroidAudioImportJobAdapter = AndroidAudioImportJobAdapter(
             context = context.applicationContext,
@@ -81,10 +88,16 @@ class AndroidAudioImportJobAdapter private constructor(
 
     override val queueState: Flow<AudioImportQueueState> = flow {
         while (currentCoroutineContext().isActive) {
-            emit(buildQueueState())
-            delay(500)
+            val current = withContext(Dispatchers.IO) { buildQueueState() }
+            emit(current)
+            val pollIntervalMs = if (current.activeCount > 0) 500L else 2_500L
+            withTimeoutOrNull(pollIntervalMs) { refreshSignal.first() }
         }
-    }
+    }.shareIn(
+        scope = ioScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 1_000L),
+        replay = 1,
+    )
 
     override val state: Flow<AudioImportJobState> = queueState.map { it.toLegacyState() }
 
@@ -95,10 +108,12 @@ class AndroidAudioImportJobAdapter private constructor(
             is AudioImportTarget.NewImport -> {
                 val uri = Uri.parse(target.source.locator)
                 if (uri.scheme == "content") {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    )
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    }
                     val name = displayName(uri) ?: "Imported audio"
                     val staged = stageRecoverySource(job.id, uri, name)
                     persistedJob = job.copy(
@@ -114,18 +129,25 @@ class AndroidAudioImportJobAdapter private constructor(
         recovery.upsert(persistedJob.toRecoveryInput(displayName, RecoveryStage.QUEUED, 0.0))
         reconcileAndScheduleLocked()
         }
+        refreshSignal.tryEmit(Unit)
     }
 
     override suspend fun cancel(jobId: String) {
         mutex.withLock {
-            workManager.value.cancelAllWorkByTag(jobId)
-            recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
-            workManager.value.pruneWork()
-            reconcileAndScheduleLocked()
+            withContext(Dispatchers.IO) {
+                workManager.value.cancelAllWorkByTag(jobId)
+                recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
+                workManager.value.pruneWork()
+                reconcileAndScheduleLocked()
+            }
         }
+        refreshSignal.tryEmit(Unit)
     }
 
-    suspend fun reconcileAndSchedule() = mutex.withLock { reconcileAndScheduleLocked() }
+    suspend fun reconcileAndSchedule() {
+        mutex.withLock { reconcileAndScheduleLocked() }
+        refreshSignal.tryEmit(Unit)
+    }
 
     private suspend fun reconcileAndScheduleLocked() {
         val snapshot = recovery.load()

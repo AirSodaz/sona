@@ -11,8 +11,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.os.LocaleListCompat
+import kotlinx.coroutines.launch
 import com.sona.android.adapters.android.audio.EXTRA_AUDIO_IMPORT_HISTORY_ID
 import com.sona.android.app.composition.SonaAppContainer
 import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
@@ -298,7 +300,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        container.syncWork.scheduleImmediate()
+        lifecycleScope.launch {
+            val syncState = runCatching { container.syncOperations.status().state }.getOrNull()
+            if (syncState != null && syncState !in setOf(
+                    SyncLifecycleState.DISABLED,
+                    SyncLifecycleState.LOCKED,
+                    SyncLifecycleState.PAUSED,
+                    SyncLifecycleState.SYNCING,
+                )
+            ) {
+                container.syncWork.scheduleImmediate()
+            }
+        }
     }
 
     private fun consumeOpenHistoryIntent(intent: Intent?) {

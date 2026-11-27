@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.sona.android.application.llm.LlmConfig
 import com.sona.android.application.llm.LlmConfigurationPort
 import com.sona.android.application.llm.LlmProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,7 +28,22 @@ data class LlmSettingsUiState(
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: Boolean = false,
-)
+) {
+    override fun toString(): String =
+        "LlmSettingsUiState(" +
+            "providers=$providers, " +
+            "providerId=$providerId, " +
+            "strategy=$strategy, " +
+            "model=$model, " +
+            "baseUrl=$baseUrl, " +
+            "apiPath=$apiPath, " +
+            "apiVersion=$apiVersion, " +
+            "apiKeyInput=<redacted>, " +
+            "hasApiKey=$hasApiKey, " +
+            "saving=$saving, " +
+            "saved=$saved, " +
+            "error=$error)"
+}
 
 class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewModel() {
     private val mutableState = MutableStateFlow(LlmSettingsUiState())
@@ -57,6 +73,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
             repository.configuration.drop(1).collect { config ->
                 val provider = providers.firstOrNull { it.id == config.providerId }
                 val strategy = config.strategy.ifBlank { provider?.strategy ?: "OPEN_AI_COMPATIBLE" }
+                val storedKeyPresent = !repository.loadApiKey().isNullOrBlank()
                 mutableState.update {
                     it.copy(
                         providerId = config.providerId,
@@ -65,7 +82,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
                         baseUrl = config.baseUrl,
                         apiPath = config.apiPath ?: provider?.apiPath.orEmpty(),
                         apiVersion = config.apiVersion ?: provider?.apiVersion.orEmpty(),
-                        hasApiKey = it.hasApiKey || config.configured,
+                        hasApiKey = config.configured || storedKeyPresent,
                     )
                 }
             }
@@ -93,6 +110,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
     }
     fun save() {
         val current = state.value
+        if (current.saving) return
         val effectiveKey = current.apiKeyInput.ifBlank { apiKeyDraft }
         if (current.model.isBlank() || current.baseUrl.isBlank() || (effectiveKey.isBlank() && !current.hasApiKey)) {
             mutableState.update { it.copy(error = true) }
@@ -100,7 +118,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
         }
         viewModelScope.launch {
             mutableState.update { it.copy(saving = true, error = false) }
-            runCatching {
+            try {
                 repository.save(
                     LlmConfig(
                         providerId = current.providerId,
@@ -113,22 +131,37 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
                     ),
                     effectiveKey.ifBlank { repository.loadApiKey().orEmpty() },
                 )
-            }.onSuccess {
                 apiKeyDraft = ""
                 mutableState.update {
                     it.copy(apiKeyInput = "", saving = false, hasApiKey = true, saved = true)
                 }
-            }.onFailure {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
                 mutableState.update { it.copy(saving = false, error = true) }
             }
         }
     }
     fun clear() {
+        val current = state.value
+        if (current.saving) return
         viewModelScope.launch {
-            repository.clear()
-            apiKeyDraft = ""
-            mutableState.value = LlmSettingsUiState(providers = state.value.providers)
+            mutableState.update { it.copy(saving = true, error = false) }
+            try {
+                repository.clear()
+                apiKeyDraft = ""
+                mutableState.value = LlmSettingsUiState(providers = state.value.providers)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                mutableState.update { it.copy(saving = false, error = true) }
+            }
         }
+    }
+
+    override fun onCleared() {
+        apiKeyDraft = ""
+        mutableState.update { it.copy(apiKeyInput = "") }
     }
 
     companion object {

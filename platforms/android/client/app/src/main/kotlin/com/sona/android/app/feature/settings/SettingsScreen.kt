@@ -131,6 +131,7 @@ internal fun SettingsScreen(
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
     onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
+    onReturnedToSettingsList: () -> Unit = {},
     onCloseToLibrary: (() -> Unit)? = null,
     bottomOverlayPadding: Dp = 0.dp,
 ) {
@@ -150,6 +151,7 @@ internal fun SettingsScreen(
     val currentOnCloudCredentialFocusConsumed by rememberUpdatedState(
         onCloudCredentialFocusConsumed,
     )
+    val currentOnReturnedToSettingsList by rememberUpdatedState(onReturnedToSettingsList)
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
@@ -157,6 +159,8 @@ internal fun SettingsScreen(
     val detailPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] ==
         PaneAdaptedValue.Expanded
     val isTwoPane = listPaneVisible && detailPaneVisible
+    val showingSinglePaneList = !isTwoPane &&
+        navigator.currentDestination?.pane == ListDetailPaneScaffoldRole.List
     val canNavigateBack = !listPaneVisible && navigator.canNavigateBack()
     val showDetailBack = canNavigateBack || (isTwoPane && initialSection != null && onCloseToLibrary != null)
     val consumeCloudCredentialFocusSession = {
@@ -171,6 +175,12 @@ internal fun SettingsScreen(
             scope.launch { navigator.navigateBack() }
         } else {
             onCloseToLibrary?.invoke()
+        }
+    }
+
+    LaunchedEffect(showingSinglePaneList) {
+        if (showingSinglePaneList) {
+            currentOnReturnedToSettingsList()
         }
     }
 

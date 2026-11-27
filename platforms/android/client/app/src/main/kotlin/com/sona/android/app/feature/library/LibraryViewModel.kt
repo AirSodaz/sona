@@ -452,6 +452,12 @@ class LibraryViewModel(
             try {
                 val segments = library.loadTranscript(historyId)
                 if (generation != detailGeneration) return@launch
+                val currentEditor = mutableState.value.editor
+                if (currentEditor.active && currentEditor.historyId != historyId && !currentEditor.dirty) {
+                    undoStack.clear()
+                    redoStack.clear()
+                    mutableState.update { it.copy(editor = TranscriptEditorUiState()) }
+                }
                 mutableState.update {
                     it.copy(
                         detail = LibraryDetailUiState.Ready(historyId, segments),
@@ -876,6 +882,10 @@ class LibraryViewModel(
     }
 
     private suspend fun restoreDraft(historyId: String, current: List<TranscriptSegment>) {
+        val currentEditor = mutableState.value.editor
+        if (currentEditor.active && currentEditor.historyId == historyId && currentEditor.baseSegments == current) {
+            return
+        }
         val recovered = runCatching { editRecovery?.load(historyId) }.getOrNull() ?: return
         if (recovered.baseSegments != current) return
         undoStack.clear()

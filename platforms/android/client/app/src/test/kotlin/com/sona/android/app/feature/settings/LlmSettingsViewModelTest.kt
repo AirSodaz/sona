@@ -255,6 +255,14 @@ class LlmSettingsViewModelTest {
     fun `unknown provider ID returns null resource for fallback formatting`() {
         assertNull(llmProviderLabelRes("custom_provider_name"))
     }
+
+    @Test
+    fun `state toString redacts typed apiKeyInput`() {
+        val state = LlmSettingsUiState(apiKeyInput = "sk-super-secret-value")
+        val rendered = state.toString()
+        assertFalse(rendered.contains("sk-super-secret-value"))
+        assertTrue(rendered.contains("apiKeyInput=<redacted>"))
+    }
 }
 
 
