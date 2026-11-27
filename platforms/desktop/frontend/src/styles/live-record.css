@@ -84,15 +84,26 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.record-primary-slot.is-locked {
+  cursor: not-allowed;
 }
 
 .record-primary-slot:focus {
   outline: none;
 }
 
+.record-primary-slot:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .control-button {
   width: 64px;
   height: 64px;
+  flex-shrink: 0;
   border-radius: 50%;
   border: none;
   cursor: pointer;
@@ -286,6 +297,7 @@
     transition: none;
   }
 
+  .control-button.stop:not(.is-paused):not(.is-preparing),
   .control-button.stop,
   .control-button.is-preparing,
   .control-button.is-preparing .control-button-inner {

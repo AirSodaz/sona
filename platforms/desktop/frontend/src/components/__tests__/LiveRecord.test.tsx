@@ -11,6 +11,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptStore as useCanonicalTranscriptStore } from '../../stores/transcriptStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
@@ -365,6 +366,7 @@ describe('LiveRecord', () => {
         title: '',
         icon: null,
       });
+      useTranscriptRuntimeStore.setState({ isAgentRecording: false });
       useOnboardingStore.setState({
         persistedState: { version: 1, status: 'pending' },
         currentStep: 'microphone',
@@ -455,6 +457,46 @@ describe('LiveRecord', () => {
     expect(container.querySelector('.control-button-pause-icon')?.className).toContain(
       'is-visible'
     );
+  });
+
+  it('closes the pause tooltip when recording stops and exposes locked focus slot for agent recording', async () => {
+    const { container } = render(<LiveRecord />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    const pauseBtn = screen.getByRole('button', { name: /live.pause/i });
+    fireEvent.focus(pauseBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe('live.pause');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    act(() => {
+      useTranscriptRuntimeStore.setState({ isAgentRecording: true });
+    });
+
+    const lockedSlot = container.querySelector('.record-primary-slot') as HTMLElement | null;
+    expect(lockedSlot).not.toBeNull();
+    expect(lockedSlot?.className).toContain('is-locked');
+    expect(lockedSlot?.getAttribute('tabindex')).toBe('0');
+    expect(lockedSlot?.getAttribute('role')).toBe('group');
+    expect(lockedSlot?.getAttribute('aria-label')).toBe('live.agent_recording_locked');
+
+    if (lockedSlot) {
+      fireEvent.focus(lockedSlot);
+    }
+    expect(screen.getByRole('tooltip').textContent).toBe('live.agent_recording_locked');
+
+    act(() => {
+      useTranscriptRuntimeStore.setState({ isAgentRecording: false });
+    });
   });
 
   it('pauses native recording by flushing the current final segment and blocks later partials until resume', async () => {

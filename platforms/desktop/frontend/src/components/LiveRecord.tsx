@@ -327,6 +327,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     isTransitioning,
   ]);
 
+  const isPrimaryLocked = isAgentRecording && !isRecording;
+  const agentLockedLabel = t('live.agent_recording_locked', {
+    defaultValue: 'AI Agent recording in progress',
+  });
+
   return (
     <div className={`live-record-container ${className}`}>
       <div className="live-record-main-content">
@@ -350,7 +355,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             className={`record-pause-slot ${isRecording ? 'is-open' : ''}`}
             aria-hidden={!isRecording}
           >
-            <Tooltip content={isPaused ? t('live.resume') : t('live.pause')} placement="bottom">
+            <Tooltip
+              content={isPaused ? t('live.resume') : t('live.pause')}
+              placement="bottom"
+              disabled={!isRecording}
+            >
               <button
                 type="button"
                 className={`control-button pause ${isPaused ? 'is-paused' : ''}`}
@@ -375,10 +384,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             content={
               isRecording
                 ? t('live.stop')
-                : isAgentRecording
-                  ? t('live.agent_recording_locked', {
-                      defaultValue: 'AI Agent recording in progress',
-                    })
+                : isPrimaryLocked
+                  ? agentLockedLabel
                   : isInitializing
                     ? 'Initializing...'
                     : t('live.start_recording')
@@ -386,8 +393,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             placement="bottom"
           >
             <div
-              className="record-primary-slot"
-              tabIndex={isAgentRecording && !isRecording ? 0 : undefined}
+              className={`record-primary-slot ${isPrimaryLocked ? 'is-locked' : ''}`.trim()}
+              tabIndex={isPrimaryLocked ? 0 : undefined}
+              role={isPrimaryLocked ? 'group' : undefined}
+              aria-label={isPrimaryLocked ? agentLockedLabel : undefined}
             >
               <button
                 ref={startButtonRef}
@@ -397,19 +406,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                   isRecording ? 'stop' : 'start',
                   isInitializing || isTransitioning ? 'is-preparing' : '',
                   isPaused ? 'is-paused' : '',
-                  isAgentRecording && !isRecording ? 'is-locked' : '',
+                  isPrimaryLocked ? 'is-locked' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 onClick={handleToggleRecording}
-                disabled={isInitializing || isTransitioning || (!isRecording && isAgentRecording)}
+                disabled={isInitializing || isTransitioning || isPrimaryLocked}
                 aria-label={
                   isRecording
                     ? t('live.stop')
-                    : isAgentRecording
-                      ? t('live.agent_recording_locked', {
-                          defaultValue: 'AI Agent recording in progress',
-                        })
+                    : isPrimaryLocked
+                      ? agentLockedLabel
                       : t('live.start_recording')
                 }
               >
