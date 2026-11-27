@@ -1,5 +1,6 @@
 package com.sona.android.app.feature.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +36,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -57,6 +62,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.sona.android.app.ui.component.SonaOptionItem
 import com.sona.android.app.ui.component.SonaSingleChoiceDialog
+import com.sona.android.app.ui.component.SonaTextInputDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -64,7 +70,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -89,6 +94,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -97,6 +105,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -207,81 +216,53 @@ internal fun LibraryScreen(
     }
 
     if (createProjectDialogVisible) {
-        AlertDialog(
-            onDismissRequest = { createProjectDialogVisible = false },
-            title = { Text(stringResource(R.string.history_create_project)) },
-            text = {
-                OutlinedTextField(
-                    value = newProjectName,
-                    onValueChange = { newProjectName = it },
-                    label = { Text(stringResource(R.string.history_project_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        SonaTextInputDialog(
+            title = stringResource(R.string.history_create_project),
+            value = newProjectName,
+            onValueChange = { newProjectName = it },
+            label = stringResource(R.string.history_project_name),
+            confirmText = stringResource(R.string.history_create_project),
+            confirmEnabled = newProjectName.isNotBlank() && !state.operationInProgress,
+            onConfirm = {
+                onCreateProject(newProjectName.trim())
+                newProjectName = ""
+                createProjectDialogVisible = false
             },
-            confirmButton = {
-                TextButton(
-                    enabled = newProjectName.isNotBlank() && !state.operationInProgress,
-                    onClick = {
-                        onCreateProject(newProjectName.trim())
-                        newProjectName = ""
-                        createProjectDialogVisible = false
-                    },
-                ) { Text(stringResource(R.string.history_create_project)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { createProjectDialogVisible = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
+            onDismiss = { createProjectDialogVisible = false },
         )
     }
 
     managedProject?.let { project ->
-        AlertDialog(
-            onDismissRequest = { managedProject = null },
-            title = { Text(project.name) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = renameProjectName,
-                        onValueChange = { renameProjectName = it },
-                        label = { Text(stringResource(R.string.history_project_name)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    TextButton(
-                        onClick = {
-                            managedProject = null
-                            deleteProjectConfirmation = project
-                        },
-                    ) {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.action_delete),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
+        SonaTextInputDialog(
+            title = project.name,
+            value = renameProjectName,
+            onValueChange = { renameProjectName = it },
+            label = stringResource(R.string.history_project_name),
+            confirmText = stringResource(R.string.action_save),
+            confirmEnabled = renameProjectName.isNotBlank() && !state.operationInProgress,
+            onConfirm = {
+                onRenameProject(project.id, renameProjectName.trim())
+                managedProject = null
             },
-            confirmButton = {
+            onDismiss = { managedProject = null },
+            extraContent = {
                 TextButton(
-                    enabled = renameProjectName.isNotBlank() && !state.operationInProgress,
                     onClick = {
-                        onRenameProject(project.id, renameProjectName.trim())
                         managedProject = null
+                        deleteProjectConfirmation = project
                     },
-                ) { Text(stringResource(R.string.action_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { managedProject = null }) {
-                    Text(stringResource(R.string.action_cancel))
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             },
         )
@@ -350,6 +331,10 @@ internal fun LibraryScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isSelecting = state.selectedIds.isNotEmpty()
     val hasActiveFilter = state.query.query.isNotBlank() || activeFilterCount > 0
+
+    BackHandler(enabled = isSelecting) {
+        onClearSelection()
+    }
 
     LaunchedEffect(state.items.isEmpty()) {
         if (state.items.isEmpty()) {
@@ -645,7 +630,8 @@ internal fun LibraryScreen(
                 onRefresh = onRefresh,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .imePadding(),
             ) {
                 Box(
                     modifier = Modifier
@@ -676,6 +662,7 @@ internal fun LibraryScreen(
                                     )
                                 }
                                 val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier
@@ -690,7 +677,11 @@ internal fun LibraryScreen(
                                         start = 20.dp,
                                         end = 20.dp,
                                         top = 10.dp,
-                                        bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+                                        bottom = if (imeVisible) {
+                                            16.dp
+                                        } else {
+                                            maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp)
+                                        },
                                     ),
                                 ) {
                                     items(state.items, key = HistoryItem::historyId) { item ->
@@ -750,6 +741,9 @@ private fun LibrarySearchPill(
     activeFilterCount: Int,
     onOpenFilters: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -791,6 +785,13 @@ private fun LibrarySearchPill(
                         color = MaterialTheme.colorScheme.onSurface,
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        },
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

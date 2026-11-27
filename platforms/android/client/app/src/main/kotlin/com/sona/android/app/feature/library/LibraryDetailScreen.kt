@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,12 +26,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Edit
@@ -59,7 +62,8 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -67,23 +71,29 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import com.sona.android.app.ui.component.SonaOptionItem
 import com.sona.android.app.ui.component.SonaSingleChoiceDialog
+import com.sona.android.app.ui.component.SonaTextInputDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -107,6 +117,112 @@ import com.sona.android.application.recording.CloudTranscriptionFailure
 private enum class DetailWorkspaceTab {
     TRANSCRIPT,
     AI_SUMMARY,
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProjectPickerSheet(
+    selectedProjectId: String?,
+    projects: List<ProjectRecord>,
+    enabled: Boolean,
+    onSelectProject: (String?) -> Unit,
+    onCreateProject: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val entries: List<Pair<String?, String>> = listOf(
+        null to stringResource(R.string.history_scope_inbox),
+    ) + projects.map { it.id to it.name }
+
+    val dismissWithAnimation: () -> Unit = {
+        scope.launch {
+            sheetState.hide()
+        }.invokeOnCompletion {
+            if (!sheetState.isVisible) {
+                onDismiss()
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.history_projects),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                entries.forEach { (projectId, label) ->
+                    val selected = selectedProjectId == projectId
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .selectable(
+                                selected = selected,
+                                enabled = enabled,
+                                role = Role.RadioButton,
+                                onClick = {
+                                    if (!selected) {
+                                        onSelectProject(projectId)
+                                    }
+                                    dismissWithAnimation()
+                                },
+                            )
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = selected,
+                            onClick = null,
+                            enabled = enabled,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+
+            FilledTonalButton(
+                onClick = onCreateProject,
+                enabled = enabled,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.history_create_project))
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -293,116 +409,48 @@ internal fun LibraryDetailScreen(
     }
 
     if (titleEditorVisible) {
-        AlertDialog(
-            onDismissRequest = { titleEditorVisible = false },
-            title = { Text(stringResource(R.string.history_edit_title)) },
-            text = {
-                OutlinedTextField(
-                    value = titleInput,
-                    onValueChange = { titleInput = it },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        SonaTextInputDialog(
+            title = stringResource(R.string.history_edit_title),
+            value = titleInput,
+            onValueChange = { titleInput = it },
+            confirmText = stringResource(R.string.action_save),
+            confirmEnabled = titleInput.isNotBlank() && !operationInProgress,
+            onConfirm = {
+                onUpdateTitle(titleInput.trim())
+                titleEditorVisible = false
             },
-            confirmButton = {
-                TextButton(
-                    enabled = titleInput.isNotBlank() && !operationInProgress,
-                    onClick = {
-                        onUpdateTitle(titleInput.trim())
-                        titleEditorVisible = false
-                    },
-                ) { Text(stringResource(R.string.action_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { titleEditorVisible = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
+            onDismiss = { titleEditorVisible = false },
         )
     }
 
     if (projectCreatorVisible) {
-        AlertDialog(
-            onDismissRequest = { projectCreatorVisible = false },
-            title = { Text(stringResource(R.string.history_create_project)) },
-            text = {
-                OutlinedTextField(
-                    value = projectNameInput,
-                    onValueChange = { projectNameInput = it },
-                    label = { Text(stringResource(R.string.history_project_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        SonaTextInputDialog(
+            title = stringResource(R.string.history_create_project),
+            value = projectNameInput,
+            onValueChange = { projectNameInput = it },
+            label = stringResource(R.string.history_project_name),
+            confirmText = stringResource(R.string.history_create_project),
+            confirmEnabled = projectNameInput.isNotBlank() && !operationInProgress,
+            onConfirm = {
+                onCreateProject(projectNameInput.trim())
+                projectNameInput = ""
+                projectCreatorVisible = false
             },
-            confirmButton = {
-                TextButton(
-                    enabled = projectNameInput.isNotBlank() && !operationInProgress,
-                    onClick = {
-                        onCreateProject(projectNameInput.trim())
-                        projectNameInput = ""
-                        projectCreatorVisible = false
-                    },
-                ) { Text(stringResource(R.string.history_create_project)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { projectCreatorVisible = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
+            onDismiss = { projectCreatorVisible = false },
         )
     }
 
     if (projectDialogVisible && item != null) {
-        AlertDialog(
-            onDismissRequest = { projectDialogVisible = false },
-            title = { Text(stringResource(R.string.history_projects)) },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        FilterChip(
-                            selected = item.projectId == null,
-                            enabled = !operationInProgress,
-                            onClick = { onUpdateProject(null) },
-                            label = { Text(stringResource(R.string.history_scope_inbox)) },
-                        )
-                        projects.forEach { project ->
-                            val selected = project.id == item.projectId
-                            FilterChip(
-                                selected = selected,
-                                enabled = !operationInProgress,
-                                onClick = {
-                                    onUpdateProject(if (selected) null else project.id)
-                                },
-                                label = { Text(project.name) },
-                            )
-                        }
-                    }
-                    FilledTonalButton(
-                        onClick = {
-                            projectDialogVisible = false
-                            projectCreatorVisible = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.history_create_project))
-                    }
-                }
+        ProjectPickerSheet(
+            selectedProjectId = item.projectId,
+            projects = projects,
+            enabled = !operationInProgress,
+            onSelectProject = onUpdateProject,
+            onCreateProject = {
+                projectDialogVisible = false
+                projectCreatorVisible = true
             },
-            confirmButton = {
-                TextButton(onClick = { projectDialogVisible = false }) {
-                    Text(stringResource(R.string.action_done))
-                }
-            },
+            onDismiss = { projectDialogVisible = false },
         )
     }
 

@@ -11,12 +11,16 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -51,8 +55,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
@@ -78,21 +88,29 @@ internal fun LlmSettingsPane(
     var apiKeyVisible by remember { mutableStateOf(false) }
     var showClearConfirmation by remember { mutableStateOf(false) }
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
+                .align(Alignment.TopCenter)
                 .widthIn(max = 720.dp)
                 .fillMaxWidth()
+                .imePadding()
                 .springOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
                     top = 20.dp,
-                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-                )
-                .align(Alignment.TopCenter),
+                    bottom = if (imeVisible) {
+                        16.dp
+                    } else {
+                        maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp)
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Provider & Model Section Card
@@ -153,6 +171,13 @@ internal fun LlmSettingsPane(
                         onValueChange = onModel,
                         enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_model)) },
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -162,6 +187,14 @@ internal fun LlmSettingsPane(
                         onValueChange = onBaseUrl,
                         enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_base_url)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -171,6 +204,13 @@ internal fun LlmSettingsPane(
                         onValueChange = onPath,
                         enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_api_path)) },
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -180,6 +220,13 @@ internal fun LlmSettingsPane(
                         onValueChange = onVersion,
                         enabled = !state.saving,
                         label = { Text(stringResource(R.string.llm_api_version)) },
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -242,6 +289,17 @@ internal fun LlmSettingsPane(
                         } else {
                             PasswordVisualTransformation()
                         },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            },
+                        ),
                         trailingIcon = {
                             IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
                                 Icon(
