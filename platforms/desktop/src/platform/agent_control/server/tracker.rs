@@ -31,15 +31,15 @@ impl ActiveConnectionTracker {
     pub fn on_connected(&self, app_handle: Option<&tauri::AppHandle>) {
         self.count.fetch_add(1, Ordering::SeqCst);
         if let Some(app) = app_handle {
-            crate::app::tray::set_agent_connected(app, true);
+            crate::app::tray::set_agent_connected(app, self.count.load(Ordering::SeqCst) > 0);
         }
     }
 
     pub fn on_disconnected(&self, app_handle: Option<&tauri::AppHandle>) {
         let mut current = self.count.load(Ordering::SeqCst);
-        let prev = loop {
+        loop {
             if current == 0 {
-                break 0;
+                break;
             }
             match self.count.compare_exchange_weak(
                 current,
@@ -47,14 +47,12 @@ impl ActiveConnectionTracker {
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             ) {
-                Ok(prev) => break prev,
+                Ok(_) => break,
                 Err(actual) => current = actual,
             }
-        };
-        if prev == 1
-            && let Some(app) = app_handle
-        {
-            crate::app::tray::set_agent_connected(app, false);
+        }
+        if let Some(app) = app_handle {
+            crate::app::tray::set_agent_connected(app, self.count.load(Ordering::SeqCst) > 0);
         }
     }
 
@@ -108,14 +106,18 @@ pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
             false
         };
 
-        if !is_ui && let Some(facade) = facade {
-            let _ = facade
-                .stop_recording(
-                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
-                )
-                .await;
+        if !is_ui {
+            if let Some(facade) = facade {
+                let _ = facade
+                    .stop_recording(
+                        crate::platform::agent_control::facade::StopRecordingRequest {
+                            discard: false,
+                        },
+                    )
+                    .await;
+            }
+            crate::app::tray::set_recording_active(&app_handle_clone, false);
         }
         let _ = app_handle_clone.emit("tray-stop-recording", ());
-        crate::app::tray::set_recording_active(&app_handle_clone, false);
     });
 }

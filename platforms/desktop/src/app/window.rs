@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
 pub const MAIN_WINDOW_TITLE: &str = "Sona - Transcript Editor";
@@ -137,7 +137,12 @@ pub fn create_main_window<R: Runtime>(
         .build()?;
 
     if start_silently {
-        let _ = window.hide();
+        #[cfg(target_os = "macos")]
+        if let Err(error) = app.set_activation_policy(tauri::ActivationPolicy::Accessory) {
+            log::warn!(
+                "[Window] Failed to set macOS Accessory activation policy on silent startup: {error}"
+            );
+        }
     }
 
     // Paint the frame before the first visible frame is composited so the
@@ -148,6 +153,50 @@ pub fn create_main_window<R: Runtime>(
     }
 
     Ok(window)
+}
+
+/// Returns whether macOS Dock / application reopen should restore the main window.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn should_restore_main_window_on_reopen(
+    has_visible_windows: bool,
+    main_visible: bool,
+    main_minimized: bool,
+) -> bool {
+    !has_visible_windows || !main_visible || main_minimized
+}
+
+/// Restores the main window from minimized/hidden state and brings it to focus.
+///
+/// On macOS, switches the activation policy back to `Regular` so the Dock icon
+/// and application switcher entry reappear alongside the window.
+pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
+        return;
+    };
+
+    #[cfg(target_os = "macos")]
+    if let Err(error) = app.set_activation_policy(tauri::ActivationPolicy::Regular) {
+        log::warn!("[Window] Failed to restore macOS Regular activation policy: {error}");
+    }
+
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+/// Hides the main window into the system tray.
+///
+/// On macOS, switches the activation policy to `Accessory` so the app stays
+/// running in the menu bar without keeping an icon in the Dock.
+pub(crate) fn hide_main_window_to_tray<R: Runtime>(window: &tauri::Window<R>) {
+    let _ = window.hide();
+    #[cfg(target_os = "macos")]
+    if let Err(error) = window
+        .app_handle()
+        .set_activation_policy(tauri::ActivationPolicy::Accessory)
+    {
+        log::warn!("[Window] Failed to set macOS Accessory activation policy: {error}");
+    }
 }
 
 /// Recolor the native window frame to match the application theme.
@@ -323,5 +372,14 @@ mod tests {
             parse_launch_visibility_from_args(["sona://agent/launch?silent=true&focus=true"]),
             Some(LaunchVisibility::Focus)
         );
+    }
+
+    #[test]
+    fn restores_main_window_on_reopen_when_hidden_minimized_or_no_visible_windows() {
+        assert!(should_restore_main_window_on_reopen(false, false, false));
+        // Even if an auxiliary window (e.g. caption) is visible, reopen restores a hidden main window.
+        assert!(should_restore_main_window_on_reopen(true, false, false));
+        assert!(should_restore_main_window_on_reopen(true, true, true));
+        assert!(!should_restore_main_window_on_reopen(true, true, false));
     }
 }

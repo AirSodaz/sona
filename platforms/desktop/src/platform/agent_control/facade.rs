@@ -187,10 +187,11 @@ impl AgentControlFacade {
     pub fn focus_window(&self) -> Result<bool, String> {
         if let Some(app) = &self.app_handle {
             use tauri::Manager;
-            if let Some(window) = app.get_webview_window(crate::app::window::MAIN_WINDOW_LABEL) {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+            if app
+                .get_webview_window(crate::app::window::MAIN_WINDOW_LABEL)
+                .is_some()
+            {
+                crate::app::window::show_main_window(app);
                 return Ok(true);
             }
         }

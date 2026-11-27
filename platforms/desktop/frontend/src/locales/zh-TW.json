@@ -3016,6 +3016,10 @@
     }
   },
   "tray": {
+    "status_label": "狀態：{{status}}",
+    "status_idle": "閒置",
+    "status_recording": "正在錄音",
+    "status_agent_connected": "Agent 已連線",
     "show": "顯示主視窗",
     "live_caption": "即時字幕",
     "settings": "設定",

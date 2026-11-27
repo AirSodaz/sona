@@ -167,6 +167,10 @@ type UpdateTrayMenuArgs = {
   captionChecked: boolean;
   disconnectAgentText?: string;
   stopRecordingText?: string;
+  statusLabelText?: string;
+  statusIdleText?: string;
+  statusRecordingText?: string;
+  statusAgentConnectedText?: string;
 };
 
 type StartAudioCaptureArgs = {

@@ -26,7 +26,8 @@ vi.mock('../../stores/transcriptCoordinator', () => ({
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, opts?: Record<string, string>) =>
+      opts?.status ? `${key}:${opts.status}` : key,
     i18n: {
       language: 'en',
     },
@@ -116,5 +117,39 @@ describe('useTrayHandling', () => {
     expect(setSettingsInitialTab1).not.toHaveBeenCalled();
     expect(setIsSettingsOpen2).toHaveBeenCalledWith(true);
     expect(setSettingsInitialTab2).toHaveBeenCalledWith('general');
+  });
+
+  it('syncs tray menu texts and caption checked state via update_tray_menu', async () => {
+    renderHook(() => useTrayHandling(vi.fn(), vi.fn()));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('update_tray_menu', {
+        showText: 'tray.show',
+        settingsText: 'tray.settings',
+        updatesText: 'tray.check_updates',
+        quitText: 'tray.quit',
+        captionText: 'tray.live_caption',
+        captionChecked: false,
+        disconnectAgentText: 'tray.disconnect_agent',
+        stopRecordingText: 'tray.stop_recording',
+        statusLabelText: 'tray.status_label:{{status}}',
+        statusIdleText: 'tray.status_idle',
+        statusRecordingText: 'tray.status_recording',
+        statusAgentConnectedText: 'tray.status_agent_connected',
+      });
+    });
+
+    await act(async () => {
+      await listeners.get('toggle-caption')?.();
+    });
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'update_tray_menu',
+        expect.objectContaining({
+          captionChecked: true,
+        })
+      );
+    });
   });
 });

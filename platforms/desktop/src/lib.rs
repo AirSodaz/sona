@@ -76,7 +76,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
     #[cfg(debug_assertions)]
     export_typescript_bindings().expect("Failed to export typescript bindings");
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Trace)
@@ -111,7 +111,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 ) {
                     crate::app::settings::MainWindowCloseAction::Ignore => {}
                     crate::app::settings::MainWindowCloseAction::HideToTray => {
-                        let _ = window.hide();
+                        crate::app::window::hide_main_window_to_tray(window);
                         api.prevent_close();
                     }
                     crate::app::settings::MainWindowCloseAction::RequestQuit => {
@@ -136,10 +136,8 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 crate::app::window::parse_launch_visibility_from_args(&args),
                 Some(crate::app::window::LaunchVisibility::Silent)
             );
-            if !should_stay_silent && let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
+            if !should_stay_silent {
+                crate::app::window::show_main_window(app);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -160,7 +158,33 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(prevent_default)
         .invoke_handler(crate::commands::get_handlers())
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())?;
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } = event
+        {
+            let should_restore = app_handle
+                .get_webview_window(crate::app::window::MAIN_WINDOW_LABEL)
+                .is_some_and(|w| {
+                    crate::app::window::should_restore_main_window_on_reopen(
+                        has_visible_windows,
+                        w.is_visible().unwrap_or(false),
+                        w.is_minimized().unwrap_or(false),
+                    )
+                });
+            if should_restore {
+                crate::app::window::show_main_window(app_handle);
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app_handle, event);
+    });
+
+    Ok(())
 }
 
 #[cfg(test)]
