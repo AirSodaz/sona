@@ -56,6 +56,12 @@ export function getModelPlaceholder(provider: LlmProvider): string {
       return 'Qwen/Qwen3.5-4B';
     case 'google_translate':
     case 'google_translate_free':
+    case 'deepl':
+    case 'microsoft_translator':
+    case 'libre_translate':
+    case 'deeplx':
+    case 'baidu_translate':
+    case 'youdao_translate':
       return 'default';
     default:
       return 'gpt-4o-mini';

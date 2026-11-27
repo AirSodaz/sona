@@ -97,6 +97,18 @@ pub enum LlmProviderStrategy {
     GoogleTranslate,
     #[serde(rename = "google_translate_free")]
     GoogleTranslateFree,
+    #[serde(rename = "deepl")]
+    Deepl,
+    #[serde(rename = "microsoft_translator")]
+    MicrosoftTranslator,
+    #[serde(rename = "libre_translate")]
+    LibreTranslate,
+    #[serde(rename = "deeplx")]
+    Deeplx,
+    #[serde(rename = "baidu_translate")]
+    BaiduTranslate,
+    #[serde(rename = "youdao_translate")]
+    YoudaoTranslate,
     OpenAiCompatible,
     OpenAiCompatibleCustomPath,
     #[serde(rename = "local")]
@@ -160,9 +172,47 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::Laya => Self::Laya,
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
+                BuiltinLlmProvider::Deepl => Self::Deepl,
+                BuiltinLlmProvider::MicrosoftTranslator => Self::MicrosoftTranslator,
+                BuiltinLlmProvider::LibreTranslate => Self::LibreTranslate,
+                BuiltinLlmProvider::Deeplx => Self::Deeplx,
+                BuiltinLlmProvider::BaiduTranslate => Self::BaiduTranslate,
+                BuiltinLlmProvider::YoudaoTranslate => Self::YoudaoTranslate,
                 BuiltinLlmProvider::CustomOpenAiCompatible => Self::OpenAiCompatible,
                 BuiltinLlmProvider::Local => Self::Local,
             },
+        }
+    }
+
+    pub fn is_online_translation_api(self) -> bool {
+        matches!(
+            self,
+            Self::GoogleTranslate
+                | Self::GoogleTranslateFree
+                | Self::Deepl
+                | Self::MicrosoftTranslator
+                | Self::LibreTranslate
+                | Self::Deeplx
+                | Self::BaiduTranslate
+                | Self::YoudaoTranslate
+        )
+    }
+
+    pub fn is_translation_only(self) -> bool {
+        self.is_online_translation_api() || self == Self::LocalNmt
+    }
+
+    pub fn translation_only_display_name(self) -> &'static str {
+        match self {
+            Self::LocalNmt => "Local NMT",
+            Self::GoogleTranslate | Self::GoogleTranslateFree => "Google Translate",
+            Self::Deepl => "DeepL",
+            Self::MicrosoftTranslator => "Microsoft Translator",
+            Self::LibreTranslate => "LibreTranslate",
+            Self::Deeplx => "DeepLX",
+            Self::BaiduTranslate => "Baidu Translate",
+            Self::YoudaoTranslate => "Youdao Translate",
+            _ => "Translation API",
         }
     }
 }
@@ -224,6 +274,12 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "laya" => Self::Laya,
             "google_translate" => Self::GoogleTranslate,
             "google_translate_free" => Self::GoogleTranslateFree,
+            "deepl" => Self::Deepl,
+            "microsoft_translator" => Self::MicrosoftTranslator,
+            "libre_translate" => Self::LibreTranslate,
+            "deeplx" => Self::Deeplx,
+            "baidu_translate" => Self::BaiduTranslate,
+            "youdao_translate" => Self::YoudaoTranslate,
             "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,
             "open_ai_compatible_custom_path" | "openai_compatible_custom_path" => {
                 Self::OpenAiCompatibleCustomPath

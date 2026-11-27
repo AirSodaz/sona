@@ -69,6 +69,8 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
                 model: self.model_name.clone(),
                 api_path: None,
                 api_version: None,
+                app_id: None,
+                api_region: None,
                 temperature: Some(0.0),
                 reasoning_enabled: Some(false),
                 reasoning_level: None,

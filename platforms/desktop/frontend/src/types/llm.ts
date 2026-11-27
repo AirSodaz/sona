@@ -94,6 +94,10 @@ export interface LlmProviderSetting {
   apiPath?: string;
   /** Optional provider-specific API version. */
   apiVersion?: string;
+  /** Optional App ID / App Key (used by Baidu / Youdao Translate). */
+  appId?: string;
+  /** Optional service region (used by Microsoft / Azure Translator). */
+  apiRegion?: string;
 }
 
 export type LlmModelSource = 'manual' | 'discovered';
@@ -233,6 +237,10 @@ export interface LlmConfig {
   apiPath?: string;
   /** Optional provider-specific API version. */
   apiVersion?: string;
+  /** Optional App ID / App Key (used by Baidu / Youdao Translate). */
+  appId?: string;
+  /** Optional service region (used by Microsoft / Azure Translator). */
+  apiRegion?: string;
   /** LLM temperature (0.0 to 2.0). */
   temperature?: number;
   reasoningEnabled?: boolean;

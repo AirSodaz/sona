@@ -725,6 +725,14 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 .and_then(|s| s.get("apiVersion"))
                 .and_then(|v| v.as_str())
                 .map(String::from);
+            let app_id = provider_settings
+                .and_then(|s| s.get("appId"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let api_region = provider_settings
+                .and_then(|s| s.get("apiRegion"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
             let temperature = llm_settings
                 .as_ref()
                 .and_then(|s| s.get("selections"))
@@ -740,6 +748,8 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 model: model_str.to_string(),
                 api_path,
                 api_version,
+                app_id,
+                api_region,
                 temperature,
                 reasoning_enabled: None,
                 reasoning_level: None,

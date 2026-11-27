@@ -17,6 +17,7 @@ import {
   buildLlmConfig,
   createProviderSetting,
   getProviderDefinition,
+  isTranslationOnlyProvider,
 } from '../../../services/llm/providers';
 import {
   addLlmModel,
@@ -201,7 +202,7 @@ export function ProviderDetailsModal({
     applyTrackedLlmSettings(nextSettings);
     setDraftModelName('');
 
-    if (provider === 'google_translate' || provider === 'google_translate_free') {
+    if (isTranslationOnlyProvider(provider, currentLlmState.customProviders)) {
       return;
     }
 

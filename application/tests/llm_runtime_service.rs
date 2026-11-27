@@ -51,6 +51,8 @@ fn config() -> LlmConfig {
         model: "test-model".into(),
         api_path: None,
         api_version: None,
+        app_id: None,
+        api_region: None,
         temperature: Some(0.7),
         reasoning_enabled: None,
         reasoning_level: None,

@@ -7,11 +7,7 @@ use sona_core::ports::llm::LlmPortError;
 pub async fn complete_with_provider(
     request: LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
-    if matches!(
-        request.config.strategy,
-        sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
-            | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
-    ) {
+    if request.config.strategy.is_online_translation_api() {
         crate::native_completion::execute_native_completion(&request).await
     } else {
         crate::aimux_adapter::execute_aimux_completion(&request).await

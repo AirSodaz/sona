@@ -306,6 +306,43 @@ pub async fn post_json_request(
         .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))
 }
 
+pub async fn post_form_request(
+    url: &LlmApiUrl,
+    params: &[(&str, &str)],
+    timeout_seconds: Option<u64>,
+) -> Result<Value, LlmPortError> {
+    let client = url.client(timeout_seconds)?;
+    let encoded = params
+        .iter()
+        .map(|(key, value)| {
+            format!(
+                "{}={}",
+                urlencoding::encode(key),
+                urlencoding::encode(value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("&");
+
+    let response = client
+        .post(url.reqwest_url())
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(encoded)
+        .send()
+        .await
+        .map_err(reqwest_port_error)?;
+
+    let status = response.status();
+    let resp_headers = response.headers().clone();
+    let text = response.text().await.map_err(reqwest_port_error)?;
+
+    if !status.is_success() {
+        return Err(http_status_port_error(status, &resp_headers, text));
+    }
+    serde_json::from_str(&text)
+        .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

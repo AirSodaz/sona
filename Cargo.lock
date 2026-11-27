@@ -6916,13 +6916,16 @@ dependencies = [
  "aimux-providers",
  "async-trait",
  "futures-util",
+ "hex",
  "log",
  "reqwest 0.13.5",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "sona-core",
  "tokio",
  "urlencoding",
+ "uuid",
 ]
 
 [[package]]

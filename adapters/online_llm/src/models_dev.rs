@@ -534,6 +534,9 @@ fn parse_modalities(values: &[String]) -> Vec<LlmModality> {
 }
 
 pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static str> {
+    if strategy.is_translation_only() {
+        return None;
+    }
     Some(match strategy {
         LlmProviderStrategy::OpenAi | LlmProviderStrategy::OpenAiResponses => "openai",
         LlmProviderStrategy::AzureOpenAi => "azure",
@@ -575,10 +578,7 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::FriendliAi => "friendli",
         LlmProviderStrategy::Llamafile
         | LlmProviderStrategy::Local
-        | LlmProviderStrategy::LocalNmt
         | LlmProviderStrategy::Volcengine
-        | LlmProviderStrategy::GoogleTranslate
-        | LlmProviderStrategy::GoogleTranslateFree
         | LlmProviderStrategy::OpenAiCompatible
         | LlmProviderStrategy::OpenAiCompatibleCustomPath
         | LlmProviderStrategy::Baidu
@@ -586,7 +586,16 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         | LlmProviderStrategy::Stepfun
         | LlmProviderStrategy::Lingyiwanwu
         | LlmProviderStrategy::Vllm
-        | LlmProviderStrategy::Laya => return None,
+        | LlmProviderStrategy::Laya
+        | LlmProviderStrategy::GoogleTranslate
+        | LlmProviderStrategy::GoogleTranslateFree
+        | LlmProviderStrategy::Deepl
+        | LlmProviderStrategy::MicrosoftTranslator
+        | LlmProviderStrategy::LibreTranslate
+        | LlmProviderStrategy::Deeplx
+        | LlmProviderStrategy::BaiduTranslate
+        | LlmProviderStrategy::YoudaoTranslate
+        | LlmProviderStrategy::LocalNmt => return None,
     })
 }
 
@@ -594,17 +603,18 @@ pub fn should_enrich_model_metadata(provider: &LlmProvider, base_url: &str) -> b
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
         return match provider {
-            LlmProvider::Builtin(b) => !matches!(
-                b,
-                sona_core::domain::BuiltinLlmProvider::Local
-                    | sona_core::domain::BuiltinLlmProvider::Ollama
-                    | sona_core::domain::BuiltinLlmProvider::Llamafile
-                    | sona_core::domain::BuiltinLlmProvider::LmStudio
-                    | sona_core::domain::BuiltinLlmProvider::GoogleTranslate
-                    | sona_core::domain::BuiltinLlmProvider::GoogleTranslateFree
-                    | sona_core::domain::BuiltinLlmProvider::Vllm
-                    | sona_core::domain::BuiltinLlmProvider::Laya
-            ),
+            LlmProvider::Builtin(b) => {
+                !b.is_translation_only()
+                    && !matches!(
+                        b,
+                        sona_core::domain::BuiltinLlmProvider::Local
+                            | sona_core::domain::BuiltinLlmProvider::Ollama
+                            | sona_core::domain::BuiltinLlmProvider::Llamafile
+                            | sona_core::domain::BuiltinLlmProvider::LmStudio
+                            | sona_core::domain::BuiltinLlmProvider::Vllm
+                            | sona_core::domain::BuiltinLlmProvider::Laya
+                    )
+            }
             LlmProvider::Custom(_) => false,
         };
     }

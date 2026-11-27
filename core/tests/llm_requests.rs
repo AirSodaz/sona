@@ -21,6 +21,8 @@ fn sample_config() -> LlmConfig {
         model: "test-model".to_string(),
         api_path: None,
         api_version: None,
+        app_id: None,
+        api_region: None,
         temperature: Some(0.2),
         reasoning_enabled: None,
         reasoning_level: None,
@@ -526,4 +528,65 @@ fn transcript_job_request_sanitize_for_task() {
     );
     assert_eq!(summary_req.chunk_size, Some(10));
     assert_eq!(summary_req.chunk_char_budget, Some(2000));
+}
+
+#[test]
+fn new_translation_only_strategies_reject_polish_and_summary() {
+    for (provider, strategy) in [
+        (BuiltinLlmProvider::Deepl, LlmProviderStrategy::Deepl),
+        (
+            BuiltinLlmProvider::MicrosoftTranslator,
+            LlmProviderStrategy::MicrosoftTranslator,
+        ),
+        (
+            BuiltinLlmProvider::LibreTranslate,
+            LlmProviderStrategy::LibreTranslate,
+        ),
+        (BuiltinLlmProvider::Deeplx, LlmProviderStrategy::Deeplx),
+        (
+            BuiltinLlmProvider::BaiduTranslate,
+            LlmProviderStrategy::BaiduTranslate,
+        ),
+        (
+            BuiltinLlmProvider::YoudaoTranslate,
+            LlmProviderStrategy::YoudaoTranslate,
+        ),
+    ] {
+        assert!(strategy.is_translation_only());
+        assert!(strategy.is_online_translation_api());
+        let mut config = sample_config();
+        config.provider = LlmProvider::Builtin(provider);
+        config.strategy = strategy;
+
+        let polish_err = validate_polish_segments_request(&PolishSegmentsRequest {
+            task_id: "p-1".to_string(),
+            config: config.clone(),
+            segments: vec![LlmSegmentInput {
+                id: "1".to_string(),
+                text: "hello".to_string(),
+            }],
+            chunk_size: None,
+            context: None,
+            keywords: None,
+            mode: None,
+        })
+        .unwrap_err();
+        assert_eq!(polish_err.field, "strategy");
+        assert!(polish_err.reason.contains("does not support transcript polishing"));
+
+        let summary_err = validate_summarize_transcript_request(&SummarizeTranscriptRequest {
+            task_id: "s-1".to_string(),
+            config,
+            template: SummaryTemplateConfig {
+                id: "meeting".to_string(),
+                name: "Meeting".to_string(),
+                instructions: "Summarize".to_string(),
+            },
+            segments: Vec::new(),
+            chunk_char_budget: None,
+        })
+        .unwrap_err();
+        assert_eq!(summary_err.field, "strategy");
+        assert!(summary_err.reason.contains("does not support transcript summaries"));
+    }
 }

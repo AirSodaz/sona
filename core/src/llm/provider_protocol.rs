@@ -142,6 +142,9 @@ pub struct LlmModelSummary {
 }
 
 pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Option<bool> {
+    if strategy.is_translation_only() {
+        return Some(false);
+    }
     match strategy {
         LlmProviderStrategy::DeepSeek
         | LlmProviderStrategy::MoonshotAi
@@ -156,30 +159,25 @@ pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Opt
         | LlmProviderStrategy::Chatglm
         | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::Perplexity
-        | LlmProviderStrategy::GoogleTranslate
-        | LlmProviderStrategy::GoogleTranslateFree
         | LlmProviderStrategy::Cohere
         | LlmProviderStrategy::Together
         | LlmProviderStrategy::Venice
         | LlmProviderStrategy::Hyperbolic
         | LlmProviderStrategy::Llamafile
-        | LlmProviderStrategy::Local
-        | LlmProviderStrategy::LocalNmt => Some(false),
+        | LlmProviderStrategy::Local => Some(false),
         _ => None,
     }
 }
 pub fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> bool {
-    !matches!(
-        strategy,
-        LlmProviderStrategy::AzureOpenAi
-            | LlmProviderStrategy::Volcengine
-            | LlmProviderStrategy::Perplexity
-            | LlmProviderStrategy::Copilot
-            | LlmProviderStrategy::OpenAiCompatibleCustomPath
-            | LlmProviderStrategy::GoogleTranslate
-            | LlmProviderStrategy::GoogleTranslateFree
-            | LlmProviderStrategy::LocalNmt
-    )
+    !strategy.is_translation_only()
+        && !matches!(
+            strategy,
+            LlmProviderStrategy::AzureOpenAi
+                | LlmProviderStrategy::Volcengine
+                | LlmProviderStrategy::Perplexity
+                | LlmProviderStrategy::Copilot
+                | LlmProviderStrategy::OpenAiCompatibleCustomPath
+        )
 }
 
 pub fn join_url(base_url: &str, path: &str) -> String {

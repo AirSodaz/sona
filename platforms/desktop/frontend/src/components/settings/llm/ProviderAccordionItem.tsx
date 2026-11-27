@@ -88,6 +88,12 @@ export function ProviderAccordionItem({
     if (isConfigured) {
       return { type: 'ready', text: t('settings.llm.status_ready') };
     }
+    if (def.requiresAppId && !setting?.appId?.trim()) {
+      return {
+        type: 'missing',
+        text: t('settings.llm.status_missing_app_id', { defaultValue: 'Missing App ID' }),
+      };
+    }
     if (def.requiresApiKey) {
       return {
         type: 'missing',
@@ -95,7 +101,7 @@ export function ProviderAccordionItem({
       };
     }
     return { type: 'off', text: t('settings.llm.status_off', { defaultValue: 'Not configured' }) };
-  }, [isConfigured, def.requiresApiKey, t]);
+  }, [isConfigured, def.requiresAppId, def.requiresApiKey, setting?.appId, t]);
 
   const actions =
     onEdit || onDelete ? (
@@ -174,13 +180,44 @@ export function ProviderAccordionItem({
                   className="settings-input"
                   value={setting?.apiHost || ''}
                   onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
-                  placeholder={def.defaultApiHost}
+                  placeholder={def.apiHostPlaceholder || def.defaultApiHost}
                 />
               )}
             </div>
           </SettingsItem>
 
-          <SettingsItem title={t('settings.llm.api_key')}>
+          {def.requiresAppId && (
+            <SettingsItem
+              title={
+                def.appIdLabelKey
+                  ? t(def.appIdLabelKey, { defaultValue: def.appIdLabelDefault })
+                  : t('settings.llm.app_id', { defaultValue: 'App ID' })
+              }
+            >
+              <div style={{ width: '320px' }}>
+                <input
+                  id={`llm-${def.id}-app-id`}
+                  type="text"
+                  className="settings-input"
+                  value={setting?.appId || ''}
+                  onChange={(e) => applyProviderUpdates({ appId: e.target.value })}
+                  placeholder={
+                    def.appIdLabelKey
+                      ? t(def.appIdLabelKey, { defaultValue: def.appIdLabelDefault })
+                      : 'App ID'
+                  }
+                />
+              </div>
+            </SettingsItem>
+          )}
+
+          <SettingsItem
+            title={
+              def.apiKeyLabelKey
+                ? t(def.apiKeyLabelKey, { defaultValue: def.apiKeyLabelDefault })
+                : t('settings.llm.api_key')
+            }
+          >
             <div style={{ width: '320px' }}>
               <input
                 id={`llm-${def.id}-key`}
@@ -192,6 +229,27 @@ export function ProviderAccordionItem({
               />
             </div>
           </SettingsItem>
+
+          {def.supportsRegion && (
+            <SettingsItem
+              title={
+                def.apiRegionLabelKey
+                  ? t(def.apiRegionLabelKey, { defaultValue: def.apiRegionLabelDefault })
+                  : t('settings.llm.api_region', { defaultValue: 'Region (Optional)' })
+              }
+            >
+              <div style={{ width: '320px' }}>
+                <input
+                  id={`llm-${def.id}-region`}
+                  type="text"
+                  className="settings-input"
+                  value={setting?.apiRegion || ''}
+                  onChange={(e) => applyProviderUpdates({ apiRegion: e.target.value })}
+                  placeholder="eastasia"
+                />
+              </div>
+            </SettingsItem>
+          )}
 
           {setting?.apiVersion !== undefined && (
             <SettingsItem title={t('settings.llm.api_version')}>
@@ -228,7 +286,7 @@ export function ProviderAccordionItem({
             </SettingsItem>
           )}
 
-          {def.id !== 'google_translate' && (
+          {def.category !== 'translation' && (
             <SettingsItem
               title={t('settings.llm.models_management_title', {
                 defaultValue: 'Model Management',
@@ -248,7 +306,7 @@ export function ProviderAccordionItem({
             </SettingsItem>
           )}
 
-          {def.id === 'google_translate' && (
+          {def.category === 'translation' && (
             <SettingsItem
               title={t('settings.llm.test_connection_title', { defaultValue: 'Connection Test' })}
             >

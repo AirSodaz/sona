@@ -214,6 +214,15 @@ pub fn resolve_feature_llm_config_from_app_config(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
 
+            let app_id = provider_settings
+                .and_then(|s| s.get("appId"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let api_region = provider_settings
+                .and_then(|s| s.get("apiRegion"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+
             let provider: Result<sona_core::domain::LlmProvider, _> =
                 serde_json::from_value(serde_json::Value::String(provider_str.to_string()));
             if let Ok(prov) = provider {
@@ -226,6 +235,8 @@ pub fn resolve_feature_llm_config_from_app_config(
                     model: model_str.to_string(),
                     api_path: None,
                     api_version: None,
+                    app_id,
+                    api_region,
                     temperature: None,
                     reasoning_enabled: None,
                     reasoning_level: None,

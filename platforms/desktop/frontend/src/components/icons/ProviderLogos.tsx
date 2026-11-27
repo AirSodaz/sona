@@ -11,6 +11,8 @@ import cohereSvg from '../../assets/providers/cohere.svg';
 import copilotSvg from '../../assets/providers/copilot.svg';
 import databricksSvg from '../../assets/providers/databricks.svg';
 import deepinfraSvg from '../../assets/providers/deepinfra.svg';
+import deeplSvg from '../../assets/providers/deepl.svg';
+import deeplxSvg from '../../assets/providers/deeplx.svg';
 import deepseekSvg from '../../assets/providers/deepseek.svg';
 import falSvg from '../../assets/providers/fal.svg';
 import fireworksSvg from '../../assets/providers/fireworks.svg';
@@ -22,6 +24,7 @@ import groqSvg from '../../assets/providers/groq.svg';
 import huggingfaceSvg from '../../assets/providers/huggingface.svg';
 import hyperbolicSvg from '../../assets/providers/hyperbolic.svg';
 import layaSvg from '../../assets/providers/laya.svg';
+import libretranslateSvg from '../../assets/providers/libretranslate.svg';
 import llamafileSvg from '../../assets/providers/llamafile.svg';
 import lmstudioSvg from '../../assets/providers/lmstudio.svg';
 import minimaxSvg from '../../assets/providers/minimax.svg';
@@ -44,6 +47,7 @@ import vllmSvg from '../../assets/providers/vllm.svg';
 import volcengineSvg from '../../assets/providers/volcengine.svg';
 import xaiSvg from '../../assets/providers/xai.svg';
 import xiaomiSvg from '../../assets/providers/xiaomi.svg';
+import youdaoSvg from '../../assets/providers/youdao.svg';
 import zerooneSvg from '../../assets/providers/zeroone.svg';
 import zhipuSvg from '../../assets/providers/zhipu.svg';
 
@@ -119,9 +123,15 @@ export const PROVIDER_ICON_MAP: Record<string, ProviderIconMeta> = {
   lingyiwanwu: { src: zerooneSvg },
   // Cerebras
   cerebras: { src: cerebrasSvg },
-  // Google Translate
+  // Translation Providers
   google_translate: { src: googletranslateSvg },
   google_translate_free: { src: googletranslateSvg },
+  deepl: { src: deeplSvg },
+  microsoft_translator: { src: azureSvg },
+  libre_translate: { src: libretranslateSvg },
+  deeplx: { src: deeplxSvg },
+  baidu_translate: { src: baiduSvg },
+  youdao_translate: { src: youdaoSvg },
   // Amazon Bedrock
   amazon_bedrock: { src: bedrockSvg },
   bedrock: { src: bedrockSvg },

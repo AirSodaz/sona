@@ -455,6 +455,12 @@ class UniffiLlmAdapterTest {
         assertEquals("COPILOT", resolveLlmStrategy("copilot"))
         assertEquals("GOOGLE_TRANSLATE", resolveLlmStrategy("google_translate"))
         assertEquals("GOOGLE_TRANSLATE_FREE", resolveLlmStrategy("google_translate_free"))
+        assertEquals("DEEPL", resolveLlmStrategy("deepl"))
+        assertEquals("MICROSOFT_TRANSLATOR", resolveLlmStrategy("microsoft_translator"))
+        assertEquals("LIBRE_TRANSLATE", resolveLlmStrategy("libre_translate"))
+        assertEquals("DEEPLX", resolveLlmStrategy("deeplx"))
+        assertEquals("BAIDU_TRANSLATE", resolveLlmStrategy("baidu_translate"))
+        assertEquals("YOUDAO_TRANSLATE", resolveLlmStrategy("youdao_translate"))
         assertEquals("OPEN_AI_COMPATIBLE_CUSTOM_PATH", resolveLlmStrategy("open_ai_compatible_custom_path"))
         assertEquals("OPEN_AI_COMPATIBLE", resolveLlmStrategy("custom_unknown_provider"))
     }

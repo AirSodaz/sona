@@ -82,12 +82,7 @@ impl LlmModelCapabilities {
         let base_lower = base_url.to_lowercase();
 
         // 1. Translation-only providers
-        if matches!(
-            strategy,
-            LlmProviderStrategy::GoogleTranslate
-                | LlmProviderStrategy::GoogleTranslateFree
-                | LlmProviderStrategy::LocalNmt
-        ) {
+        if strategy.is_translation_only() {
             return Self {
                 reasoning: false,
                 reasoning_mode: ReasoningMode::None,

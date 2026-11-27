@@ -245,15 +245,13 @@ where
             sona_core::llm::tasks::DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             sona_core::llm::tasks::estimate_structured_output_tokens(&request.segments),
         );
-        let direct_translation = matches!(
-            request.config.strategy,
-            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
-                | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
-                | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
-        );
+        let direct_translation = request.config.strategy.is_translation_only();
         let single_segment_direct = matches!(
             request.config.strategy,
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
+                | sona_core::llm::tasks::LlmProviderStrategy::Deeplx
+                | sona_core::llm::tasks::LlmProviderStrategy::BaiduTranslate
+                | sona_core::llm::tasks::LlmProviderStrategy::YoudaoTranslate
                 | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
         );
         let chunks = sona_core::llm::tasks::plan_segment_chunks_with_budget(

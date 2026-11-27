@@ -119,6 +119,12 @@ impl_fallback_deserialize!(SummaryTemplateId, BuiltinSummaryTemplateId);
 pub enum BuiltinLlmProvider {
     GoogleTranslate,
     GoogleTranslateFree,
+    Deepl,
+    MicrosoftTranslator,
+    LibreTranslate,
+    Deeplx,
+    BaiduTranslate,
+    YoudaoTranslate,
     OpenAi,
     OpenAiResponses,
     AzureOpenai,
@@ -191,6 +197,11 @@ impl BuiltinLlmProvider {
         match self {
             Self::GoogleTranslateFree => "https://translate.googleapis.com/translate_a/single",
             Self::GoogleTranslate => "https://translation.googleapis.com/language/translate/v2",
+            Self::Deepl => "https://api-free.deepl.com",
+            Self::MicrosoftTranslator => "https://api.cognitive.microsofttranslator.com",
+            Self::LibreTranslate | Self::Deeplx => "",
+            Self::BaiduTranslate => "https://fanyi-api.baidu.com/api/trans/vip/translate",
+            Self::YoudaoTranslate => "https://openapi.youdao.com/api",
             Self::OpenAi | Self::OpenAiResponses => "https://api.openai.com",
             Self::AzureOpenai => "",
             Self::Anthropic => "https://api.anthropic.com",
@@ -247,12 +258,28 @@ impl BuiltinLlmProvider {
         !matches!(
             self,
             Self::GoogleTranslateFree
+                | Self::LibreTranslate
+                | Self::Deeplx
                 | Self::Ollama
                 | Self::LmStudio
                 | Self::Llamafile
                 | Self::Local
                 | Self::Vllm
                 | Self::Laya
+        )
+    }
+
+    pub fn is_translation_only(&self) -> bool {
+        matches!(
+            self,
+            Self::GoogleTranslate
+                | Self::GoogleTranslateFree
+                | Self::Deepl
+                | Self::MicrosoftTranslator
+                | Self::LibreTranslate
+                | Self::Deeplx
+                | Self::BaiduTranslate
+                | Self::YoudaoTranslate
         )
     }
 }

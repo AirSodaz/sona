@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getFeatureLlmConfig,
   isFeatureLlmConfigComplete,
+  isProviderConfigComplete,
   isSummaryLlmConfigComplete,
 } from '../configUtils';
 import { DEFAULT_LLM_TEMPERATURE } from '../providers';
@@ -377,5 +378,38 @@ describe('llm runtime', () => {
     patch = buildLlmConfigPatch(llmSettings);
     expect(patch.realtimeTranslationEngine).toBe('online');
     expect(patch.realtimeTranslationModelId).toBeNull();
+  });
+
+  it('validates translation provider completeness for appId, apiHost, and optional apiKey', () => {
+    expect(isProviderConfigComplete('libre_translate', { apiHost: '', apiKey: '' })).toBe(false);
+    expect(
+      isProviderConfigComplete('libre_translate', {
+        apiHost: 'http://127.0.0.1:5000',
+        apiKey: '',
+      })
+    ).toBe(true);
+
+    expect(
+      isProviderConfigComplete('baidu_translate', {
+        apiHost: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
+        apiKey: 'secret',
+        appId: '',
+      })
+    ).toBe(false);
+    expect(
+      isProviderConfigComplete('baidu_translate', {
+        apiHost: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
+        apiKey: 'secret',
+        appId: 'app-id',
+      })
+    ).toBe(true);
+
+    expect(
+      isProviderConfigComplete('microsoft_translator', {
+        apiHost: 'https://api.cognitive.microsofttranslator.com',
+        apiKey: 'ms-key',
+        apiRegion: '',
+      })
+    ).toBe(true);
   });
 });
