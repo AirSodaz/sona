@@ -14,6 +14,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,6 +23,8 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +32,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -77,16 +83,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.sona.android.app.R
 import com.sona.android.application.sync.DiscoveredVaultSummary
 import com.sona.android.application.sync.SYNC_PROVIDER_PRESETS
@@ -100,7 +113,7 @@ import com.sona.android.application.sync.detectProviderPresetId
 import com.sona.android.application.sync.decodeSyncPairingToken
 import com.sona.android.application.sync.encodeSyncPairingToken
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun SyncSettingsPane(
     state: SyncSettingsUiState,
@@ -174,21 +187,31 @@ internal fun SyncSettingsPane(
         SYNC_PROVIDER_PRESETS.firstOrNull { it.id == selectedPresetId }
     }
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val masterPasswordFocusRequester = remember { FocusRequester() }
+    val remoteRootFocusRequester = remember { FocusRequester() }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
+                .align(Alignment.TopCenter)
                 .widthIn(max = 720.dp)
                 .fillMaxWidth()
+                .imePadding()
                 .springOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
                     top = 20.dp,
-                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-                )
-                .align(Alignment.TopCenter),
+                    bottom = if (imeVisible) {
+                        16.dp
+                    } else {
+                        maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp)
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Pairing Success Banner
@@ -343,6 +366,14 @@ internal fun SyncSettingsPane(
                         },
                         label = { Text(stringResource(R.string.sync_server_url)) },
                         placeholder = { Text(activePreset?.defaultServerUrl ?: "https://...") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -352,6 +383,14 @@ internal fun SyncSettingsPane(
                         onValueChange = { username = it },
                         label = { Text(stringResource(R.string.sync_username)) },
                         placeholder = { Text(activePreset?.usernamePlaceholder ?: "user@example.com") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -360,6 +399,10 @@ internal fun SyncSettingsPane(
                         value = providerPassword,
                         onChange = { providerPassword = it },
                         labelRes = R.string.sync_provider_password,
+                        imeAction = ImeAction.Next,
+                        keyboardActions = KeyboardActions(
+                            onNext = { masterPasswordFocusRequester.requestFocus() },
+                        ),
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -380,7 +423,10 @@ internal fun SyncSettingsPane(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             FilterChip(
                                 selected = unlockMethod == "password",
                                 onClick = { unlockMethod = "password" },
@@ -400,6 +446,15 @@ internal fun SyncSettingsPane(
                             onChange = { masterPassword = it },
                             labelRes = if (unlockMethod == "password") R.string.sync_master_password else R.string.sync_recovery_key,
                             monospace = unlockMethod == "recovery",
+                            imeAction = if (showAdvanced) ImeAction.Next else ImeAction.Done,
+                            keyboardActions = KeyboardActions(
+                                onNext = { remoteRootFocusRequester.requestFocus() },
+                                onDone = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                },
+                            ),
+                            modifier = Modifier.focusRequester(masterPasswordFocusRequester),
                         )
                     }
 
@@ -447,7 +502,16 @@ internal fun SyncSettingsPane(
                                     value = root,
                                     onValueChange = { root = it },
                                     label = { Text(stringResource(R.string.sync_remote_root)) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(
+                                        autoCorrectEnabled = false,
+                                        imeAction = ImeAction.Next,
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(remoteRootFocusRequester),
                                     singleLine = true,
                                 )
 
@@ -458,6 +522,16 @@ internal fun SyncSettingsPane(
                                     onValueChange = { vaultId = it },
                                     label = { Text(stringResource(R.string.sync_vault_id)) },
                                     placeholder = { Text(stringResource(R.string.sync_vault_id_placeholder)) },
+                                    keyboardOptions = KeyboardOptions(
+                                        autoCorrectEnabled = false,
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                        },
+                                    ),
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                 )
@@ -578,7 +652,10 @@ internal fun SyncSettingsPane(
                                 )
                             }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
                                 FilterChip(
                                     selected = unlockMethod == "password",
                                     onClick = { unlockMethod = "password" },
@@ -595,24 +672,39 @@ internal fun SyncSettingsPane(
                                 value = providerPassword,
                                 onChange = { providerPassword = it },
                                 labelRes = R.string.sync_provider_password,
+                                imeAction = ImeAction.Next,
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                ),
                             )
+
+                            val canUnlock = !state.busy && providerPassword.isNotBlank() && masterPassword.isNotBlank()
+                            val submitUnlock = {
+                                if (unlockMethod == "recovery") {
+                                    onUnlockWithRecovery(providerPassword, masterPassword)
+                                } else {
+                                    onUnlock(providerPassword, masterPassword)
+                                }
+                            }
 
                             SecretField(
                                 value = masterPassword,
                                 onChange = { masterPassword = it },
                                 labelRes = if (unlockMethod == "recovery") R.string.sync_recovery_key else R.string.sync_master_password,
                                 monospace = unlockMethod == "recovery",
+                                imeAction = ImeAction.Done,
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        if (canUnlock) submitUnlock()
+                                    },
+                                ),
                             )
 
                             Button(
-                                onClick = {
-                                    if (unlockMethod == "recovery") {
-                                        onUnlockWithRecovery(providerPassword, masterPassword)
-                                    } else {
-                                        onUnlock(providerPassword, masterPassword)
-                                    }
-                                },
-                                enabled = !state.busy && providerPassword.isNotBlank() && masterPassword.isNotBlank(),
+                                onClick = submitUnlock,
+                                enabled = canUnlock,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 if (state.busy) {
@@ -713,14 +805,14 @@ internal fun SyncSettingsPane(
                     }
 
                     // Actions Bar (Sync now, Pause/Resume, Lock)
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Button(
                             onClick = onRunNow,
                             enabled = !state.busy && state.status.state != SyncLifecycleState.PAUSED,
-                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -730,7 +822,6 @@ internal fun SyncSettingsPane(
                         OutlinedButton(
                             onClick = { onSetPaused(state.status.state != SyncLifecycleState.PAUSED) },
                             enabled = !state.busy,
-                            modifier = Modifier.weight(1f),
                         ) {
                             Text(stringResource(if (state.status.state == SyncLifecycleState.PAUSED) R.string.sync_resume else R.string.sync_pause))
                         }
@@ -738,7 +829,6 @@ internal fun SyncSettingsPane(
                         OutlinedButton(
                             onClick = onLock,
                             enabled = !state.busy,
-                            modifier = Modifier.weight(1f),
                         ) {
                             Text(stringResource(R.string.sync_lock))
                         }
@@ -868,7 +958,10 @@ internal fun SyncSettingsPane(
                                 fontWeight = FontWeight.Medium,
                             )
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
                                 FilterChip(
                                     selected = passwordChangeMode == "password",
                                     onClick = { passwordChangeMode = "password" },
@@ -881,6 +974,24 @@ internal fun SyncSettingsPane(
                                 )
                             }
 
+                            val canUpdatePassword = currentPasswordInput.isNotBlank() &&
+                                nextPasswordInput.isNotBlank() &&
+                                confirmPasswordInput.isNotBlank() &&
+                                !state.busy
+
+                            val mismatchMessage = stringResource(R.string.sync_password_mismatch)
+                            val submitPasswordChange = {
+                                if (nextPasswordInput != confirmPasswordInput) {
+                                    passwordError = mismatchMessage
+                                } else {
+                                    onChangePassword(currentPasswordInput, nextPasswordInput)
+                                    currentPasswordInput = ""
+                                    nextPasswordInput = ""
+                                    confirmPasswordInput = ""
+                                    passwordError = null
+                                }
+                            }
+
                             SecretField(
                                 value = currentPasswordInput,
                                 onChange = {
@@ -889,6 +1000,10 @@ internal fun SyncSettingsPane(
                                 },
                                 labelRes = if (passwordChangeMode == "password") R.string.sync_current_master_password else R.string.sync_recovery_key,
                                 monospace = passwordChangeMode == "recovery",
+                                imeAction = ImeAction.Next,
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                ),
                             )
 
                             SecretField(
@@ -898,6 +1013,10 @@ internal fun SyncSettingsPane(
                                     passwordError = null
                                 },
                                 labelRes = R.string.sync_new_master_password,
+                                imeAction = ImeAction.Next,
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                ),
                             )
 
                             SecretField(
@@ -907,30 +1026,22 @@ internal fun SyncSettingsPane(
                                     passwordError = null
                                 },
                                 labelRes = R.string.sync_confirm_new_password,
+                                imeAction = ImeAction.Done,
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        if (canUpdatePassword) submitPasswordChange()
+                                    },
+                                ),
                             )
 
                             passwordError?.let { err ->
                                 Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
 
-                            val canUpdatePassword = currentPasswordInput.isNotBlank() &&
-                                nextPasswordInput.isNotBlank() &&
-                                confirmPasswordInput.isNotBlank() &&
-                                !state.busy
-
-                            val mismatchMessage = stringResource(R.string.sync_password_mismatch)
                             OutlinedButton(
-                                onClick = {
-                                    if (nextPasswordInput != confirmPasswordInput) {
-                                        passwordError = mismatchMessage
-                                        return@OutlinedButton
-                                    }
-                                    onChangePassword(currentPasswordInput, nextPasswordInput)
-                                    currentPasswordInput = ""
-                                    nextPasswordInput = ""
-                                    confirmPasswordInput = ""
-                                    passwordError = null
-                                },
+                                onClick = submitPasswordChange,
                                 enabled = canUpdatePassword,
                             ) {
                                 Text(stringResource(R.string.sync_change_master_password))
@@ -975,7 +1086,10 @@ internal fun SyncSettingsPane(
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
                                         OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_CURRENT) }) { Text(stringResource(R.string.sync_keep_current)) }
                                         OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.USE_CONFLICTING) }) { Text(stringResource(R.string.sync_use_remote)) }
                                         OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_BOTH) }) { Text(stringResource(R.string.sync_keep_both)) }
@@ -1038,10 +1152,27 @@ internal fun SyncSettingsPane(
     // Modal 1: Import Pairing Token Dialog
     if (showImportPairingDialog) {
         val invalidTokenMessage = stringResource(R.string.sync_invalid_pairing_token)
+        val submitPairingImport = {
+            val payload = onApplyPairingToken?.invoke(pairingTokenInput)
+                ?: decodeSyncPairingToken(pairingTokenInput)
+            if (payload != null) {
+                server = payload.serverUrl
+                root = payload.remoteRoot
+                username = payload.username
+                vaultId = payload.vaultId
+                payload.providerPassword?.let { providerPassword = it }
+                selectedPresetId = detectProviderPresetId(payload.serverUrl)
+                showImportPairingDialog = false
+            } else {
+                pairingTokenError = invalidTokenMessage
+            }
+        }
         AlertDialog(
             onDismissRequest = { showImportPairingDialog = false },
             title = { Text(stringResource(R.string.sync_pairing_modal_title)) },
             text = {
+                val dialogFocusManager = LocalFocusManager.current
+                val dialogKeyboardController = LocalSoftwareKeyboardController.current
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = stringResource(R.string.sync_pairing_modal_desc),
@@ -1055,8 +1186,20 @@ internal fun SyncSettingsPane(
                         },
                         label = { Text(stringResource(R.string.sync_pairing_token_label)) },
                         placeholder = { Text("sonasync://v1?data=...") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                dialogKeyboardController?.hide()
+                                dialogFocusManager.clearFocus()
+                                if (pairingTokenInput.isNotBlank()) submitPairingImport()
+                            },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3,
+                        singleLine = true,
                     )
                     OutlinedButton(
                         onClick = {
@@ -1090,21 +1233,7 @@ internal fun SyncSettingsPane(
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        val payload = onApplyPairingToken?.invoke(pairingTokenInput)
-                            ?: decodeSyncPairingToken(pairingTokenInput)
-                        if (payload != null) {
-                            server = payload.serverUrl
-                            root = payload.remoteRoot
-                            username = payload.username
-                            vaultId = payload.vaultId
-                            payload.providerPassword?.let { providerPassword = it }
-                            selectedPresetId = detectProviderPresetId(payload.serverUrl)
-                            showImportPairingDialog = false
-                        } else {
-                            pairingTokenError = invalidTokenMessage
-                        }
-                    },
+                    onClick = submitPairingImport,
                     enabled = pairingTokenInput.isNotBlank(),
                 ) {
                     Text(stringResource(R.string.sync_action_import))
@@ -1313,7 +1442,10 @@ private fun SecretField(
     value: String,
     onChange: (String) -> Unit,
     labelRes: Int,
+    modifier: Modifier = Modifier,
     monospace: Boolean = false,
+    imeAction: ImeAction = ImeAction.Next,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -1327,6 +1459,12 @@ private fun SecretField(
         } else {
             MaterialTheme.typography.bodyMedium
         },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Password,
+            autoCorrectEnabled = false,
+            imeAction = imeAction,
+        ),
+        keyboardActions = keyboardActions,
         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             val image = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility
@@ -1339,7 +1477,7 @@ private fun SecretField(
                 )
             }
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
 }
 
