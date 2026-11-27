@@ -628,7 +628,7 @@ pub async fn test_online_asr_provider(
 }
 
 enum ResolvedTranslationTarget {
-    Online(sona_core::llm::requests::LlmConfig),
+    Online(Box<sona_core::llm::requests::LlmConfig>),
     LocalLlama(String),
     LocalOnnx,
 }
@@ -763,7 +763,7 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                 reasoning_level: None,
                 timeout_seconds: timeout,
             };
-            ResolvedTranslationTarget::Online(cfg)
+            ResolvedTranslationTarget::Online(Box::new(cfg))
         }
         None => {
             let engine_str = services
@@ -793,7 +793,7 @@ fn resolve_effective_translation(services: &DesktopServices) -> ResolvedTranslat
                         strategy: sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree,
                         ..Default::default()
                     };
-                    ResolvedTranslationTarget::Online(cfg)
+                    ResolvedTranslationTarget::Online(Box::new(cfg))
                 }
                 _ => ResolvedTranslationTarget::LocalOnnx,
             }
@@ -842,7 +842,7 @@ pub(crate) fn build_live_translation_coordinator(
         ResolvedTranslationTarget::Online(cfg) => {
             let engine =
                 crate::integrations::translation::TranslationEngineFactory::create_online_engine(
-                    services, cfg,
+                    services, *cfg,
                 );
             (engine, 500)
         }
