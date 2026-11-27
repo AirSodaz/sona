@@ -56,8 +56,20 @@ internal object GeneratedUniffiLocalAsrModelStorageBindings : UniffiLocalAsrMode
 class UniffiLocalAsrModelStorageAdapter internal constructor(
     private val modelsDir: String,
     private val bindings: UniffiLocalAsrModelStorageBindings,
+    private val modelSources: AndroidModelSourceRepository = AndroidModelSourceRepository(),
 ) : LocalAsrModelStoragePort {
-    constructor(modelsDir: String) : this(modelsDir, GeneratedUniffiLocalAsrModelStorageBindings)
+    constructor(
+        modelsDir: String,
+        modelSources: AndroidModelSourceRepository = AndroidModelSourceRepository(),
+    ) : this(modelsDir, GeneratedUniffiLocalAsrModelStorageBindings, modelSources)
+
+    private val sourceNamesById: Map<String, String> by lazy {
+        modelSources.loadSources()
+            .mapNotNull { source ->
+                source.name.takeIf { it.isNotBlank() }?.let { source.id to it }
+            }
+            .toMap()
+    }
 
     init {
         require(modelsDir.isNotBlank()) { "Models directory must not be blank." }
@@ -65,7 +77,7 @@ class UniffiLocalAsrModelStorageAdapter internal constructor(
 
     override fun listInstalledModels(numThreads: Int): List<LocalAsrModel> =
         bindings.list(modelsDir, numThreads.toBindingThreads())
-            .map(FfiInstalledLocalAsrModel::toApplication)
+            .map { it.toApplication(sourceNamesById) }
 
     override suspend fun downloadModel(
         modelId: String,
@@ -80,7 +92,7 @@ class UniffiLocalAsrModelStorageAdapter internal constructor(
                 progress.onProgress(event.toApplication())
             }
         },
-    ).toApplication()
+    ).toApplication(sourceNamesById)
 
     override suspend fun validateModel(modelId: String): Boolean =
         bindings.validate(modelId, modelsDir)
@@ -90,9 +102,17 @@ class UniffiLocalAsrModelStorageAdapter internal constructor(
     }
 }
 
-internal fun FfiInstalledLocalAsrModel.toApplication(): LocalAsrModel = LocalAsrModel(
+internal fun sanitizeLocalModelDisplayName(displayName: String): String = displayName
+    .replace(Regex("""\s*\(\s*int8\s*\)\s*""", RegexOption.IGNORE_CASE), " ")
+    .replace(Regex("""(?i)(?:^|\s+)int8(?:\s+|$)"""), " ")
+    .replace(Regex("""\s{2,}"""), " ")
+    .trim()
+
+internal fun FfiInstalledLocalAsrModel.toApplication(
+    sourceNamesById: Map<String, String> = emptyMap(),
+): LocalAsrModel = LocalAsrModel(
     id = id,
-    displayName = displayName,
+    displayName = sourceNamesById[id] ?: sanitizeLocalModelDisplayName(displayName),
     config = LocalSherpaConfig(
         modelPath = modelPath,
         numThreads = numThreads.toInt(),

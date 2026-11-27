@@ -202,7 +202,6 @@
     <string name="local_model_delete_title">모델을 삭제할까요?</string>
     <string name="local_model_delete_message">이 기기에서 %1$s을(를) 삭제할까요?</string>
     <string name="local_model_recommended">추천</string>
-    <string name="local_model_quantization_int8">INT8</string>
     <string name="local_model_in_use">사용 중</string>
     <string name="local_device_tier_limited">제한됨</string>
     <string name="local_device_tier_standard">표준</string>

@@ -202,7 +202,6 @@
     <string name="local_model_delete_title">刪除模型？</string>
     <string name="local_model_delete_message">從此裝置刪除 %1$s？</string>
     <string name="local_model_recommended">推薦</string>
-    <string name="local_model_quantization_int8">INT8</string>
     <string name="local_model_in_use">使用中</string>
     <string name="local_device_tier_limited">效能受限</string>
     <string name="local_device_tier_standard">標準效能</string>

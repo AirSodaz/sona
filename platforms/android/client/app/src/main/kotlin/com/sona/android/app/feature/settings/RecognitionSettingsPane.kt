@@ -542,18 +542,6 @@ private fun LocalRecognitionSettings(
                                             )
                                         }
                                     }
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.local_model_quantization_int8),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                        )
-                                    }
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Row(

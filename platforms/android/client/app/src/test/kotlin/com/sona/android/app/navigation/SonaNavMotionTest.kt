@@ -147,4 +147,41 @@ class SonaNavMotionTest {
             ),
         )
     }
+
+    @Test
+    fun `peer tab transition detection matches root library and settings switches only`() {
+        assertTrue(SonaNavMotion.isPeerTabTransition("library", "settings"))
+        assertTrue(
+            SonaNavMotion.isPeerTabTransition(
+                "settings?section={section}",
+                "library",
+                initialSectionArg = null,
+            ),
+        )
+        assertTrue(
+            SonaNavMotion.isPeerTabTransition(
+                "library",
+                "settings?section={section}",
+                targetSectionArg = "",
+            ),
+        )
+
+        assertFalse(SonaNavMotion.isPeerTabTransition("library", "library"))
+        assertFalse(SonaNavMotion.isPeerTabTransition("library", LIBRARY_DETAIL_ROUTE))
+        assertFalse(
+            SonaNavMotion.isPeerTabTransition(
+                "settings?section={section}",
+                "settings?section={section}",
+                initialSectionArg = null,
+                targetSectionArg = "recognition",
+            ),
+        )
+        assertFalse(
+            SonaNavMotion.isPeerTabTransition(
+                "library",
+                "settings?section={section}",
+                targetSectionArg = "recognition",
+            ),
+        )
+    }
 }

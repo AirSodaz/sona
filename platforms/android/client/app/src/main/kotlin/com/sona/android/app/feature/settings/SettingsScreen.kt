@@ -57,6 +57,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
+import com.sona.android.app.navigation.SonaNavMotion
+import com.sona.android.app.navigation.sonaSubPageEnterFromLeft
+import com.sona.android.app.navigation.sonaSubPageEnterFromRight
+import com.sona.android.app.navigation.sonaSubPageExitToLeft
+import com.sona.android.app.navigation.sonaSubPageExitToRight
 import com.sona.android.app.ui.component.SonaBackButton
 import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
@@ -212,7 +217,11 @@ internal fun SettingsScreen(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         navigator = navigator,
         listPane = {
-            AnimatedPane {
+            AnimatedPane(
+                enterTransition = sonaSubPageEnterFromLeft(),
+                exitTransition = sonaSubPageExitToLeft(),
+                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+            ) {
                 SettingsSectionList(
                     selectedSection = selectedSection,
                     showSelection = isTwoPane,
@@ -230,7 +239,11 @@ internal fun SettingsScreen(
             }
         },
         detailPane = {
-            AnimatedPane {
+            AnimatedPane(
+                enterTransition = sonaSubPageEnterFromRight(),
+                exitTransition = sonaSubPageExitToRight(),
+                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+            ) {
                 SettingsDetailPane(
                     section = selectedSection,
                     showBack = showDetailBack,

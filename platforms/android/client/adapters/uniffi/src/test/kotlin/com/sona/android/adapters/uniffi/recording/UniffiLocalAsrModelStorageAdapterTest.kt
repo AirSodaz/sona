@@ -29,6 +29,7 @@ class UniffiLocalAsrModelStorageAdapterTest {
         )
 
         assertEquals("sensevoice", listed.id)
+        assertEquals("SenseVoice", listed.displayName)
         assertEquals("/data/models/sensevoice", listed.config.modelPath)
         assertEquals("model.int8.onnx", listed.config.fileConfig?.model)
         assertEquals("/data/models/silero_vad.onnx", listed.config.vadModel)
@@ -42,14 +43,40 @@ class UniffiLocalAsrModelStorageAdapterTest {
         assertEquals("sensevoice", bindings.deletedModelId)
         assertEquals("/data/models", bindings.deletedModelsDir)
     }
+
+    @Test
+    fun `installed catalog models resolve clean display names without int8`() {
+        val adapter = UniffiLocalAsrModelStorageAdapter(
+            "/data/models",
+            FakeBindings(
+                customModels = listOf(
+                    installedModel(
+                        numThreads = 2u,
+                        id = "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
+                        displayName = "Qwen3 ASR 0.6B Int8",
+                    ),
+                    installedModel(
+                        numThreads = 2u,
+                        id = "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+                        displayName = "Moonshine Tiny En Quantized",
+                    ),
+                ),
+            ),
+        )
+
+        val models = adapter.listInstalledModels(2)
+        assertEquals(listOf("Qwen3 ASR 0.6B", "Moonshine Tiny EN"), models.map { it.displayName })
+    }
 }
 
-private class FakeBindings : UniffiLocalAsrModelStorageBindings {
+private class FakeBindings(
+    private val customModels: List<FfiInstalledLocalAsrModel>? = null,
+) : UniffiLocalAsrModelStorageBindings {
     var deletedModelId: String? = null
     var deletedModelsDir: String? = null
 
     override fun list(modelsDir: String, numThreads: UInt): List<FfiInstalledLocalAsrModel> =
-        listOf(installedModel(numThreads))
+        customModels ?: listOf(installedModel(numThreads))
 
     override suspend fun download(
         modelId: String,
@@ -77,9 +104,13 @@ private class FakeBindings : UniffiLocalAsrModelStorageBindings {
     }
 }
 
-private fun installedModel(numThreads: UInt) = FfiInstalledLocalAsrModel(
-    id = "sensevoice",
-    displayName = "SenseVoice Int8",
+private fun installedModel(
+    numThreads: UInt,
+    id: String = "sensevoice",
+    displayName: String = "SenseVoice Int8",
+) = FfiInstalledLocalAsrModel(
+    id = id,
+    displayName = displayName,
     modelPath = "/data/models/sensevoice",
     modelType = "sensevoice",
     modes = listOf("streaming", "batch"),

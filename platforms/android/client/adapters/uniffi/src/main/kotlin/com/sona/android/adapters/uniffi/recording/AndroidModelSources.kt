@@ -87,7 +87,7 @@ class AndroidModelSourceRepository(
         val FALLBACK_SOURCES: List<AndroidModelSource> = listOf(
             AndroidModelSource(
                 id = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
-                name = "SenseVoice (Int8)",
+                name = "SenseVoice",
                 modelType = "sensevoice",
                 quantization = "int8",
                 size = "~240 MB",
@@ -99,7 +99,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
-                name = "Moonshine Tiny EN (Int8)",
+                name = "Moonshine Tiny EN",
                 modelType = "moonshine",
                 quantization = "int8",
                 size = "~44 MB",
@@ -110,7 +110,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
-                name = "Moonshine Base ZH (Int8)",
+                name = "Moonshine Base ZH",
                 modelType = "moonshine",
                 quantization = "int8",
                 size = "~141 MB",
@@ -121,7 +121,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
-                name = "Moonshine Base EN (Int8)",
+                name = "Moonshine Base EN",
                 modelType = "moonshine",
                 quantization = "int8",
                 size = "~141 MB",
@@ -132,7 +132,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
-                name = "Paraformer Trilingual (Int8)",
+                name = "Paraformer Trilingual",
                 modelType = "paraformer",
                 quantization = "int8",
                 size = "~238 MB",
@@ -143,7 +143,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",
-                name = "Dolphin Small Multi-Lang (Int8)",
+                name = "Dolphin Small Multi-Lang",
                 modelType = "dolphin",
                 quantization = "int8",
                 size = "~250 MB",
@@ -154,7 +154,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
-                name = "Parakeet TDT 0.6B (Int8)",
+                name = "Parakeet TDT 0.6B",
                 modelType = "parakeet-tdt",
                 quantization = "int8",
                 size = "~670 MB",
@@ -165,7 +165,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
-                name = "Qwen3 ASR 0.6B (Int8)",
+                name = "Qwen3 ASR 0.6B",
                 modelType = "qwen3-asr",
                 quantization = "int8",
                 size = "~943 MB",
@@ -176,7 +176,7 @@ class AndroidModelSourceRepository(
             ),
             AndroidModelSource(
                 id = "sherpa-onnx-funasr-nano-int8-2025-12-30",
-                name = "FunASR Nano (Int8)",
+                name = "FunASR Nano",
                 modelType = "funasr-nano",
                 quantization = "int8",
                 size = "~994 MB",
