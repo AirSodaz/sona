@@ -67,12 +67,15 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.sona.android.app.ui.component.SonaOptionItem
+import com.sona.android.app.ui.component.SonaSingleChoiceDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -887,7 +890,7 @@ private fun DockedAudioPlayer(
 ) {
     val duration = state.durationMillis.coerceAtLeast(0L)
     val position = state.positionMillis.coerceIn(0L, duration.coerceAtLeast(1L))
-    var speedMenuExpanded by remember { mutableStateOf(false) }
+    var speedDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     Surface(
         modifier = modifier
@@ -972,28 +975,27 @@ private fun DockedAudioPlayer(
                     }
                 }
 
-                Box {
-                    TextButton(onClick = { speedMenuExpanded = true }) {
-                        Text(
-                            text = "${state.speed}x",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
+                TextButton(onClick = { speedDialogVisible = true }) {
+                    Text(
+                        text = "${state.speed}x",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                if (speedDialogVisible) {
+                    val speedOptions = listOf(0.5f, 0.8f, 1f, 1.25f, 1.5f, 2f, 3f).map { speed ->
+                        SonaOptionItem(
+                            value = speed,
+                            label = "${speed}x",
                         )
                     }
-                    DropdownMenu(
-                        expanded = speedMenuExpanded,
-                        onDismissRequest = { speedMenuExpanded = false },
-                    ) {
-                        listOf(0.5f, 0.8f, 1f, 1.25f, 1.5f, 2f, 3f).forEach { speed ->
-                            DropdownMenuItem(
-                                text = { Text("${speed}x") },
-                                onClick = {
-                                    onSetSpeed(speed)
-                                    speedMenuExpanded = false
-                                },
-                            )
-                        }
-                    }
+                    SonaSingleChoiceDialog(
+                        title = stringResource(R.string.playback_speed),
+                        options = speedOptions,
+                        selectedValue = state.speed,
+                        onSelect = onSetSpeed,
+                        onDismiss = { speedDialogVisible = false },
+                    )
                 }
             }
             (state.status as? AudioPlaybackStatus.Failed)?.let {

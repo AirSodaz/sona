@@ -54,9 +54,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.sona.android.app.ui.component.SonaOptionItem
+import com.sona.android.app.ui.component.SonaSingleChoiceDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -81,6 +81,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -159,7 +160,12 @@ internal fun LibraryScreen(
 ) {
     val listState = rememberLazyListState()
     var purgeConfirmationVisible by remember { mutableStateOf(false) }
-    var projectMenuVisible by remember { mutableStateOf(false) }
+    var projectMenuVisible by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.selectedIds.isNotEmpty(), state.query.scope) {
+        if (state.selectedIds.isEmpty() || state.query.scope == HistoryScope.Trash) {
+            projectMenuVisible = false
+        }
+    }
     var filterSheetVisible by remember { mutableStateOf(false) }
     var createProjectDialogVisible by remember { mutableStateOf(false) }
     var newProjectName by remember { mutableStateOf("") }
@@ -408,36 +414,32 @@ internal fun LibraryScreen(
                                     )
                                 }
                             } else {
-                                Box {
-                                    IconButton(onClick = { projectMenuVisible = true }) {
-                                        Icon(
-                                            Icons.Rounded.FolderOpen,
-                                            stringResource(R.string.history_manage_selected_project),
+                                IconButton(onClick = { projectMenuVisible = true }) {
+                                    Icon(
+                                        Icons.Rounded.FolderOpen,
+                                        stringResource(R.string.history_manage_selected_project),
+                                    )
+                                }
+                                if (projectMenuVisible) {
+                                    val projectOptions = listOf(
+                                        SonaOptionItem<String?>(
+                                            value = null,
+                                            label = stringResource(R.string.history_move_to_inbox),
+                                        ),
+                                    ) + state.projects.map { project ->
+                                        SonaOptionItem<String?>(
+                                            value = project.id,
+                                            label = stringResource(R.string.history_move_to_project, project.name),
                                         )
                                     }
-                                    DropdownMenu(
-                                        expanded = projectMenuVisible,
-                                        onDismissRequest = { projectMenuVisible = false },
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.history_move_to_inbox)) },
-                                            onClick = {
-                                                projectMenuVisible = false
-                                                onMoveSelectedToProject(null)
-                                            },
-                                        )
-                                        state.projects.forEach { project ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(stringResource(R.string.history_move_to_project, project.name))
-                                                },
-                                                onClick = {
-                                                    projectMenuVisible = false
-                                                    onMoveSelectedToProject(project.id)
-                                                },
-                                            )
-                                        }
-                                    }
+                                    SonaSingleChoiceDialog(
+                                        title = stringResource(R.string.history_manage_selected_project),
+                                        options = projectOptions,
+                                        selectedValue = null,
+                                        hasSelection = false,
+                                        onSelect = onMoveSelectedToProject,
+                                        onDismiss = { projectMenuVisible = false },
+                                    )
                                 }
                                 IconButton(onClick = onTrashSelected) {
                                     Icon(Icons.Rounded.Delete, stringResource(R.string.history_move_to_trash))

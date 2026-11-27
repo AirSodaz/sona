@@ -26,26 +26,28 @@ import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaCardDefaults
+import com.sona.android.app.ui.component.SonaOptionItem
+import com.sona.android.app.ui.component.SonaOptionSettingRow
+import com.sona.android.app.ui.component.SonaSingleChoiceDialog
 import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,7 +74,7 @@ internal fun LlmSettingsPane(
     modifier: Modifier = Modifier,
     extraBottomPadding: Dp = 0.dp,
 ) {
-    var providerMenuExpanded by remember { mutableStateOf(false) }
+    var providerDialogVisible by rememberSaveable { mutableStateOf(false) }
     var apiKeyVisible by remember { mutableStateOf(false) }
     var showClearConfirmation by remember { mutableStateOf(false) }
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -113,35 +115,33 @@ internal fun LlmSettingsPane(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                    ExposedDropdownMenuBox(
-                        expanded = providerMenuExpanded,
-                        onExpandedChange = { providerMenuExpanded = !providerMenuExpanded },
+                    Surface(
+                        shape = SonaCardDefaults.SubGroupShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        OutlinedTextField(
-                            value = llmProviderDisplayName(state.providerId),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(stringResource(R.string.llm_provider)) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerMenuExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth(),
-                            singleLine = true,
+                        SonaOptionSettingRow(
+                            headline = stringResource(R.string.llm_provider),
+                            selectedValueText = llmProviderDisplayName(state.providerId),
+                            onClick = { providerDialogVisible = true },
+                            enabled = state.providers.isNotEmpty() && !state.saving,
                         )
-                        ExposedDropdownMenu(
-                            expanded = providerMenuExpanded,
-                            onDismissRequest = { providerMenuExpanded = false },
-                        ) {
-                            state.providers.forEach { provider ->
-                                DropdownMenuItem(
-                                    text = { Text(llmProviderDisplayName(provider.id)) },
-                                    onClick = {
-                                        onProvider(provider.id)
-                                        providerMenuExpanded = false
-                                    },
-                                )
-                            }
+                    }
+
+                    if (providerDialogVisible) {
+                        val providerOptions = state.providers.map { provider ->
+                            SonaOptionItem(
+                                value = provider.id,
+                                label = llmProviderDisplayName(provider.id),
+                            )
                         }
+                        SonaSingleChoiceDialog(
+                            title = stringResource(R.string.llm_provider),
+                            options = providerOptions,
+                            selectedValue = state.providerId,
+                            onSelect = onProvider,
+                            onDismiss = { providerDialogVisible = false },
+                        )
                     }
 
                     OutlinedTextField(

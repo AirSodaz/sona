@@ -238,6 +238,7 @@
     <string name="playback_pause">一時停止</string>
     <string name="playback_back_five">5秒戻る</string>
     <string name="playback_forward_five">5秒進む</string>
+    <string name="playback_speed">再生速度</string>
     <string name="playback_failed">音声再生を利用できません。</string>
     <string name="action_cancel">キャンセル</string>
     <string name="action_configure">設定を開く</string>

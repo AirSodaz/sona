@@ -43,22 +43,21 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Surface
 import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaCardDefaults
+import com.sona.android.app.ui.component.SonaOptionItem
+import com.sona.android.app.ui.component.SonaOptionSettingRow
+import com.sona.android.app.ui.component.SonaSingleChoiceDialog
+import com.sona.android.app.ui.component.TwoLineItemDivider
 import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -325,26 +325,35 @@ private fun LocalRecognitionSettings(
             }
         }
 
-        ModelSelectionDropdown(
-            label = stringResource(R.string.recognition_live_model),
-            slot = AsrSelectionSlot.LIVE,
-            mode = AsrMode.STREAMING,
-            selected = state.liveSelection,
-            state = state,
-            configuredProviders = configuredProviders,
-            enabled = !busy,
-            onSelect = onSelectModel,
-        )
-        ModelSelectionDropdown(
-            label = stringResource(R.string.recognition_batch_model),
-            slot = AsrSelectionSlot.BATCH,
-            mode = AsrMode.BATCH,
-            selected = state.batchSelection,
-            state = state,
-            configuredProviders = configuredProviders,
-            enabled = !busy,
-            onSelect = onSelectModel,
-        )
+        Surface(
+            shape = SonaCardDefaults.SubGroupShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ModelSelectionRow(
+                    label = stringResource(R.string.recognition_live_model),
+                    slot = AsrSelectionSlot.LIVE,
+                    mode = AsrMode.STREAMING,
+                    selected = state.liveSelection,
+                    state = state,
+                    configuredProviders = configuredProviders,
+                    enabled = !busy,
+                    onSelect = onSelectModel,
+                )
+                TwoLineItemDivider(startIndent = 18.dp)
+                ModelSelectionRow(
+                    label = stringResource(R.string.recognition_batch_model),
+                    slot = AsrSelectionSlot.BATCH,
+                    mode = AsrMode.BATCH,
+                    selected = state.batchSelection,
+                    state = state,
+                    configuredProviders = configuredProviders,
+                    enabled = !busy,
+                    onSelect = onSelectModel,
+                )
+            }
+        }
         if (state.operationError) {
             Text(
                 text = stringResource(R.string.local_model_operation_failed),
@@ -674,9 +683,8 @@ private fun LocalRecognitionSettings(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModelSelectionDropdown(
+private fun ModelSelectionRow(
     label: String,
     slot: AsrSelectionSlot,
     mode: AsrMode,
@@ -686,51 +694,48 @@ private fun ModelSelectionDropdown(
     enabled: Boolean,
     onSelect: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var dialogVisible by rememberSaveable { mutableStateOf(false) }
     val localOptions = state.installedModels
         .filter { it.supports(mode) }
-        .map { AsrModelSelection.Local(it.id) to it.displayName }
+        .map { model ->
+            SonaOptionItem<AsrModelSelection?>(
+                value = AsrModelSelection.Local(model.id),
+                label = model.displayName,
+                supportingText = model.config.modelType,
+            )
+        }
     val onlineOptions = OnlineAsrProvider.entries
         .filter { provider ->
             provider.supports(mode) &&
                 (provider in configuredProviders || selected == AsrModelSelection.Online(provider))
         }
-        .map { provider -> AsrModelSelection.Online(provider) to provider.displayLabel() }
-    val options = localOptions + onlineOptions
-    val selectedLabel = options.firstOrNull { it.first == selected }?.second
-        ?: stringResource(R.string.recognition_model_not_selected)
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = !expanded },
-    ) {
-        OutlinedTextField(
-            value = selectedLabel,
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.recognition_model_not_selected)) },
-                onClick = {
-                    expanded = false
-                    onSelect(slot, null)
-                },
+        .map { provider ->
+            SonaOptionItem<AsrModelSelection?>(
+                value = AsrModelSelection.Online(provider),
+                label = provider.displayLabel(),
             )
-            options.forEach { (selection, optionLabel) ->
-                DropdownMenuItem(
-                    text = { Text(optionLabel) },
-                    onClick = {
-                        expanded = false
-                        onSelect(slot, selection)
-                    },
-                )
-            }
         }
+    val notSelectedLabel = stringResource(R.string.recognition_model_not_selected)
+    val options = listOf(SonaOptionItem<AsrModelSelection?>(value = null, label = notSelectedLabel)) +
+        localOptions +
+        onlineOptions
+    val selectedLabel = options.firstOrNull { it.value == selected }?.label ?: notSelectedLabel
+
+    SonaOptionSettingRow(
+        headline = label,
+        selectedValueText = selectedLabel,
+        onClick = { dialogVisible = true },
+        enabled = enabled,
+    )
+
+    if (dialogVisible) {
+        SonaSingleChoiceDialog(
+            title = label,
+            options = options,
+            selectedValue = selected,
+            onSelect = { selection -> onSelect(slot, selection) },
+            onDismiss = { dialogVisible = false },
+        )
     }
 }
 

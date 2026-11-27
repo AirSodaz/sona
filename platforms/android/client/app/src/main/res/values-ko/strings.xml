@@ -238,6 +238,7 @@
     <string name="playback_pause">일시중지</string>
     <string name="playback_back_five">5초 뒤로</string>
     <string name="playback_forward_five">5초 앞으로</string>
+    <string name="playback_speed">재생 속도</string>
     <string name="playback_failed">오디오 재생을 사용할 수 없습니다.</string>
     <string name="action_cancel">취소</string>
     <string name="action_configure">설정 열기</string>

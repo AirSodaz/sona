@@ -238,6 +238,7 @@
     <string name="playback_pause">暫停</string>
     <string name="playback_back_five">倒退 5 秒</string>
     <string name="playback_forward_five">快進 5 秒</string>
+    <string name="playback_speed">播放倍速</string>
     <string name="playback_failed">音訊播放不可用。</string>
     <string name="action_cancel">取消</string>
     <string name="action_configure">前往設定</string>
