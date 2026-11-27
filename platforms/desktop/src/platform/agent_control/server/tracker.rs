@@ -1,13 +1,19 @@
+use parking_lot::Mutex;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tauri::{Emitter, Manager};
 use tokio::sync::watch;
 
 use crate::platform::agent_control::facade::AgentControlFacade;
 
+#[derive(Default)]
+struct ConnectionTrackerState {
+    generation: u64,
+    active_in_gen: usize,
+}
+
 #[derive(Clone)]
 pub struct ActiveConnectionTracker {
-    pub(crate) count: Arc<AtomicUsize>,
+    state: Arc<Mutex<ConnectionTrackerState>>,
     pub(crate) disconnect_tx: Arc<watch::Sender<u64>>,
     pub(crate) disconnect_rx: watch::Receiver<u64>,
 }
@@ -16,7 +22,7 @@ impl Default for ActiveConnectionTracker {
     fn default() -> Self {
         let (disconnect_tx, disconnect_rx) = watch::channel(0);
         Self {
-            count: Arc::new(AtomicUsize::new(0)),
+            state: Arc::new(Mutex::new(ConnectionTrackerState::default())),
             disconnect_tx: Arc::new(disconnect_tx),
             disconnect_rx,
         }
@@ -28,40 +34,60 @@ impl ActiveConnectionTracker {
         Self::default()
     }
 
-    pub fn on_connected(&self, app_handle: Option<&tauri::AppHandle>) {
-        self.count.fetch_add(1, Ordering::SeqCst);
+    pub fn on_connected(&self, app_handle: Option<&tauri::AppHandle>) -> u64 {
+        let (generation, is_connected) = {
+            let mut guard = self.state.lock();
+            guard.active_in_gen += 1;
+            (guard.generation, guard.active_in_gen > 0)
+        };
         if let Some(app) = app_handle {
-            crate::app::tray::set_agent_connected(app, self.count.load(Ordering::SeqCst) > 0);
+            crate::app::tray::set_agent_connected(app, is_connected);
         }
+        generation
     }
 
     pub fn on_disconnected(&self, app_handle: Option<&tauri::AppHandle>) {
-        let mut current = self.count.load(Ordering::SeqCst);
-        loop {
-            if current == 0 {
-                break;
-            }
-            match self.count.compare_exchange_weak(
-                current,
-                current - 1,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            ) {
-                Ok(_) => break,
-                Err(actual) => current = actual,
-            }
-        }
+        let is_connected = {
+            let mut guard = self.state.lock();
+            guard.active_in_gen = guard.active_in_gen.saturating_sub(1);
+            guard.active_in_gen > 0
+        };
         if let Some(app) = app_handle {
-            crate::app::tray::set_agent_connected(app, self.count.load(Ordering::SeqCst) > 0);
+            crate::app::tray::set_agent_connected(app, is_connected);
+        }
+    }
+
+    pub fn on_disconnected_generation(
+        &self,
+        generation: u64,
+        app_handle: Option<&tauri::AppHandle>,
+    ) {
+        let is_connected = {
+            let mut guard = self.state.lock();
+            // Ignore connections invalidated by an earlier `disconnect_all` so their teardown
+            // cannot decrement newer connections or briefly flip the tray back to connected.
+            if guard.generation == generation {
+                guard.active_in_gen = guard.active_in_gen.saturating_sub(1);
+            }
+            guard.active_in_gen > 0
+        };
+        if let Some(app) = app_handle {
+            crate::app::tray::set_agent_connected(app, is_connected);
         }
     }
 
     pub fn active_count(&self) -> usize {
-        self.count.load(Ordering::SeqCst)
+        self.state.lock().active_in_gen
     }
 
     pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
-        self.disconnect_tx.send_modify(|v| *v += 1);
+        let next_generation = {
+            let mut guard = self.state.lock();
+            guard.generation = guard.generation.wrapping_add(1);
+            guard.active_in_gen = 0;
+            guard.generation
+        };
+        let _ = self.disconnect_tx.send_replace(next_generation);
         if let Some(app) = app_handle {
             crate::app::tray::set_agent_connected(app, false);
         }

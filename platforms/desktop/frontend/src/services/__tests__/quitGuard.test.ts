@@ -49,6 +49,9 @@ describe('quitGuard', () => {
       if (command === 'has_active_downloads') {
         return false;
       }
+      if (command === 'focus_window') {
+        return undefined;
+      }
 
       throw new Error(`Unexpected invoke command: ${command}`);
     });
@@ -136,6 +139,7 @@ describe('quitGuard', () => {
 
     expect(result).toBe(true);
     expect(invoke).toHaveBeenCalledWith('has_active_downloads');
+    expect(invoke).not.toHaveBeenCalledWith('focus_window', { label: 'main' });
     expect(confirmMock).not.toHaveBeenCalled();
     expect(exitMock).toHaveBeenCalledTimes(1);
   });
@@ -157,6 +161,7 @@ describe('quitGuard', () => {
     const result = await runGuardedQuit(exitMock);
 
     expect(result).toBe(true);
+    expect(invoke).toHaveBeenCalledWith('focus_window', { label: 'main' });
     expect(confirmMock).toHaveBeenCalledWith(
       'tray.quit_warning_message',
       expect.objectContaining({

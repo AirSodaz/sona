@@ -24,6 +24,8 @@ pub(crate) struct TrayTexts {
     pub status_idle: String,
     pub status_recording: String,
     pub status_agent_connected: String,
+    pub stop_recording: String,
+    pub disconnect_agent: String,
 }
 
 impl Default for TrayTexts {
@@ -33,6 +35,8 @@ impl Default for TrayTexts {
             status_idle: "Idle".to_string(),
             status_recording: "Recording".to_string(),
             status_agent_connected: "Agent Connected".to_string(),
+            stop_recording: DEFAULT_STOP_RECORDING_LABEL.to_string(),
+            disconnect_agent: DEFAULT_DISCONNECT_AGENT_LABEL.to_string(),
         }
     }
 }
@@ -52,10 +56,18 @@ pub(crate) struct TrayMenuUpdate {
     pub status_agent_connected_text: Option<String>,
 }
 
+#[cfg(target_os = "macos")]
+struct MacosAppMenuItems {
+    settings_item: tauri::menu::MenuItem<tauri::Wry>,
+    quit_item: tauri::menu::MenuItem<tauri::Wry>,
+}
+
 struct TrayInner {
     status_item: tauri::menu::MenuItem<tauri::Wry>,
     disconnect_item: tauri::menu::MenuItem<tauri::Wry>,
     stop_recording_item: tauri::menu::MenuItem<tauri::Wry>,
+    #[cfg(target_os = "macos")]
+    macos_app_menu: MacosAppMenuItems,
     texts: TrayTexts,
 }
 
@@ -85,6 +97,14 @@ pub(crate) fn merge_tray_texts(current: &TrayTexts, update: &TrayMenuUpdate) -> 
             .status_agent_connected_text
             .clone()
             .unwrap_or_else(|| current.status_agent_connected.clone()),
+        stop_recording: update
+            .stop_recording_text
+            .clone()
+            .unwrap_or_else(|| current.stop_recording.clone()),
+        disconnect_agent: update
+            .disconnect_agent_text
+            .clone()
+            .unwrap_or_else(|| current.disconnect_agent.clone()),
     }
 }
 
@@ -94,7 +114,10 @@ pub(crate) fn format_tray_status_summary(
     agent_connected: bool,
 ) -> String {
     match (is_recording, agent_connected) {
-        (true, true) => format!("{} · {}", texts.status_recording, texts.status_agent_connected),
+        (true, true) => format!(
+            "{} · {}",
+            texts.status_recording, texts.status_agent_connected
+        ),
         (true, false) => texts.status_recording.clone(),
         (false, true) => texts.status_agent_connected.clone(),
         (false, false) => texts.status_idle.clone(),
@@ -159,7 +182,8 @@ fn sync_tray_macos_icon(#[allow(unused_variables)] app: &tauri::AppHandle) {
             if let Some(tray) = app_handle.tray_by_id(MAIN_TRAY_ID) {
                 match load_platform_tray_icon(is_recording) {
                     Ok(icon) => {
-                        if let Err(err) = tray.set_icon_with_as_template(Some(icon), !is_recording) {
+                        if let Err(err) = tray.set_icon_with_as_template(Some(icon), !is_recording)
+                        {
                             log::warn!("[Tray] Failed to update macOS tray icon: {err}");
                         }
                     }
@@ -174,39 +198,56 @@ fn sync_tray_macos_icon(#[allow(unused_variables)] app: &tauri::AppHandle) {
     }
 }
 
-fn sync_tray_status_and_tooltip(app: &tauri::AppHandle, tray_state: &TrayState) {
-    // Snapshot handles and formatted strings under the mutex, then release it before
-    // invoking Tauri UI methods that synchronously dispatch to the main thread.
-    let (status_item, disconnect_item, stop_recording_item, status_text, tooltip, is_recording, is_connected) = {
-        let guard = tray_state.inner.lock();
-        let is_connected = tray_state.agent_connected.load(Ordering::SeqCst);
-        let is_recording = tray_state.is_recording.load(Ordering::SeqCst);
-        let status_text = format_tray_status_menu_text(&guard.texts, is_recording, is_connected);
-        let tooltip = format_tray_tooltip(&guard.texts, is_recording, is_connected);
-        (
-            guard.status_item.clone(),
-            guard.disconnect_item.clone(),
-            guard.stop_recording_item.clone(),
+fn sync_tray_status_and_tooltip(app: &tauri::AppHandle, _tray_state: &TrayState) {
+    let app_handle = app.clone();
+    if let Err(err) = app.run_on_main_thread(move || {
+        let Some(tray_state) = app_handle.try_state::<TrayState>() else {
+            return;
+        };
+        // Read the latest state and snapshot handles on the main thread so rapid updates
+        // converge monotonically, then release the mutex before calling Tauri UI methods.
+        let (
+            status_item,
+            disconnect_item,
+            stop_recording_item,
             status_text,
             tooltip,
             is_recording,
             is_connected,
-        )
-    };
+        ) = {
+            let guard = tray_state.inner.lock();
+            let is_connected = tray_state.agent_connected.load(Ordering::SeqCst);
+            let is_recording = tray_state.is_recording.load(Ordering::SeqCst);
+            let status_text =
+                format_tray_status_menu_text(&guard.texts, is_recording, is_connected);
+            let tooltip = format_tray_tooltip(&guard.texts, is_recording, is_connected);
+            (
+                guard.status_item.clone(),
+                guard.disconnect_item.clone(),
+                guard.stop_recording_item.clone(),
+                status_text,
+                tooltip,
+                is_recording,
+                is_connected,
+            )
+        };
 
-    if let Err(err) = status_item.set_text(&status_text) {
-        log::warn!("[Tray] Failed to update status menu item text: {err}");
-    }
-    if let Err(err) = disconnect_item.set_enabled(is_connected) {
-        log::warn!("[Tray] Failed to update disconnect menu item state: {err}");
-    }
-    if let Err(err) = stop_recording_item.set_enabled(is_recording) {
-        log::warn!("[Tray] Failed to update stop recording menu item state: {err}");
-    }
-    if let Some(tray) = app.tray_by_id(MAIN_TRAY_ID)
-        && let Err(err) = tray.set_tooltip(Some(&tooltip))
-    {
-        log::warn!("[Tray] Failed to update tray tooltip: {err}");
+        if let Err(err) = status_item.set_text(&status_text) {
+            log::warn!("[Tray] Failed to update status menu item text: {err}");
+        }
+        if let Err(err) = disconnect_item.set_enabled(is_connected) {
+            log::warn!("[Tray] Failed to update disconnect menu item state: {err}");
+        }
+        if let Err(err) = stop_recording_item.set_enabled(is_recording) {
+            log::warn!("[Tray] Failed to update stop recording menu item state: {err}");
+        }
+        if let Some(tray) = app_handle.tray_by_id(MAIN_TRAY_ID)
+            && let Err(err) = tray.set_tooltip(Some(&tooltip))
+        {
+            log::warn!("[Tray] Failed to update tray tooltip: {err}");
+        }
+    }) {
+        log::warn!("[Tray] Failed to schedule tray status update on main thread: {err}");
     }
 }
 
@@ -354,7 +395,7 @@ fn build_tray_menu<M: Manager<tauri::Wry>>(
 /// `Quit` (`Cmd+Q`) routed through Sona's own menu handlers (and `quitGuard`) instead of
 /// `PredefinedMenuItem::quit` which calls `NSApplication.terminate:` directly.
 #[cfg(target_os = "macos")]
-fn setup_macos_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_macos_app_menu(app: &tauri::App) -> Result<MacosAppMenuItems, Box<dyn std::error::Error>> {
     use tauri::menu::{
         AboutMetadata, HELP_SUBMENU_ID, Menu, MenuItem, PredefinedMenuItem, Submenu,
         WINDOW_SUBMENU_ID,
@@ -371,13 +412,8 @@ fn setup_macos_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Erro
         ..Default::default()
     };
 
-    let app_settings = MenuItem::with_id(
-        app_handle,
-        "settings",
-        "Settings...",
-        true,
-        Some("Cmd+,"),
-    )?;
+    let app_settings =
+        MenuItem::with_id(app_handle, "settings", "Settings...", true, Some("Cmd+,"))?;
     let app_quit = MenuItem::with_id(
         app_handle,
         "quit",
@@ -461,7 +497,10 @@ fn setup_macos_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Erro
     )?;
 
     app.set_menu(menu)?;
-    Ok(())
+    Ok(MacosAppMenuItems {
+        settings_item: app_settings,
+        quit_item: app_quit,
+    })
 }
 
 pub(crate) async fn update_tray_menu(
@@ -489,12 +528,6 @@ pub(crate) async fn update_tray_menu(
         };
 
         let status_text = format_tray_status_menu_text(&updated_texts, is_rec, is_connected);
-        let stop_rec_label = update
-            .stop_recording_text
-            .unwrap_or_else(|| DEFAULT_STOP_RECORDING_LABEL.to_string());
-        let disconnect_label = update
-            .disconnect_agent_text
-            .unwrap_or_else(|| DEFAULT_DISCONNECT_AGENT_LABEL.to_string());
 
         let built = build_tray_menu(
             &app,
@@ -505,14 +538,26 @@ pub(crate) async fn update_tray_menu(
                 caption_checked: update.caption_checked,
                 settings_text: &update.settings_text,
                 updates_text: &update.updates_text,
-                stop_recording_text: &stop_rec_label,
+                stop_recording_text: &updated_texts.stop_recording,
                 stop_recording_enabled: is_rec,
-                disconnect_agent_text: &disconnect_label,
+                disconnect_agent_text: &updated_texts.disconnect_agent,
                 disconnect_agent_enabled: is_connected,
                 quit_text: &update.quit_text,
             },
         )?;
 
+        #[cfg(target_os = "macos")]
+        let macos_app_menu = {
+            let mut inner = tray_state.inner.lock();
+            inner.status_item = built.status_item;
+            inner.disconnect_item = built.disconnect_item;
+            inner.stop_recording_item = built.stop_recording_item;
+            (
+                inner.macos_app_menu.settings_item.clone(),
+                inner.macos_app_menu.quit_item.clone(),
+            )
+        };
+        #[cfg(not(target_os = "macos"))]
         {
             let mut inner = tray_state.inner.lock();
             inner.status_item = built.status_item;
@@ -520,9 +565,19 @@ pub(crate) async fn update_tray_menu(
             inner.stop_recording_item = built.stop_recording_item;
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            let (app_settings, app_quit) = macos_app_menu;
+            if let Err(err) = app_settings.set_text(&update.settings_text) {
+                log::warn!("[Tray] Failed to update macOS app menu Settings item: {err}");
+            }
+            if let Err(err) = app_quit.set_text(&update.quit_text) {
+                log::warn!("[Tray] Failed to update macOS app menu Quit item: {err}");
+            }
+        }
+
         if let Some(tray) = app.tray_by_id(MAIN_TRAY_ID) {
-            tray.set_menu(Some(built.menu))
-                .map_err(|e| e.to_string())?;
+            tray.set_menu(Some(built.menu)).map_err(|e| e.to_string())?;
         }
 
         sync_tray_status_and_tooltip(&app, &tray_state);
@@ -536,7 +591,7 @@ pub(crate) fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
         use tauri::tray::TrayIconBuilder;
 
         #[cfg(target_os = "macos")]
-        setup_macos_app_menu(app)?;
+        let macos_app_menu = setup_macos_app_menu(app)?;
 
         let default_texts = TrayTexts::default();
         let initial_status_text = format_tray_status_menu_text(&default_texts, false, false);
@@ -565,6 +620,8 @@ pub(crate) fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
                 status_item: built.status_item,
                 disconnect_item: built.disconnect_item,
                 stop_recording_item: built.stop_recording_item,
+                #[cfg(target_os = "macos")]
+                macos_app_menu,
                 texts: default_texts,
             })),
             menu_update_lock: Arc::new(tokio::sync::Mutex::new(())),
@@ -700,6 +757,7 @@ mod tests {
         let partial = TrayMenuUpdate {
             status_recording_text: Some("正在录音".to_string()),
             status_idle_text: Some("空闲".to_string()),
+            stop_recording_text: Some("停止录音".to_string()),
             ..empty_update()
         };
 
@@ -708,6 +766,16 @@ mod tests {
         assert_eq!(merged.status_idle, "空闲");
         assert_eq!(merged.status_recording, "正在录音");
         assert_eq!(merged.status_agent_connected, "Agent Connected");
+        assert_eq!(merged.stop_recording, "停止录音");
+        assert_eq!(merged.disconnect_agent, "Disconnect Agent");
+
+        let next_partial = TrayMenuUpdate {
+            disconnect_agent_text: Some("断开 Agent".to_string()),
+            ..empty_update()
+        };
+        let merged_next = merge_tray_texts(&merged, &next_partial);
+        assert_eq!(merged_next.stop_recording, "停止录音");
+        assert_eq!(merged_next.disconnect_agent, "断开 Agent");
     }
 
     #[test]
@@ -720,10 +788,7 @@ mod tests {
             "Status: Idle"
         );
 
-        assert_eq!(
-            format_tray_tooltip(&texts, true, false),
-            "Sona · Recording"
-        );
+        assert_eq!(format_tray_tooltip(&texts, true, false), "Sona · Recording");
         assert_eq!(
             format_tray_status_menu_text(&texts, true, false),
             "Status: Recording"
@@ -755,16 +820,14 @@ mod tests {
             status_idle: "空闲".to_string(),
             status_recording: "正在录音".to_string(),
             status_agent_connected: "Agent 已连接".to_string(),
+            ..TrayTexts::default()
         };
 
         assert_eq!(
             format_tray_status_menu_text(&texts, false, false),
             "状态：空闲"
         );
-        assert_eq!(
-            format_tray_tooltip(&texts, true, false),
-            "Sona · 正在录音"
-        );
+        assert_eq!(format_tray_tooltip(&texts, true, false), "Sona · 正在录音");
 
         let fallback_texts = TrayTexts {
             status_label_template: "Status".to_string(),
@@ -778,10 +841,9 @@ mod tests {
 
     #[test]
     fn embedded_macos_tray_icons_decode_cleanly() {
-        let template_icon = tauri::image::Image::from_bytes(include_bytes!(
-            "../../icons/tray-macos-template.png"
-        ))
-        .expect("template icon should decode");
+        let template_icon =
+            tauri::image::Image::from_bytes(include_bytes!("../../icons/tray-macos-template.png"))
+                .expect("template icon should decode");
         assert_eq!((template_icon.width(), template_icon.height()), (44, 44));
         // AppKit template images expect pure black RGB channels with alpha mask.
         let mut has_opaque_pixel = false;
@@ -793,10 +855,9 @@ mod tests {
         }
         assert!(has_opaque_pixel);
 
-        let recording_icon = tauri::image::Image::from_bytes(include_bytes!(
-            "../../icons/tray-macos-recording.png"
-        ))
-        .expect("recording icon should decode");
+        let recording_icon =
+            tauri::image::Image::from_bytes(include_bytes!("../../icons/tray-macos-recording.png"))
+                .expect("recording icon should decode");
         assert_eq!((recording_icon.width(), recording_icon.height()), (44, 44));
     }
 }

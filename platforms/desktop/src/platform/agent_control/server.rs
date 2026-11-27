@@ -267,18 +267,21 @@ pub async fn handle_connection_tracked<S>(
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
-    tracker.on_connected(app_handle.as_ref());
+    let connection_generation = tracker.on_connected(app_handle.as_ref());
     struct ConnectionGuard {
         tracker: ActiveConnectionTracker,
+        generation: u64,
         app_handle: Option<tauri::AppHandle>,
     }
     impl Drop for ConnectionGuard {
         fn drop(&mut self) {
-            self.tracker.on_disconnected(self.app_handle.as_ref());
+            self.tracker
+                .on_disconnected_generation(self.generation, self.app_handle.as_ref());
         }
     }
     let _guard = ConnectionGuard {
         tracker: tracker.clone(),
+        generation: connection_generation,
         app_handle: app_handle.clone(),
     };
 
@@ -286,7 +289,7 @@ where
     let mut buf_reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
     let mut disconnect_rx = tracker.disconnect_rx.clone();
-    let initial_version = *disconnect_rx.borrow();
+    let initial_version = connection_generation;
     let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<String>(64);
     let writer_task = tokio::spawn(async move {
         while let Some(resp_str) = resp_rx.recv().await {
@@ -400,6 +403,11 @@ where
             }
         }
     });
+
+    if *disconnect_rx.borrow() != initial_version {
+        log::info!("[AgentControlIPC] Client connection terminated by disconnect request");
+        return Ok(());
+    }
 
     loop {
         tokio::select! {
@@ -1091,6 +1099,23 @@ mod tests {
         assert_eq!(tracker.active_count(), 0);
 
         tracker.disconnect_all(None);
+        assert_eq!(tracker.active_count(), 0);
+
+        // Stale connections from before `disconnect_all` must neither decrement new-generation
+        // counts nor underflow when they finish tearing down.
+        let gen0_a = tracker.on_connected(None);
+        let gen0_b = tracker.on_connected(None);
+        assert_eq!(tracker.active_count(), 2);
+        tracker.disconnect_all(None);
+        assert_eq!(tracker.active_count(), 0);
+
+        let gen1 = tracker.on_connected(None);
+        assert_ne!(gen0_a, gen1);
+        assert_eq!(tracker.active_count(), 1);
+        tracker.on_disconnected_generation(gen0_a, None);
+        tracker.on_disconnected_generation(gen0_b, None);
+        assert_eq!(tracker.active_count(), 1);
+        tracker.on_disconnected_generation(gen1, None);
         assert_eq!(tracker.active_count(), 0);
     }
 

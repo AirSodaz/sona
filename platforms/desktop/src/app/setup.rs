@@ -78,12 +78,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         initial_config.as_ref(),
     );
     #[cfg(target_os = "macos")]
-    if start_silently
-        && let Err(error) = app
-            .handle()
-            .set_activation_policy(tauri::ActivationPolicy::Accessory)
-    {
-        log::warn!("[Setup] Failed to set macOS Accessory activation policy early: {error}");
+    if start_silently {
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
     }
 
     let dashboard_state = crate::platform::dashboard::DesktopDashboardState::new(dashboard_service);
