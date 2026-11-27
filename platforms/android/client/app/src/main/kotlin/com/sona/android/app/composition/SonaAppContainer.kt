@@ -127,14 +127,14 @@ class SonaAppContainer(context: Context) {
         recoveryCoordinator,
         audioImportJobs,
         unavailableReason = { job ->
-        when (val engine = job.engine) {
-            is AudioImportEngine.Local -> if (
-                localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
-            ) RecoveryUnavailableReason.MODEL_MISSING else null
-            is AudioImportEngine.Online -> if (
-                batchCredentialRepository.load(engine.provider) == null
-            ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
-        }
+            when (val engine = job.engine) {
+                is AudioImportEngine.Local -> if (
+                    localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
+                ) RecoveryUnavailableReason.MODEL_MISSING else null
+                is AudioImportEngine.Online -> if (
+                    batchCredentialRepository.load(engine.provider) == null
+                ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
+            }
         },
         transcriptHistory = history,
     )

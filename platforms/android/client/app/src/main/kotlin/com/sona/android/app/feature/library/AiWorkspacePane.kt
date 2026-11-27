@@ -1,5 +1,8 @@
 package com.sona.android.app.feature.library
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,9 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -254,9 +256,16 @@ internal fun AiWorkspacePane(
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
-                        val clipboardManager = LocalClipboardManager.current
+                        val context = LocalContext.current
+                        val clipboardManager = remember(context) {
+                            context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        }
                         IconButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(summary)) },
+                            onClick = {
+                                clipboardManager?.setPrimaryClip(
+                                    ClipData.newPlainText("Sona Summary", summary),
+                                )
+                            },
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.ContentCopy,

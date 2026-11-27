@@ -1009,14 +1009,17 @@ private fun SwipeableLibraryItemRow(
     onSwipeAction: () -> Unit,
 ) {
     val currentOnSwipeAction by rememberUpdatedState(onSwipeAction)
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart && !operationInProgress) {
+    val currentOperationInProgress by rememberUpdatedState(operationInProgress)
+    val dismissState = rememberSwipeToDismissBoxState()
+
+    LaunchedEffect(dismissState.currentValue) {
+        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
+            if (!currentOperationInProgress) {
                 currentOnSwipeAction()
             }
-            false
-        },
-    )
+            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,

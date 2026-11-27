@@ -500,175 +500,175 @@ private fun LocalRecognitionSettings(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.catalogModels.forEach { model ->
-                val installed = state.installedModels.any { it.id == model.id }
-                val downloading = state.downloadingModelId == model.id
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
+                    state.catalogModels.forEach { model ->
+                        val installed = state.installedModels.any { it.id == model.id }
+                        val downloading = state.downloadingModelId == model.id
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
-                                    Text(
-                                        text = model.displayName,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    if (model.isRecommended) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
                                             Text(
-                                                text = stringResource(R.string.local_model_recommended),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                text = model.displayName,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            if (model.isRecommended) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(R.string.local_model_recommended),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Text(
+                                                text = model.sizeLabel,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                            Text(
+                                                text = "·",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.outline,
+                                            )
+                                            Text(
+                                                text = model.languageSummary(),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false),
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(Modifier.width(8.dp))
+
+                                    if (installed) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Check,
+                                                    contentDescription = stringResource(R.string.local_model_downloaded),
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
+                                    } else if (downloading) {
+                                        Box(
+                                            modifier = Modifier.size(36.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                strokeWidth = 2.5.dp,
+                                            )
+                                        }
+                                    } else {
+                                        FilledTonalIconButton(
+                                            onClick = { handleDownload(model.id) },
+                                            enabled = !busy && state.deviceCapabilities?.supported != false,
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Download,
+                                                contentDescription = stringResource(R.string.action_download_model),
+                                                modifier = Modifier.size(20.dp),
                                             )
                                         }
                                     }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        text = model.sizeLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Text(
-                                        text = "·",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                    Text(
-                                        text = model.languageSummary(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                    )
-                                }
-                            }
 
-                            Spacer(Modifier.width(8.dp))
-
-                            if (installed) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(36.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = stringResource(R.string.local_model_downloaded),
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp),
-                                        )
+                                if (downloading) {
+                                    val progress = state.downloadProgress
+                                    val fraction = if (progress != null && progress.totalBytes > 0) {
+                                        (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
+                                    } else {
+                                        null
                                     }
-                                }
-                            } else if (downloading) {
-                                Box(
-                                    modifier = Modifier.size(36.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.5.dp,
-                                    )
-                                }
-                            } else {
-                                FilledTonalIconButton(
-                                    onClick = { handleDownload(model.id) },
-                                    enabled = !busy && state.deviceCapabilities?.supported != false,
-                                    modifier = Modifier.size(36.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = stringResource(R.string.action_download_model),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        }
-
-                        if (downloading) {
-                            val progress = state.downloadProgress
-                            val fraction = if (progress != null && progress.totalBytes > 0) {
-                                (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
-                            } else {
-                                null
-                            }
-                            Spacer(Modifier.height(2.dp))
-                            if (fraction == null) {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    progress = { fraction },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = if (progress != null) {
-                                        stringResource(
-                                            when (progress.stage) {
-                                                LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
-                                                LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
-                                                LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
-                                            },
+                                    Spacer(Modifier.height(2.dp))
+                                    if (fraction == null) {
+                                        LinearProgressIndicator(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
                                         )
                                     } else {
-                                        stringResource(R.string.local_model_downloading)
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                if (progress != null && progress.totalBytes > 0) {
-                                    Text(
-                                        text = "${(fraction?.times(100))?.toInt() ?: 0}% · ${formatBytes(progress.downloadedBytes.toLong())} / ${formatBytes(progress.totalBytes.toLong())}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                        LinearProgressIndicator(
+                                            progress = { fraction },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = if (progress != null) {
+                                                stringResource(
+                                                    when (progress.stage) {
+                                                        LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
+                                                        LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
+                                                        LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
+                                                    },
+                                                )
+                                            } else {
+                                                stringResource(R.string.local_model_downloading)
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        if (progress != null && progress.totalBytes > 0) {
+                                            Text(
+                                                text = "${(fraction?.times(100))?.toInt() ?: 0}% · ${formatBytes(progress.downloadedBytes.toLong())} / ${formatBytes(progress.totalBytes.toLong())}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        }
             }
         }
     }

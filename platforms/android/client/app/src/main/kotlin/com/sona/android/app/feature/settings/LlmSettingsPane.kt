@@ -78,249 +78,249 @@ internal fun LlmSettingsPane(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(modifier = modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 720.dp)
-            .fillMaxWidth()
-            .springOverscroll()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = 24.dp,
-                end = 24.dp,
-                top = 20.dp,
-                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-            )
-            .align(Alignment.TopCenter),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // Provider & Model Section Card
-        InsetGroupedCard(
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier = Modifier
+                .widthIn(max = 720.dp)
+                .fillMaxWidth()
+                .springOverscroll()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = 20.dp,
+                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+                )
+                .align(Alignment.TopCenter),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+            // Provider & Model Section Card
+            InsetGroupedCard(
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    text = stringResource(R.string.settings_llm_heading),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(R.string.settings_llm_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                ExposedDropdownMenuBox(
-                    expanded = providerMenuExpanded,
-                    onExpandedChange = { providerMenuExpanded = !providerMenuExpanded },
-                ) {
-                    OutlinedTextField(
-                        value = llmProviderDisplayName(state.providerId),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.llm_provider)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerMenuExpanded) },
-                        modifier = Modifier
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    ExposedDropdownMenu(
-                        expanded = providerMenuExpanded,
-                        onDismissRequest = { providerMenuExpanded = false },
-                    ) {
-                        state.providers.forEach { provider ->
-                            DropdownMenuItem(
-                                text = { Text(llmProviderDisplayName(provider.id)) },
-                                onClick = {
-                                    onProvider(provider.id)
-                                    providerMenuExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = state.model,
-                    onValueChange = onModel,
-                    label = { Text(stringResource(R.string.llm_model)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = state.baseUrl,
-                    onValueChange = onBaseUrl,
-                    label = { Text(stringResource(R.string.llm_base_url)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = state.apiPath,
-                    onValueChange = onPath,
-                    label = { Text(stringResource(R.string.llm_api_path)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = state.apiVersion,
-                    onValueChange = onVersion,
-                    label = { Text(stringResource(R.string.llm_api_version)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            }
-        }
-
-        // Credentials Section Card
-        InsetGroupedCard(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.credential_api_key),
+                        text = stringResource(R.string.settings_llm_heading),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
                     )
-                    if (state.hasApiKey || state.configured) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = stringResource(R.string.credential_configured),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                    Text(
+                        text = stringResource(R.string.settings_llm_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = providerMenuExpanded,
+                        onExpandedChange = { providerMenuExpanded = !providerMenuExpanded },
+                    ) {
+                        OutlinedTextField(
+                            value = llmProviderDisplayName(state.providerId),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.llm_provider)) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerMenuExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                            singleLine = true,
+                        )
+                        ExposedDropdownMenu(
+                            expanded = providerMenuExpanded,
+                            onDismissRequest = { providerMenuExpanded = false },
+                        ) {
+                            state.providers.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(llmProviderDisplayName(provider.id)) },
+                                    onClick = {
+                                        onProvider(provider.id)
+                                        providerMenuExpanded = false
+                                    },
+                                )
+                            }
                         }
                     }
-                }
 
-                OutlinedTextField(
-                    value = state.apiKeyInput,
-                    onValueChange = onApiKey,
-                    label = {
+                    OutlinedTextField(
+                        value = state.model,
+                        onValueChange = onModel,
+                        label = { Text(stringResource(R.string.llm_model)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+
+                    OutlinedTextField(
+                        value = state.baseUrl,
+                        onValueChange = onBaseUrl,
+                        label = { Text(stringResource(R.string.llm_base_url)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+
+                    OutlinedTextField(
+                        value = state.apiPath,
+                        onValueChange = onPath,
+                        label = { Text(stringResource(R.string.llm_api_path)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+
+                    OutlinedTextField(
+                        value = state.apiVersion,
+                        onValueChange = onVersion,
+                        label = { Text(stringResource(R.string.llm_api_version)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+            }
+
+            // Credentials Section Card
+            InsetGroupedCard(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
-                            stringResource(
-                                if (state.hasApiKey && state.apiKeyInput.isBlank()) {
-                                    R.string.llm_api_key_stored
-                                } else {
-                                    R.string.llm_api_key
-                                },
-                            ),
+                            text = stringResource(R.string.credential_api_key),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
-                    },
-                    visualTransformation = if (apiKeyVisible) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                            Icon(
-                                imageVector = if (apiKeyVisible) {
-                                    Icons.Rounded.VisibilityOff
-                                } else {
-                                    Icons.Rounded.Visibility
-                                },
-                                contentDescription = stringResource(
-                                    if (apiKeyVisible) {
-                                        R.string.llm_hide_api_key
+                        if (state.hasApiKey || state.configured) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.credential_configured),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = state.apiKeyInput,
+                        onValueChange = onApiKey,
+                        label = {
+                            Text(
+                                stringResource(
+                                    if (state.hasApiKey && state.apiKeyInput.isBlank()) {
+                                        R.string.llm_api_key_stored
                                     } else {
-                                        R.string.llm_show_api_key
+                                        R.string.llm_api_key
                                     },
                                 ),
                             )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            }
-        }
-
-        // Error message card if failed
-        if (state.error) {
-            Card(
-                shape = MaterialTheme.shapes.small,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.WarningAmber,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(R.string.llm_configuration_failed),
-                        style = MaterialTheme.typography.bodyMedium,
+                        },
+                        visualTransformation = if (apiKeyVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                Icon(
+                                    imageVector = if (apiKeyVisible) {
+                                        Icons.Rounded.VisibilityOff
+                                    } else {
+                                        Icons.Rounded.Visibility
+                                    },
+                                    contentDescription = stringResource(
+                                        if (apiKeyVisible) {
+                                            R.string.llm_hide_api_key
+                                        } else {
+                                            R.string.llm_show_api_key
+                                        },
+                                    ),
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                     )
                 }
             }
-        }
 
-        // Action Buttons
-        Button(
-            onClick = onSave,
-            enabled = !state.saving,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (state.saving) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(Modifier.width(8.dp))
+            // Error message card if failed
+            if (state.error) {
+                Card(
+                    shape = MaterialTheme.shapes.small,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.WarningAmber,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(R.string.llm_configuration_failed),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
-            Text(
-                text = stringResource(
-                    if (state.saved) R.string.llm_saved else R.string.llm_save,
-                ),
-            )
-        }
 
-        if (state.hasApiKey || state.configured) {
-            OutlinedButton(
-                onClick = { showClearConfirmation = true },
+            // Action Buttons
+            Button(
+                onClick = onSave,
+                enabled = !state.saving,
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                if (state.saving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
                 Text(
-                    text = stringResource(R.string.llm_clear),
-                    color = MaterialTheme.colorScheme.error,
+                    text = stringResource(
+                        if (state.saved) R.string.llm_saved else R.string.llm_save,
+                    ),
                 )
             }
-        }
 
-        Spacer(Modifier.height(16.dp))
-    }
+            if (state.hasApiKey || state.configured) {
+                OutlinedButton(
+                    onClick = { showClearConfirmation = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.llm_clear),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+        }
     }
 
     if (showClearConfirmation) {

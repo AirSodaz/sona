@@ -94,7 +94,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -103,6 +102,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
@@ -286,7 +286,13 @@ internal fun RecordScreen(
     onViewCompleted: (String) -> Unit = {},
     onMinimize: () -> Unit = {},
 ) {
-    BackHandler(onBack = onMinimize)
+    var pendingAutoStart by remember { mutableStateOf(false) }
+    val minimizeRecordScreen = {
+        pendingAutoStart = false
+        onMinimize()
+    }
+
+    BackHandler(onBack = minimizeRecordScreen)
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -457,6 +463,8 @@ internal fun RecordScreen(
     val requestRecording = {
         if (configurationMissing || recordingState is LiveRecordingState.NeedsConfiguration) {
             setupSheetVisible = true
+        } else if (bootstrapState is SonaBootstrapUiState.Loading) {
+            pendingAutoStart = true
         } else if (!bootstrapReady) {
             setupSheetVisible = true
         } else {
@@ -488,6 +496,15 @@ internal fun RecordScreen(
     LaunchedEffect(autoStartRequestToken) {
         if (autoStartRequestToken > 0 && !isActive) {
             requestRecording()
+        }
+    }
+
+    LaunchedEffect(bootstrapState) {
+        if (pendingAutoStart && bootstrapState !is SonaBootstrapUiState.Loading) {
+            pendingAutoStart = false
+            if (!isActive) {
+                requestRecording()
+            }
         }
     }
 
@@ -563,7 +580,7 @@ internal fun RecordScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    IconButton(onClick = onMinimize) {
+                    IconButton(onClick = minimizeRecordScreen) {
                         Icon(
                             imageVector = Icons.Rounded.KeyboardArrowDown,
                             contentDescription = stringResource(R.string.action_back),

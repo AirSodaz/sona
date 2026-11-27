@@ -176,863 +176,863 @@ internal fun SyncSettingsPane(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(modifier = modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 720.dp)
-            .fillMaxWidth()
-            .springOverscroll()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = 24.dp,
-                end = 24.dp,
-                top = 20.dp,
-                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-            )
-            .align(Alignment.TopCenter),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        // Pairing Success Banner
-        val pairingNoticeText = state.pairingImportedVaultId?.let { vault ->
-            stringResource(R.string.sync_pairing_imported_notice, vault)
-        } ?: state.pairingSuccessNotice
-        pairingNoticeText?.let { notice ->
-            OutlinedCard(
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(
-                        Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = notice,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { onClearPairingNotice?.invoke() }) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = stringResource(R.string.action_close),
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        // Global error banner
-        val syncErrorText = when (state.errorCategory) {
-            SyncUiError.INVALID_PAIRING_TOKEN -> stringResource(R.string.sync_invalid_pairing_token)
-            SyncUiError.OPERATION_FAILED -> stringResource(R.string.sync_operation_failed)
-            null -> state.error
-        }
-        syncErrorText?.let { err ->
-            OutlinedCard(
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-
-        when (state.status.state) {
-            SyncLifecycleState.DISABLED -> {
-                // Top Pairing Quick Import Banner
+        Column(
+            modifier = Modifier
+                .widthIn(max = 720.dp)
+                .fillMaxWidth()
+                .springOverscroll()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = 20.dp,
+                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+                )
+                .align(Alignment.TopCenter),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Pairing Success Banner
+            val pairingNoticeText = state.pairingImportedVaultId?.let { vault ->
+                stringResource(R.string.sync_pairing_imported_notice, vault)
+            } ?: state.pairingSuccessNotice
+            pairingNoticeText?.let { notice ->
                 OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.outlinedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                     ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        Icon(
+                            Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = notice,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f),
-                        ) {
+                        )
+                        IconButton(onClick = { onClearPairingNotice?.invoke() }) {
                             Icon(
-                                Icons.Rounded.Link,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                text = stringResource(R.string.sync_have_device_hint),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                pairingTokenInput = ""
-                                pairingTokenError = null
-                                showImportPairingDialog = true
-                            },
-                            enabled = !state.busy,
-                        ) {
-                            Text(stringResource(R.string.sync_import_pairing_token))
-                        }
-                    }
-                }
-
-                // Provider Presets
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = stringResource(R.string.sync_preset_label),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SYNC_PROVIDER_PRESETS.forEach { preset ->
-                            FilterChip(
-                                selected = selectedPresetId == preset.id,
-                                onClick = {
-                                    selectedPresetId = preset.id
-                                    server = preset.defaultServerUrl
-                                    root = preset.defaultRemoteRoot
-                                },
-                                label = { Text(preset.defaultName) },
-                            )
-                        }
-                    }
-                    activePreset?.let { preset ->
-                        if (preset.helpText.isNotBlank()) {
-                            Text(
-                                text = preset.helpText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.action_close),
+                                modifier = Modifier.size(16.dp),
                             )
                         }
                     }
                 }
+            }
 
-                // Connection Parameters
-                OutlinedTextField(
-                    value = server,
-                    onValueChange = {
-                        server = it
-                        selectedPresetId = detectProviderPresetId(it)
-                    },
-                    label = { Text(stringResource(R.string.sync_server_url)) },
-                    placeholder = { Text(activePreset?.defaultServerUrl ?: "https://...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text(stringResource(R.string.sync_username)) },
-                    placeholder = { Text(activePreset?.usernamePlaceholder ?: "user@example.com") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                SecretField(
-                    value = providerPassword,
-                    onChange = { providerPassword = it },
-                    labelRes = R.string.sync_provider_password,
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { onTestProvider(provider) },
-                        enabled = !state.busy && server.isNotBlank(),
-                    ) {
-                        Text(stringResource(R.string.sync_test))
-                    }
-                }
-
-                HorizontalDivider()
-
-                // Authentication Method (Master Password vs Emergency Recovery Key)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = stringResource(R.string.sync_auth_mode),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = unlockMethod == "password",
-                            onClick = { unlockMethod = "password" },
-                            label = { Text(stringResource(R.string.sync_use_master_password)) },
-                            leadingIcon = { Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        )
-                        FilterChip(
-                            selected = unlockMethod == "recovery",
-                            onClick = { unlockMethod = "recovery" },
-                            label = { Text(stringResource(R.string.sync_use_recovery_key)) },
-                            leadingIcon = { Icon(Icons.Rounded.Shield, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        )
-                    }
-
-                    SecretField(
-                        value = masterPassword,
-                        onChange = { masterPassword = it },
-                        labelRes = if (unlockMethod == "password") R.string.sync_master_password else R.string.sync_recovery_key,
-                        monospace = unlockMethod == "recovery",
-                    )
-                }
-
-                // Advanced Settings Accordion
+            // Global error banner
+            val syncErrorText = when (state.errorCategory) {
+                SyncUiError.INVALID_PAIRING_TOKEN -> stringResource(R.string.sync_invalid_pairing_token)
+                SyncUiError.OPERATION_FAILED -> stringResource(R.string.sync_operation_failed)
+                null -> state.error
+            }
+            syncErrorText?.let { err ->
                 OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.outlinedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                     ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+
+            when (state.status.state) {
+                SyncLifecycleState.DISABLED -> {
+                    // Top Pairing Quick Import Banner
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        ),
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showAdvanced = !showAdvanced },
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.sync_advanced_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Link,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
                                 )
                                 Text(
-                                    text = stringResource(R.string.sync_advanced_desc),
+                                    text = stringResource(R.string.sync_have_device_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    pairingTokenInput = ""
+                                    pairingTokenError = null
+                                    showImportPairingDialog = true
+                                },
+                                enabled = !state.busy,
+                            ) {
+                                Text(stringResource(R.string.sync_import_pairing_token))
+                            }
+                        }
+                    }
+
+                    // Provider Presets
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = stringResource(R.string.sync_preset_label),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            SYNC_PROVIDER_PRESETS.forEach { preset ->
+                                FilterChip(
+                                    selected = selectedPresetId == preset.id,
+                                    onClick = {
+                                        selectedPresetId = preset.id
+                                        server = preset.defaultServerUrl
+                                        root = preset.defaultRemoteRoot
+                                    },
+                                    label = { Text(preset.defaultName) },
+                                )
+                            }
+                        }
+                        activePreset?.let { preset ->
+                            if (preset.helpText.isNotBlank()) {
+                                Text(
+                                    text = preset.helpText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            IconButton(onClick = { showAdvanced = !showAdvanced }) {
-                                Icon(
-                                    if (showAdvanced) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                                    contentDescription = null,
-                                )
-                            }
-                        }
-
-                        if (showAdvanced) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            OutlinedTextField(
-                                value = root,
-                                onValueChange = { root = it },
-                                label = { Text(stringResource(R.string.sync_remote_root)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedTextField(
-                                value = vaultId,
-                                onValueChange = { vaultId = it },
-                                label = { Text(stringResource(R.string.sync_vault_id)) },
-                                placeholder = { Text(stringResource(R.string.sync_vault_id_placeholder)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = stringResource(R.string.sync_preset),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                SyncPreset.entries.forEach { p ->
-                                    FilterChip(
-                                        selected = selectedPresetScope == p,
-                                        onClick = { selectedPresetScope = p },
-                                        label = { Text(stringResource(p.labelRes())) },
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(R.string.sync_create_recovery_key_label),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.sync_create_recovery_key_hint),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                SonaSwitch(
-                                    checked = createRecoveryKey,
-                                    onCheckedChange = { createRecoveryKey = it },
-                                    enabled = !state.busy,
-                                )
-                            }
                         }
                     }
-                }
 
-                // Connect / Create Action Button
-                val canSubmit = server.isNotBlank() && providerPassword.isNotBlank() && masterPassword.isNotBlank()
-                Button(
-                    onClick = {
-                        val trimmedVault = vaultId.trim()
-                        if (trimmedVault.isNotEmpty()) {
-                            onJoin(provider, trimmedVault, masterPassword)
-                        } else if (onDiscoverVaults != null) {
-                            onDiscoverVaults(provider) { vaults ->
-                                when {
-                                    vaults.isEmpty() -> {
-                                        if (onCreateWithVaultId != null) {
-                                            onCreateWithVaultId(provider, selectedPresetScope, masterPassword, "default", createRecoveryKey)
-                                        } else {
-                                            onCreate(provider, selectedPresetScope, masterPassword)
-                                        }
-                                    }
-                                    vaults.size == 1 -> {
-                                        onJoin(provider, vaults[0].vaultId, masterPassword)
-                                    }
-                                    else -> {
-                                        discoveredVaultsToResolve = vaults
-                                        selectedVaultToJoin = vaults[0].vaultId
-                                        isCreatingNewVaultChoice = false
-                                    }
-                                }
-                            }
-                        } else {
-                            if (onCreateWithVaultId != null) {
-                                onCreateWithVaultId(provider, selectedPresetScope, masterPassword, "default", createRecoveryKey)
-                            } else {
-                                onCreate(provider, selectedPresetScope, masterPassword)
-                            }
-                        }
-                    },
-                    enabled = !state.busy && canSubmit,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.busy) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(stringResource(R.string.sync_connect))
-                }
-            }
+                    // Connection Parameters
+                    OutlinedTextField(
+                        value = server,
+                        onValueChange = {
+                            server = it
+                            selectedPresetId = detectProviderPresetId(it)
+                        },
+                        label = { Text(stringResource(R.string.sync_server_url)) },
+                        placeholder = { Text(activePreset?.defaultServerUrl ?: "https://...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
 
-            SyncLifecycleState.LOCKED -> {
-                InsetGroupedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text(stringResource(R.string.sync_username)) },
+                        placeholder = { Text(activePreset?.usernamePlaceholder ?: "user@example.com") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+
+                    SecretField(
+                        value = providerPassword,
+                        onChange = { providerPassword = it },
+                        labelRes = R.string.sync_provider_password,
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { onTestProvider(provider) },
+                            enabled = !state.busy && server.isNotBlank(),
                         ) {
-                            Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(
-                                text = stringResource(R.string.sync_lock),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
+                            Text(stringResource(R.string.sync_test))
                         }
+                    }
 
+                    HorizontalDivider()
+
+                    // Authentication Method (Master Password vs Emergency Recovery Key)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = stringResource(R.string.sync_auth_mode),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
                                 selected = unlockMethod == "password",
                                 onClick = { unlockMethod = "password" },
                                 label = { Text(stringResource(R.string.sync_use_master_password)) },
+                                leadingIcon = { Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.size(16.dp)) },
                             )
                             FilterChip(
                                 selected = unlockMethod == "recovery",
                                 onClick = { unlockMethod = "recovery" },
                                 label = { Text(stringResource(R.string.sync_use_recovery_key)) },
+                                leadingIcon = { Icon(Icons.Rounded.Shield, contentDescription = null, modifier = Modifier.size(16.dp)) },
                             )
                         }
-
-                        SecretField(
-                            value = providerPassword,
-                            onChange = { providerPassword = it },
-                            labelRes = R.string.sync_provider_password,
-                        )
 
                         SecretField(
                             value = masterPassword,
                             onChange = { masterPassword = it },
-                            labelRes = if (unlockMethod == "recovery") R.string.sync_recovery_key else R.string.sync_master_password,
+                            labelRes = if (unlockMethod == "password") R.string.sync_master_password else R.string.sync_recovery_key,
                             monospace = unlockMethod == "recovery",
                         )
-
-                        Button(
-                            onClick = {
-                                if (unlockMethod == "recovery") {
-                                    onUnlockWithRecovery(providerPassword, masterPassword)
-                                } else {
-                                    onUnlock(providerPassword, masterPassword)
-                                }
-                            },
-                            enabled = !state.busy && providerPassword.isNotBlank() && masterPassword.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            if (state.busy) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(stringResource(R.string.sync_unlock))
-                        }
                     }
-                }
-            }
 
-            else -> {
-                // Connected Hero Card
-                InsetGroupedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    // Advanced Settings Accordion
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAdvanced = !showAdvanced },
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                val dotColor = when (state.status.state) {
-                                    SyncLifecycleState.IDLE -> Color(0xFF22C55E)
-                                    SyncLifecycleState.SYNCING -> MaterialTheme.colorScheme.primary
-                                    SyncLifecycleState.PAUSED -> Color(0xFFF59E0B)
-                                    SyncLifecycleState.ERROR -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.outline
-                                }
-                                Surface(
-                                    modifier = Modifier.size(10.dp),
-                                    shape = CircleShape,
-                                    color = dotColor,
-                                ) {}
-                                Text(
-                                    text = stringResource(state.status.state.labelRes()),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = { showPairDeviceModal = true },
-                                enabled = !state.busy,
-                            ) {
-                                Icon(Icons.Rounded.QrCode, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.sync_pair_btn))
-                            }
-                        }
-
-                        HorizontalDivider()
-
-                        state.pairingInfo?.serverUrl?.let { url ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text(stringResource(R.string.sync_server_url), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(url, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                            }
-                        }
-
-                        state.pairingInfo?.username?.let { user ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(stringResource(R.string.sync_username), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(user, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                            }
-                        }
-
-                        state.status.vaultId?.let { id ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(stringResource(R.string.sync_vault_id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(id, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-
-                        Text(
-                            text = stringResource(R.string.sync_counts, state.status.pendingOperationCount, state.status.conflictCount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                // Actions Bar (Sync now, Pause/Resume, Lock)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = onRunNow,
-                        enabled = !state.busy && state.status.state != SyncLifecycleState.PAUSED,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(R.string.sync_now))
-                    }
-
-                    OutlinedButton(
-                        onClick = { onSetPaused(state.status.state != SyncLifecycleState.PAUSED) },
-                        enabled = !state.busy,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(stringResource(if (state.status.state == SyncLifecycleState.PAUSED) R.string.sync_resume else R.string.sync_pause))
-                    }
-
-                    OutlinedButton(
-                        onClick = onLock,
-                        enabled = !state.busy,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(stringResource(R.string.sync_lock))
-                    }
-                }
-
-                // Scope / Preset Selection
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.sync_preset), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SyncPreset.entries.forEach { p ->
-                            FilterChip(
-                                selected = state.status.preset == p,
-                                onClick = { onChangePreset(p) },
-                                enabled = !state.busy,
-                                label = { Text(stringResource(p.labelRes())) },
-                            )
-                        }
-                    }
-                }
-
-                // Security & Recovery Card
-                InsetGroupedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(Icons.Rounded.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(
-                                text = stringResource(R.string.sync_security_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.sync_security_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        HorizontalDivider()
-
-                        // Recovery Key Management
-                        Text(
-                            text = stringResource(R.string.sync_recovery_key_manage_title),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = stringResource(R.string.sync_recovery_key_manage_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        OutlinedButton(
-                            onClick = onGenerateRecoveryKey,
-                            enabled = !state.busy,
-                        ) {
-                            Text(stringResource(R.string.sync_generate_recovery_key))
-                        }
-
-                        state.recoveryKey?.let { key ->
-                            OutlinedCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-                                ),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = stringResource(R.string.sync_active_recovery_key),
-                                        style = MaterialTheme.typography.labelMedium,
+                                        text = stringResource(R.string.sync_advanced_title),
+                                        style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                     Text(
-                                        text = key,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace,
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.sync_recovery_key_save_warning),
+                                        text = stringResource(R.string.sync_advanced_desc),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                copyToClipboard(clipboard, "Sona Recovery Key", key, sensitive = true)
-                                                onConsumeRecoveryKey()
-                                            },
-                                        ) {
-                                            Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.action_copy))
-                                        }
-                                        OutlinedButton(
-                                            onClick = { keyExporter.launch("sona-recovery-key.txt") },
-                                        ) {
-                                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.action_export))
-                                        }
+                                }
+                                IconButton(onClick = { showAdvanced = !showAdvanced }) {
+                                    Icon(
+                                        if (showAdvanced) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                        contentDescription = null,
+                                    )
+                                }
+                            }
+
+                            if (showAdvanced) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider()
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = root,
+                                    onValueChange = { root = it },
+                                    label = { Text(stringResource(R.string.sync_remote_root)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedTextField(
+                                    value = vaultId,
+                                    onValueChange = { vaultId = it },
+                                    label = { Text(stringResource(R.string.sync_vault_id)) },
+                                    placeholder = { Text(stringResource(R.string.sync_vault_id_placeholder)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = stringResource(R.string.sync_preset),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    SyncPreset.entries.forEach { p ->
+                                        FilterChip(
+                                            selected = selectedPresetScope == p,
+                                            onClick = { selectedPresetScope = p },
+                                            label = { Text(stringResource(p.labelRes())) },
+                                        )
                                     }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.sync_create_recovery_key_label),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.sync_create_recovery_key_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    SonaSwitch(
+                                        checked = createRecoveryKey,
+                                        onCheckedChange = { createRecoveryKey = it },
+                                        enabled = !state.busy,
+                                    )
                                 }
                             }
                         }
+                    }
 
-                        HorizontalDivider()
-
-                        // Change Master Password Form
-                        Text(
-                            text = stringResource(R.string.sync_change_master_password),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = passwordChangeMode == "password",
-                                onClick = { passwordChangeMode = "password" },
-                                label = { Text(stringResource(R.string.sync_change_password_mode_current)) },
-                            )
-                            FilterChip(
-                                selected = passwordChangeMode == "recovery",
-                                onClick = { passwordChangeMode = "recovery" },
-                                label = { Text(stringResource(R.string.sync_change_password_mode_recovery)) },
-                            )
-                        }
-
-                        SecretField(
-                            value = currentPasswordInput,
-                            onChange = {
-                                currentPasswordInput = it
-                                passwordError = null
-                            },
-                            labelRes = if (passwordChangeMode == "password") R.string.sync_current_master_password else R.string.sync_recovery_key,
-                            monospace = passwordChangeMode == "recovery",
-                        )
-
-                        SecretField(
-                            value = nextPasswordInput,
-                            onChange = {
-                                nextPasswordInput = it
-                                passwordError = null
-                            },
-                            labelRes = R.string.sync_new_master_password,
-                        )
-
-                        SecretField(
-                            value = confirmPasswordInput,
-                            onChange = {
-                                confirmPasswordInput = it
-                                passwordError = null
-                            },
-                            labelRes = R.string.sync_confirm_new_password,
-                        )
-
-                        passwordError?.let { err ->
-                            Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-
-                        val canUpdatePassword = currentPasswordInput.isNotBlank() &&
-                            nextPasswordInput.isNotBlank() &&
-                            confirmPasswordInput.isNotBlank() &&
-                            !state.busy
-
-                        val mismatchMessage = stringResource(R.string.sync_password_mismatch)
-                        OutlinedButton(
-                            onClick = {
-                                if (nextPasswordInput != confirmPasswordInput) {
-                                    passwordError = mismatchMessage
-                                    return@OutlinedButton
+                    // Connect / Create Action Button
+                    val canSubmit = server.isNotBlank() && providerPassword.isNotBlank() && masterPassword.isNotBlank()
+                    Button(
+                        onClick = {
+                            val trimmedVault = vaultId.trim()
+                            if (trimmedVault.isNotEmpty()) {
+                                onJoin(provider, trimmedVault, masterPassword)
+                            } else if (onDiscoverVaults != null) {
+                                onDiscoverVaults(provider) { vaults ->
+                                    when {
+                                        vaults.isEmpty() -> {
+                                            if (onCreateWithVaultId != null) {
+                                                onCreateWithVaultId(provider, selectedPresetScope, masterPassword, "default", createRecoveryKey)
+                                            } else {
+                                                onCreate(provider, selectedPresetScope, masterPassword)
+                                            }
+                                        }
+                                        vaults.size == 1 -> {
+                                            onJoin(provider, vaults[0].vaultId, masterPassword)
+                                        }
+                                        else -> {
+                                            discoveredVaultsToResolve = vaults
+                                            selectedVaultToJoin = vaults[0].vaultId
+                                            isCreatingNewVaultChoice = false
+                                        }
+                                    }
                                 }
-                                onChangePassword(currentPasswordInput, nextPasswordInput)
-                                currentPasswordInput = ""
-                                nextPasswordInput = ""
-                                confirmPasswordInput = ""
-                                passwordError = null
-                            },
-                            enabled = canUpdatePassword,
-                        ) {
-                            Text(stringResource(R.string.sync_change_master_password))
+                            } else {
+                                if (onCreateWithVaultId != null) {
+                                    onCreateWithVaultId(provider, selectedPresetScope, masterPassword, "default", createRecoveryKey)
+                                } else {
+                                    onCreate(provider, selectedPresetScope, masterPassword)
+                                }
+                            }
+                        },
+                        enabled = !state.busy && canSubmit,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (state.busy) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                            Spacer(modifier = Modifier.width(8.dp))
                         }
+                        Text(stringResource(R.string.sync_connect))
                     }
                 }
 
-                // Conflicts Center
-                if (state.conflicts.isNotEmpty()) {
+                SyncLifecycleState.LOCKED -> {
                     InsetGroupedCard(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(
-                                text = stringResource(R.string.sync_conflict_center_title, state.conflicts.size),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    text = stringResource(R.string.sync_lock),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = unlockMethod == "password",
+                                    onClick = { unlockMethod = "password" },
+                                    label = { Text(stringResource(R.string.sync_use_master_password)) },
+                                )
+                                FilterChip(
+                                    selected = unlockMethod == "recovery",
+                                    onClick = { unlockMethod = "recovery" },
+                                    label = { Text(stringResource(R.string.sync_use_recovery_key)) },
+                                )
+                            }
+
+                            SecretField(
+                                value = providerPassword,
+                                onChange = { providerPassword = it },
+                                labelRes = R.string.sync_provider_password,
                             )
 
-                            state.conflicts.forEach { conflict ->
-                                TextButton(onClick = { onLoadConflict(conflict.id) }) {
-                                    Text("${conflict.entityKind} / ${conflict.kind}", style = MaterialTheme.typography.titleSmall)
+                            SecretField(
+                                value = masterPassword,
+                                onChange = { masterPassword = it },
+                                labelRes = if (unlockMethod == "recovery") R.string.sync_recovery_key else R.string.sync_master_password,
+                                monospace = unlockMethod == "recovery",
+                            )
+
+                            Button(
+                                onClick = {
+                                    if (unlockMethod == "recovery") {
+                                        onUnlockWithRecovery(providerPassword, masterPassword)
+                                    } else {
+                                        onUnlock(providerPassword, masterPassword)
+                                    }
+                                },
+                                enabled = !state.busy && providerPassword.isNotBlank() && masterPassword.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (state.busy) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                    Spacer(modifier = Modifier.width(8.dp))
                                 }
-                                state.conflictDetail?.takeIf { it.summary.id == conflict.id }?.let { detail ->
-                                    Text(
-                                        text = stringResource(
-                                            R.string.sync_conflict_current_detail,
-                                            detail.current.kind,
-                                            detail.current.sourceDeviceId,
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    Text(
-                                        text = stringResource(
-                                            R.string.sync_conflict_remote_detail,
-                                            detail.conflicting.kind,
-                                            detail.conflicting.sourceDeviceId,
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_CURRENT) }) { Text(stringResource(R.string.sync_keep_current)) }
-                                    OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.USE_CONFLICTING) }) { Text(stringResource(R.string.sync_use_remote)) }
-                                    OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_BOTH) }) { Text(stringResource(R.string.sync_keep_both)) }
-                                }
+                                Text(stringResource(R.string.sync_unlock))
                             }
                         }
                     }
                 }
 
-                // Danger Zone (Disconnect)
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f)),
-                    colors = CardDefaults.outlinedCardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f),
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                else -> {
+                    // Connected Hero Card
+                    InsetGroupedCard(
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            text = stringResource(R.string.sync_danger_zone),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = stringResource(R.string.sync_disconnect_warning),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OutlinedButton(
-                            onClick = { showDisconnectConfirm = true },
-                            enabled = !state.busy,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Text(stringResource(R.string.sync_disconnect))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    val dotColor = when (state.status.state) {
+                                        SyncLifecycleState.IDLE -> Color(0xFF22C55E)
+                                        SyncLifecycleState.SYNCING -> MaterialTheme.colorScheme.primary
+                                        SyncLifecycleState.PAUSED -> Color(0xFFF59E0B)
+                                        SyncLifecycleState.ERROR -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.outline
+                                    }
+                                    Surface(
+                                        modifier = Modifier.size(10.dp),
+                                        shape = CircleShape,
+                                        color = dotColor,
+                                    ) {}
+                                    Text(
+                                        text = stringResource(state.status.state.labelRes()),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+
+                                OutlinedButton(
+                                    onClick = { showPairDeviceModal = true },
+                                    enabled = !state.busy,
+                                ) {
+                                    Icon(Icons.Rounded.QrCode, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.sync_pair_btn))
+                                }
+                            }
+
+                            HorizontalDivider()
+
+                            state.pairingInfo?.serverUrl?.let { url ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(stringResource(R.string.sync_server_url), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(url, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                }
+                            }
+
+                            state.pairingInfo?.username?.let { user ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(stringResource(R.string.sync_username), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(user, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                }
+                            }
+
+                            state.status.vaultId?.let { id ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(stringResource(R.string.sync_vault_id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(id, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+
+                            Text(
+                                text = stringResource(R.string.sync_counts, state.status.pendingOperationCount, state.status.conflictCount),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    // Actions Bar (Sync now, Pause/Resume, Lock)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = onRunNow,
+                            enabled = !state.busy && state.status.state != SyncLifecycleState.PAUSED,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.sync_now))
+                        }
+
+                        OutlinedButton(
+                            onClick = { onSetPaused(state.status.state != SyncLifecycleState.PAUSED) },
+                            enabled = !state.busy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(if (state.status.state == SyncLifecycleState.PAUSED) R.string.sync_resume else R.string.sync_pause))
+                        }
+
+                        OutlinedButton(
+                            onClick = onLock,
+                            enabled = !state.busy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.sync_lock))
+                        }
+                    }
+
+                    // Scope / Preset Selection
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(R.string.sync_preset), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            SyncPreset.entries.forEach { p ->
+                                FilterChip(
+                                    selected = state.status.preset == p,
+                                    onClick = { onChangePreset(p) },
+                                    enabled = !state.busy,
+                                    label = { Text(stringResource(p.labelRes())) },
+                                )
+                            }
+                        }
+                    }
+
+                    // Security & Recovery Card
+                    InsetGroupedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(Icons.Rounded.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    text = stringResource(R.string.sync_security_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.sync_security_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                            HorizontalDivider()
+
+                            // Recovery Key Management
+                            Text(
+                                text = stringResource(R.string.sync_recovery_key_manage_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = stringResource(R.string.sync_recovery_key_manage_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                            OutlinedButton(
+                                onClick = onGenerateRecoveryKey,
+                                enabled = !state.busy,
+                            ) {
+                                Text(stringResource(R.string.sync_generate_recovery_key))
+                            }
+
+                            state.recoveryKey?.let { key ->
+                                OutlinedCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.outlinedCardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                                    ),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.sync_active_recovery_key),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        Text(
+                                            text = key,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace,
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.sync_recovery_key_save_warning),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    copyToClipboard(clipboard, "Sona Recovery Key", key, sensitive = true)
+                                                    onConsumeRecoveryKey()
+                                                },
+                                            ) {
+                                                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.action_copy))
+                                            }
+                                            OutlinedButton(
+                                                onClick = { keyExporter.launch("sona-recovery-key.txt") },
+                                            ) {
+                                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.action_export))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider()
+
+                            // Change Master Password Form
+                            Text(
+                                text = stringResource(R.string.sync_change_master_password),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = passwordChangeMode == "password",
+                                    onClick = { passwordChangeMode = "password" },
+                                    label = { Text(stringResource(R.string.sync_change_password_mode_current)) },
+                                )
+                                FilterChip(
+                                    selected = passwordChangeMode == "recovery",
+                                    onClick = { passwordChangeMode = "recovery" },
+                                    label = { Text(stringResource(R.string.sync_change_password_mode_recovery)) },
+                                )
+                            }
+
+                            SecretField(
+                                value = currentPasswordInput,
+                                onChange = {
+                                    currentPasswordInput = it
+                                    passwordError = null
+                                },
+                                labelRes = if (passwordChangeMode == "password") R.string.sync_current_master_password else R.string.sync_recovery_key,
+                                monospace = passwordChangeMode == "recovery",
+                            )
+
+                            SecretField(
+                                value = nextPasswordInput,
+                                onChange = {
+                                    nextPasswordInput = it
+                                    passwordError = null
+                                },
+                                labelRes = R.string.sync_new_master_password,
+                            )
+
+                            SecretField(
+                                value = confirmPasswordInput,
+                                onChange = {
+                                    confirmPasswordInput = it
+                                    passwordError = null
+                                },
+                                labelRes = R.string.sync_confirm_new_password,
+                            )
+
+                            passwordError?.let { err ->
+                                Text(text = err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+
+                            val canUpdatePassword = currentPasswordInput.isNotBlank() &&
+                                nextPasswordInput.isNotBlank() &&
+                                confirmPasswordInput.isNotBlank() &&
+                                !state.busy
+
+                            val mismatchMessage = stringResource(R.string.sync_password_mismatch)
+                            OutlinedButton(
+                                onClick = {
+                                    if (nextPasswordInput != confirmPasswordInput) {
+                                        passwordError = mismatchMessage
+                                        return@OutlinedButton
+                                    }
+                                    onChangePassword(currentPasswordInput, nextPasswordInput)
+                                    currentPasswordInput = ""
+                                    nextPasswordInput = ""
+                                    confirmPasswordInput = ""
+                                    passwordError = null
+                                },
+                                enabled = canUpdatePassword,
+                            ) {
+                                Text(stringResource(R.string.sync_change_master_password))
+                            }
+                        }
+                    }
+
+                    // Conflicts Center
+                    if (state.conflicts.isNotEmpty()) {
+                        InsetGroupedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.sync_conflict_center_title, state.conflicts.size),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+
+                                state.conflicts.forEach { conflict ->
+                                    TextButton(onClick = { onLoadConflict(conflict.id) }) {
+                                        Text("${conflict.entityKind} / ${conflict.kind}", style = MaterialTheme.typography.titleSmall)
+                                    }
+                                    state.conflictDetail?.takeIf { it.summary.id == conflict.id }?.let { detail ->
+                                        Text(
+                                            text = stringResource(
+                                                R.string.sync_conflict_current_detail,
+                                                detail.current.kind,
+                                                detail.current.sourceDeviceId,
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                        Text(
+                                            text = stringResource(
+                                                R.string.sync_conflict_remote_detail,
+                                                detail.conflicting.kind,
+                                                detail.conflicting.sourceDeviceId,
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_CURRENT) }) { Text(stringResource(R.string.sync_keep_current)) }
+                                        OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.USE_CONFLICTING) }) { Text(stringResource(R.string.sync_use_remote)) }
+                                        OutlinedButton(onClick = { onResolveConflict(conflict.id, SyncConflictResolution.KEEP_BOTH) }) { Text(stringResource(R.string.sync_keep_both)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Danger Zone (Disconnect)
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f)),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f),
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sync_danger_zone),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = stringResource(R.string.sync_disconnect_warning),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(
+                                onClick = { showDisconnectConfirm = true },
+                                enabled = !state.busy,
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                            ) {
+                                Text(stringResource(R.string.sync_disconnect))
+                            }
                         }
                     }
                 }
             }
-        }
 
-        OutlinedButton(
-            onClick = onRefresh,
-            enabled = !state.busy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(stringResource(R.string.action_refresh))
+            OutlinedButton(
+                onClick = onRefresh,
+                enabled = !state.busy,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.action_refresh))
+            }
         }
-    }
     }
 
     // Modal 1: Import Pairing Token Dialog

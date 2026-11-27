@@ -6,7 +6,7 @@ import java.util.Locale
 
 internal enum class AppLanguage(
     val languageTag: String,
-    @StringRes val labelRes: Int,
+    @param:StringRes val labelRes: Int,
 ) {
     SYSTEM("", R.string.language_follow_system),
     ENGLISH("en", R.string.language_english),
