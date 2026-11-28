@@ -241,7 +241,7 @@ export function SyncConnectedPanel({
     defaultValue: status.state,
   });
   const retryLabel = formatFriendlyTime(
-    status.nextRetryAtMs,
+    status.nextRetryAtMs ?? null,
     t('settings.sync.not_scheduled', { defaultValue: 'Not scheduled' }),
     t
   );
@@ -540,7 +540,7 @@ export function SyncConnectedPanel({
             </span>
             <strong className="sync-metric-value">
               {formatFriendlyTime(
-                status.lastSuccessAtMs,
+                status.lastSuccessAtMs ?? null,
                 t('settings.sync.never', { defaultValue: 'Never' }),
                 t
               )}
@@ -684,7 +684,7 @@ export function SyncConnectedPanel({
                 const isShrink = status.preset
                   ? isPresetShrink(status.preset, selectedPreset)
                   : false;
-                const currentLabel = getPresetLabel(status.preset);
+                const currentLabel = getPresetLabel(status.preset ?? null);
                 const targetLabel = getPresetLabel(selectedPreset);
 
                 return (

@@ -187,13 +187,19 @@ export function EmbyProcessingSettingsModal({
         modelPath,
       };
     }
+    const baseAsr = asrConfigService.normalizeAsrConfig(config);
     const tempConfig: AppConfig = {
       ...config,
       asr: {
-        ...config.asr,
+        ...baseAsr,
         selections: {
-          ...config.asr?.selections,
-          batch: asrSelection,
+          ...baseAsr.selections,
+          batch: {
+            ...asrSelection,
+            modelId: asrSelection.modelId ?? undefined,
+            providerId: asrSelection.providerId ?? undefined,
+            profileId: asrSelection.profileId ?? undefined,
+          },
         },
       },
     };

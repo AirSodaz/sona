@@ -1,7 +1,7 @@
 import type {
-  AsrTranscriptionRequest_Serialize as CoreAsrTranscriptionRequest,
-  ModelFileConfig as CoreModelFileConfig,
-  SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
+  AsrTranscriptionRequest_Deserialize as CoreAsrTranscriptionRequest,
+  ModelFileConfig_Deserialize as CoreModelFileConfig,
+  SpeakerProcessingConfig_Deserialize as CoreSpeakerProcessingConfig,
 } from '../../bindings';
 import type { AsrTranscriptionRequest } from '../../types/asr';
 import type { SpeakerProcessingConfig } from '../../types/speaker';

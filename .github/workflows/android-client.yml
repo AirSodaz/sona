@@ -75,7 +75,7 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: >-
-            platforms;android-37.0
+            platforms;android-37.2
             ndk;29.0.14206865
 
       - name: Rust setup

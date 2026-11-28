@@ -190,7 +190,7 @@ export function SyncHeaderPill({
         <Cloud size={14} />
         <span className="sync-pill-label">
           {formatRelativeTime(
-            status.lastSuccessAtMs,
+            status.lastSuccessAtMs ?? null,
             t('settings.sync.idle_short', { defaultValue: 'Synced' }),
             t,
             i18n?.language
@@ -286,7 +286,7 @@ export function SyncHeaderPill({
                     </span>
                     <strong>
                       {formatRelativeTime(
-                        status.lastSuccessAtMs,
+                        status.lastSuccessAtMs ?? null,
                         t('settings.sync.never', { defaultValue: 'Never' }),
                         t,
                         i18n?.language

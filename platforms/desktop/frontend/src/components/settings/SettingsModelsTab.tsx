@@ -148,7 +148,7 @@ export function SettingsModelsTab({
       .then((status) => {
         if (mounted) {
           setCudaStatus(status);
-          setCudaStatusError(status.updateCheckError);
+          setCudaStatusError(status.updateCheckError ?? null);
         }
       })
       .catch((error) => {
@@ -167,7 +167,7 @@ export function SettingsModelsTab({
   const refreshCudaStatus = useCallback(async () => {
     const status = await cudaAddonService.getStatus(cudaMirror);
     setCudaStatus(status);
-    setCudaStatusError(status.updateCheckError);
+    setCudaStatusError(status.updateCheckError ?? null);
     return status;
   }, [cudaMirror]);
 

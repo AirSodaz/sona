@@ -507,7 +507,7 @@ describe('ToolEmbySyncPanel', () => {
     expect(queue[0].embyContext?.sourceLanguage).toBe('ja');
     expect(queue[0].embyContext?.subtitleMode).toBe('pure_translation');
     expect(queue[0].resolvedConfigSnapshot?.language).toBe('ja');
-    expect(queue[0].resolvedConfigSnapshot?.asr.selections.batch).toEqual(
+    expect(queue[0].resolvedConfigSnapshot?.asr?.selections.batch).toEqual(
       customOverrides.asrSelection
     );
     expect(queue[0].resolvedConfigSnapshot?.llmSettings?.selections.translationModelId).toBe(

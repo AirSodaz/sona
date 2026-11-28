@@ -622,12 +622,16 @@ describe('TranscriptionOptions', () => {
   });
 
   it('disables speaker switch when cloud provider does not support speaker diarization', () => {
+    const defaultAsr = DEFAULT_CONFIG.asr;
+    if (!defaultAsr) {
+      throw new Error('DEFAULT_CONFIG.asr must be defined');
+    }
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
         asr: {
           selections: {
-            ...DEFAULT_CONFIG.asr.selections,
+            ...defaultAsr.selections,
             batch: {
               engine: 'online',
               providerId: 'groq-whisper',

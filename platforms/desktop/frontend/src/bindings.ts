@@ -8,7 +8,7 @@ export type AppAsrConfig_Deserialize = {
 
 export type AppAsrConfig_Serialize = {
 	selections: AppAsrSelections_Serialize,
-	providers?: AppAsrProviderConfig_Serialize | null,
+	providers?: AppAsrProviderConfig_Serialize,
 };
 
 export type AppAsrModelSelection = AppAsrModelSelection_Serialize | AppAsrModelSelection_Deserialize;
@@ -25,10 +25,10 @@ export type AppAsrModelSelection_Deserialize = {
 export type AppAsrModelSelection_Serialize = {
 	engine: AsrEngine_Serialize,
 	mode: AsrMode_Serialize,
-	modelId?: string | null,
+	modelId?: string,
 	modelPath: string,
-	providerId?: string | null,
-	profileId?: string | null,
+	providerId?: string,
+	profileId?: string,
 };
 
 export type AppAsrProviderConfig = AppAsrProviderConfig_Serialize | AppAsrProviderConfig_Deserialize;
@@ -40,9 +40,9 @@ export type AppAsrProviderConfig_Deserialize = {
 };
 
 export type AppAsrProviderConfig_Serialize = {
-	online?: { [key in string]: unknown } | null,
-	volcengineDoubao?: unknown | null,
-	groqWhisper?: unknown | null,
+	online?: { [key in string]: unknown },
+	volcengineDoubao?: unknown,
+	groqWhisper?: unknown,
 };
 
 export type AppAsrSelections = AppAsrSelections_Serialize | AppAsrSelections_Deserialize;
@@ -82,7 +82,7 @@ export type AppConfig_Deserialize = {
 	keepMicrophoneActive?: boolean | null,
 	ffmpegEnabled?: boolean | null,
 	ffmpegPath?: string | null,
-	asr: AppAsrConfig_Deserialize | null,
+	asr?: AppAsrConfig_Deserialize | null,
 	streamingModelPath?: string | null,
 	batchModelPath?: string | null,
 	livePunctuationModelPath?: string | null,
@@ -149,7 +149,7 @@ export type AppConfig_Deserialize = {
 	textReplacementSets?: TextReplacementSetRecord[] | null,
 	hotwordSets?: HotwordSetRecord[] | null,
 	polishKeywordSets?: PolishKeywordSetRecord[] | null,
-	speakerProfiles?: SpeakerProfile[] | null,
+	speakerProfiles?: SpeakerProfile_Deserialize[] | null,
 	hotwords?: string[] | null,
 	textReplacements?: TextReplacementRuleRecord[] | null,
 	voiceTypingEnabled?: boolean | null,
@@ -184,159 +184,183 @@ export type AppConfig_Deserialize = {
 	mcpAllowModelManagement?: boolean | null,
 	mcpNotifyOnMutation?: boolean | null,
 	mcpAuditLogEnabled?: boolean | null,
-} & {
+} & ({
 	enableITN?: boolean | null,
 } & {
+	enableItn?: boolean | null,
+}) & ({
 	httpServerMaxUploadSizeMB?: number | null,
 } & {
+	httpServerMaxUploadSizeMb?: number | null,
+}) & ({
 	embyServerUrl?: string | null,
 } & {
+	emby_server_url?: string | null,
+}) & ({
 	embyUsername?: string | null,
 } & {
+	emby_username?: string | null,
+}) & ({
 	embyApiKey?: string | null,
 } & {
+	emby_api_key?: string | null,
+}) & ({
 	embyAllowInvalidCerts?: boolean | null,
 } & {
+	emby_allow_invalid_certs?: boolean | null,
+}) & ({
 	embyAdminUserId?: string | null,
 } & {
+	emby_admin_user_id?: string | null,
+}) & ({
 	embyProcessingSettings?: unknown | null,
 } & {
+	emby_processing_settings?: unknown | null,
+} & {
+	embyToolOverrides?: unknown | null,
+} & {
+	emby_tool_overrides?: unknown | null,
+}) & ({
 	mediaServers?: MediaServerProfile_Deserialize[] | null,
 } & {
+	media_servers?: MediaServerProfile_Deserialize[] | null,
+}) & ({
 	activeMediaServerId?: string | null,
-};
+} & {
+	active_media_server_id?: string | null,
+});
 
 export type AppConfig_Serialize = {
-	configVersion?: number | null,
-	appLanguage?: AppLanguagePreference | null,
-	theme?: AppTheme | null,
-	font?: AppFont | null,
-	minimizeToTrayOnExit?: boolean | null,
-	autoStart?: boolean | null,
-	silentStart?: boolean | null,
-	autoCheckUpdates?: boolean | null,
-	logLevel?: AppLogLevel | null,
-	projectsViewMode?: ProjectsViewMode | null,
-	liveRecordShortcut?: string | null,
-	microphoneId?: string | null,
+	configVersion?: number,
+	appLanguage?: AppLanguagePreference,
+	theme?: AppTheme,
+	font?: AppFont,
+	minimizeToTrayOnExit?: boolean,
+	autoStart?: boolean,
+	silentStart?: boolean,
+	autoCheckUpdates?: boolean,
+	logLevel?: AppLogLevel,
+	projectsViewMode?: ProjectsViewMode,
+	liveRecordShortcut?: string,
+	microphoneId?: string,
 	microphoneBoost?: number | null,
-	systemAudioDeviceId?: string | null,
-	muteDuringRecording?: boolean | null,
-	keepMicrophoneActive?: boolean | null,
-	ffmpegEnabled?: boolean | null,
-	ffmpegPath?: string | null,
+	systemAudioDeviceId?: string,
+	muteDuringRecording?: boolean,
+	keepMicrophoneActive?: boolean,
+	ffmpegEnabled?: boolean,
+	ffmpegPath?: string,
 	asr: AppAsrConfig_Serialize | null,
-	streamingModelPath?: string | null,
-	batchModelPath?: string | null,
-	livePunctuationModelPath?: string | null,
-	liveVadModelPath?: string | null,
-	liveSpeakerSegmentationModelPath?: string | null,
-	liveSpeakerEmbeddingModelPath?: string | null,
-	liveAlignmentModelPath?: string | null,
-	liveSpeakerDiarizationEnabled?: boolean | null,
-	batchPunctuationModelPath?: string | null,
-	batchVadModelPath?: string | null,
-	batchSpeakerSegmentationModelPath?: string | null,
-	batchSpeakerEmbeddingModelPath?: string | null,
-	batchAlignmentModelPath?: string | null,
-	batchSpeakerDiarizationEnabled?: boolean | null,
-	speakerDiarizationSensitivity?: string | null,
-	modelDownloadMirror?: string | null,
-	lockWindow?: boolean | null,
-	alwaysOnTop?: boolean | null,
-	startOnLaunch?: boolean | null,
+	streamingModelPath?: string,
+	batchModelPath?: string,
+	livePunctuationModelPath?: string,
+	liveVadModelPath?: string,
+	liveSpeakerSegmentationModelPath?: string,
+	liveSpeakerEmbeddingModelPath?: string,
+	liveAlignmentModelPath?: string,
+	liveSpeakerDiarizationEnabled?: boolean,
+	batchPunctuationModelPath?: string,
+	batchVadModelPath?: string,
+	batchSpeakerSegmentationModelPath?: string,
+	batchSpeakerEmbeddingModelPath?: string,
+	batchAlignmentModelPath?: string,
+	batchSpeakerDiarizationEnabled?: boolean,
+	speakerDiarizationSensitivity?: string,
+	modelDownloadMirror?: string,
+	lockWindow?: boolean,
+	alwaysOnTop?: boolean,
+	startOnLaunch?: boolean,
 	captionWindowWidth?: number | null,
 	captionWindowX?: number | null,
 	captionWindowY?: number | null,
 	captionFontSize?: number | null,
-	captionFontColor?: string | null,
+	captionFontColor?: string,
 	captionTranslationFontSize?: number | null,
-	captionTranslationFontColor?: string | null,
-	captionBackgroundColor?: string | null,
+	captionTranslationFontColor?: string,
+	captionBackgroundColor?: string,
 	captionBackgroundOpacity?: number | null,
-	captionDisplayMode?: string | null,
-	captionBilingualOrder?: string | null,
-	captionDisplayPriority?: string | null,
-	captionTextStroke?: boolean | null,
+	captionDisplayMode?: string,
+	captionBilingualOrder?: string,
+	captionDisplayPriority?: string,
+	captionTextStroke?: boolean,
 	captionStrokeWidth?: number | null,
-	captionStrokeColor?: string | null,
-	captionTextShadow?: boolean | null,
-	captionTextAlign?: string | null,
+	captionStrokeColor?: string,
+	captionTextShadow?: boolean,
+	captionTextAlign?: string,
 	captionDisappearDelay?: number | null,
-	captionLockShortcut?: string | null,
-	realtimeTranslationEnabled?: boolean | null,
-	realtimeTranslationSourceLanguage?: string | null,
-	realtimeTranslationTargetLanguage?: string | null,
-	realtimeTranslationEngine?: string | null,
-	realtimeTranslationModelId?: string | null,
-	language?: string | null,
-	liveLanguage?: string | null,
-	batchLanguage?: string | null,
-	enableTimeline?: boolean | null,
-	enableITN?: boolean | null,
-	batchVadEnabled?: boolean | null,
+	captionLockShortcut?: string,
+	realtimeTranslationEnabled?: boolean,
+	realtimeTranslationSourceLanguage?: string,
+	realtimeTranslationTargetLanguage?: string,
+	realtimeTranslationEngine?: string,
+	realtimeTranslationModelId?: string,
+	language?: string,
+	liveLanguage?: string,
+	batchLanguage?: string,
+	enableTimeline?: boolean,
+	enableITN?: boolean,
+	batchVadEnabled?: boolean,
 	liveVadBufferSize?: number | null,
 	batchVadBufferSize?: number | null,
-	maxConcurrent?: number | null,
-	gpuAcceleration?: GpuAcceleration_Serialize | null,
-	llmSettings?: unknown | null,
-	summaryEnabled?: boolean | null,
-	summaryTemplateId?: string | null,
-	summaryCustomTemplates?: SummaryTemplateRecord[] | null,
-	translationLanguage?: string | null,
-	polishKeywords?: string | null,
-	polishPresetId?: string | null,
-	polishCustomPresets?: PolishPresetRecord[] | null,
-	polishContext?: string | null,
-	polishScenario?: string | null,
+	maxConcurrent?: number,
+	gpuAcceleration?: GpuAcceleration_Serialize,
+	llmSettings?: unknown,
+	summaryEnabled?: boolean,
+	summaryTemplateId?: string,
+	summaryCustomTemplates?: SummaryTemplateRecord[],
+	translationLanguage?: string,
+	polishKeywords?: string,
+	polishPresetId?: string,
+	polishCustomPresets?: PolishPresetRecord[],
+	polishContext?: string,
+	polishScenario?: string,
 	llmRequestTimeoutSeconds?: number | null,
-	textReplacementSets?: TextReplacementSetRecord[] | null,
-	hotwordSets?: HotwordSetRecord[] | null,
-	polishKeywordSets?: PolishKeywordSetRecord[] | null,
-	speakerProfiles?: SpeakerProfile[] | null,
-	hotwords?: string[] | null,
-	textReplacements?: TextReplacementRuleRecord[] | null,
-	voiceTypingEnabled?: boolean | null,
-	voiceTypingShortcut?: string | null,
-	voiceTypingMode?: VoiceTypingMode | null,
-	voiceTypingProcessingMode?: VoiceTypingProcessingMode | null,
-	voiceTypingSoundEnabled?: boolean | null,
-	voiceTypingCjkSpacingEnabled?: boolean | null,
-	voiceTypingPolishPrompt?: string | null,
-	voiceTypingPlacement?: VoiceTypingPlacement | null,
-	voiceTypingRealtimePreview?: boolean | null,
-	voiceTypingQuickRecallShortcut?: string | null,
-	voiceTypingContextAwarenessEnabled?: boolean | null,
-	voiceTypingContextPreset?: string | null,
-	voiceTypingContextRules?: VoiceTypingContextRuleRecord_Serialize[] | null,
-	httpServerEnabled?: boolean | null,
-	httpServerHost?: string | null,
-	httpServerPort?: number | null,
-	httpServerApiKey?: string | null,
-	httpServerMaxConcurrent?: number | null,
-	httpServerMaxQueueSize?: number | null,
-	httpServerMaxStreaming?: number | null,
-	httpServerMaxUploadSizeMB?: number | null,
-	httpServerJobTtlMinutes?: number | null,
-	httpServerIpWhitelist?: string | null,
-	historyAudioRetentionDays?: number | null,
-	mcpEnabled?: boolean | null,
-	mcpPermissionMode?: string | null,
-	mcpAllowRecording?: boolean | null,
-	mcpAllowTranscriptEdit?: boolean | null,
-	mcpAllowDestructive?: boolean | null,
-	mcpAllowSettingsUpdate?: boolean | null,
-	mcpAllowModelManagement?: boolean | null,
-	mcpNotifyOnMutation?: boolean | null,
-	mcpAuditLogEnabled?: boolean | null,
-	embyServerUrl?: string | null,
-	embyUsername?: string | null,
-	embyApiKey?: string | null,
-	embyAllowInvalidCerts?: boolean | null,
-	embyAdminUserId?: string | null,
-	embyProcessingSettings?: unknown | null,
-	mediaServers?: MediaServerProfile_Serialize[] | null,
-	activeMediaServerId?: string | null,
+	textReplacementSets?: TextReplacementSetRecord[],
+	hotwordSets?: HotwordSetRecord[],
+	polishKeywordSets?: PolishKeywordSetRecord[],
+	speakerProfiles?: SpeakerProfile_Serialize[],
+	hotwords?: string[],
+	textReplacements?: TextReplacementRuleRecord[],
+	voiceTypingEnabled?: boolean,
+	voiceTypingShortcut?: string,
+	voiceTypingMode?: VoiceTypingMode,
+	voiceTypingProcessingMode?: VoiceTypingProcessingMode,
+	voiceTypingSoundEnabled?: boolean,
+	voiceTypingCjkSpacingEnabled?: boolean,
+	voiceTypingPolishPrompt?: string,
+	voiceTypingPlacement?: VoiceTypingPlacement,
+	voiceTypingRealtimePreview?: boolean,
+	voiceTypingQuickRecallShortcut?: string,
+	voiceTypingContextAwarenessEnabled?: boolean,
+	voiceTypingContextPreset?: string,
+	voiceTypingContextRules?: VoiceTypingContextRuleRecord_Serialize[],
+	httpServerEnabled?: boolean,
+	httpServerHost?: string,
+	httpServerPort?: number,
+	httpServerApiKey?: string,
+	httpServerMaxConcurrent?: number,
+	httpServerMaxQueueSize?: number,
+	httpServerMaxStreaming?: number,
+	httpServerMaxUploadSizeMB?: number,
+	httpServerJobTtlMinutes?: number,
+	httpServerIpWhitelist?: string,
+	historyAudioRetentionDays?: number,
+	mcpEnabled?: boolean,
+	mcpPermissionMode?: string,
+	mcpAllowRecording?: boolean,
+	mcpAllowTranscriptEdit?: boolean,
+	mcpAllowDestructive?: boolean,
+	mcpAllowSettingsUpdate?: boolean,
+	mcpAllowModelManagement?: boolean,
+	mcpNotifyOnMutation?: boolean,
+	mcpAuditLogEnabled?: boolean,
+	embyServerUrl?: string,
+	embyUsername?: string,
+	embyApiKey?: string,
+	embyAllowInvalidCerts?: boolean,
+	embyAdminUserId?: string,
+	embyProcessingSettings?: unknown,
+	mediaServers?: MediaServerProfile_Serialize[],
+	activeMediaServerId?: string,
 };
 
 export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";
@@ -358,52 +382,52 @@ export type AsrEngineConfig_Deserialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
-	encoder: string | null,
-	decoder: string | null,
-	model: string | null,
-	joiner: string | null,
-	tokens: string | null,
-	convFrontend: string | null,
-	encoderAdaptor: string | null,
-	llm: string | null,
-	embedding: string | null,
-	tokenizer: string | null,
-	mmproj: string | null,
-	preprocessor: string | null,
-	uncachedDecoder: string | null,
-	cachedDecoder: string | null,
-	mergedDecoder: string | null,
-	sourceSpm: string | null,
-	targetSpm: string | null,
-	vocab: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
+{ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+	encoder?: string | null,
+	decoder?: string | null,
+	model?: string | null,
+	joiner?: string | null,
+	tokens?: string | null,
+	convFrontend?: string | null,
+	encoderAdaptor?: string | null,
+	llm?: string | null,
+	embedding?: string | null,
+	tokenizer?: string | null,
+	mmproj?: string | null,
+	preprocessor?: string | null,
+	uncachedDecoder?: string | null,
+	cachedDecoder?: string | null,
+	mergedDecoder?: string | null,
+	sourceSpm?: string | null,
+	targetSpm?: string | null,
+	vocab?: string | null,
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null } |
 /**
  *  Local offline transcription through a provider-crate engine.
  *
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
-	encoder: string | null,
-	decoder: string | null,
-	model: string | null,
-	joiner: string | null,
-	tokens: string | null,
-	convFrontend: string | null,
-	encoderAdaptor: string | null,
-	llm: string | null,
-	embedding: string | null,
-	tokenizer: string | null,
-	mmproj: string | null,
-	preprocessor: string | null,
-	uncachedDecoder: string | null,
-	cachedDecoder: string | null,
-	mergedDecoder: string | null,
-	sourceSpm: string | null,
-	targetSpm: string | null,
-	vocab: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+{ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+	encoder?: string | null,
+	decoder?: string | null,
+	model?: string | null,
+	joiner?: string | null,
+	tokens?: string | null,
+	convFrontend?: string | null,
+	encoderAdaptor?: string | null,
+	llm?: string | null,
+	embedding?: string | null,
+	tokenizer?: string | null,
+	mmproj?: string | null,
+	preprocessor?: string | null,
+	uncachedDecoder?: string | null,
+	cachedDecoder?: string | null,
+	mergedDecoder?: string | null,
+	sourceSpm?: string | null,
+	targetSpm?: string | null,
+	vocab?: string | null,
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null } | { engine: "online"; onlineProvider: OnlineAsrProviderRequest_Deserialize };
 
 export type AsrEngineConfig_Serialize =
 /**
@@ -412,7 +436,7 @@ export type AsrEngineConfig_Serialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; alignmentModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
+{ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; alignmentModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -431,7 +455,7 @@ export type AsrEngineConfig_Serialize =
 	sourceSpm: string | null,
 	targetSpm: string | null,
 	vocab: string | null,
-} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; enablePartialDecoding: boolean | null; ffmpegEnabled: boolean | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; enablePartialDecoding: boolean | null; ffmpegEnabled: boolean | null; ffmpegPath: string | null } | { engine: "online"; onlineProvider: OnlineAsrProviderRequest_Serialize };
 
 export type AsrEngine_Deserialize =
 /**  Local offline transcription. */
@@ -443,7 +467,26 @@ export type AsrEngine_Serialize =
 /**  Local offline transcription. */
 "local" | "online";
 
-export type AsrInferenceMetric = {
+export type AsrInferenceMetric = AsrInferenceMetric_Serialize | AsrInferenceMetric_Deserialize;
+
+export type AsrInferenceMetric_Deserialize = {
+	occurredAtMs: number,
+	source: string,
+	instanceId?: string | null,
+	stage: string,
+	isFinal: boolean,
+	audioDurationMs: number,
+	bufferedSamples: number,
+	audioExtractMs?: number | null,
+	decodeMs: number,
+	emitLatencyMs?: number | null,
+	totalMs?: number | null,
+	rtf?: number | null,
+	segmentCount?: number | null,
+	processRssMb?: number | null,
+};
+
+export type AsrInferenceMetric_Serialize = {
 	occurredAtMs: number,
 	source: string,
 	instanceId: string | null,
@@ -466,7 +509,24 @@ export type AsrMode_Deserialize = "streaming" | "batch" | "offline";
 
 export type AsrMode_Serialize = "streaming" | "batch";
 
-export type AsrModelLoadMetric = {
+export type AsrModelLoadMetric = AsrModelLoadMetric_Serialize | AsrModelLoadMetric_Deserialize;
+
+export type AsrModelLoadMetric_Deserialize = {
+	occurredAtMs: number,
+	instanceId: string,
+	modelPath: string,
+	modelType: string,
+	recognizerKind: string,
+	numThreads: number,
+	reusedFromPool: boolean,
+	loadMs: number,
+	rssBeforeMb?: number | null,
+	rssAfterMb?: number | null,
+	rssDeltaMb?: number | null,
+	processRssMb?: number | null,
+};
+
+export type AsrModelLoadMetric_Serialize = {
 	occurredAtMs: number,
 	instanceId: string,
 	modelPath: string,
@@ -481,10 +541,18 @@ export type AsrModelLoadMetric = {
 	processRssMb: number | null,
 };
 
-export type AsrRuntimeMetricsSnapshot = {
-	modelLoad: AsrModelLoadMetric | null,
-	liveInference: AsrInferenceMetric | null,
-	batchInference: AsrInferenceMetric | null,
+export type AsrRuntimeMetricsSnapshot = AsrRuntimeMetricsSnapshot_Serialize | AsrRuntimeMetricsSnapshot_Deserialize;
+
+export type AsrRuntimeMetricsSnapshot_Deserialize = {
+	modelLoad?: AsrModelLoadMetric_Deserialize | null,
+	liveInference?: AsrInferenceMetric_Deserialize | null,
+	batchInference?: AsrInferenceMetric_Deserialize | null,
+};
+
+export type AsrRuntimeMetricsSnapshot_Serialize = {
+	modelLoad: AsrModelLoadMetric_Serialize | null,
+	liveInference: AsrInferenceMetric_Serialize | null,
+	batchInference: AsrInferenceMetric_Serialize | null,
 };
 
 export type AsrTranscriptionRequest = AsrTranscriptionRequest_Serialize | AsrTranscriptionRequest_Deserialize;
@@ -494,9 +562,9 @@ export type AsrTranscriptionRequest_Deserialize = {
 	language: string,
 	enableItn: boolean,
 	normalizationOptions: TranscriptNormalizationOptions,
-	postprocessOptions: TranscriptPostprocessOptions,
-	hotwords: string | null,
-	speakerProcessing: SpeakerProcessingConfig_Deserialize | null,
+	postprocessOptions: TranscriptPostprocessOptions_Deserialize,
+	hotwords?: string | null,
+	speakerProcessing?: SpeakerProcessingConfig_Deserialize | null,
 } & AsrEngineConfig_Deserialize;
 
 export type AsrTranscriptionRequest_Serialize = {
@@ -504,7 +572,7 @@ export type AsrTranscriptionRequest_Serialize = {
 	language: string,
 	enableItn: boolean,
 	normalizationOptions: TranscriptNormalizationOptions,
-	postprocessOptions: TranscriptPostprocessOptions,
+	postprocessOptions: TranscriptPostprocessOptions_Serialize,
 	hotwords: string | null,
 	speakerProcessing: SpeakerProcessingConfig_Serialize | null,
 } & AsrEngineConfig_Serialize;
@@ -534,7 +602,7 @@ export type AutomationProcessedInput_Deserialize = {
 };
 
 export type AutomationProcessedInput_Serialize = {
-	id?: string | null,
+	id?: string,
 	ruleId: string,
 	attempt: number,
 	filePath: string,
@@ -543,9 +611,9 @@ export type AutomationProcessedInput_Serialize = {
 	mtimeMs: number,
 	status: string,
 	processedAt: number,
-	historyId?: string | null,
-	exportPath?: string | null,
-	errorMessage?: string | null,
+	historyId?: string,
+	exportPath?: string,
+	errorMessage?: string,
 };
 
 export type AutomationProcessedRecord = AutomationProcessedRecord_Serialize | AutomationProcessedRecord_Deserialize;
@@ -560,9 +628,9 @@ export type AutomationProcessedRecord_Deserialize = {
 	mtimeMs: number,
 	status: string,
 	processedAt: number,
-	historyId: string | null,
-	exportPath: string | null,
-	errorMessage: string | null,
+	historyId?: string | null,
+	exportPath?: string | null,
+	errorMessage?: string | null,
 };
 
 export type AutomationProcessedRecord_Serialize = {
@@ -575,9 +643,9 @@ export type AutomationProcessedRecord_Serialize = {
 	mtimeMs: number,
 	status: string,
 	processedAt: number,
-	historyId?: string | null,
-	exportPath?: string | null,
-	errorMessage?: string | null,
+	historyId?: string,
+	exportPath?: string,
+	errorMessage?: string,
 };
 
 export type AutomationRepositoryInput = AutomationRepositoryInput_Serialize | AutomationRepositoryInput_Deserialize;
@@ -604,35 +672,52 @@ export type AutomationRepositoryState_Serialize = {
 	processedEntries: AutomationProcessedRecord_Serialize[],
 };
 
-export type AutomationRule = {
-	name?: string,
-	saveHistory?: boolean,
-	projectId?: string,
-	watchDirectory?: string,
-	recursive?: boolean,
-	stageConfig?: AutomationRuleStageConfig,
-	exportConfig?: AutomationRuleExportConfig,
-};
+export type AutomationRule = AutomationRule_Serialize | AutomationRule_Deserialize;
 
-export type AutomationRuleExportConfig = {
+export type AutomationRuleExportConfig = AutomationRuleExportConfig_Serialize | AutomationRuleExportConfig_Deserialize;
+
+export type AutomationRuleExportConfig_Deserialize = {
 	directory?: string,
 	mode?: string,
 };
 
+export type AutomationRuleExportConfig_Serialize = {
+	directory: string,
+	mode: string,
+};
+
 export type AutomationRuleInput = AutomationRuleInput_Serialize | AutomationRuleInput_Deserialize;
 
-export type AutomationRuleInputExportConfig = {
+export type AutomationRuleInputExportConfig = AutomationRuleInputExportConfig_Serialize | AutomationRuleInputExportConfig_Deserialize;
+
+export type AutomationRuleInputExportConfig_Deserialize = {
 	directory?: string,
 	format?: string,
 	mode?: string,
 	prefix?: string,
 };
 
-export type AutomationRuleInputStageConfig = {
+export type AutomationRuleInputExportConfig_Serialize = {
+	directory: string,
+	format: string,
+	mode: string,
+	prefix: string,
+};
+
+export type AutomationRuleInputStageConfig = AutomationRuleInputStageConfig_Serialize | AutomationRuleInputStageConfig_Deserialize;
+
+export type AutomationRuleInputStageConfig_Deserialize = {
 	autoPolish?: boolean,
 	polishPresetId?: string,
 	autoTranslate?: boolean,
 	translationLanguage?: string,
+};
+
+export type AutomationRuleInputStageConfig_Serialize = {
+	autoPolish: boolean,
+	polishPresetId: string,
+	autoTranslate: boolean,
+	translationLanguage: string,
 };
 
 export type AutomationRuleInput_Deserialize = {
@@ -643,22 +728,22 @@ export type AutomationRuleInput_Deserialize = {
 	watchDirectory?: string,
 	recursive?: boolean,
 	enabled?: boolean,
-	stageConfig?: AutomationRuleInputStageConfig,
-	exportConfig?: AutomationRuleInputExportConfig,
+	stageConfig?: AutomationRuleInputStageConfig_Deserialize,
+	exportConfig?: AutomationRuleInputExportConfig_Deserialize,
 	createdAt?: number,
 	updatedAt?: number,
 };
 
 export type AutomationRuleInput_Serialize = {
-	id?: string | null,
+	id?: string,
 	name: string,
 	saveHistory: boolean,
 	projectId: string,
 	watchDirectory: string,
 	recursive: boolean,
 	enabled: boolean,
-	stageConfig: AutomationRuleInputStageConfig,
-	exportConfig: AutomationRuleInputExportConfig,
+	stageConfig: AutomationRuleInputStageConfig_Serialize,
+	exportConfig: AutomationRuleInputExportConfig_Serialize,
 	createdAt: number,
 	updatedAt: number,
 };
@@ -691,23 +776,50 @@ export type AutomationRuleRecordStageConfig = {
 	translationLanguage: string,
 };
 
-export type AutomationRuleStageConfig = {
+export type AutomationRuleStageConfig = AutomationRuleStageConfig_Serialize | AutomationRuleStageConfig_Deserialize;
+
+export type AutomationRuleStageConfig_Deserialize = {
 	autoPolish?: boolean,
 	autoTranslate?: boolean,
+};
+
+export type AutomationRuleStageConfig_Serialize = {
+	autoPolish: boolean,
+	autoTranslate: boolean,
 };
 
 export type AutomationRuleValidationResult = AutomationRuleValidationResult_Serialize | AutomationRuleValidationResult_Deserialize;
 
 export type AutomationRuleValidationResult_Deserialize = {
 	valid: boolean,
-	code: string | null,
-	message: string | null,
+	code?: string | null,
+	message?: string | null,
 };
 
 export type AutomationRuleValidationResult_Serialize = {
 	valid: boolean,
-	code?: string | null,
-	message?: string | null,
+	code?: string,
+	message?: string,
+};
+
+export type AutomationRule_Deserialize = {
+	name?: string,
+	saveHistory?: boolean,
+	projectId?: string,
+	watchDirectory?: string,
+	recursive?: boolean,
+	stageConfig?: AutomationRuleStageConfig_Deserialize,
+	exportConfig?: AutomationRuleExportConfig_Deserialize,
+};
+
+export type AutomationRule_Serialize = {
+	name: string,
+	saveHistory: boolean,
+	projectId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	stageConfig: AutomationRuleStageConfig_Serialize,
+	exportConfig: AutomationRuleExportConfig_Serialize,
 };
 
 export type AutomationRuntimeCandidatePayload = {
@@ -720,14 +832,31 @@ export type AutomationRuntimeCandidatePayload = {
 
 export type AutomationRuntimePathCollectionOutcome = "candidate" | "missing" | "unsupported" | "excluded" | "not_file" | "error";
 
-export type AutomationRuntimePathCollectionResult = {
+export type AutomationRuntimePathCollectionResult = AutomationRuntimePathCollectionResult_Serialize | AutomationRuntimePathCollectionResult_Deserialize;
+
+export type AutomationRuntimePathCollectionResult_Deserialize = {
+	filePath: string,
+	outcome: AutomationRuntimePathCollectionOutcome,
+	candidate?: AutomationRuntimeCandidatePayload | null,
+	error?: string | null,
+};
+
+export type AutomationRuntimePathCollectionResult_Serialize = {
 	filePath: string,
 	outcome: AutomationRuntimePathCollectionOutcome,
 	candidate: AutomationRuntimeCandidatePayload | null,
 	error: string | null,
 };
 
-export type AutomationRuntimeReplaceResult = {
+export type AutomationRuntimeReplaceResult = AutomationRuntimeReplaceResult_Serialize | AutomationRuntimeReplaceResult_Deserialize;
+
+export type AutomationRuntimeReplaceResult_Deserialize = {
+	ruleId: string,
+	started: boolean,
+	error?: string | null,
+};
+
+export type AutomationRuntimeReplaceResult_Serialize = {
 	ruleId: string,
 	started: boolean,
 	error: string | null,
@@ -785,11 +914,13 @@ export type BackupManifestCounts_Deserialize = {
 	automationRules: number,
 	automationProcessedEntries: number,
 	analyticsFiles: number,
-} & {
+} & ({
 	tags: number,
+	projects?: never,
 } | {
 	projects: number,
-};
+	tags?: never,
+});
 
 export type BackupManifestCounts_Serialize = {
 	tags: number,
@@ -847,7 +978,7 @@ export type ContentStats = ContentStats_Serialize | ContentStats_Deserialize;
 
 export type ContentStats_Deserialize = {
 	overview: OverviewStats_Deserialize,
-	speakers: SpeakerStats | null,
+	speakers?: SpeakerStats | null,
 };
 
 export type ContentStats_Serialize = {
@@ -864,7 +995,30 @@ export type ContentTrendPoint = {
 	durationDisplay: string,
 };
 
-export type CudaAddonInspection = {
+export type CudaAddonInspection = CudaAddonInspection_Serialize | CudaAddonInspection_Deserialize;
+
+export type CudaAddonInspection_Deserialize = {
+	isInstalled: boolean,
+	isActive: boolean,
+	isCompatible: boolean,
+	path: string,
+	missingFiles: string[],
+	validationError?: string | null,
+	version?: string | null,
+	cudaVersion?: string | null,
+	llamaCppRef?: string | null,
+	sherpaOnnxVersion?: string | null,
+	requiredLlamaCppRef: string,
+	requiredSherpaOnnxVersion: string,
+	requiredVersion?: string | null,
+	requiredCudaVersion?: string | null,
+	downloadUrl?: string | null,
+	expectedSha256?: string | null,
+	updateAvailable: boolean,
+	updateCheckError?: string | null,
+};
+
+export type CudaAddonInspection_Serialize = {
 	isInstalled: boolean,
 	isActive: boolean,
 	isCompatible: boolean,
@@ -924,13 +1078,23 @@ export type DeviceOptionInput = {
 	value: string,
 };
 
-export type DeviceProbeInput = {
+export type DeviceProbeInput = DeviceProbeInput_Serialize | DeviceProbeInput_Deserialize;
+
+export type DeviceProbeInput_Deserialize = {
+	options: DeviceOptionInput[],
+	available: boolean,
+	errorMessage?: string | null,
+};
+
+export type DeviceProbeInput_Serialize = {
 	options: DeviceOptionInput[],
 	available: boolean,
 	errorMessage: string | null,
 };
 
-export type DiagnosticsConfigInput = {
+export type DiagnosticsConfigInput = DiagnosticsConfigInput_Serialize | DiagnosticsConfigInput_Deserialize;
+
+export type DiagnosticsConfigInput_Deserialize = {
 	streamingModelPath: string,
 	batchModelPath: string,
 	vadModelPath?: string,
@@ -940,40 +1104,108 @@ export type DiagnosticsConfigInput = {
 	ffmpegPath?: string,
 };
 
-export type DiagnosticsCoreInput = {
-	config: DiagnosticsConfigInput,
-	selectedModels?: SelectedModelsInput,
-	modelRules?: ModelRulesInput,
-	pathStatuses?: PathStatusesInput,
+export type DiagnosticsConfigInput_Serialize = {
+	streamingModelPath: string,
+	batchModelPath: string,
+	vadModelPath: string,
+	punctuationModelPath: string,
+	microphoneId: string,
+	ffmpegEnabled: boolean,
+	ffmpegPath: string,
+};
+
+export type DiagnosticsCoreInput = DiagnosticsCoreInput_Serialize | DiagnosticsCoreInput_Deserialize;
+
+export type DiagnosticsCoreInput_Deserialize = {
+	config: DiagnosticsConfigInput_Deserialize,
+	selectedModels?: SelectedModelsInput_Deserialize,
+	modelRules?: ModelRulesInput_Deserialize,
+	pathStatuses?: PathStatusesInput_Deserialize,
 	permissionState: PermissionState,
-	microphoneProbe: DeviceProbeInput,
-	systemAudioProbe: DeviceProbeInput,
-	voiceTypingReadiness: VoiceTypingReadinessInput,
-	runtimeEnvironment?: RuntimeEnvironmentStatus,
-	asrRuntimeMetrics?: AsrRuntimeMetricsSnapshot,
+	microphoneProbe: DeviceProbeInput_Deserialize,
+	systemAudioProbe: DeviceProbeInput_Deserialize,
+	voiceTypingReadiness: VoiceTypingReadinessInput_Deserialize,
+	runtimeEnvironment?: RuntimeEnvironmentStatus_Deserialize,
+	asrRuntimeMetrics?: AsrRuntimeMetricsSnapshot_Deserialize,
 	liveTranscription?: LiveTranscriptionDiagnosticsSnapshot,
 	onboardingReady?: boolean,
 	punctuationRequired?: boolean,
 };
 
-export type DiagnosticsCoreSnapshot = {
-	scannedAt: string,
-	config: DiagnosticsConfigInput,
-	selectedModels: SelectedModelsInput,
-	modelRules: ModelRulesInput,
-	pathStatuses: PathStatusesInput,
+export type DiagnosticsCoreInput_Serialize = {
+	config: DiagnosticsConfigInput_Serialize,
+	selectedModels: SelectedModelsInput_Serialize,
+	modelRules: ModelRulesInput_Serialize,
+	pathStatuses: PathStatusesInput_Serialize,
 	permissionState: PermissionState,
-	microphoneProbe: DeviceProbeInput,
-	systemAudioProbe: DeviceProbeInput,
-	voiceTypingReadiness: VoiceTypingReadinessInput,
-	runtimeEnvironment: RuntimeEnvironmentStatus,
-	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot,
+	microphoneProbe: DeviceProbeInput_Serialize,
+	systemAudioProbe: DeviceProbeInput_Serialize,
+	voiceTypingReadiness: VoiceTypingReadinessInput_Serialize,
+	runtimeEnvironment: RuntimeEnvironmentStatus_Serialize,
+	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot_Serialize,
 	liveTranscription: LiveTranscriptionDiagnosticsSnapshot,
 	onboardingReady: boolean,
 	punctuationRequired: boolean,
 };
 
-export type EffectivePipelineSnapshot = {
+export type DiagnosticsCoreSnapshot = DiagnosticsCoreSnapshot_Serialize | DiagnosticsCoreSnapshot_Deserialize;
+
+export type DiagnosticsCoreSnapshot_Deserialize = {
+	scannedAt: string,
+	config: DiagnosticsConfigInput_Deserialize,
+	selectedModels: SelectedModelsInput_Deserialize,
+	modelRules: ModelRulesInput_Deserialize,
+	pathStatuses: PathStatusesInput_Deserialize,
+	permissionState: PermissionState,
+	microphoneProbe: DeviceProbeInput_Deserialize,
+	systemAudioProbe: DeviceProbeInput_Deserialize,
+	voiceTypingReadiness: VoiceTypingReadinessInput_Deserialize,
+	runtimeEnvironment: RuntimeEnvironmentStatus_Deserialize,
+	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot_Deserialize,
+	liveTranscription: LiveTranscriptionDiagnosticsSnapshot,
+	onboardingReady: boolean,
+	punctuationRequired: boolean,
+};
+
+export type DiagnosticsCoreSnapshot_Serialize = {
+	scannedAt: string,
+	config: DiagnosticsConfigInput_Serialize,
+	selectedModels: SelectedModelsInput_Serialize,
+	modelRules: ModelRulesInput_Serialize,
+	pathStatuses: PathStatusesInput_Serialize,
+	permissionState: PermissionState,
+	microphoneProbe: DeviceProbeInput_Serialize,
+	systemAudioProbe: DeviceProbeInput_Serialize,
+	voiceTypingReadiness: VoiceTypingReadinessInput_Serialize,
+	runtimeEnvironment: RuntimeEnvironmentStatus_Serialize,
+	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot_Serialize,
+	liveTranscription: LiveTranscriptionDiagnosticsSnapshot,
+	onboardingReady: boolean,
+	punctuationRequired: boolean,
+};
+
+export type EffectivePipelineSnapshot = EffectivePipelineSnapshot_Serialize | EffectivePipelineSnapshot_Deserialize;
+
+export type EffectivePipelineSnapshot_Deserialize = {
+	isProjectPipeline: boolean,
+	autoPolish: boolean,
+	autoPolishFrequency: number,
+	polishPresetId?: string | null,
+	polishPromptOverride?: string | null,
+	autoTranslate: boolean,
+	targetLanguage?: string | null,
+	autoSummary: boolean,
+	summaryTemplateId?: string | null,
+	hotwordSetIds: string[],
+	replacementSetIds: string[],
+	customTerms: string[],
+	autoExport: boolean,
+	exportFormat?: string | null,
+	exportDirectory?: string | null,
+	exportFileNamePrefix?: string | null,
+};
+
+export type EffectivePipelineSnapshot_Serialize = {
 	isProjectPipeline: boolean,
 	autoPolish: boolean,
 	autoPolishFrequency: number,
@@ -1050,9 +1282,9 @@ export type HistoryAudioCleanupRequest_Deserialize = {
 };
 
 export type HistoryAudioCleanupRequest_Serialize = {
-	retentionDays?: number | null,
-	excludeHistoryId?: string | null,
-	excludeHistoryIds?: string[] | null,
+	retentionDays?: number,
+	excludeHistoryId?: string,
+	excludeHistoryIds?: string[],
 };
 
 export type HistoryAudioStatus = "available" | "missing" | "removed";
@@ -1077,9 +1309,9 @@ export type HistoryCommitTranscriptEditRequest_Serialize = {
 
 export type HistoryCommitTranscriptEditResult = HistoryCommitTranscriptEditResult_Serialize | HistoryCommitTranscriptEditResult_Deserialize;
 
-export type HistoryCommitTranscriptEditResult_Deserialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Deserialize[] }) & { item?: never; snapshot?: never };
+export type HistoryCommitTranscriptEditResult_Deserialize = { status: "unchanged" } | { status: "committed"; item: HistoryItemRecord_Deserialize; snapshot: TranscriptSnapshotMetadata } | { status: "conflict"; current_segments: TranscriptSegment_Deserialize[] };
 
-export type HistoryCommitTranscriptEditResult_Serialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Serialize[] }) & { item?: never; snapshot?: never };
+export type HistoryCommitTranscriptEditResult_Serialize = { status: "unchanged" } | { status: "committed"; item: HistoryItemRecord_Serialize; snapshot: TranscriptSnapshotMetadata } | { status: "conflict"; current_segments: TranscriptSegment_Serialize[] };
 
 export type HistoryCompleteLiveDraftRequest = HistoryCompleteLiveDraftRequest_Serialize | HistoryCompleteLiveDraftRequest_Deserialize;
 
@@ -1095,10 +1327,20 @@ export type HistoryCompleteLiveDraftRequest_Serialize = {
 	duration: number,
 };
 
-export type HistoryCreateLiveDraftRequest = {
-	id: string | null,
+export type HistoryCreateLiveDraftRequest = HistoryCreateLiveDraftRequest_Serialize | HistoryCreateLiveDraftRequest_Deserialize;
+
+export type HistoryCreateLiveDraftRequest_Deserialize = {
+	id?: string | null,
 	audioExtension: string,
 	tagIds?: string[],
+	projectId?: string | null,
+	icon?: string | null,
+};
+
+export type HistoryCreateLiveDraftRequest_Serialize = {
+	id: string | null,
+	audioExtension: string,
+	tagIds: string[],
 	projectId: string | null,
 	icon: string | null,
 };
@@ -1143,21 +1385,46 @@ export type HistoryItemMetaPatch_Deserialize = {
 };
 
 export type HistoryItemMetaPatch_Serialize = {
-	timestamp?: number | null,
-	duration?: number | null,
-	audioPath?: string | null,
-	audioStatus?: HistoryAudioStatus | null,
-	transcriptPath?: string | null,
-	title?: string | null,
-	previewText?: string | null,
+	timestamp?: number,
+	duration?: number,
+	audioPath?: string,
+	audioStatus?: HistoryAudioStatus,
+	transcriptPath?: string,
+	title?: string,
+	previewText?: string,
 	icon?: string | null,
-	type?: HistoryItemKind | null,
-	searchContent?: string | null,
-	status?: HistoryItemStatus | null,
+	type?: HistoryItemKind,
+	searchContent?: string,
+	status?: HistoryItemStatus,
 	draftSource?: HistoryDraftSource | null,
 };
 
-export type HistoryItemRecord = {
+export type HistoryItemRecord = HistoryItemRecord_Serialize | HistoryItemRecord_Deserialize;
+
+export type HistoryItemRecord_Deserialize = {
+	id: string,
+	timestamp: number,
+	duration: number,
+	audioPath: string,
+	audioStatus: HistoryAudioStatus,
+	transcriptPath: string,
+	title: string,
+	previewText: string,
+	icon?: string | null,
+	type: HistoryItemKind,
+	searchContent: string,
+	projectId?: string | null,
+	/**
+	 *  Single project ownership. `tag_ids` is retained only for legacy backup
+	 *  decoding and is not used by new runtime code.
+	 */
+	tagIds?: string[],
+	deletedAt?: number | null,
+	status: HistoryItemStatus,
+	draftSource?: HistoryDraftSource | null,
+};
+
+export type HistoryItemRecord_Serialize = {
 	id: string,
 	timestamp: number,
 	duration: number,
@@ -1174,8 +1441,8 @@ export type HistoryItemRecord = {
 	 *  Single project ownership. `tag_ids` is retained only for legacy backup
 	 *  decoding and is not used by new runtime code.
 	 */
-	tagIds?: string[],
-	deletedAt?: number | null,
+	tagIds: string[],
+	deletedAt: number | null,
 	status: HistoryItemStatus,
 	draftSource: HistoryDraftSource | null,
 };
@@ -1195,18 +1462,18 @@ export type HistorySaveImportedFileRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
 	tagIds?: string[],
-	projectId: string | null,
+	projectId?: string | null,
 	convertedSourcePath?: string | null,
 };
 
 export type HistorySaveImportedFileRequest_Serialize = {
-	id?: string | null,
+	id?: string,
 	sourcePath: string,
 	segments: TranscriptSegment_Serialize[],
 	duration: number,
 	tagIds?: string[],
 	projectId: string | null,
-	convertedSourcePath?: string | null,
+	convertedSourcePath?: string,
 };
 
 export type HistorySaveRecordingRequest = HistorySaveRecordingRequest_Serialize | HistorySaveRecordingRequest_Deserialize;
@@ -1215,7 +1482,7 @@ export type HistorySaveRecordingRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
 	tagIds?: string[],
-	projectId: string | null,
+	projectId?: string | null,
 	audioBytes?: number[] | null,
 	nativeAudioPath?: string | null,
 	audioExtension?: string | null,
@@ -1226,21 +1493,21 @@ export type HistorySaveRecordingRequest_Serialize = {
 	duration: number,
 	tagIds?: string[],
 	projectId: string | null,
-	audioBytes?: number[] | null,
-	nativeAudioPath?: string | null,
-	audioExtension?: string | null,
+	audioBytes?: number[],
+	nativeAudioPath?: string,
+	audioExtension?: string,
 };
 
 export type HistorySummaryPayload = HistorySummaryPayload_Serialize | HistorySummaryPayload_Deserialize;
 
 export type HistorySummaryPayload_Deserialize = {
 	activeTemplateId: string,
-	record: TranscriptSummaryRecordPayload_Deserialize | null,
+	record?: TranscriptSummaryRecordPayload_Deserialize | null,
 };
 
 export type HistorySummaryPayload_Serialize = {
 	activeTemplateId: string,
-	record?: TranscriptSummaryRecordPayload_Serialize | null,
+	record?: TranscriptSummaryRecordPayload_Serialize,
 };
 
 export type HistoryTrashItemsRequest = {
@@ -1260,7 +1527,14 @@ export type HistoryUpdateItemMetaRequest_Serialize = {
 	updates: HistoryItemMetaPatch_Serialize,
 };
 
-export type HistoryUpdateProjectAssignmentsRequest = {
+export type HistoryUpdateProjectAssignmentsRequest = HistoryUpdateProjectAssignmentsRequest_Serialize | HistoryUpdateProjectAssignmentsRequest_Deserialize;
+
+export type HistoryUpdateProjectAssignmentsRequest_Deserialize = {
+	ids: string[],
+	projectId?: string | null,
+};
+
+export type HistoryUpdateProjectAssignmentsRequest_Serialize = {
 	ids: string[],
 	projectId: string | null,
 };
@@ -1287,7 +1561,9 @@ export type HistoryWorkspaceDateFilter = "all" | "today" | "week" | "month";
 
 export type HistoryWorkspaceFilterType = "all" | "recording" | "batch";
 
-export type HistoryWorkspaceItemCounts = {
+export type HistoryWorkspaceItemCounts = HistoryWorkspaceItemCounts_Serialize | HistoryWorkspaceItemCounts_Deserialize;
+
+export type HistoryWorkspaceItemCounts_Deserialize = {
 	untagged: number,
 	inbox?: number,
 	trash: number,
@@ -1295,7 +1571,23 @@ export type HistoryWorkspaceItemCounts = {
 	byProjectId?: { [key in string]: number },
 };
 
-export type HistoryWorkspaceItemSearchMatch = {
+export type HistoryWorkspaceItemCounts_Serialize = {
+	untagged: number,
+	inbox: number,
+	trash: number,
+	byTagId: { [key in string]: number },
+	byProjectId: { [key in string]: number },
+};
+
+export type HistoryWorkspaceItemSearchMatch = HistoryWorkspaceItemSearchMatch_Serialize | HistoryWorkspaceItemSearchMatch_Deserialize;
+
+export type HistoryWorkspaceItemSearchMatch_Deserialize = {
+	matchedField: string,
+	titleMatch?: HistoryWorkspaceSearchRange | null,
+	displaySnippet: HistoryWorkspaceSearchSnippet,
+};
+
+export type HistoryWorkspaceItemSearchMatch_Serialize = {
 	matchedField: string,
 	titleMatch: HistoryWorkspaceSearchRange | null,
 	displaySnippet: HistoryWorkspaceSearchSnippet,
@@ -1311,13 +1603,24 @@ export type HistoryWorkspaceQueryRequest = {
 	offset: number,
 };
 
-export type HistoryWorkspaceQueryResult = {
-	filteredItems: HistoryItemRecord[],
-	searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch | null },
+export type HistoryWorkspaceQueryResult = HistoryWorkspaceQueryResult_Serialize | HistoryWorkspaceQueryResult_Deserialize;
+
+export type HistoryWorkspaceQueryResult_Deserialize = {
+	filteredItems: HistoryItemRecord_Deserialize[],
+	searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch_Deserialize | null },
 	filteredItemCount: number,
 	hasMore: boolean,
-	summary: HistoryWorkspaceSummary,
-	itemCounts: HistoryWorkspaceItemCounts,
+	summary: HistoryWorkspaceSummary_Deserialize,
+	itemCounts: HistoryWorkspaceItemCounts_Deserialize,
+};
+
+export type HistoryWorkspaceQueryResult_Serialize = {
+	filteredItems: HistoryItemRecord_Serialize[],
+	searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch_Serialize | null },
+	filteredItemCount: number,
+	hasMore: boolean,
+	summary: HistoryWorkspaceSummary_Serialize,
+	itemCounts: HistoryWorkspaceItemCounts_Serialize,
 };
 
 export type HistoryWorkspaceScope = { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string } | { kind: "trash" };
@@ -1335,7 +1638,17 @@ export type HistoryWorkspaceSearchSnippet = {
 
 export type HistoryWorkspaceSortOrder = "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
 
-export type HistoryWorkspaceSummary = {
+export type HistoryWorkspaceSummary = HistoryWorkspaceSummary_Serialize | HistoryWorkspaceSummary_Deserialize;
+
+export type HistoryWorkspaceSummary_Deserialize = {
+	totalItems: number,
+	totalDuration: number,
+	latestTimestamp?: number | null,
+	recordingCount: number,
+	batchCount: number,
+};
+
+export type HistoryWorkspaceSummary_Serialize = {
 	totalItems: number,
 	totalDuration: number,
 	latestTimestamp: number | null,
@@ -1360,7 +1673,16 @@ export type HybridLogicalClock = {
 	logical: number,
 };
 
-export type InterruptedDownloadInfo = {
+export type InterruptedDownloadInfo = InterruptedDownloadInfo_Serialize | InterruptedDownloadInfo_Deserialize;
+
+export type InterruptedDownloadInfo_Deserialize = {
+	modelId: string,
+	downloadedBytes: number,
+	totalBytes?: number | null,
+	percentage?: number | null,
+};
+
+export type InterruptedDownloadInfo_Serialize = {
 	modelId: string,
 	downloadedBytes: number,
 	totalBytes: number | null,
@@ -1386,8 +1708,15 @@ export type LanguageMode =
 /**  Not applicable (companion models such as VAD or speaker diarization). */
 "none";
 
-export type LiveRecordingDraftResult = {
-	item: HistoryItemRecord,
+export type LiveRecordingDraftResult = LiveRecordingDraftResult_Serialize | LiveRecordingDraftResult_Deserialize;
+
+export type LiveRecordingDraftResult_Deserialize = {
+	item: HistoryItemRecord_Deserialize,
+	audioAbsolutePath: string,
+};
+
+export type LiveRecordingDraftResult_Serialize = {
+	item: HistoryItemRecord_Serialize,
 	audioAbsolutePath: string,
 };
 
@@ -1401,7 +1730,9 @@ export type LiveTranscriptionDiagnosticsSnapshot = {
 
 export type LlmCapabilityPolicy = "strict" | "compatible";
 
-export type LlmCompletionOptions = {
+export type LlmCompletionOptions = LlmCompletionOptions_Serialize | LlmCompletionOptions_Deserialize;
+
+export type LlmCompletionOptions_Deserialize = {
 	temperature?: number | null,
 	maxOutputTokens?: number | null,
 	reasoningEnabled?: boolean | null,
@@ -1411,13 +1742,23 @@ export type LlmCompletionOptions = {
 	capabilityPolicy?: LlmCapabilityPolicy,
 };
 
+export type LlmCompletionOptions_Serialize = {
+	temperature: number | null,
+	maxOutputTokens: number | null,
+	reasoningEnabled: boolean | null,
+	reasoningLevel: string | null,
+	responseFormat: LlmResponseFormat,
+	promptCache: LlmPromptCachePolicy,
+	capabilityPolicy: LlmCapabilityPolicy,
+};
+
 export type LlmCompletionRequest = LlmCompletionRequest_Serialize | LlmCompletionRequest_Deserialize;
 
 export type LlmCompletionRequest_Deserialize = {
 	config: LlmConfig_Deserialize,
 	systemPrompt?: string | null,
 	input: string,
-	options?: LlmCompletionOptions,
+	options?: LlmCompletionOptions_Deserialize,
 	source?: LlmGenerateSource | null,
 };
 
@@ -1425,7 +1766,7 @@ export type LlmCompletionRequest_Serialize = {
 	config: LlmConfig_Serialize,
 	systemPrompt: string | null,
 	input: string,
-	options: LlmCompletionOptions,
+	options: LlmCompletionOptions_Serialize,
 	source: LlmGenerateSource | null,
 };
 
@@ -1434,16 +1775,16 @@ export type LlmCompletionResponse = LlmCompletionResponse_Serialize | LlmComplet
 export type LlmCompletionResponse_Deserialize = {
 	text: string,
 	thought?: string | null,
-	json: unknown | null,
-	usage: TokenUsage | null,
+	json?: unknown | null,
+	usage?: TokenUsage_Deserialize | null,
 	execution: LlmExecutionMetadata,
 };
 
 export type LlmCompletionResponse_Serialize = {
 	text: string,
-	thought?: string | null,
-	json?: unknown | null,
-	usage: TokenUsage | null,
+	thought?: string,
+	json?: unknown,
+	usage: TokenUsage_Serialize | null,
 	execution: LlmExecutionMetadata,
 };
 
@@ -1455,14 +1796,14 @@ export type LlmConfig_Deserialize = {
 	baseUrl: string,
 	apiKey: string,
 	model: string,
-	apiPath: string | null,
-	apiVersion: string | null,
+	apiPath?: string | null,
+	apiVersion?: string | null,
 	appId?: string | null,
 	apiRegion?: string | null,
-	temperature: number | null,
-	reasoningEnabled: boolean | null,
-	reasoningLevel: string | null,
-	timeoutSeconds: number | null,
+	temperature?: number | null,
+	reasoningEnabled?: boolean | null,
+	reasoningLevel?: string | null,
+	timeoutSeconds?: number | null,
 };
 
 export type LlmConfig_Serialize = {
@@ -1473,8 +1814,8 @@ export type LlmConfig_Serialize = {
 	model: string,
 	apiPath: string | null,
 	apiVersion: string | null,
-	appId?: string | null,
-	apiRegion?: string | null,
+	appId?: string,
+	apiRegion?: string,
 	temperature: number | null,
 	reasoningEnabled: boolean | null,
 	reasoningLevel: string | null,
@@ -1493,7 +1834,7 @@ export type LlmGenerateRequest = LlmGenerateRequest_Serialize | LlmGenerateReque
 export type LlmGenerateRequest_Deserialize = {
 	config: LlmConfig_Deserialize,
 	input: string,
-	source: LlmGenerateSource | null,
+	source?: LlmGenerateSource | null,
 };
 
 export type LlmGenerateRequest_Serialize = {
@@ -1508,30 +1849,58 @@ export type LlmModality = "text" | "image" | "audio" | "video" | "pdf";
 
 export type LlmModelMetadataSource = "provider" | "models_dev";
 
-export type LlmModelSummary = {
+export type LlmModelSummary = LlmModelSummary_Serialize | LlmModelSummary_Deserialize;
+
+export type LlmModelSummary_Deserialize = {
 	model: string,
 	displayName?: string | null,
-	inputPrice: number | null,
-	outputPrice: number | null,
+	inputPrice?: number | null,
+	outputPrice?: number | null,
 	cacheReadPrice?: number | null,
 	cacheWritePrice?: number | null,
-	contextWindow: number | null,
-	maxOutputTokens: number | null,
+	contextWindow?: number | null,
+	maxOutputTokens?: number | null,
 	knowledgeCutoff?: string | null,
 	releaseDate?: string | null,
 	lastUpdated?: string | null,
 	inputModalities?: LlmModality[],
 	outputModalities?: LlmModality[],
-	supportsMultimodal: boolean | null,
-	supportsTools: boolean | null,
-	supportsReasoning: boolean | null,
+	supportsMultimodal?: boolean | null,
+	supportsTools?: boolean | null,
+	supportsReasoning?: boolean | null,
 	supportsTemperature?: boolean | null,
-	supportsStructuredOutput: boolean | null,
+	supportsStructuredOutput?: boolean | null,
 	supportsPromptCaching?: boolean | null,
 	metadataSources?: LlmModelMetadataSource[],
 	reasoningMode?: ReasoningMode | null,
 	tokenLimitKey?: string | null,
 	supportedThinkingLevels?: ThinkingLevel[],
+};
+
+export type LlmModelSummary_Serialize = {
+	model: string,
+	displayName: string | null,
+	inputPrice: number | null,
+	outputPrice: number | null,
+	cacheReadPrice: number | null,
+	cacheWritePrice: number | null,
+	contextWindow: number | null,
+	maxOutputTokens: number | null,
+	knowledgeCutoff: string | null,
+	releaseDate: string | null,
+	lastUpdated: string | null,
+	inputModalities: LlmModality[],
+	outputModalities: LlmModality[],
+	supportsMultimodal: boolean | null,
+	supportsTools: boolean | null,
+	supportsReasoning: boolean | null,
+	supportsTemperature: boolean | null,
+	supportsStructuredOutput: boolean | null,
+	supportsPromptCaching: boolean | null,
+	metadataSources: LlmModelMetadataSource[],
+	reasoningMode: ReasoningMode | null,
+	tokenLimitKey: string | null,
+	supportedThinkingLevels: ThinkingLevel[],
 };
 
 export type LlmModelsRequest = LlmModelsRequest_Serialize | LlmModelsRequest_Deserialize;
@@ -1582,7 +1951,7 @@ export type LlmStreamDelta_Deserialize = {
 export type LlmStreamDelta_Serialize = {
 	text: string,
 	delta: string,
-	kind?: LlmStreamDeltaKind | null,
+	kind?: LlmStreamDeltaKind,
 };
 
 export type LlmTaskChunkPayload<T> = {
@@ -1600,13 +1969,24 @@ export type LlmTaskProgressPayload = {
 	totalChunks: number,
 };
 
-export type LlmTaskTextPayload = {
+export type LlmTaskTextPayload = LlmTaskTextPayload_Serialize | LlmTaskTextPayload_Deserialize;
+
+export type LlmTaskTextPayload_Deserialize = {
 	taskId: string,
 	taskType: LlmTaskType,
 	text: string,
 	delta: string,
 	reset: boolean,
 	isThought?: boolean,
+};
+
+export type LlmTaskTextPayload_Serialize = {
+	taskId: string,
+	taskType: LlmTaskType,
+	text: string,
+	delta: string,
+	reset: boolean,
+	isThought: boolean,
 };
 
 export type LlmTaskType = "polish" | "translate" | "summary";
@@ -1616,10 +1996,10 @@ export type LlmUsageCategory = "summary" | "translation" | "polish" | "title_gen
 export type LlmUsageDashboardStats = LlmUsageDashboardStats_Serialize | LlmUsageDashboardStats_Deserialize;
 
 export type LlmUsageDashboardStats_Deserialize = {
-	startedAt: string | null,
-	lastUpdatedAt: string | null,
-	trackingSinceDisplay: string | null,
-	lastUpdatedDisplay: string | null,
+	startedAt?: string | null,
+	lastUpdatedAt?: string | null,
+	trackingSinceDisplay?: string | null,
+	lastUpdatedDisplay?: string | null,
 	totals: DashboardUsageBucket,
 	byProvider: UsageBreakdown[],
 	byProviderTopRows: UsageBreakdown[],
@@ -1631,10 +2011,10 @@ export type LlmUsageDashboardStats_Deserialize = {
 };
 
 export type LlmUsageDashboardStats_Serialize = {
-	startedAt?: string | null,
-	lastUpdatedAt?: string | null,
-	trackingSinceDisplay?: string | null,
-	lastUpdatedDisplay?: string | null,
+	startedAt?: string,
+	lastUpdatedAt?: string,
+	trackingSinceDisplay?: string,
+	lastUpdatedDisplay?: string,
 	totals: DashboardUsageBucket,
 	byProvider: UsageBreakdown[],
 	byProviderTopRows: UsageBreakdown[],
@@ -1652,7 +2032,7 @@ export type LlmUsageEventPayload_Deserialize = {
 	provider: LlmProvider_Deserialize,
 	model: string,
 	category: LlmUsageCategory,
-	usage: TokenUsage | null,
+	usage?: TokenUsage_Deserialize | null,
 };
 
 export type LlmUsageEventPayload_Serialize = {
@@ -1660,7 +2040,7 @@ export type LlmUsageEventPayload_Serialize = {
 	provider: LlmProvider_Serialize,
 	model: string,
 	category: LlmUsageCategory,
-	usage: TokenUsage | null,
+	usage: TokenUsage_Serialize | null,
 };
 
 export type LocalAsrEngine = "sherpa-onnx" | "llama-cpp";
@@ -1677,7 +2057,16 @@ export type LocalLlmCardsResponse_Serialize = {
 	cards: LocalLlmModelCard_Serialize[],
 };
 
-export type LocalLlmDownload = {
+export type LocalLlmDownload = LocalLlmDownload_Serialize | LocalLlmDownload_Deserialize;
+
+export type LocalLlmDownload_Deserialize = {
+	url: string,
+	mirrorUrl?: string | null,
+	sha256: string,
+	sizeBytes?: number | null,
+};
+
+export type LocalLlmDownload_Serialize = {
 	url: string,
 	mirrorUrl: string | null,
 	sha256: string,
@@ -1696,8 +2085,8 @@ export type LocalLlmModelCard_Deserialize = {
 	contextWindow: number,
 	maxOutputTokens: number,
 	size: string,
-	parameters: string | null,
-	quantization: string | null,
+	parameters?: string | null,
+	quantization?: string | null,
 	groupId?: string | null,
 	versionLabel?: string | null,
 	modalities?: string[],
@@ -1705,11 +2094,11 @@ export type LocalLlmModelCard_Deserialize = {
 	capabilities: string[],
 	isRecommended: boolean,
 	isInstalled: boolean,
-	installedPath: string | null,
-	installedSizeBytes: number | null,
-	downloadUrl: string | null,
-	downloadSizeBytes: number | null,
-	interruptedDownload?: InterruptedDownloadInfo | null,
+	installedPath?: string | null,
+	installedSizeBytes?: number | null,
+	downloadUrl?: string | null,
+	downloadSizeBytes?: number | null,
+	interruptedDownload?: InterruptedDownloadInfo_Deserialize | null,
 };
 
 export type LocalLlmModelCard_Serialize = {
@@ -1735,10 +2124,33 @@ export type LocalLlmModelCard_Serialize = {
 	installedSizeBytes: number | null,
 	downloadUrl: string | null,
 	downloadSizeBytes: number | null,
-	interruptedDownload?: InterruptedDownloadInfo | null,
+	interruptedDownload?: InterruptedDownloadInfo_Serialize,
 };
 
-export type LocalLlmPreset = {
+export type LocalLlmPreset = LocalLlmPreset_Serialize | LocalLlmPreset_Deserialize;
+
+export type LocalLlmPreset_Deserialize = {
+	id: string,
+	name: string,
+	model: string,
+	filename: string,
+	description: string,
+	backend: string,
+	contextWindow: number,
+	maxOutputTokens: number,
+	size: string,
+	parameters?: string | null,
+	quantization?: string | null,
+	groupId?: string | null,
+	versionLabel?: string | null,
+	modalities?: string[],
+	languages?: string[],
+	capabilities?: string[],
+	isRecommended: boolean,
+	download?: LocalLlmDownload_Deserialize | null,
+};
+
+export type LocalLlmPreset_Serialize = {
 	id: string,
 	name: string,
 	model: string,
@@ -1750,13 +2162,13 @@ export type LocalLlmPreset = {
 	size: string,
 	parameters: string | null,
 	quantization: string | null,
-	groupId?: string | null,
-	versionLabel?: string | null,
-	modalities?: string[],
-	languages?: string[],
-	capabilities?: string[],
+	groupId: string | null,
+	versionLabel: string | null,
+	modalities: string[],
+	languages: string[],
+	capabilities: string[],
 	isRecommended: boolean,
-	download: LocalLlmDownload | null,
+	download: LocalLlmDownload_Serialize | null,
 };
 
 export type MediaServerProfile = MediaServerProfile_Serialize | MediaServerProfile_Deserialize;
@@ -1780,8 +2192,8 @@ export type MediaServerProfile_Serialize = {
 	serverType: MediaServerType,
 	serverUrl: string,
 	apiKey: string,
-	username?: string | null,
-	adminUserId?: string | null,
+	username?: string,
+	adminUserId?: string,
 	allowInvalidCerts: boolean,
 	createdAt: number,
 	updatedAt: number,
@@ -1812,33 +2224,6 @@ export type ModelCatalogModel_Deserialize = {
 	name: string,
 	description: string,
 	type: ModelCatalogModelType,
-	modes: ModelCatalogMode[] | null,
-	/**
-	 *  All languages the model can recognize, sorted ascending ISO 639 codes
-	 *  (`yue` covers Cantonese). Empty for non-ASR models.
-	 */
-	languages: string[],
-	languageMode: LanguageMode,
-	size: string,
-	artifacts: PresetModelArtifact[],
-	isRecommended: boolean | null,
-	isArchive: boolean,
-	filename: string | null,
-	engine: ModelEngine,
-	rules: ModelRules,
-	groupId: string | null,
-	versionLabel: string | null,
-	installPath: string,
-	downloadPath: string,
-	isInstalled: boolean,
-	interruptedDownload: InterruptedDownloadInfo | null,
-};
-
-export type ModelCatalogModel_Serialize = {
-	id: string,
-	name: string,
-	description: string,
-	type: ModelCatalogModelType,
 	modes?: ModelCatalogMode[] | null,
 	/**
 	 *  All languages the model can recognize, sorted ascending ISO 639 codes
@@ -1847,18 +2232,45 @@ export type ModelCatalogModel_Serialize = {
 	languages: string[],
 	languageMode: LanguageMode,
 	size: string,
-	artifacts?: PresetModelArtifact[],
+	artifacts: PresetModelArtifact_Deserialize[],
 	isRecommended?: boolean | null,
 	isArchive: boolean,
 	filename?: string | null,
 	engine: ModelEngine,
-	rules: ModelRules,
+	rules: ModelRules_Deserialize,
 	groupId?: string | null,
 	versionLabel?: string | null,
 	installPath: string,
 	downloadPath: string,
 	isInstalled: boolean,
-	interruptedDownload?: InterruptedDownloadInfo | null,
+	interruptedDownload?: InterruptedDownloadInfo_Deserialize | null,
+};
+
+export type ModelCatalogModel_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	type: ModelCatalogModelType,
+	modes?: ModelCatalogMode[],
+	/**
+	 *  All languages the model can recognize, sorted ascending ISO 639 codes
+	 *  (`yue` covers Cantonese). Empty for non-ASR models.
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
+	size: string,
+	artifacts?: PresetModelArtifact_Serialize[],
+	isRecommended?: boolean,
+	isArchive: boolean,
+	filename?: string,
+	engine: ModelEngine,
+	rules: ModelRules_Serialize,
+	groupId?: string,
+	versionLabel?: string,
+	installPath: string,
+	downloadPath: string,
+	isInstalled: boolean,
+	interruptedDownload?: InterruptedDownloadInfo_Serialize,
 };
 
 export type ModelCatalogPathMatchToken = {
@@ -1869,13 +2281,13 @@ export type ModelCatalogPathMatchToken = {
 export type ModelCatalogRestoreDefaults = ModelCatalogRestoreDefaults_Serialize | ModelCatalogRestoreDefaults_Deserialize;
 
 export type ModelCatalogRestoreDefaults_Deserialize = {
-	streamingModelPath: string | null,
-	batchModelPath: string | null,
-	vadModelPath: string | null,
-	punctuationModelPath: string | null,
-	speakerSegmentationModelPath: string | null,
-	speakerEmbeddingModelPath: string | null,
-	alignmentModelPath: string | null,
+	streamingModelPath?: string | null,
+	batchModelPath?: string | null,
+	vadModelPath?: string | null,
+	punctuationModelPath?: string | null,
+	speakerSegmentationModelPath?: string | null,
+	speakerEmbeddingModelPath?: string | null,
+	alignmentModelPath?: string | null,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1883,13 +2295,13 @@ export type ModelCatalogRestoreDefaults_Deserialize = {
 };
 
 export type ModelCatalogRestoreDefaults_Serialize = {
-	streamingModelPath?: string | null,
-	batchModelPath?: string | null,
-	vadModelPath?: string | null,
+	streamingModelPath?: string,
+	batchModelPath?: string,
+	vadModelPath?: string,
 	punctuationModelPath: string | null,
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
-	alignmentModelPath?: string | null,
+	alignmentModelPath?: string,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1913,11 +2325,11 @@ export type ModelCatalogSection_Serialize = {
 export type ModelCatalogSelectedIds = ModelCatalogSelectedIds_Serialize | ModelCatalogSelectedIds_Deserialize;
 
 export type ModelCatalogSelectedIds_Deserialize = {
-	streaming: string | null,
-	batch: string | null,
-	speakerSegmentation: string | null,
-	speakerEmbedding: string | null,
-	alignment: string | null,
+	streaming?: string | null,
+	batch?: string | null,
+	speakerSegmentation?: string | null,
+	speakerEmbedding?: string | null,
+	alignment?: string | null,
 };
 
 export type ModelCatalogSelectedIds_Serialize = {
@@ -1925,7 +2337,7 @@ export type ModelCatalogSelectedIds_Serialize = {
 	batch: string | null,
 	speakerSegmentation: string | null,
 	speakerEmbedding: string | null,
-	alignment?: string | null,
+	alignment?: string,
 };
 
 export type ModelCatalogSelectionOptions = {
@@ -1973,7 +2385,30 @@ export type ModelDependencyRequest = {
 
 export type ModelEngine = "sherpa-onnx" | "llama-cpp" | "onnx-nmt";
 
-export type ModelFileConfig = {
+export type ModelFileConfig = ModelFileConfig_Serialize | ModelFileConfig_Deserialize;
+
+export type ModelFileConfig_Deserialize = {
+	encoder?: string | null,
+	decoder?: string | null,
+	model?: string | null,
+	joiner?: string | null,
+	tokens?: string | null,
+	convFrontend?: string | null,
+	encoderAdaptor?: string | null,
+	llm?: string | null,
+	embedding?: string | null,
+	tokenizer?: string | null,
+	mmproj?: string | null,
+	preprocessor?: string | null,
+	uncachedDecoder?: string | null,
+	cachedDecoder?: string | null,
+	mergedDecoder?: string | null,
+	sourceSpm?: string | null,
+	targetSpm?: string | null,
+	vocab?: string | null,
+};
+
+export type ModelFileConfig_Serialize = {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -2000,16 +2435,34 @@ export type ModelRuleInput = {
 };
 
 /**  Companion-model requirements for a preset model. */
-export type ModelRules = {
+export type ModelRules = ModelRules_Serialize | ModelRules_Deserialize;
+
+export type ModelRulesInput = ModelRulesInput_Serialize | ModelRulesInput_Deserialize;
+
+export type ModelRulesInput_Deserialize = {
+	live?: ModelRuleInput | null,
+	batch?: ModelRuleInput | null,
+};
+
+export type ModelRulesInput_Serialize = {
+	live: ModelRuleInput | null,
+	batch: ModelRuleInput | null,
+};
+
+/**  Companion-model requirements for a preset model. */
+export type ModelRules_Deserialize = {
+	requiresVad: boolean,
+	requiresPunctuation: boolean,
+	timestampSupportHint?: TimestampSupportHint | null,
+	initialRefreshRateMs?: number | null,
+};
+
+/**  Companion-model requirements for a preset model. */
+export type ModelRules_Serialize = {
 	requiresVad: boolean,
 	requiresPunctuation: boolean,
 	timestampSupportHint: TimestampSupportHint | null,
 	initialRefreshRateMs: number | null,
-};
-
-export type ModelRulesInput = {
-	live: ModelRuleInput | null,
-	batch: ModelRuleInput | null,
 };
 
 export type ModelSelectionOption = {
@@ -2019,12 +2472,22 @@ export type ModelSelectionOption = {
 	isInstalled: boolean,
 };
 
-export type ModelSelectionPaths = {
+export type ModelSelectionPaths = ModelSelectionPaths_Serialize | ModelSelectionPaths_Deserialize;
+
+export type ModelSelectionPaths_Deserialize = {
 	streamingModelPath: string,
 	batchModelPath: string,
 	speakerSegmentationModelPath: string,
 	speakerEmbeddingModelPath: string,
 	alignmentModelPath?: string | null,
+};
+
+export type ModelSelectionPaths_Serialize = {
+	streamingModelPath: string,
+	batchModelPath: string,
+	speakerSegmentationModelPath: string,
+	speakerEmbeddingModelPath: string,
+	alignmentModelPath: string | null,
 };
 
 export type ModelSummaryInput = {
@@ -2038,7 +2501,15 @@ export type OnlineAsrBatchCapability = {
 	localFileMode: OnlineAsrLocalFileBatchMode,
 };
 
-export type OnlineAsrCapability = {
+export type OnlineAsrCapability = OnlineAsrCapability_Serialize | OnlineAsrCapability_Deserialize;
+
+export type OnlineAsrCapability_Deserialize = {
+	supported?: boolean | null,
+	requiresApiKey: boolean,
+	requiredConfigFields: string[],
+};
+
+export type OnlineAsrCapability_Serialize = {
 	supported: boolean | null,
 	requiresApiKey: boolean,
 	requiredConfigFields: string[],
@@ -2051,7 +2522,27 @@ export type OnlineAsrLocalFileBatchMode = {
 	unsupportedMessage: string,
 };
 
-export type OnlineAsrProvider = {
+export type OnlineAsrProvider = OnlineAsrProvider_Serialize | OnlineAsrProvider_Deserialize;
+
+export type OnlineAsrProviderRequest = OnlineAsrProviderRequest_Serialize | OnlineAsrProviderRequest_Deserialize;
+
+export type OnlineAsrProviderRequest_Deserialize = {
+	providerId: string,
+	profileId: string,
+	config?: unknown,
+};
+
+export type OnlineAsrProviderRequest_Serialize = {
+	providerId: string,
+	profileId: string,
+	config: unknown,
+};
+
+export type OnlineAsrProviderSpec = {
+	modelName: string,
+};
+
+export type OnlineAsrProvider_Deserialize = {
 	id: string,
 	/**
 	 *  Languages the hosted model can recognize, sorted ascending ISO 639
@@ -2062,55 +2553,52 @@ export type OnlineAsrProvider = {
 	profileId: string,
 	apiKeyEnv?: string | null,
 	defaults: unknown,
-	streaming: OnlineAsrCapability,
+	streaming: OnlineAsrCapability_Deserialize,
 	batch: OnlineAsrBatchCapability,
 	spec?: OnlineAsrProviderSpec | null,
-	models?: OnlineAsrSupportedModel[],
+	models?: OnlineAsrSupportedModel_Deserialize[],
 };
 
-export type OnlineAsrProviderRequest = {
-	providerId: string,
+export type OnlineAsrProvider_Serialize = {
+	id: string,
+	/**
+	 *  Languages the hosted model can recognize, sorted ascending ISO 639
+	 *  codes (`yue` covers Cantonese).
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
 	profileId: string,
-	config?: unknown,
+	apiKeyEnv: string | null,
+	defaults: unknown,
+	streaming: OnlineAsrCapability_Serialize,
+	batch: OnlineAsrBatchCapability,
+	spec: OnlineAsrProviderSpec | null,
+	models: OnlineAsrSupportedModel_Serialize[],
 };
 
-export type OnlineAsrProviderSpec = {
-	modelName: string,
-};
+export type OnlineAsrSupportedModel = OnlineAsrSupportedModel_Serialize | OnlineAsrSupportedModel_Deserialize;
 
-export type OnlineAsrSupportedModel = {
+export type OnlineAsrSupportedModel_Deserialize = {
 	id: string,
 	name: string,
 	modes?: string[],
-	description: string | null,
+	description?: string | null,
 	descriptionKey?: string | null,
 	isDefault?: boolean | null,
+};
+
+export type OnlineAsrSupportedModel_Serialize = {
+	id: string,
+	name: string,
+	modes: string[],
+	description: string | null,
+	descriptionKey: string | null,
+	isDefault: boolean | null,
 };
 
 export type OverviewStats = OverviewStats_Serialize | OverviewStats_Deserialize;
 
 export type OverviewStats_Deserialize = {
-	itemCount: number,
-	itemCountDisplay: string,
-	tagCount: number,
-	tagCountDisplay: string,
-	totalDurationSeconds: number,
-	totalDurationDisplay: string,
-	transcriptCharacterCount: number | null,
-	transcriptCharacterCountDisplay: string | null,
-	recordingCount: number,
-	recordingCountDisplay: string,
-	batchCount: number,
-	batchCountDisplay: string,
-	untaggedCount: number,
-	untaggedCountDisplay: string,
-	taggedCount: number,
-	taggedCountDisplay: string,
-	recentDailyItems: ContentTrendPoint[],
-	isDeepLoaded: boolean,
-};
-
-export type OverviewStats_Serialize = {
 	itemCount: number,
 	itemCountDisplay: string,
 	tagCount: number,
@@ -2131,11 +2619,41 @@ export type OverviewStats_Serialize = {
 	isDeepLoaded: boolean,
 };
 
-export type PathStatusesInput = {
-	liveModel: RuntimePathStatus | null,
-	batchModel: RuntimePathStatus | null,
-	vad: RuntimePathStatus | null,
-	punctuation: RuntimePathStatus | null,
+export type OverviewStats_Serialize = {
+	itemCount: number,
+	itemCountDisplay: string,
+	tagCount: number,
+	tagCountDisplay: string,
+	totalDurationSeconds: number,
+	totalDurationDisplay: string,
+	transcriptCharacterCount?: number,
+	transcriptCharacterCountDisplay?: string,
+	recordingCount: number,
+	recordingCountDisplay: string,
+	batchCount: number,
+	batchCountDisplay: string,
+	untaggedCount: number,
+	untaggedCountDisplay: string,
+	taggedCount: number,
+	taggedCountDisplay: string,
+	recentDailyItems: ContentTrendPoint[],
+	isDeepLoaded: boolean,
+};
+
+export type PathStatusesInput = PathStatusesInput_Serialize | PathStatusesInput_Deserialize;
+
+export type PathStatusesInput_Deserialize = {
+	liveModel?: RuntimePathStatus_Deserialize | null,
+	batchModel?: RuntimePathStatus_Deserialize | null,
+	vad?: RuntimePathStatus_Deserialize | null,
+	punctuation?: RuntimePathStatus_Deserialize | null,
+};
+
+export type PathStatusesInput_Serialize = {
+	liveModel: RuntimePathStatus_Serialize | null,
+	batchModel: RuntimePathStatus_Serialize | null,
+	vad: RuntimePathStatus_Serialize | null,
+	punctuation: RuntimePathStatus_Serialize | null,
 };
 
 export type PermissionState = "denied" | "granted" | "prompt" | "unsupported";
@@ -2163,8 +2681,8 @@ export type PolishSegmentsRequest_Deserialize = {
 	taskId: string,
 	config: LlmConfig_Deserialize,
 	segments: LlmSegmentInput[],
-	chunkSize: number | null,
-	context: string | null,
+	chunkSize?: number | null,
+	context?: string | null,
 	keywords?: string | null,
 	mode?: PolishMode | null,
 };
@@ -2194,11 +2712,13 @@ export type PreparedBackupImport_Deserialize = {
 	automationRules: unknown[],
 	automationProcessedEntries: unknown[],
 	analyticsContent: string,
-} & {
+} & ({
 	tags: unknown[],
+	projects?: never,
 } | {
 	projects: unknown[],
-};
+	tags?: never,
+});
 
 export type PreparedBackupImport_Serialize = {
 	importId: string,
@@ -2211,7 +2731,18 @@ export type PreparedBackupImport_Serialize = {
 	analyticsContent: string,
 };
 
-export type PresetModelArtifact = {
+export type PresetModelArtifact = PresetModelArtifact_Serialize | PresetModelArtifact_Deserialize;
+
+export type PresetModelArtifact_Deserialize = {
+	url: string,
+	filename: string,
+	/**  Present when the published file has a known integrity hash. */
+	sha256?: string | null,
+	/**  Exact byte size when known; archives publish without one. */
+	sizeBytes?: number | null,
+};
+
+export type PresetModelArtifact_Serialize = {
 	url: string,
 	filename: string,
 	/**  Present when the published file has a known integrity hash. */
@@ -2220,15 +2751,27 @@ export type PresetModelArtifact = {
 	sizeBytes: number | null,
 };
 
-export type ProjectCreateInput = {
+export type ProjectCreateInput = ProjectCreateInput_Serialize | ProjectCreateInput_Deserialize;
+
+export type ProjectCreateInput_Deserialize = {
 	name?: string,
 	description?: string | null,
 	icon?: string | null,
 	color?: string | null,
-	pipeline?: ProjectPipelineConfig | null,
+	pipeline?: ProjectPipelineConfig_Deserialize | null,
 };
 
-export type ProjectPipelineConfig = {
+export type ProjectCreateInput_Serialize = {
+	name: string,
+	description: string | null,
+	icon: string | null,
+	color: string | null,
+	pipeline: ProjectPipelineConfig_Serialize | null,
+};
+
+export type ProjectPipelineConfig = ProjectPipelineConfig_Serialize | ProjectPipelineConfig_Deserialize;
+
+export type ProjectPipelineConfig_Deserialize = {
 	enabled?: boolean,
 	autoPolish?: boolean,
 	autoPolishFrequency?: number | null,
@@ -2247,6 +2790,25 @@ export type ProjectPipelineConfig = {
 	exportFileNamePrefix?: string | null,
 };
 
+export type ProjectPipelineConfig_Serialize = {
+	enabled: boolean,
+	autoPolish: boolean,
+	autoPolishFrequency: number | null,
+	polishPresetId: string | null,
+	polishPromptOverride: string | null,
+	autoTranslate: boolean,
+	targetLanguage: string | null,
+	autoSummary: boolean,
+	summaryTemplateId: string | null,
+	hotwordSetIds: string[],
+	replacementSetIds: string[],
+	customTerms: string[],
+	autoExport: boolean,
+	exportFormat: string | null,
+	exportDirectory: string | null,
+	exportFileNamePrefix: string | null,
+};
+
 export type ProjectRecord = ProjectRecord_Serialize | ProjectRecord_Deserialize;
 
 export type ProjectRecord_Deserialize = {
@@ -2258,7 +2820,7 @@ export type ProjectRecord_Deserialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
-	pipeline?: ProjectPipelineConfig | null,
+	pipeline?: ProjectPipelineConfig_Deserialize | null,
 };
 
 export type ProjectRecord_Serialize = {
@@ -2270,15 +2832,25 @@ export type ProjectRecord_Serialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
-	pipeline?: ProjectPipelineConfig | null,
+	pipeline?: ProjectPipelineConfig_Serialize,
 };
 
-export type ProjectUpdateInput = {
+export type ProjectUpdateInput = ProjectUpdateInput_Serialize | ProjectUpdateInput_Deserialize;
+
+export type ProjectUpdateInput_Deserialize = {
 	name?: string | null,
 	description?: string | null,
 	icon?: string | null,
 	color?: string | null,
-	pipeline?: ProjectPipelineConfig | null,
+	pipeline?: ProjectPipelineConfig_Deserialize | null,
+};
+
+export type ProjectUpdateInput_Serialize = {
+	name: string | null,
+	description: string | null,
+	icon: string | null,
+	color: string | null,
+	pipeline: ProjectPipelineConfig_Serialize | null,
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";
@@ -2296,34 +2868,6 @@ export type RecoveredQueueItem_Deserialize = {
 	progress: number,
 	segments: RecoveredTranscriptSegment_Deserialize[],
 	tagIds?: string[],
-	historyId: string | null,
-	historyTitle: string | null,
-	lastKnownStage: RecoveryItemStage,
-	updatedAt: number,
-	hasSourceFile: boolean,
-	canResume: boolean,
-	automationRuleId: string | null,
-	automationRuleName: string | null,
-	resolvedConfigSnapshot: unknown | null,
-	exportConfig: unknown,
-	stageConfig: unknown,
-	sourceFingerprint: string | null,
-	fileStat: RecoveryFileStat | null,
-	exportFileNamePrefix: string | null,
-	attemptCount?: number,
-	lastError?: string | null,
-	retryable?: boolean,
-};
-
-export type RecoveredQueueItem_Serialize = {
-	id: string,
-	filename: string,
-	filePath: string,
-	source: RecoverySource,
-	resolution: RecoveryResolution,
-	progress: number,
-	segments: RecoveredTranscriptSegment_Serialize[],
-	tagIds: string[],
 	historyId?: string | null,
 	historyTitle?: string | null,
 	lastKnownStage: RecoveryItemStage,
@@ -2338,8 +2882,36 @@ export type RecoveredQueueItem_Serialize = {
 	sourceFingerprint?: string | null,
 	fileStat?: RecoveryFileStat | null,
 	exportFileNamePrefix?: string | null,
-	attemptCount: number,
+	attemptCount?: number,
 	lastError?: string | null,
+	retryable?: boolean,
+};
+
+export type RecoveredQueueItem_Serialize = {
+	id: string,
+	filename: string,
+	filePath: string,
+	source: RecoverySource,
+	resolution: RecoveryResolution,
+	progress: number,
+	segments: RecoveredTranscriptSegment_Serialize[],
+	tagIds: string[],
+	historyId?: string,
+	historyTitle?: string,
+	lastKnownStage: RecoveryItemStage,
+	updatedAt: number,
+	hasSourceFile: boolean,
+	canResume: boolean,
+	automationRuleId?: string,
+	automationRuleName?: string,
+	resolvedConfigSnapshot?: unknown,
+	exportConfig: unknown,
+	stageConfig: unknown,
+	sourceFingerprint?: string,
+	fileStat?: RecoveryFileStat,
+	exportFileNamePrefix?: string,
+	attemptCount: number,
+	lastError?: string,
 	retryable: boolean,
 };
 
@@ -2351,11 +2923,11 @@ export type RecoveredTranscriptSegment_Deserialize = {
 	start?: number,
 	end?: number,
 	isFinal?: boolean,
-	timing?: RecoveredTranscriptTiming | null,
-	tokens: string[] | null,
-	timestamps: number[] | null,
-	durations: number[] | null,
-	translation: string | null,
+	timing?: RecoveredTranscriptTiming_Deserialize | null,
+	tokens?: string[] | null,
+	timestamps?: number[] | null,
+	durations?: number[] | null,
+	translation?: string | null,
 	speaker?: SpeakerTag_Deserialize | null,
 	speakerAttribution?: SpeakerAttribution | null,
 };
@@ -2366,25 +2938,41 @@ export type RecoveredTranscriptSegment_Serialize = {
 	start: number,
 	end: number,
 	isFinal: boolean,
-	timing?: RecoveredTranscriptTiming | null,
-	tokens?: string[] | null,
-	timestamps?: number[] | null,
-	durations?: number[] | null,
-	translation?: string | null,
-	speaker?: SpeakerTag_Serialize | null,
-	speakerAttribution?: SpeakerAttribution | null,
+	timing?: RecoveredTranscriptTiming_Serialize,
+	tokens?: string[],
+	timestamps?: number[],
+	durations?: number[],
+	translation?: string,
+	speaker?: SpeakerTag_Serialize,
+	speakerAttribution?: SpeakerAttribution,
 };
 
-export type RecoveredTranscriptTiming = {
-	level: TranscriptTimingLevel,
-	source: TranscriptTimingSource,
-	units: RecoveredTranscriptTimingUnit[],
-};
+export type RecoveredTranscriptTiming = RecoveredTranscriptTiming_Serialize | RecoveredTranscriptTiming_Deserialize;
 
-export type RecoveredTranscriptTimingUnit = {
+export type RecoveredTranscriptTimingUnit = RecoveredTranscriptTimingUnit_Serialize | RecoveredTranscriptTimingUnit_Deserialize;
+
+export type RecoveredTranscriptTimingUnit_Deserialize = {
 	text?: string,
 	start?: number,
 	end?: number,
+};
+
+export type RecoveredTranscriptTimingUnit_Serialize = {
+	text: string,
+	start: number,
+	end: number,
+};
+
+export type RecoveredTranscriptTiming_Deserialize = {
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: RecoveredTranscriptTimingUnit_Deserialize[],
+};
+
+export type RecoveredTranscriptTiming_Serialize = {
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: RecoveredTranscriptTimingUnit_Serialize[],
 };
 
 export type RecoveryFileStat = {
@@ -2427,34 +3015,34 @@ export type RecoveryItemInput_Deserialize = {
 };
 
 export type RecoveryItemInput_Serialize = {
-	id?: string | null,
-	recoveryId?: string | null,
-	filename?: string | null,
-	filePath?: string | null,
-	source?: string | null,
-	origin?: string | null,
-	resolution?: string | null,
-	status?: string | null,
-	progress?: number | null,
+	id?: string,
+	recoveryId?: string,
+	filename?: string,
+	filePath?: string,
+	source?: string,
+	origin?: string,
+	resolution?: string,
+	status?: string,
+	progress?: number,
 	segments: RecoveredTranscriptSegment_Serialize[],
 	tagIds?: string[],
-	projectId?: string | null,
-	historyId?: string | null,
-	historyTitle?: string | null,
-	lastKnownStage?: string | null,
-	updatedAt?: number | null,
-	hasSourceFile?: boolean | null,
-	canResume?: boolean | null,
-	automationRuleId?: string | null,
-	automationRuleName?: string | null,
-	resolvedConfigSnapshot?: unknown | null,
-	exportConfig?: unknown | null,
-	stageConfig?: unknown | null,
-	sourceFingerprint?: string | null,
-	fileStat?: RecoveryFileStat | null,
-	exportFileNamePrefix?: string | null,
-	attemptCount?: number | null,
-	lastError?: string | null,
+	projectId?: string,
+	historyId?: string,
+	historyTitle?: string,
+	lastKnownStage?: string,
+	updatedAt?: number,
+	hasSourceFile?: boolean,
+	canResume?: boolean,
+	automationRuleId?: string,
+	automationRuleName?: string,
+	resolvedConfigSnapshot?: unknown,
+	exportConfig?: unknown,
+	stageConfig?: unknown,
+	sourceFingerprint?: string,
+	fileStat?: RecoveryFileStat,
+	exportFileNamePrefix?: string,
+	attemptCount?: number,
+	lastError?: string,
 	retryable: boolean,
 };
 
@@ -2478,7 +3066,7 @@ export type RecoverySnapshotInput_Serialize = {
 
 export type RecoverySnapshot_Deserialize = {
 	version: number,
-	updatedAt: number | null,
+	updatedAt?: number | null,
 	items: RecoveredQueueItem_Deserialize[],
 };
 
@@ -2490,16 +3078,33 @@ export type RecoverySnapshot_Serialize = {
 
 export type RecoverySource = "batch_import" | "automation" | "transcript_edit";
 
-export type RuntimeEnvironmentStatus = {
+export type RuntimeEnvironmentStatus = RuntimeEnvironmentStatus_Serialize | RuntimeEnvironmentStatus_Deserialize;
+
+export type RuntimeEnvironmentStatus_Deserialize = {
 	ffmpegPath: string,
 	ffmpegExists: boolean,
 	logDirPath: string,
 	builtinAudioDecoderReady?: boolean,
 };
 
+export type RuntimeEnvironmentStatus_Serialize = {
+	ffmpegPath: string,
+	ffmpegExists: boolean,
+	logDirPath: string,
+	builtinAudioDecoderReady: boolean,
+};
+
 export type RuntimePathKind = "file" | "directory" | "missing" | "unknown";
 
-export type RuntimePathStatus = {
+export type RuntimePathStatus = RuntimePathStatus_Serialize | RuntimePathStatus_Deserialize;
+
+export type RuntimePathStatus_Deserialize = {
+	path: string,
+	kind: RuntimePathKind,
+	error?: string | null,
+};
+
+export type RuntimePathStatus_Serialize = {
 	path: string,
 	kind: RuntimePathKind,
 	error: string | null,
@@ -2525,7 +3130,14 @@ export type SQLiteUsageSummary = {
 	dbstatAvailable: boolean,
 };
 
-export type SelectedModelsInput = {
+export type SelectedModelsInput = SelectedModelsInput_Serialize | SelectedModelsInput_Deserialize;
+
+export type SelectedModelsInput_Deserialize = {
+	live?: ModelSummaryInput | null,
+	batch?: ModelSummaryInput | null,
+};
+
+export type SelectedModelsInput_Serialize = {
 	live: ModelSummaryInput | null,
 	batch: ModelSummaryInput | null,
 };
@@ -2560,20 +3172,29 @@ export type SpeakerLeader = {
 export type SpeakerProcessingConfig = SpeakerProcessingConfig_Serialize | SpeakerProcessingConfig_Deserialize;
 
 export type SpeakerProcessingConfig_Deserialize = {
-	speakerSegmentationModelPath: string | null,
-	speakerEmbeddingModelPath: string | null,
-	speakerProfiles: SpeakerProfile[] | null,
+	speakerSegmentationModelPath?: string | null,
+	speakerEmbeddingModelPath?: string | null,
+	speakerProfiles?: SpeakerProfile_Deserialize[] | null,
 	sensitivity?: string | null,
 };
 
 export type SpeakerProcessingConfig_Serialize = {
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
-	speakerProfiles: SpeakerProfile[] | null,
-	sensitivity?: string | null,
+	speakerProfiles: SpeakerProfile_Serialize[] | null,
+	sensitivity?: string,
 };
 
-export type SpeakerProfile = {
+export type SpeakerProfile = SpeakerProfile_Serialize | SpeakerProfile_Deserialize;
+
+export type SpeakerProfileSample = {
+	id: string,
+	filePath: string,
+	sourceName: string,
+	durationSeconds: number,
+};
+
+export type SpeakerProfile_Deserialize = {
 	id: string,
 	name: string,
 	enabled: boolean,
@@ -2582,11 +3203,13 @@ export type SpeakerProfile = {
 	samples: SpeakerProfileSample[],
 };
 
-export type SpeakerProfileSample = {
+export type SpeakerProfile_Serialize = {
 	id: string,
-	filePath: string,
-	sourceName: string,
-	durationSeconds: number,
+	name: string,
+	enabled: boolean,
+	scope: string,
+	projectIds: string[],
+	samples: SpeakerProfileSample[],
 };
 
 export type SpeakerStats = {
@@ -2631,7 +3254,7 @@ export type SpeakerTag_Serialize = {
 	id: string,
 	label: string,
 	kind: string,
-	score?: number | null,
+	score?: number,
 };
 
 export type StorageUsageCategories = StorageUsageCategories_Serialize | StorageUsageCategories_Deserialize;
@@ -2675,7 +3298,7 @@ export type SummarizeTranscriptRequest_Deserialize = {
 	config: LlmConfig_Deserialize,
 	template: SummaryTemplateConfig,
 	segments: SummarySegmentInput[],
-	chunkCharBudget: number | null,
+	chunkCharBudget?: number | null,
 };
 
 export type SummarizeTranscriptRequest_Serialize = {
@@ -2718,8 +3341,16 @@ export type SyncConflict = {
 	loser: SyncOperation,
 };
 
-export type SyncConflictDetail = {
-	summary: SyncConflictSummary,
+export type SyncConflictDetail = SyncConflictDetail_Serialize | SyncConflictDetail_Deserialize;
+
+export type SyncConflictDetail_Deserialize = {
+	summary: SyncConflictSummary_Deserialize,
+	current: SyncOperation,
+	conflicting: SyncOperation,
+};
+
+export type SyncConflictDetail_Serialize = {
+	summary: SyncConflictSummary_Serialize,
 	current: SyncOperation,
 	conflicting: SyncOperation,
 };
@@ -2728,7 +3359,17 @@ export type SyncConflictKind = "concurrent_write" | "delete_vs_write";
 
 export type SyncConflictResolution = "keep_current" | "use_conflicting" | "keep_both";
 
-export type SyncConflictSummary = {
+export type SyncConflictSummary = SyncConflictSummary_Serialize | SyncConflictSummary_Deserialize;
+
+export type SyncConflictSummary_Deserialize = {
+	conflictId: string,
+	kind: SyncConflictKind,
+	entity: SyncEntityKey,
+	field?: string | null,
+	createdAtMs: number,
+};
+
+export type SyncConflictSummary_Serialize = {
 	conflictId: string,
 	kind: SyncConflictKind,
 	entity: SyncEntityKey,
@@ -2786,7 +3427,21 @@ export type SyncRunResult = {
 	checkpointPublished: boolean,
 };
 
-export type SyncStatusSnapshot = {
+export type SyncStatusSnapshot = SyncStatusSnapshot_Serialize | SyncStatusSnapshot_Deserialize;
+
+export type SyncStatusSnapshot_Deserialize = {
+	state: SyncLifecycleState,
+	providerId?: string | null,
+	vaultId?: string | null,
+	preset?: SyncPresetV1 | null,
+	lastSuccessAtMs?: number | null,
+	pendingOperationCount: number,
+	conflictCount: number,
+	nextRetryAtMs?: number | null,
+	lastError?: SyncErrorSnapshot | null,
+};
+
+export type SyncStatusSnapshot_Serialize = {
 	state: SyncLifecycleState,
 	providerId: string | null,
 	vaultId: string | null,
@@ -2804,11 +3459,20 @@ export type SyncVersion = {
 	operationId: string,
 };
 
-export type TagCreateInput = {
+export type TagCreateInput = TagCreateInput_Serialize | TagCreateInput_Deserialize;
+
+export type TagCreateInput_Deserialize = {
 	name: string,
 	description?: string | null,
 	icon?: string | null,
 	color?: string | null,
+};
+
+export type TagCreateInput_Serialize = {
+	name: string,
+	description: string | null,
+	icon: string | null,
+	color: string | null,
 };
 
 export type TagRecord = {
@@ -2822,16 +3486,32 @@ export type TagRecord = {
 	updatedAt: number,
 };
 
-export type TagRepositorySnapshot = {
+export type TagRepositorySnapshot = TagRepositorySnapshot_Serialize | TagRepositorySnapshot_Deserialize;
+
+export type TagRepositorySnapshot_Deserialize = {
+	tags: TagRecord[],
+	activeTagId?: string | null,
+};
+
+export type TagRepositorySnapshot_Serialize = {
 	tags: TagRecord[],
 	activeTagId: string | null,
 };
 
-export type TagUpdateInput = {
+export type TagUpdateInput = TagUpdateInput_Serialize | TagUpdateInput_Deserialize;
+
+export type TagUpdateInput_Deserialize = {
 	name?: string | null,
 	icon?: string | null,
 	color?: string | null,
 	description?: string | null,
+};
+
+export type TagUpdateInput_Serialize = {
+	name: string | null,
+	icon: string | null,
+	color: string | null,
+	description: string | null,
 };
 
 export type TaskLedgerKind = "batchImport" | "automation" | "llmPolish" | "llmTranslate" | "llmSummary" | "recovery" | "update";
@@ -2860,18 +3540,18 @@ export type TaskLedgerPatch_Deserialize = {
 };
 
 export type TaskLedgerPatch_Serialize = {
-	kind?: TaskLedgerKind | null,
-	status?: TaskLedgerStatus | null,
-	title?: string | null,
-	progress?: number | null,
-	createdAt?: number | null,
-	updatedAt?: number | null,
-	retryable?: boolean | null,
-	cancelable?: boolean | null,
-	recoverable?: boolean | null,
+	kind?: TaskLedgerKind,
+	status?: TaskLedgerStatus,
+	title?: string,
+	progress?: number,
+	createdAt?: number,
+	updatedAt?: number,
+	retryable?: boolean,
+	cancelable?: boolean,
+	recoverable?: boolean,
 	stage?: string | null,
 	historyId?: string | null,
-	tagIds?: string[] | null,
+	tagIds?: string[],
 	filePath?: string | null,
 	automationRuleId?: string | null,
 	sourceFingerprint?: string | null,
@@ -2893,15 +3573,15 @@ export type TaskLedgerRecord_Deserialize = {
 	retryable: boolean,
 	cancelable: boolean,
 	recoverable: boolean,
-	stage: string | null,
-	historyId: string | null,
+	stage?: string | null,
+	historyId?: string | null,
 	tagIds?: string[],
-	filePath: string | null,
-	automationRuleId: string | null,
-	sourceFingerprint: string | null,
-	errorMessage: string | null,
-	templateId: string | null,
-	targetLanguage: string | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
 };
 
 export type TaskLedgerRecord_Serialize = {
@@ -2915,22 +3595,22 @@ export type TaskLedgerRecord_Serialize = {
 	retryable: boolean,
 	cancelable: boolean,
 	recoverable: boolean,
-	stage?: string | null,
-	historyId?: string | null,
+	stage?: string,
+	historyId?: string,
 	tagIds?: string[],
-	filePath?: string | null,
-	automationRuleId?: string | null,
-	sourceFingerprint?: string | null,
-	errorMessage?: string | null,
-	templateId?: string | null,
-	targetLanguage?: string | null,
+	filePath?: string,
+	automationRuleId?: string,
+	sourceFingerprint?: string,
+	errorMessage?: string,
+	templateId?: string,
+	targetLanguage?: string,
 };
 
 export type TaskLedgerSnapshot = TaskLedgerSnapshot_Serialize | TaskLedgerSnapshot_Deserialize;
 
 export type TaskLedgerSnapshot_Deserialize = {
 	version: number,
-	updatedAt: number | null,
+	updatedAt?: number | null,
 	tasks: TaskLedgerRecord_Deserialize[],
 };
 
@@ -2960,13 +3640,24 @@ export type ThinkingLevel = { mode: "none" } | { mode: "auto" } | { mode: "minim
 
 export type TimestampSupportHint = "token" | "segment" | "unknown";
 
-export type TokenUsage = {
+export type TokenUsage = TokenUsage_Serialize | TokenUsage_Deserialize;
+
+export type TokenUsage_Deserialize = {
 	promptTokens: number,
 	completionTokens: number,
 	totalTokens: number,
 	cachedInputTokens?: number,
 	cacheCreationInputTokens?: number,
 	reasoningTokens?: number,
+};
+
+export type TokenUsage_Serialize = {
+	promptTokens: number,
+	completionTokens: number,
+	totalTokens: number,
+	cachedInputTokens: number,
+	cacheCreationInputTokens: number,
+	reasoningTokens: number,
 };
 
 export type TranscriptDiffResult = TranscriptDiffResult_Serialize | TranscriptDiffResult_Deserialize;
@@ -2986,17 +3677,17 @@ export type TranscriptDiffRow = TranscriptDiffRow_Serialize | TranscriptDiffRow_
 export type TranscriptDiffRow_Deserialize = {
 	id: string,
 	status: TranscriptDiffStatus,
-	snapshotSegment: TranscriptSegment_Deserialize | null,
-	currentSegment: TranscriptSegment_Deserialize | null,
-	snapshotIndex: number | null,
-	currentIndex: number | null,
+	snapshotSegment?: TranscriptSegment_Deserialize | null,
+	currentSegment?: TranscriptSegment_Deserialize | null,
+	snapshotIndex?: number | null,
+	currentIndex?: number | null,
 };
 
 export type TranscriptDiffRow_Serialize = {
 	id: string,
 	status: TranscriptDiffStatus,
-	snapshotSegment?: TranscriptSegment_Serialize | null,
-	currentSegment?: TranscriptSegment_Serialize | null,
+	snapshotSegment?: TranscriptSegment_Serialize,
+	currentSegment?: TranscriptSegment_Serialize,
 	snapshotIndex: number | null,
 	currentIndex: number | null,
 };
@@ -3008,19 +3699,19 @@ export type TranscriptLlmJobRequest = TranscriptLlmJobRequest_Serialize | Transc
 export type TranscriptLlmJobRequest_Deserialize = {
 	taskId: string,
 	taskType: LlmTaskType,
-	jobHistoryId: string | null,
+	jobHistoryId?: string | null,
 	config: LlmConfig_Deserialize,
 	segments: TranscriptSegment_Deserialize[],
-	targetLanguage: string | null,
-	targetLanguageName: string | null,
+	targetLanguage?: string | null,
+	targetLanguageName?: string | null,
 	sourceLanguage?: string | null,
-	context: string | null,
-	keywords: string | null,
+	context?: string | null,
+	keywords?: string | null,
 	mode?: PolishMode | null,
-	template: SummaryTemplateConfig | null,
-	chunkSize: number | null,
-	chunkCharBudget: number | null,
-	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
+	template?: SummaryTemplateConfig | null,
+	chunkSize?: number | null,
+	chunkCharBudget?: number | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet_Deserialize[] | null,
 };
 
 export type TranscriptLlmJobRequest_Serialize = {
@@ -3038,37 +3729,28 @@ export type TranscriptLlmJobRequest_Serialize = {
 	template: SummaryTemplateConfig | null,
 	chunkSize: number | null,
 	chunkCharBudget: number | null,
-	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet_Serialize[],
 };
 
 export type TranscriptNormalizationOptions = {
 	enableTimeline: boolean,
 };
 
-export type TranscriptPostprocessOptions = {
-	textReplacementSets?: TranscriptTextReplacementRuleSet[],
+export type TranscriptPostprocessOptions = TranscriptPostprocessOptions_Serialize | TranscriptPostprocessOptions_Deserialize;
+
+export type TranscriptPostprocessOptions_Deserialize = {
+	textReplacementSets?: TranscriptTextReplacementRuleSet_Deserialize[],
 	dropFinalDotSegments?: boolean,
+};
+
+export type TranscriptPostprocessOptions_Serialize = {
+	textReplacementSets: TranscriptTextReplacementRuleSet_Serialize[],
+	dropFinalDotSegments: boolean,
 };
 
 export type TranscriptSegment = TranscriptSegment_Serialize | TranscriptSegment_Deserialize;
 
 export type TranscriptSegment_Deserialize = {
-	id: string,
-	text: string,
-	start: number,
-	end: number,
-	isFinal: boolean,
-	timing: TranscriptTiming | null,
-	tokens: string[] | null,
-	timestamps: number[] | null,
-	durations: number[] | null,
-	translation: string | null,
-	draftTranslation: string | null,
-	speaker: SpeakerTag_Deserialize | null,
-	speakerAttribution: SpeakerAttribution | null,
-};
-
-export type TranscriptSegment_Serialize = {
 	id: string,
 	text: string,
 	start: number,
@@ -3080,8 +3762,24 @@ export type TranscriptSegment_Serialize = {
 	durations?: number[] | null,
 	translation?: string | null,
 	draftTranslation?: string | null,
-	speaker?: SpeakerTag_Serialize | null,
+	speaker?: SpeakerTag_Deserialize | null,
 	speakerAttribution?: SpeakerAttribution | null,
+};
+
+export type TranscriptSegment_Serialize = {
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing?: TranscriptTiming,
+	tokens?: string[],
+	timestamps?: number[],
+	durations?: number[],
+	translation?: string,
+	draftTranslation?: string,
+	speaker?: SpeakerTag_Serialize,
+	speakerAttribution?: SpeakerAttribution,
 };
 
 export type TranscriptSnapshotMetadata = {
@@ -3119,7 +3817,7 @@ export type TranscriptSummaryRecordPayload_Deserialize = {
 export type TranscriptSummaryRecordPayload_Serialize = {
 	templateId: string,
 	content: string,
-	thought?: string | null,
+	thought?: string,
 	generatedAt: string,
 	sourceFingerprint: string,
 };
@@ -3135,18 +3833,33 @@ export type TranscriptSummaryResult_Deserialize = {
 export type TranscriptSummaryResult_Serialize = {
 	templateId: string,
 	content: string,
-	thought?: string | null,
+	thought?: string,
 };
 
-export type TranscriptTextReplacementRule = {
+export type TranscriptTextReplacementRule = TranscriptTextReplacementRule_Serialize | TranscriptTextReplacementRule_Deserialize;
+
+export type TranscriptTextReplacementRuleSet = TranscriptTextReplacementRuleSet_Serialize | TranscriptTextReplacementRuleSet_Deserialize;
+
+export type TranscriptTextReplacementRuleSet_Deserialize = {
+	enabled?: boolean,
+	ignoreCase?: boolean,
+	rules?: TranscriptTextReplacementRule_Deserialize[],
+};
+
+export type TranscriptTextReplacementRuleSet_Serialize = {
+	enabled: boolean,
+	ignoreCase: boolean,
+	rules: TranscriptTextReplacementRule_Serialize[],
+};
+
+export type TranscriptTextReplacementRule_Deserialize = {
 	from?: string,
 	to?: string,
 };
 
-export type TranscriptTextReplacementRuleSet = {
-	enabled?: boolean,
-	ignoreCase?: boolean,
-	rules?: TranscriptTextReplacementRule[],
+export type TranscriptTextReplacementRule_Serialize = {
+	from: string,
+	to: string,
 };
 
 export type TranscriptTiming = {
@@ -3171,13 +3884,13 @@ export type TranslateSegmentsRequest_Deserialize = {
 	taskId: string,
 	config: LlmConfig_Deserialize,
 	segments: LlmSegmentInput[],
-	chunkSize: number | null,
+	chunkSize?: number | null,
 	targetLanguage: string,
-	targetLanguageName: string | null,
+	targetLanguageName?: string | null,
 	sourceLanguage?: string | null,
 	context?: string | null,
 	keywords?: string | null,
-	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet_Deserialize[] | null,
 };
 
 export type TranslateSegmentsRequest_Serialize = {
@@ -3190,7 +3903,7 @@ export type TranslateSegmentsRequest_Serialize = {
 	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
-	postProcessReplacements?: TranscriptTextReplacementRuleSet[] | null,
+	postProcessReplacements?: TranscriptTextReplacementRuleSet_Serialize[],
 };
 
 export type TranslatedSegment = {
@@ -3218,7 +3931,7 @@ export type VoiceTypingContextRuleRecord_Deserialize = {
 	name: string,
 	icon?: string | null,
 	badgeColor?: string | null,
-	appsByPlatform?: VoiceTypingPlatformAppsRecord,
+	appsByPlatform?: VoiceTypingPlatformAppsRecord_Deserialize,
 	titlePatterns?: string[],
 	promptDirective: string,
 	stripTrailingPunctuation?: boolean,
@@ -3229,9 +3942,9 @@ export type VoiceTypingContextRuleRecord_Deserialize = {
 export type VoiceTypingContextRuleRecord_Serialize = {
 	id: string,
 	name: string,
-	icon?: string | null,
-	badgeColor?: string | null,
-	appsByPlatform: VoiceTypingPlatformAppsRecord,
+	icon?: string,
+	badgeColor?: string,
+	appsByPlatform: VoiceTypingPlatformAppsRecord_Serialize,
 	titlePatterns: string[],
 	promptDirective: string,
 	stripTrailingPunctuation: boolean,
@@ -3243,22 +3956,39 @@ export type VoiceTypingMode = "hold" | "toggle";
 
 export type VoiceTypingPlacement = "caret" | "bottom_center";
 
-export type VoiceTypingPlatformAppsRecord = {
+export type VoiceTypingPlatformAppsRecord = VoiceTypingPlatformAppsRecord_Serialize | VoiceTypingPlatformAppsRecord_Deserialize;
+
+export type VoiceTypingPlatformAppsRecord_Deserialize = {
 	windows?: string[],
 	macos?: string[],
 	linux?: string[],
 };
 
+export type VoiceTypingPlatformAppsRecord_Serialize = {
+	windows: string[],
+	macos: string[],
+	linux: string[],
+};
+
 export type VoiceTypingProcessingMode = "raw" | "polish";
 
-export type VoiceTypingReadinessInput = {
+export type VoiceTypingReadinessInput = VoiceTypingReadinessInput_Serialize | VoiceTypingReadinessInput_Deserialize;
+
+export type VoiceTypingReadinessInput_Deserialize = {
+	state: VoiceTypingState,
+	lastErrorMessage?: string | null,
+};
+
+export type VoiceTypingReadinessInput_Serialize = {
 	state: VoiceTypingState,
 	lastErrorMessage: string | null,
 };
 
 export type VoiceTypingState = "off" | "needs_shortcut" | "needs_live_model" | "needs_vad" | "failed" | "preparing" | "ready";
 
-export type VolcengineDoubaoAsrConfig = {
+export type VolcengineDoubaoAsrConfig = VolcengineDoubaoAsrConfig_Serialize | VolcengineDoubaoAsrConfig_Deserialize;
+
+export type VolcengineDoubaoAsrConfig_Deserialize = {
 	apiKey?: string,
 	streamingEndpoint?: string,
 	streamingResourceId?: string,
@@ -3266,7 +3996,23 @@ export type VolcengineDoubaoAsrConfig = {
 	batchResourceId?: string,
 };
 
-export type WebviewBrowsingDataClearResult = {
+export type VolcengineDoubaoAsrConfig_Serialize = {
+	apiKey: string,
+	streamingEndpoint: string,
+	streamingResourceId: string,
+	batchEndpoint: string,
+	batchResourceId: string,
+};
+
+export type WebviewBrowsingDataClearResult = WebviewBrowsingDataClearResult_Serialize | WebviewBrowsingDataClearResult_Deserialize;
+
+export type WebviewBrowsingDataClearResult_Deserialize = {
+	beforeBytes?: number | null,
+	afterBytes?: number | null,
+	clearRequested: boolean,
+};
+
+export type WebviewBrowsingDataClearResult_Serialize = {
 	beforeBytes: number | null,
 	afterBytes: number | null,
 	clearRequested: boolean,
@@ -3275,15 +4021,15 @@ export type WebviewBrowsingDataClearResult = {
 export type WebviewCacheUsageCategory = WebviewCacheUsageCategory_Serialize | WebviewCacheUsageCategory_Deserialize;
 
 export type WebviewCacheUsageCategory_Deserialize = {
-	bytes: number | null,
+	bytes?: number | null,
 	clearSupported: boolean,
-	path: string | null,
+	path?: string | null,
 };
 
 export type WebviewCacheUsageCategory_Serialize = {
 	bytes: number | null,
 	clearSupported: boolean,
-	path?: string | null,
+	path?: string,
 };
 
 export type RustTauriCommandContractMap = {

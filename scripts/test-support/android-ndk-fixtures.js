@@ -40,7 +40,7 @@ function androidNdkToolPaths(ndkHome, abiCase, hostPlatform) {
   const layout = androidNdkHostLayout(hostPlatform);
   const binDir = path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', layout.hostTag, 'bin');
   return {
-    linkerPath: path.join(binDir, `${abiCase.linkerPrefix}23-clang${layout.linkerExtension}`),
+    linkerPath: path.join(binDir, `${abiCase.linkerPrefix}24-clang${layout.linkerExtension}`),
     archiverPath: path.join(binDir, `llvm-ar${layout.archiverExtension}`),
   };
 }

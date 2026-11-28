@@ -9,10 +9,10 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
-const DEFAULT_GRADLE_VERSION = '9.9.2';
+const DEFAULT_GRADLE_VERSION = '9.9.3';
 const MAX_DOWNLOAD_ATTEMPTS = 3;
 const GRADLE_DISTRIBUTION_SHA256 = {
-  '9.9.2': '971fcd7150ca4ba04852c0b2ca0d2d0ab9468e14b03473eab19528809914c76b',
+  '9.9.3': '4f2135b741f272acc88c168a52202a0a63fceee0cd61ee753da79694cd2b1e4b',
 };
 
 const args = process.argv.slice(2);
