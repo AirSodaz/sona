@@ -803,7 +803,6 @@ internal fun SonaApp(
                 SonaFloatingDock(
                     currentRoute = currentRoute,
                     currentSectionArg = currentSectionArg,
-                    hasSettingsBadge = aboutState.hasActionableUpdateBadge,
                     recordingState = recordingState,
                     visible = showFloatingDock,
                     onDestinationSelected = { destination ->

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -545,24 +545,35 @@ private fun SettingsSectionList(
                                     modifier = Modifier.size(42.dp),
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        BadgedBox(
-                                            badge = {
-                                                if (hasUpdateBadge && section == SettingsSection.ABOUT) {
-                                                    Badge(
-                                                        containerColor = MaterialTheme.colorScheme.error,
-                                                        modifier = Modifier.size(8.dp),
-                                                    )
-                                                }
-                                            },
-                                        ) {
+                                        Icon(
+                                            imageVector = section.icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            },
+                            trailingContent = if (hasUpdateBadge && section == SettingsSection.ABOUT) {
+                                {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(8.dp),
+                                        )
+                                        if (!showSelection) {
                                             Icon(
-                                                imageVector = section.icon,
+                                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                             )
                                         }
                                     }
                                 }
+                            } else {
+                                null
                             },
                             showDefaultTrailingChevron = !showSelection,
                             onClick = { onSectionSelected(section) },

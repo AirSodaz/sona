@@ -1342,7 +1342,7 @@ pub fn set_app_setting_json(
     app_config_repository_bridge::set_app_setting_json(app_data_dir, key, value_json)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_dashboard_snapshot_json(
     app_data_dir: String,
     deep: bool,
@@ -1350,7 +1350,7 @@ pub async fn load_dashboard_snapshot_json(
     dashboard_bridge::load_dashboard_snapshot_json(app_data_dir, deep).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_dashboard_snapshot_v1(
     app_data_dir: String,
     deep: bool,
@@ -1358,7 +1358,7 @@ pub async fn load_dashboard_snapshot_v1(
     dashboard_bridge::load_dashboard_snapshot_v1(app_data_dir, deep).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_diagnostics_snapshot_json(
     app_data_dir: String,
     input_json: String,
@@ -1366,7 +1366,7 @@ pub async fn load_diagnostics_snapshot_json(
     diagnostics_bridge::load_diagnostics_snapshot_json(app_data_dir, input_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_diagnostics_snapshot_v1(
     app_data_dir: String,
     input: FfiDiagnosticsInputV1,
@@ -1374,14 +1374,14 @@ pub async fn load_diagnostics_snapshot_v1(
     diagnostics_bridge::load_diagnostics_snapshot_v1(app_data_dir, input).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_storage_usage_snapshot_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
     storage_usage_bridge::load_storage_usage_snapshot_json(app_data_dir).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_storage_usage_snapshot_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiStorageUsageSnapshotV1> {
