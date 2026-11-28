@@ -12,6 +12,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -20,6 +21,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,7 +50,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -63,6 +66,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -81,11 +85,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -96,6 +98,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,12 +110,15 @@ import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.notification.SonaNotificationChannels
+import com.sona.android.app.ui.component.SonaMiniWaveform
 import com.sona.android.app.ui.component.SonaWaveform
+import com.sona.android.app.ui.component.toWaveformVisualMode
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.app.ui.theme.LocalSonaRecordingContainerColor
 import com.sona.android.app.ui.theme.LocalSonaSemanticColors
 import com.sona.android.application.recording.AsrMode
 import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AudioEnergyBands
 import com.sona.android.application.recording.AudioInputStatus
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
@@ -120,8 +126,6 @@ import com.sona.android.application.recording.StreamingStatus
 import com.sona.android.application.recording.TranscriptSegment
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private const val WAVEFORM_HISTORY_SIZE = 36
 
 /**
  * Persistent floating mini-bar displayed above the dock when a live recording
@@ -142,22 +146,9 @@ internal fun RecordMiniBar(
     val isBusy = recordingState is LiveRecordingState.Preparing ||
         recordingState is LiveRecordingState.Stopping
     val elapsedMillis = (recordingState as? LiveRecordingState.Recording)?.elapsedMillis ?: 0L
+    val audioBands = (recordingState as? LiveRecordingState.Recording)?.audioBands ?: AudioEnergyBands()
     val latestText = (recordingState as? LiveRecordingState.Recording)?.segments
         ?.lastOrNull()?.text?.takeIf { it.isNotBlank() }
-
-    val pulseAlpha = if (isRecording && !isPaused) {
-        rememberInfiniteTransition(label = "miniBarPulse").animateFloat(
-            initialValue = 1f,
-            targetValue = 0.28f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(680),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "miniBarPulseAlpha",
-        ).value
-    } else {
-        0.7f
-    }
 
     Surface(
         modifier = modifier
@@ -186,14 +177,11 @@ internal fun RecordMiniBar(
                     strokeWidth = 2.dp,
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .alpha(pulseAlpha)
-                        .background(
-                            color = if (isPaused) MaterialTheme.colorScheme.tertiary else recordingColor,
-                            shape = CircleShape,
-                        ),
+                SonaMiniWaveform(
+                    audioBands = audioBands,
+                    mode = recordingState.toWaveformVisualMode(),
+                    width = 36.dp,
+                    height = 24.dp,
                 )
             }
 
@@ -315,14 +303,10 @@ internal fun RecordScreen(
     var permissionRevision by remember { mutableIntStateOf(0) }
     var permissionIssue by remember { mutableStateOf<MicrophonePermissionDecision?>(null) }
     var displayedSegments by remember { mutableStateOf(emptyList<TranscriptSegment>()) }
+    var dismissedCompletedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var visibleCompletedState by remember { mutableStateOf<LiveRecordingState.Completed?>(null) }
     var engineSheetVisible by remember { mutableStateOf(false) }
     var setupSheetVisible by remember { mutableStateOf(false) }
-
-    val waveformBars = remember {
-        mutableStateListOf<Float>().apply {
-            repeat(WAVEFORM_HISTORY_SIZE) { add(0f) }
-        }
-    }
 
     val permissionGranted = remember(permissionRevision, context) {
         context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
@@ -408,36 +392,28 @@ internal fun RecordScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val latestRecordingState by rememberUpdatedState(recordingState)
-
     LaunchedEffect(recordingState) {
         when (recordingState) {
             is LiveRecordingState.Preparing -> {
                 displayedSegments = emptyList()
-                for (i in waveformBars.indices) waveformBars[i] = 0f
+                visibleCompletedState = null
+                dismissedCompletedId = null
             }
             is LiveRecordingState.Recording -> {
                 displayedSegments = recordingState.segments
+                visibleCompletedState = null
             }
-            else -> Unit
-        }
-    }
-
-    // Uniform-cadence waveform sampler reading the latest recording RMS level
-    LaunchedEffect(
-        recordingState is LiveRecordingState.Recording && !recordingState.isPaused,
-    ) {
-        val active = latestRecordingState is LiveRecordingState.Recording &&
-            !(latestRecordingState as LiveRecordingState.Recording).isPaused
-        if (!active) return@LaunchedEffect
-        while (true) {
-            val current = latestRecordingState as? LiveRecordingState.Recording ?: break
-            if (current.isPaused) break
-            if (waveformBars.size >= WAVEFORM_HISTORY_SIZE) {
-                waveformBars.removeAt(0)
+            is LiveRecordingState.Completed -> {
+                if (recordingState.historyId != dismissedCompletedId) {
+                    visibleCompletedState = recordingState
+                    delay(if (recordingState.warning != null) 5_500L else 3_500L)
+                    visibleCompletedState = null
+                    dismissedCompletedId = recordingState.historyId
+                }
             }
-            waveformBars.add(current.rmsLevel)
-            delay(75)
+            else -> {
+                visibleCompletedState = null
+            }
         }
     }
 
@@ -573,11 +549,16 @@ internal fun RecordScreen(
                     .widthIn(max = 720.dp)
                     .fillMaxSize(),
             ) {
-                // 1. Minimalist Studio Top Bar
+                // 1. Minimalist Single-Row Top Bar (Engine Selector or Live Status + Timer)
+                val recordingColor = LocalSonaRecordingColor.current
+                val isRecording = recordingState is LiveRecordingState.Recording
+                val isPaused = (recordingState as? LiveRecordingState.Recording)?.isPaused == true
+                val statusCategory = recordingStatusForDisplay(recordingState, configurationMissing)
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -589,54 +570,133 @@ internal fun RecordScreen(
                         )
                     }
 
-                    // Active Engine Selector Pill
-                    Surface(
-                        onClick = { engineSheetVisible = true },
-                        enabled = !isActive,
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (configurationMissing) {
-                            MaterialTheme.colorScheme.errorContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        },
-                        contentColor = if (configurationMissing) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.GraphicEq,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = if (configurationMissing) {
-                                    MaterialTheme.colorScheme.error
+                        AnimatedContent(
+                            targetState = isActive,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "topBarCenter",
+                        ) { active ->
+                            if (!active) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { engineSheetVisible = true }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.GraphicEq,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (configurationMissing) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        },
+                                    )
+                                    Text(
+                                        text = liveSelection.liveModelSummary(recognitionSettings),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (configurationMissing) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Rounded.ExpandMore,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (configurationMissing) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                            } else {
+                                val pulseAlpha = if (isRecording && !isPaused) {
+                                    rememberInfiniteTransition(label = "topBarPulse").animateFloat(
+                                        initialValue = 1f,
+                                        targetValue = 0.28f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(680),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                        label = "topBarPulseAlpha",
+                                    ).value
                                 } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                            )
-                            Text(
-                                text = liveSelection.liveModelSummary(recognitionSettings),
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (!isActive) {
-                                Icon(
-                                    imageVector = Icons.Rounded.ExpandMore,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
+                                    0.85f
+                                }
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    if (recordingState is LiveRecordingState.Preparing ||
+                                        recordingState is LiveRecordingState.Stopping
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .alpha(pulseAlpha)
+                                                .background(
+                                                    color = if (isPaused) {
+                                                        MaterialTheme.colorScheme.tertiary
+                                                    } else {
+                                                        recordingColor
+                                                    },
+                                                    shape = CircleShape,
+                                                ),
+                                        )
+                                    }
+                                    if (isRecording) {
+                                        Text(
+                                            text = formatRecordingTimer(elapsedMillis),
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontFamily = FontFamily.Monospace,
+                                                fontFeatureSettings = "tnum",
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            color = if (!isPaused) {
+                                                recordingColor
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    if (statusCategory != null) {
+                                        Text(
+                                            text = stringResource(statusCategory.labelRes()),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isPaused) {
+                                                MaterialTheme.colorScheme.tertiary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Balance spacer / Settings shortcut when idle
                     if (!isActive) {
                         IconButton(onClick = onConfigureRecognition) {
                             Icon(
@@ -650,69 +710,7 @@ internal fun RecordScreen(
                     }
                 }
 
-                // 2. Hero Waveform + Timer Zone
-                val recordingColor = LocalSonaRecordingColor.current
-                val isRecording = recordingState is LiveRecordingState.Recording
-                val isPaused = (recordingState as? LiveRecordingState.Recording)?.isPaused == true
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    // Status Pill
-                    val statusCategory = recordingStatusForDisplay(recordingState, configurationMissing)
-                    if (statusCategory != null) {
-                        val isError = statusCategory.isFailure() ||
-                            statusCategory == RecordingStatusCategory.NEEDS_CONFIGURATION
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = when {
-                                isError -> MaterialTheme.colorScheme.errorContainer
-                                isRecording && !isPaused -> LocalSonaRecordingContainerColor.current
-                                isPaused -> MaterialTheme.colorScheme.tertiaryContainer
-                                else -> MaterialTheme.colorScheme.secondaryContainer
-                            },
-                            contentColor = when {
-                                isError -> MaterialTheme.colorScheme.onErrorContainer
-                                isRecording && !isPaused -> LocalSonaSemanticColors.current.onRecordingContainer
-                                isPaused -> MaterialTheme.colorScheme.onTertiaryContainer
-                                else -> MaterialTheme.colorScheme.onSecondaryContainer
-                            },
-                        ) {
-                            Text(
-                                text = stringResource(statusCategory.labelRes()),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    Text(
-                        text = formatRecordingTimer(elapsedMillis),
-                        style = MaterialTheme.typography.displayLarge,
-                        color = if (isRecording && !isPaused) {
-                            recordingColor
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-
-                    Spacer(Modifier.height(14.dp))
-
-                    SonaWaveform(
-                        amplitudes = waveformBars,
-                        active = isRecording && !isPaused,
-                        activeColor = recordingColor,
-                        inactiveColor = MaterialTheme.colorScheme.outlineVariant,
-                        height = 56.dp,
-                    )
-                }
-
-                // Notices (AudioOnly / Mic silenced / Notification rationale / Completed card)
+                // 2. Notices (Failures / AudioOnly / Mic silenced / Notification rationale)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -725,7 +723,6 @@ internal fun RecordScreen(
                         configurationMissing = configurationMissing,
                         permissionIssue = permissionIssue,
                         onOpenSetup = { setupSheetVisible = true },
-                        onViewCompleted = onViewCompleted,
                         showNotificationNotice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             !notificationPermissionGranted &&
                             effectiveHasRequestedNotificationPermission,
@@ -734,17 +731,43 @@ internal fun RecordScreen(
                     )
                 }
 
-                // 3. Flowing Live Transcript Stream
-                FlowingTranscriptStream(
-                    segments = displayedSegments,
-                    isRecording = isRecording,
+                // 3. Dominant Flowing Live Transcript Stream + Non-intrusive Auto-dismiss Completed Toast
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 24.dp),
-                )
+                        .weight(1f),
+                ) {
+                    FlowingTranscriptStream(
+                        segments = displayedSegments,
+                        isRecording = isRecording,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp),
+                    )
 
-                // 4. Expressive Bottom Control Deck
+                    val activeCompletedToast = visibleCompletedState
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = activeCompletedToast != null,
+                        enter = slideInVertically { it / 2 } + fadeIn(),
+                        exit = slideOutVertically { it / 2 } + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                    ) {
+                        if (activeCompletedToast != null) {
+                            RecordingCompletedToast(
+                                completed = activeCompletedToast,
+                                onView = {
+                                    visibleCompletedState = null
+                                    dismissedCompletedId = activeCompletedToast.historyId
+                                    onViewCompleted(activeCompletedToast.historyId)
+                                },
+                            )
+                        }
+                    }
+                }
+
+                // 4. Compact Wave-Backed Control Island
                 RecordControlDeck(
                     state = recordingState,
                     presentation = presentation,
@@ -923,136 +946,192 @@ private fun RecordControlDeck(
     val recording = state is LiveRecordingState.Recording
     val isPaused = (state as? LiveRecordingState.Recording)?.isPaused == true
     val recordingColor = LocalSonaRecordingColor.current
+    val audioBands = (state as? LiveRecordingState.Recording)?.audioBands ?: AudioEnergyBands()
+    val waveMode = state.toWaveformVisualMode()
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp,
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .height(52.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            when {
-                state is LiveRecordingState.Preparing || state is LiveRecordingState.Stopping -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.height(56.dp),
-                    ) {
-                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
-                        Text(
-                            text = stringResource(
-                                if (state is LiveRecordingState.Preparing) {
-                                    R.string.recording_preparing
-                                } else {
-                                    R.string.recording_stopping
-                                },
-                            ),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                }
-                recording -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FilledTonalButton(
-                            onClick = { if (isPaused) onResume() else onPause() },
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (isPaused) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHighest
-                                },
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = if (isPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(
-                                    if (isPaused) R.string.record_resume_description else R.string.record_pause_description,
-                                ),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-
-                        Button(
-                            onClick = onStop,
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = recordingColor,
-                                contentColor = LocalSonaSemanticColors.current.onRecording,
-                            ),
-                            modifier = Modifier
-                                .weight(1.25f)
-                                .height(56.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Stop,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.record_stop_description),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
-                }
-                else -> {
-                    val enabled = presentation.isStartAvailable
-                    Button(
-                        onClick = onStart,
-                        enabled = enabled,
-                        shape = RoundedCornerShape(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (bootstrapReady) {
-                                MaterialTheme.colorScheme.primary
+        when {
+            state is LiveRecordingState.Preparing || state is LiveRecordingState.Stopping -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.2.dp)
+                    Text(
+                        text = stringResource(
+                            if (state is LiveRecordingState.Preparing) {
+                                R.string.recording_preparing
                             } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
-                            contentColor = if (bootstrapReady) {
-                                MaterialTheme.colorScheme.onPrimary
-                            } else {
-                                MaterialTheme.colorScheme.onSecondaryContainer
+                                R.string.recording_stopping
                             },
                         ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(58.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+            recording -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SonaWaveform(
+                        audioBands = audioBands,
+                        mode = waveMode,
+                        peakCenterFraction = 0.5f,
+                        modifier = Modifier.weight(1f),
+                        height = 48.dp,
+                    )
+
+                    FilledTonalIconButton(
+                        onClick = { if (isPaused) onResume() else onPause() },
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (isPaused) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                        ),
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
+                            imageVector = if (isPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                            contentDescription = stringResource(
+                                if (isPaused) {
+                                    R.string.record_resume_description
+                                } else {
+                                    R.string.record_pause_description
+                                },
+                            ),
+                            modifier = Modifier.size(22.dp),
                         )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = stringResource(R.string.record_action_description),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                    }
+
+                    FilledIconButton(
+                        onClick = onStop,
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = recordingColor,
+                            contentColor = LocalSonaSemanticColors.current.onRecording,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Stop,
+                            contentDescription = stringResource(R.string.record_stop_description),
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
+            }
+            else -> {
+                val enabled = presentation.isStartAvailable
+                Button(
+                    onClick = onStart,
+                    enabled = enabled,
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (bootstrapReady) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        contentColor = if (bootstrapReady) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    ),
+                    modifier = Modifier.height(48.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.record_action_description),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordingCompletedToast(
+    completed: LiveRecordingState.Completed,
+    onView: () -> Unit,
+) {
+    val hasWarning = completed.warning != null
+    Surface(
+        modifier = Modifier.widthIn(max = 420.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (hasWarning) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.inverseSurface
+        },
+        contentColor = if (hasWarning) {
+            MaterialTheme.colorScheme.onErrorContainer
+        } else {
+            MaterialTheme.colorScheme.inverseOnSurface
+        },
+        shadowElevation = 4.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = if (hasWarning) Icons.Rounded.WarningAmber else Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = if (hasWarning) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.inversePrimary
+                },
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(
+                    if (hasWarning) R.string.recording_completed_warning else R.string.recording_completed,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            TextButton(
+                onClick = onView,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.file_view_result),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (hasWarning) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.inversePrimary
+                    },
+                )
             }
         }
     }
@@ -1064,45 +1143,15 @@ private fun RecordingNotices(
     configurationMissing: Boolean,
     permissionIssue: MicrophonePermissionDecision?,
     onOpenSetup: () -> Unit,
-    onViewCompleted: (String) -> Unit,
     showNotificationNotice: Boolean = false,
     onOpenNotificationSettings: () -> Unit = {},
     shouldShowNotificationRationale: Boolean = false,
 ) {
-    if (state is LiveRecordingState.Completed) {
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(
-                        if (state.warning == null) R.string.recording_completed else R.string.recording_completed_warning,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                )
-                FilledTonalButton(onClick = { onViewCompleted(state.historyId) }) {
-                    Text(stringResource(R.string.file_view_result))
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
+    if (state is LiveRecordingState.Failed) {
+        NoticePill(
+            text = stringResource(state.toRecordingPresentation().statusCategory.labelRes()),
+            isWarning = true,
+        )
     }
 
     if (configurationMissing || state is LiveRecordingState.NeedsConfiguration || permissionIssue != null) {
@@ -1152,19 +1201,16 @@ private fun RecordingNotices(
                 isWarning = true,
             )
         }
-        when (val inputStatus = state.inputStatus) {
-            AudioInputStatus.Active -> Unit
+        when (state.inputStatus) {
+            AudioInputStatus.Active,
+            is AudioInputStatus.DeviceChanged,
+            -> Unit
             AudioInputStatus.Silenced -> NoticePill(
                 text = stringResource(R.string.microphone_silenced),
                 isWarning = true,
             )
             AudioInputStatus.MonitoringUnavailable -> NoticePill(
                 text = stringResource(R.string.microphone_monitoring_unavailable),
-            )
-            is AudioInputStatus.DeviceChanged -> NoticePill(
-                text = inputStatus.deviceName?.takeIf(String::isNotBlank)?.let { name ->
-                    stringResource(R.string.microphone_device_changed, name)
-                } ?: stringResource(R.string.microphone_device_changed_unknown),
             )
         }
     }
@@ -1529,16 +1575,6 @@ private fun RecordingStatusCategory.labelRes(): Int = when (this) {
     RecordingStatusCategory.AUDIO_FAILURE -> R.string.recording_audio_failed
     RecordingStatusCategory.STREAMING_FAILURE -> R.string.recording_streaming_failed
     RecordingStatusCategory.PERSISTENCE_FAILURE -> R.string.recording_persistence_failed
-}
-
-private fun RecordingStatusCategory.isFailure(): Boolean = when (this) {
-    RecordingStatusCategory.INVALID_CONFIGURATION_FAILURE,
-    RecordingStatusCategory.STARTUP_FAILURE,
-    RecordingStatusCategory.AUDIO_FAILURE,
-    RecordingStatusCategory.STREAMING_FAILURE,
-    RecordingStatusCategory.PERSISTENCE_FAILURE,
-    -> true
-    else -> false
 }
 
 private fun Context.findActivity(): Activity? {

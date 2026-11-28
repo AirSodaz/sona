@@ -97,6 +97,12 @@ sealed interface AudioInputStatus {
     ) : AudioInputStatus
 }
 
+data class AudioEnergyBands(
+    val low: Float = 0f,
+    val mid: Float = 0f,
+    val high: Float = 0f,
+)
+
 sealed interface LiveRecordingState {
     data object Idle : LiveRecordingState
     data object NeedsConfiguration : LiveRecordingState
@@ -113,6 +119,7 @@ sealed interface LiveRecordingState {
         val inputStatus: AudioInputStatus,
         val isPaused: Boolean = false,
         val rmsLevel: Float = 0f,
+        val audioBands: AudioEnergyBands = AudioEnergyBands(),
     ) : LiveRecordingState
 
     data class Stopping(
