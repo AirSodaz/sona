@@ -119,6 +119,7 @@ class MainActivity : AppCompatActivity() {
                         val notifGranted = SonaNotificationChannels.areNotificationsEnabled(applicationContext)
                         micGranted to notifGranted
                     },
+                    onBeforeClearTempCaches = aboutSettingsViewModel::cancelDownloadAndAwait,
                     onUpdateCacheCleared = aboutSettingsViewModel::onUpdateCacheCleared,
                 ),
             )

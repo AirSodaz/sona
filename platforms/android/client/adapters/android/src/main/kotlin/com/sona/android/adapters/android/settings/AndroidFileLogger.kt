@@ -4,6 +4,7 @@ import android.content.Context
 import com.sona.android.application.settings.AppLogLevel
 import com.sona.android.application.settings.AppLogPort
 import java.io.File
+import java.io.RandomAccessFile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,6 +39,7 @@ class AndroidFileLogger internal constructor(
     override fun currentLogLevel(): AppLogLevel = currentLevel
 
     override fun applyLogLevel(level: AppLogLevel) {
+        if (currentLevel == level) return
         currentLevel = level
         onLevelChanged(level)
     }
@@ -70,20 +72,39 @@ class AndroidFileLogger internal constructor(
     }
 
     override suspend fun readRecentLogs(maxBytes: Int): String = withContext(Dispatchers.IO) {
+        if (maxBytes <= 0) return@withContext ""
         synchronized(writeLock) {
-            val builder = StringBuilder()
-            if (rotatedFile.isFile) {
-                builder.append(rotatedFile.readText(Charsets.UTF_8))
-            }
-            if (primaryFile.isFile) {
-                builder.append(primaryFile.readText(Charsets.UTF_8))
-            }
-            val full = builder.toString()
-            if (full.length <= maxBytes) {
-                full
+            val primaryTail = readTailBytes(primaryFile, maxBytes)
+            val remaining = maxBytes - primaryTail.size
+            val rotatedTail = if (remaining > 0) readTailBytes(rotatedFile, remaining) else ByteArray(0)
+            val combined = if (rotatedTail.isEmpty()) {
+                primaryTail
             } else {
-                full.takeLast(maxBytes)
+                rotatedTail + primaryTail
             }
+            if (combined.isEmpty()) return@withContext ""
+            var startOffset = 0
+            val wasTruncated = (rotatedFile.isFile && rotatedFile.length() > rotatedTail.size) ||
+                (primaryFile.isFile && primaryFile.length() > primaryTail.size)
+            if (wasTruncated) {
+                while (startOffset < combined.size && (combined[startOffset].toInt() and 0xC0) == 0x80) {
+                    startOffset += 1
+                }
+            }
+            String(combined, startOffset, combined.size - startOffset, Charsets.UTF_8)
+        }
+    }
+
+    private fun readTailBytes(file: File, maxBytes: Int): ByteArray {
+        if (!file.isFile || maxBytes <= 0) return ByteArray(0)
+        val length = file.length()
+        if (length <= 0L) return ByteArray(0)
+        val toRead = minOf(length, maxBytes.toLong()).toInt()
+        return RandomAccessFile(file, "r").use { raf ->
+            raf.seek(length - toRead)
+            val buffer = ByteArray(toRead)
+            raf.readFully(buffer)
+            buffer
         }
     }
 

@@ -14,18 +14,18 @@ class UniffiStorageUsageAdapter(
 ) : StorageUsagePort {
     override suspend fun loadSummary(): StorageUsageSummary = withContext(Dispatchers.IO) {
         val snapshot = loadStorageUsageSnapshotV1(appDataDir)
-        val updateCacheDir = File(cacheDir, "updates")
-        val updateCacheBytes = directorySizeBytes(updateCacheDir)
-        val tempCacheBytes = directorySizeBytes(File(cacheDir, "exports")) +
-            directorySizeBytes(File(cacheDir, "backup-imports")) +
+        val updateCacheBytes = directorySizeBytes(File(cacheDir, "updates"))
+        val exportsBytes = directorySizeBytes(File(cacheDir, "exports"))
+        val backupImportsBytes = directorySizeBytes(File(cacheDir, "backup-imports"))
+        val tempCacheBytes = exportsBytes +
+            backupImportsBytes +
             snapshot.categories.temporary.bytes.toLongSaturated()
         val availableDeviceBytes = runCatching { StatFs(appDataDir).availableBytes }.getOrDefault(0L)
         val audioBytes = snapshot.categories.audio.bytes.toLongSaturated()
         val databaseBytes = snapshot.categories.database.bytes.toLongSaturated()
         val modelsBytes = snapshot.categories.models.bytes.toLongSaturated()
         val totalAppBytes = snapshot.totalBytes.toLongSaturated() + updateCacheBytes +
-            directorySizeBytes(File(cacheDir, "exports")) +
-            directorySizeBytes(File(cacheDir, "backup-imports"))
+            exportsBytes + backupImportsBytes
 
         StorageUsageSummary(
             totalAppBytes = totalAppBytes,
@@ -54,6 +54,8 @@ class UniffiStorageUsageAdapter(
                         if (file.delete()) {
                             freed += size
                         }
+                    } else if (file != dir && file.isDirectory && file.list()?.isEmpty() == true) {
+                        file.delete()
                     }
                 }
             }

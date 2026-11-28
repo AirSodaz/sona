@@ -31,6 +31,7 @@ class GeneralDiagnosticsViewModelTest {
         val logger = InMemoryAppLogPort()
         val storage = InMemoryStoragePort()
         val transfers = InMemoryFileTransferPort()
+        var beforeClearCacheCount = 0
         var cacheClearedCallbackCount = 0
         val vm = GeneralDiagnosticsViewModel(
             generalSettings = repo,
@@ -54,12 +55,14 @@ class GeneralDiagnosticsViewModelTest {
             appLogs = logger,
             fileTransfers = transfers,
             permissionChecker = { true to true },
+            onBeforeClearTempCaches = { beforeClearCacheCount += 1 },
             onUpdateCacheCleared = { cacheClearedCallbackCount += 1 },
         )
 
         mainDispatcherRule.dispatcher.scheduler.runCurrent()
         assertEquals("ready", vm.state.value.diagnosticsSummary?.overallStatus)
         assertEquals(2048L, vm.state.value.logSizeBytes)
+        assertEquals(0, logger.applyCalls)
 
         vm.setDownloadMirror(DownloadMirror.GH_NET)
         vm.setLogLevel(AppLogLevel.DEBUG)
@@ -67,9 +70,11 @@ class GeneralDiagnosticsViewModelTest {
         vm.exportLogs("content://test/logs.txt")
         mainDispatcherRule.dispatcher.scheduler.runCurrent()
 
+        assertEquals(1, beforeClearCacheCount)
         assertEquals(1, cacheClearedCallbackCount)
         assertEquals(DownloadMirror.GH_NET, vm.state.value.settings.downloadMirror)
         assertEquals(AppLogLevel.DEBUG, logger.currentLogLevel())
+        assertEquals(1, logger.applyCalls)
         assertTrue(transfers.publishedTexts.single().contains("Sona Android Diagnostics"))
         assertEquals(GeneralDiagnosticsNotice.LOGS_EXPORTED, vm.state.value.notice)
     }
@@ -116,8 +121,10 @@ class GeneralDiagnosticsViewModelTest {
     private class InMemoryAppLogPort : AppLogPort {
         private var level = AppLogLevel.INFO
         private var size = 2048L
+        var applyCalls = 0
         override fun currentLogLevel(): AppLogLevel = level
         override fun applyLogLevel(level: AppLogLevel) {
+            applyCalls += 1
             this.level = level
         }
         override suspend fun logSizeBytes(): Long = size

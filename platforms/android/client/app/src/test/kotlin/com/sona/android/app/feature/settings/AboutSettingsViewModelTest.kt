@@ -273,6 +273,44 @@ class AboutSettingsViewModelTest {
         assertNull(installer.installedPath)
     }
 
+    @Test
+    fun `cancelDownloadAndAwait cancels active download and restores update available`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val updates = FakeUpdatePort(releaseWithAsset())
+        val downloader = object : AppUpdateDownloadPort {
+            override suspend fun downloadApk(
+                asset: AppApkAsset,
+                versionCode: Int,
+                mirror: DownloadMirror,
+                onProgress: (AppUpdateDownloadProgress) -> Unit,
+            ): String {
+                onProgress(AppUpdateDownloadProgress(128L, 1024L, AppUpdateDownloadStage.DOWNLOADING))
+                gate.await()
+                return "/cache/sona-update-$versionCode.apk"
+            }
+
+            override fun findCachedApk(release: AppReleaseInfo, supportedAbis: List<String>) = null
+            override suspend fun cleanupStaleUpdates(currentVersionCode: Int) = Unit
+            override suspend fun clearCachedUpdates(): Long = 0L
+        }
+        val vm = viewModel(
+            updates = updates,
+            downloader = downloader,
+            installer = FakeApkInstaller(canInstall = true),
+            networkStatus = NetworkStatusPort { false },
+        )
+
+        vm.checkForUpdates()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        vm.startDownload()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertTrue(vm.state.value.updateStatus is AboutUpdateStatus.Downloading)
+
+        vm.cancelDownloadAndAwait()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertTrue(vm.state.value.updateStatus is AboutUpdateStatus.UpdateAvailable)
+    }
+
     private fun viewModelStatusIsUpdateAvailable(vm: AboutSettingsViewModel): Boolean =
         vm.state.value.updateStatus is AboutUpdateStatus.UpdateAvailable
 

@@ -61,6 +61,7 @@ class AndroidAppUpdateAdapter internal constructor(
                     releasePageUrl = endpoint.releasePageUrl,
                 )
             } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
                 lastError = error
             }
         }
@@ -420,7 +421,8 @@ private fun parseAssets(assetsObj: JsonObject): Map<String, AppApkAsset> {
         val url = obj["url"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
         val sha256 = obj["sha256"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase().orEmpty()
         val sizeBytes = obj["sizeBytes"]?.jsonPrimitive?.longOrNull ?: 0L
-        if (url.startsWith("https://") &&
+        if (abi.isNotBlank() &&
+            url.startsWith("https://") &&
             sha256.matches(Regex("[0-9a-f]{64}")) &&
             sizeBytes > 0L
         ) {

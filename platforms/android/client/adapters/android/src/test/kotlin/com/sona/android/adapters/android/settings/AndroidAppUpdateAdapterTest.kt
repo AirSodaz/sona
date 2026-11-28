@@ -94,6 +94,37 @@ class AndroidAppUpdateAdapterTest {
     }
 
     @Test
+    fun `manifest parser skips blank abi asset keys instead of failing`() {
+        val sha = "a".repeat(64)
+        val payload = """
+            {
+              "schemaVersion": 1,
+              "channel": "stable",
+              "versionName": "1.2.4",
+              "versionCode": 42,
+              "assets": {
+                " ": {
+                  "url": "https://github.com/AirSodaz/sona/releases/download/v1.2.4/ignored.apk",
+                  "sha256": "$sha",
+                  "sizeBytes": 1024
+                },
+                "arm64-v8a": {
+                  "url": "https://github.com/AirSodaz/sona/releases/download/v1.2.4/app-arm64-v8a-debug.apk",
+                  "sha256": "$sha",
+                  "sizeBytes": 4096
+                }
+              }
+            }
+        """.trimIndent()
+        val release = parseUpdateManifest(
+            payload = payload,
+            expectedChannel = AppUpdateChannel.STABLE,
+            releasePageUrl = "https://github.com/AirSodaz/sona/releases/latest",
+        )
+        assertEquals(setOf("arm64-v8a"), release.assets.keys)
+    }
+
+    @Test
     fun `manifest check falls back to mirror when direct connection fails`() = runTest {
         val requestedUrls = mutableListOf<String>()
         val dispatcher = StandardTestDispatcher(testScheduler)

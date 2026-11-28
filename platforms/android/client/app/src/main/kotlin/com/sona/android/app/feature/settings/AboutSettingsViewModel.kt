@@ -19,6 +19,7 @@ import com.sona.android.application.settings.GeneralSettingsPort
 import com.sona.android.application.settings.NetworkStatusPort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -348,6 +349,12 @@ class AboutSettingsViewModel(
     fun cancelDownload() {
         downloadJob?.cancel()
         downloadJob = null
+    }
+
+    suspend fun cancelDownloadAndAwait() {
+        val job = downloadJob ?: return
+        downloadJob = null
+        job.cancelAndJoin()
     }
 
     fun retryDownloadWithMirror(mirror: DownloadMirror) {

@@ -109,9 +109,11 @@ jobs:
           RAW_VERSION="${VERSION#v}"
           SIGNING_KIND="${{ steps.android-artifacts.outputs.signing_kind }}"
           if [ "$SIGNING_KIND" = "release" ]; then
+            ANDROID_SECTION_HEADING="**Android**"
             ANDROID_RELEASE_SUFFIX="release"
             ANDROID_RELEASE_LABEL="Signed release"
           else
+            ANDROID_SECTION_HEADING="**Android (preview builds)**"
             ANDROID_RELEASE_SUFFIX="release-unsigned"
             ANDROID_RELEASE_LABEL="Unsigned release"
           fi
@@ -129,7 +131,7 @@ jobs:
           **Linux**
           [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)
 
-          **Android (preview builds)**
+          ${ANDROID_SECTION_HEADING}
           Debug-signed: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-debug.apk)
           ${ANDROID_RELEASE_LABEL}: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-${ANDROID_RELEASE_SUFFIX}.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-${ANDROID_RELEASE_SUFFIX}.apk)
           EOF
