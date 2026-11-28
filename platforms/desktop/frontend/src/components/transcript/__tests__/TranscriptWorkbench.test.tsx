@@ -1,15 +1,21 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
+import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { TranscriptWorkbench } from '../TranscriptWorkbench';
 
 const mockUpdateItemMeta = vi.fn();
+const mockResyncMediaServerSubtitles = vi.hoisted(() => vi.fn());
 const mockHistoryItems = vi.hoisted(() => ({ current: [] as any[] }));
+const mockTCalls = vi.hoisted(() => [] as Array<[string, Record<string, unknown> | undefined]>);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, opts?: Record<string, unknown>) => {
+      mockTCalls.push([key, opts]);
+      return key;
+    },
   }),
   initReactI18next: {
     type: '3rdParty',
@@ -64,7 +70,25 @@ vi.mock('../TranscriptVersionPanel', () => ({
 }));
 
 vi.mock('../../RenameModal', () => ({
-  RenameModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>RenameModal</div> : null),
+  RenameModal: ({
+    isOpen,
+    resetIconValue,
+    initialTitle,
+    onRename,
+  }: {
+    isOpen: boolean;
+    resetIconValue?: string;
+    initialTitle: string;
+    onRename: (title: string, icon?: string) => void;
+  }) =>
+    isOpen ? (
+      <div data-reset-icon={resetIconValue ?? ''}>
+        RenameModal
+        <button type="button" onClick={() => onRename(initialTitle, undefined)}>
+          ClearIconAndSave
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('../../PolishButton', () => ({
@@ -95,9 +119,21 @@ vi.mock('../../../services/aiRenameService', () => ({
   generateAiTitle: vi.fn().mockResolvedValue('AI Title'),
 }));
 
+vi.mock('../../../services/mediaServer/mediaServerService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../services/mediaServer/mediaServerService')>();
+  return {
+    ...actual,
+    resyncMediaServerSubtitles: mockResyncMediaServerSubtitles,
+  };
+});
+
 describe('TranscriptWorkbench', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTCalls.length = 0;
+    mockResyncMediaServerSubtitles.mockResolvedValue(undefined);
+    useEmbyHistoryStore.setState({ contexts: {} });
     mockHistoryItems.current = [];
     useTranscriptStore.setState({
       segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
@@ -315,6 +351,10 @@ describe('TranscriptWorkbench', () => {
     expect(screen.getByTestId('icon-mic')).toBeDefined();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('synchronizes fallback title and icon for batch items in projects mode', () => {
     mockHistoryItems.current = [
       {
@@ -333,5 +373,126 @@ describe('TranscriptWorkbench', () => {
 
     expect(screen.getByText('panel.batch_import')).toBeDefined();
     expect(screen.getByTestId('icon-file-text')).toBeDefined();
+  });
+
+  it('renders the persisted media server icon and uses a compact ghost icon button for resync', async () => {
+    vi.useFakeTimers();
+    useEmbyHistoryStore.getState().setContext('media-hist-1', {
+      serverId: 'srv-jf',
+      serverType: 'jellyfin',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-1',
+      itemName: 'Very Long Episode Title',
+      audioStreamIndex: 1,
+      subtitleMode: 'bilingual',
+      targetLanguage: 'zh-CN',
+      overwriteExistingExternal: true,
+    });
+    useTranscriptStore.setState({
+      sourceHistoryId: 'media-hist-1',
+      title: 'Very Long Episode Title',
+      icon: 'system:jellyfin',
+    });
+
+    const { container } = render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    expect(screen.getByTestId('media-server-header-icon')).toBeDefined();
+    expect(screen.queryByTestId('icon-file-text')).toBeNull();
+    expect(screen.queryByText('Jellyfin')).toBeNull();
+    expect(screen.queryByText('Emby')).toBeNull();
+
+    const resyncCall = mockTCalls.find(([key]) => key === 'media_server.resync_tooltip');
+    expect(resyncCall?.[1]).toMatchObject({ server: 'Jellyfin' });
+
+    const resyncButton = screen.getByRole('button', { name: 'media_server.resync_tooltip' });
+    expect(resyncButton.className).toContain('btn-ghost');
+    expect(resyncButton.className).toContain('btn-icon');
+    expect(resyncButton.className).toContain('btn-md');
+    expect(container.querySelector('.projects-detail-header-actions')?.contains(resyncButton)).toBe(
+      true
+    );
+
+    await act(async () => {
+      fireEvent.click(resyncButton);
+      await Promise.resolve();
+    });
+
+    expect(mockResyncMediaServerSubtitles).toHaveBeenCalledTimes(1);
+    const syncedButton = screen.getByRole('button', { name: 'emby.synced' });
+    expect(syncedButton.className).toContain('btn-feedback-success');
+
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(screen.getByRole('button', { name: 'media_server.resync_tooltip' })).toBeDefined();
+  });
+
+  it('keeps legacy empty-icon media server records unchanged and passes resetIconValue to RenameModal when customized', async () => {
+    useEmbyHistoryStore.getState().setContext('media-hist-2', {
+      serverId: 'srv-emby',
+      serverType: 'emby',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-2',
+      itemName: 'Movie Name',
+      audioStreamIndex: 0,
+      subtitleMode: 'bilingual',
+      targetLanguage: 'zh-CN',
+      overwriteExistingExternal: true,
+    });
+    mockHistoryItems.current = [
+      {
+        id: 'media-hist-2',
+        type: 'batch',
+        status: 'complete',
+      },
+    ];
+    useTranscriptStore.setState({
+      sourceHistoryId: 'media-hist-2',
+      title: 'Movie Name',
+      icon: null,
+    });
+
+    const { rerender } = render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    expect(screen.getByTestId('icon-file-text')).toBeDefined();
+    expect(screen.queryByTestId('media-server-header-icon')).toBeNull();
+
+    await act(async () => {
+      useTranscriptStore.setState({ icon: '🎬' });
+    });
+    rerender(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    expect(screen.getByText('🎬')).toBeDefined();
+    expect(screen.queryByTestId('media-server-header-icon')).toBeNull();
+    expect(screen.getByRole('button', { name: 'media_server.resync_tooltip' })).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'common.rename' }));
+    });
+    expect(screen.getByText('RenameModal').getAttribute('data-reset-icon')).toBe('system:emby');
+  });
+
+  it('persists icon: null when clearing a customized icon on rename', async () => {
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-clear-icon',
+      title: 'Meeting Notes',
+      icon: '🎬',
+    });
+
+    render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'common.rename' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'ClearIconAndSave' }));
+    });
+
+    expect(mockUpdateItemMeta).toHaveBeenCalledWith('hist-clear-icon', {
+      title: 'Meeting Notes',
+      icon: null,
+    });
+    expect(useTranscriptStore.getState().sessions.default.icon).toBeNull();
   });
 });

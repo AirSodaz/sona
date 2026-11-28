@@ -286,15 +286,34 @@ export class BatchItemProcessor {
       }
 
       savedHistoryId = historyItem.id;
-      if ((isStream || isEmbyItem) && item.filename && item.filename !== historyItem.title) {
-        historyItem.title = item.filename;
+      const nextTitle =
+        (isStream || isEmbyItem) && item.filename && item.filename !== historyItem.title
+          ? item.filename
+          : undefined;
+      const mediaServerIcon = mediaContext
+        ? mediaContext.serverType === 'jellyfin'
+          ? 'system:jellyfin'
+          : 'system:emby'
+        : undefined;
+      if (nextTitle || mediaServerIcon) {
+        let metaPersisted = true;
         if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
           try {
             await this.ports.useHistoryStore.getState().updateItemMeta(historyItem.id, {
-              title: item.filename,
+              ...(nextTitle ? { title: nextTitle } : {}),
+              ...(mediaServerIcon ? { icon: mediaServerIcon } : {}),
             });
           } catch (metaErr) {
-            logger.warn('[BatchQueue] Failed to update stream history title meta:', metaErr);
+            metaPersisted = false;
+            logger.warn('[BatchQueue] Failed to update stream history meta:', metaErr);
+          }
+        }
+        if (metaPersisted) {
+          if (nextTitle) {
+            historyItem.title = nextTitle;
+          }
+          if (mediaServerIcon) {
+            historyItem.icon = mediaServerIcon;
           }
         }
       }

@@ -39,5 +39,6 @@ export interface RenameTarget {
   id: string;
   title: string;
   icon?: string;
+  resetIconValue?: string;
   type?: 'recording' | 'batch';
 }

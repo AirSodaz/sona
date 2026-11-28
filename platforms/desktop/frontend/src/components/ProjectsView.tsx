@@ -19,6 +19,7 @@ import { storageOpenPath } from '../services/tauri/storage';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useEmbyHistoryStore } from '../stores/embyHistoryStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
@@ -34,6 +35,7 @@ import { isHistoryItemDraft } from '../types/history';
 import type { ProjectRecord } from '../types/project';
 import { logger } from '../utils/logger';
 import { useContextMenu } from './context-menu/useContextMenu';
+import { getMediaServerIconId, getMediaServerIconMeta, getMediaServerLabel } from './IconPicker';
 import { useHistoryItemContextMenu } from './projects/context-menu/useHistoryItemContextMenu';
 import { useProjectRailContextMenu } from './projects/context-menu/useProjectRailContextMenu';
 import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
@@ -763,7 +765,19 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
+    const embyContext = useEmbyHistoryStore.getState().getContext(id);
+    const resetIconValue = embyContext
+      ? getMediaServerIconId(embyContext.serverType)
+      : getMediaServerIconMeta(item.icon)
+        ? item.icon
+        : undefined;
+    setRenameTarget({
+      id,
+      title: item.title,
+      icon: item.icon,
+      resetIconValue,
+      type: item.type,
+    });
   };
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
@@ -781,7 +795,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     const trimmedTitle = newTitle.trim();
     await useHistoryStore
       .getState()
-      .updateItemMeta(targetId, { title: trimmedTitle, icon: newIcon });
+      .updateItemMeta(targetId, { title: trimmedTitle, icon: newIcon || null });
     await useHistoryStore.getState().refresh();
 
     updateSessionMetaByHistoryId(targetId, {
@@ -925,6 +939,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const handleResyncEmby = async (item: HistoryItemType, context: EmbyTaskContext) => {
     if (syncingEmbyIdsRef.current.has(item.id)) return;
     syncingEmbyIdsRef.current.add(item.id);
+    const serverLabel = getMediaServerLabel(context.serverType);
     try {
       const activeSession = useTranscriptSessionStore.getState();
       const segments =
@@ -936,8 +951,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           code: 'emby.resync_failed',
           messageKey: 'errors.common.operation_failed',
           cause: new Error(
-            t('emby.resync_no_segments', {
-              defaultValue: 'Cannot re-sync to Emby: Transcript has no segments.',
+            t('media_server.resync_no_segments', {
+              server: serverLabel,
+              defaultValue: `Cannot re-sync to ${serverLabel}: Transcript has no segments.`,
             })
           ),
         });
@@ -945,11 +961,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       }
       await resyncMediaServerSubtitles(segments, context);
       await useDialogStore.getState().alert(
-        t('emby.resync_success', {
-          defaultValue: 'Successfully synced subtitles to Emby.',
+        t('media_server.resync_success', {
+          server: serverLabel,
+          defaultValue: `Successfully synced subtitles to ${serverLabel}.`,
         }),
         {
-          title: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
+          title: t('media_server.resync', {
+            server: serverLabel,
+            defaultValue: `Re-sync to ${serverLabel}`,
+          }),
           variant: 'success',
         }
       );

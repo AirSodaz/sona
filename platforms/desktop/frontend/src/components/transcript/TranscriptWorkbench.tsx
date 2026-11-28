@@ -1,5 +1,6 @@
 import {
-  Tv as EmbyIcon,
+  Check,
+  CloudUpload,
   Users as SpeakerReviewIcon,
   History as VersionHistoryIcon,
 } from 'lucide-react';
@@ -29,18 +30,16 @@ import { AudioPlayer } from '../AudioPlayer';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import {
-  CloseIcon,
-  CodeIcon,
-  EditIcon,
-  FileTextIcon,
-  FolderIcon,
-  MicIcon,
-  SummaryIcon,
-} from '../Icons';
+  getMediaServerIconId,
+  getMediaServerIconMeta,
+  getMediaServerLabel,
+  renderSystemIcon,
+} from '../IconPicker';
+import { CloseIcon, EditIcon, FileTextIcon, MicIcon, SummaryIcon } from '../Icons';
 import { PolishButton } from '../PolishButton';
 import { RenameModal } from '../RenameModal';
 import { TranslateButton } from '../TranslateButton';
-import { Button, IconButton } from '../ui/Button';
+import { IconButton } from '../ui/Button';
 import { Tooltip } from '../ui/Tooltip';
 import { TranscriptEditor } from './TranscriptEditor';
 import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
@@ -65,18 +64,9 @@ interface TranscriptWorkbenchProps {
 function renderHeaderIcon(icon: string | null, defaultType: string): React.ReactNode {
   if (icon) {
     if (icon.startsWith('system:')) {
-      const iconName = icon.replace('system:', '');
-      switch (iconName) {
-        case 'mic':
-          return <MicIcon />;
-        case 'file':
-          return <FileTextIcon />;
-        case 'folder':
-          return <FolderIcon />;
-        case 'code':
-          return <CodeIcon />;
-        default:
-          break;
+      const resolved = renderSystemIcon(icon);
+      if (resolved) {
+        return resolved;
       }
     } else {
       return <span style={{ fontSize: '1.125rem', lineHeight: 1 }}>{icon}</span>;
@@ -171,7 +161,10 @@ export function TranscriptWorkbench({
         useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
-      logger.error('[TranscriptWorkbench] Failed to resync to Emby:', err);
+      logger.error(
+        `[TranscriptWorkbench] Failed to resync to ${getMediaServerLabel(embyContext.serverType)}:`,
+        err
+      );
       void useDialogStore.getState().showError({
         code: 'emby.resync_failed',
         messageKey: 'errors.common.operation_failed',
@@ -247,12 +240,29 @@ export function TranscriptWorkbench({
   const isManualHeaderActionsDisabled =
     isCurrentSessionRecording || isDocumentLocked || isBatchProcessing;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
+  const mediaServerLabel = embyContext ? getMediaServerLabel(embyContext.serverType) : null;
+  const mediaIconMeta = getMediaServerIconMeta(storeIcon);
+  const mediaServerResetIcon = embyContext
+    ? getMediaServerIconId(embyContext.serverType)
+    : mediaIconMeta
+      ? (storeIcon ?? undefined)
+      : undefined;
+  const resyncActionLabel = !mediaServerLabel
+    ? ''
+    : isSyncingEmby
+      ? t('emby.syncing', { defaultValue: 'Syncing...' })
+      : embySyncSuccess
+        ? t('emby.synced', { defaultValue: 'Synced' })
+        : t('media_server.resync_tooltip', {
+            server: mediaServerLabel,
+            defaultValue: `Re-sync subtitles to ${mediaServerLabel} server`,
+          });
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
     setTitle(newTitle.trim());
     setIcon(newIcon || null);
     if (sourceHistoryId) {
-      await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim(), icon: newIcon });
+      await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim(), icon: newIcon || null });
     }
     setIsRenameModalOpen(false);
   };
@@ -262,19 +272,43 @@ export function TranscriptWorkbench({
       {hasSegments && (
         <div className="projects-detail-header">
           <div className="projects-detail-header-primary">
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              {renderHeaderIcon(storeIcon, displayIconType)}
-            </div>
+            {mediaIconMeta ? (
+              <Tooltip
+                content={
+                  embyContext
+                    ? `${mediaIconMeta.label}: ${embyContext.itemName}`
+                    : mediaIconMeta.label
+                }
+                placement="bottom"
+              >
+                <span
+                  data-testid="media-server-header-icon"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {renderHeaderIcon(storeIcon, displayIconType)}
+                </span>
+              </Tooltip>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: 'var(--color-text-secondary)',
+                  flexShrink: 0,
+                }}
+              >
+                {renderHeaderIcon(storeIcon, displayIconType)}
+              </div>
+            )}
             <Tooltip content={displayTitle} placement="bottom" onlyWhenTruncated>
               <h4
                 style={{
                   margin: 0,
+                  minWidth: 0,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -283,41 +317,6 @@ export function TranscriptWorkbench({
                 {displayTitle}
               </h4>
             </Tooltip>
-            {embyContext && (
-              <Tooltip
-                content={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
-                placement="bottom"
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    background:
-                      embyContext.serverType === 'jellyfin'
-                        ? 'rgba(168, 85, 247, 0.12)'
-                        : 'rgba(82, 196, 26, 0.12)',
-                    color:
-                      embyContext.serverType === 'jellyfin'
-                        ? '#a855f7'
-                        : 'var(--color-success, #52c41a)',
-                    border:
-                      embyContext.serverType === 'jellyfin'
-                        ? '1px solid rgba(168, 85, 247, 0.25)'
-                        : '1px solid rgba(82, 196, 26, 0.25)',
-                    whiteSpace: 'nowrap',
-                    marginLeft: '4px',
-                  }}
-                >
-                  <EmbyIcon size={12} />
-                  <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
-                </span>
-              </Tooltip>
-            )}
             <IconButton
               tier="ghost"
               size="sm"
@@ -365,27 +364,19 @@ export function TranscriptWorkbench({
           </div>
           <div className="projects-detail-header-actions">
             {embyContext && (
-              <Button
-                tier="secondary"
-                size="sm"
+              <IconButton
+                tier="ghost"
+                size="md"
+                className="projects-detail-header-action"
                 loading={isSyncingEmby}
                 feedback={embySyncSuccess ? 'success' : 'idle'}
-                leftIcon={<EmbyIcon size={14} />}
+                icon={embySyncSuccess ? <Check size={16} /> : <CloudUpload size={16} />}
                 onClick={handleResyncEmby}
                 disabled={isManualHeaderActionsDisabled || segments.length === 0}
-                tooltip={t('emby.resync_tooltip', {
-                  defaultValue: 'Re-sync subtitles to Emby server',
-                })}
+                aria-label={resyncActionLabel}
+                tooltip={resyncActionLabel}
                 tooltipPos="bottom"
-              >
-                <span>
-                  {isSyncingEmby
-                    ? t('emby.syncing', { defaultValue: 'Syncing...' })
-                    : embySyncSuccess
-                      ? t('emby.synced', { defaultValue: 'Synced' })
-                      : t('emby.resync', { defaultValue: 'Re-sync to Emby' })}
-                </span>
-              </Button>
+              />
             )}
             <PolishButton className="projects-detail-header-action" />
             <TranslateButton className="projects-detail-header-action" />
@@ -434,6 +425,7 @@ export function TranscriptWorkbench({
         onClose={() => setIsRenameModalOpen(false)}
         initialTitle={displayTitle}
         initialIcon={storeIcon || undefined}
+        resetIconValue={mediaServerResetIcon}
         defaultType={displayIconType === 'batch' ? 'batch' : 'recording'}
         onRename={handlePerformRename}
         onAiAction={async () => {

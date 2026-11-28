@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { historyService, type TranscriptEditCommitResult } from '../services/historyService';
-import type { HistoryItem } from '../types/history';
+import type { HistoryItem, HistoryItemMetaUpdate } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
@@ -61,7 +61,7 @@ export interface HistoryState {
    * @param updates Partial fields to merge into the item.
    * @return A promise that resolves when the update is complete.
    */
-  updateItemMeta: (id: string, updates: Partial<HistoryItem>) => Promise<void>;
+  updateItemMeta: (id: string, updates: HistoryItemMetaUpdate) => Promise<void>;
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -241,7 +241,15 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     // Optimistic update
     set((state) => ({
-      items: state.items.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+      items: state.items.map((item) => {
+        if (item.id !== id) return item;
+        const { icon, ...rest } = updates;
+        return {
+          ...item,
+          ...rest,
+          ...(icon !== undefined ? { icon: icon ?? undefined } : {}),
+        };
+      }),
     }));
 
     try {

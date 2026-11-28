@@ -14,6 +14,7 @@ import {
 import {
   type HistoryAudioCleanupReport,
   type HistoryItem,
+  type HistoryItemMetaUpdate,
   normalizeHistoryItemRecord as normalizeHistoryItem,
 } from '../types/history';
 import type { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
@@ -125,7 +126,7 @@ export interface IHistoryOperations {
   saveRecording: (request: SaveRecordingInternalRequest) => Promise<unknown>;
   saveRecordingToProject?: (request: SaveRecordingInternalRequest) => Promise<unknown>;
   saveSummary: (historyId: string, summaryPayload: HistorySummaryPayload) => Promise<void>;
-  updateItemMeta: (id: string, updates: Partial<HistoryItem>) => Promise<void>;
+  updateItemMeta: (id: string, updates: HistoryItemMetaUpdate) => Promise<void>;
   updateProjectAssignments: (ids: string[], projectId: string | null) => Promise<void>;
   updateTranscript: (historyId: string, segments: TranscriptSegment[]) => Promise<unknown>;
   convertAudioSrc: (filePath: string) => string;
@@ -201,7 +202,7 @@ export interface HistoryServiceLegacyPorts {
   historySaveRecording: (request: SaveRecordingInternalRequest) => Promise<unknown>;
   historySaveRecordingToProject?: (request: SaveRecordingInternalRequest) => Promise<unknown>;
   historySaveSummary: (historyId: string, summaryPayload: HistorySummaryPayload) => Promise<void>;
-  historyUpdateItemMeta: (id: string, updates: Partial<HistoryItem>) => Promise<void>;
+  historyUpdateItemMeta: (id: string, updates: HistoryItemMetaUpdate) => Promise<void>;
   historyUpdateProjectAssignments: (ids: string[], projectId: string | null) => Promise<void>;
   historyUpdateTranscript: (historyId: string, segments: TranscriptSegment[]) => Promise<unknown>;
   convertManagedAudioFileSrc: (filePath: string) => string;
@@ -727,7 +728,7 @@ export class HistoryService {
     return this.ops.restoreTranscriptDiffRows(rows, selectedRowIds);
   }
 
-  async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {
+  async updateItemMeta(id: string, updates: HistoryItemMetaUpdate): Promise<void> {
     await this.ops.updateItemMeta(id, updates);
   }
 

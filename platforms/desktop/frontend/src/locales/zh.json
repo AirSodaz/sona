@@ -3441,6 +3441,10 @@
     "confirm_delete": "确定要删除此媒体服务器配置吗？",
     "connection_successful": "已成功连接到",
     "jellyfin_native_active": "已启用 Jellyfin 原生字幕集成（无需安装服务端插件）",
+    "resync": "重新同步到 {{server}}",
+    "resync_tooltip": "重新同步字幕到 {{server}} 服务器",
+    "resync_no_segments": "无法重新同步至 {{server}}：转录内容无文本片段。",
+    "resync_success": "已成功同步字幕至 {{server}}。",
     "error_url_user_required": "服务器地址与用户名不能为空",
     "error_url_key_required": "服务器地址与 API 密钥/令牌不能为空"
   }
