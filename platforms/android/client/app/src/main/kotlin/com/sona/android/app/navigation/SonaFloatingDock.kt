@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import com.sona.android.app.R
 import com.sona.android.app.feature.recording.formatRecordingTimer
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
+import com.sona.android.app.ui.theme.LocalSonaSemanticColors
 import com.sona.android.application.recording.LiveRecordingState
 
 /**
@@ -351,7 +352,8 @@ private fun RecordCaptureCapsule(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val recordingColor = LocalSonaRecordingColor.current
+    val semanticColors = LocalSonaSemanticColors.current
+    val recordingColor = semanticColors.recording
     val isActive = recordingState is LiveRecordingState.Preparing ||
         recordingState is LiveRecordingState.Recording ||
         recordingState is LiveRecordingState.Stopping
@@ -369,7 +371,7 @@ private fun RecordCaptureCapsule(
     )
     val contentColor by animateColorAsState(
         targetValue = when {
-            isActive && !isPaused -> Color.White
+            isActive && !isPaused -> semanticColors.onRecording
             isActive && isPaused -> MaterialTheme.colorScheme.onTertiaryContainer
             else -> MaterialTheme.colorScheme.onPrimary
         },

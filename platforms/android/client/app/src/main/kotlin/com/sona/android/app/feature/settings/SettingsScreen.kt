@@ -63,6 +63,10 @@ import com.sona.android.app.navigation.sonaSubPageExitToRight
 import com.sona.android.app.ui.component.SonaBackButton
 import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
+import com.sona.android.application.settings.ColorPalettePreset
+import com.sona.android.application.settings.ContrastLevel
+import com.sona.android.application.settings.PaletteStyle
+import com.sona.android.application.settings.ThemeMode
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AsrSelectionSlot
@@ -89,7 +93,13 @@ internal fun SettingsScreen(
     requestCloudCredentialFocus: Boolean,
     onCloudCredentialFocusConsumed: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
-    onDynamicColorChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit = {},
+    onPureBlackDarkChanged: (Boolean) -> Unit = {},
+    onSelectSystemDynamicColor: () -> Unit = {},
+    onSelectPalettePreset: (ColorPalettePreset) -> Unit = {},
+    onCustomSeedColorChanged: (Int) -> Unit = {},
+    onPaletteStyleChanged: (PaletteStyle) -> Unit = {},
+    onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
@@ -264,7 +274,13 @@ internal fun SettingsScreen(
                     requestCloudCredentialFocus = cloudCredentialFocusSessionActive,
                     onBack = navigateBack,
                     onAppLanguageChanged = onAppLanguageChanged,
-                    onDynamicColorChanged = onDynamicColorChanged,
+                    onThemeModeChanged = onThemeModeChanged,
+                    onPureBlackDarkChanged = onPureBlackDarkChanged,
+                    onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                    onSelectPalettePreset = onSelectPalettePreset,
+                    onCustomSeedColorChanged = onCustomSeedColorChanged,
+                    onPaletteStyleChanged = onPaletteStyleChanged,
+                    onContrastLevelChanged = onContrastLevelChanged,
                     onAboutShown = onAboutShown,
                     onCheckForUpdates = onCheckForUpdates,
                     onCloudProviderSelected = onCloudProviderSelected,
@@ -439,7 +455,13 @@ private fun SettingsDetailPane(
     requestCloudCredentialFocus: Boolean,
     onBack: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
-    onDynamicColorChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit = {},
+    onPureBlackDarkChanged: (Boolean) -> Unit = {},
+    onSelectSystemDynamicColor: () -> Unit = {},
+    onSelectPalettePreset: (ColorPalettePreset) -> Unit = {},
+    onCustomSeedColorChanged: (Int) -> Unit = {},
+    onPaletteStyleChanged: (PaletteStyle) -> Unit = {},
+    onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
@@ -511,7 +533,13 @@ private fun SettingsDetailPane(
                 state = appearanceState,
                 appLanguage = appLanguage,
                 onAppLanguageChanged = onAppLanguageChanged,
-                onDynamicColorChanged = onDynamicColorChanged,
+                onThemeModeChanged = onThemeModeChanged,
+                onPureBlackDarkChanged = onPureBlackDarkChanged,
+                onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                onSelectPalettePreset = onSelectPalettePreset,
+                onCustomSeedColorChanged = onCustomSeedColorChanged,
+                onPaletteStyleChanged = onPaletteStyleChanged,
+                onContrastLevelChanged = onContrastLevelChanged,
                 extraBottomPadding = extraBottomPadding,
                 modifier = Modifier.weight(1f),
             )

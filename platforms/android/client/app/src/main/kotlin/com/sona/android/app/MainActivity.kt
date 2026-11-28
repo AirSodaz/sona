@@ -1,11 +1,14 @@
 package com.sona.android.app
 
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +32,7 @@ import com.sona.android.app.feature.settings.SyncSettingsViewModel
 import com.sona.android.app.feature.settings.LlmSettingsViewModel
 import com.sona.android.app.feature.settings.DataRecoveryViewModel
 import com.sona.android.app.navigation.SonaApp
+import com.sona.android.app.ui.theme.resolveDarkTheme
 import com.sona.android.application.data.DataTransferBlocker
 import com.sona.android.application.recording.AudioImportJobState
 import com.sona.android.application.recording.LiveRecordingState
@@ -36,6 +40,8 @@ import com.sona.android.application.recovery.RecoveryResolution
 import com.sona.android.application.sync.SyncLifecycleState
 import com.sona.android.application.settings.AppBuildInfo
 import com.sona.android.application.settings.AppUpdateChannel
+
+private const val DEFAULT_DARK_SCRIM = 0x801B1B1B.toInt()
 
 class MainActivity : AppCompatActivity() {
     private val container: SonaAppContainer by lazy {
@@ -130,6 +136,25 @@ class MainActivity : AppCompatActivity() {
             val syncState by syncSettingsViewModel.state.collectAsStateWithLifecycle()
             val dataRecoveryState by dataRecoveryViewModel.state.collectAsStateWithLifecycle()
             val llmSettingsState by llmSettingsViewModel.state.collectAsStateWithLifecycle()
+            val resolvedDarkTheme = resolveDarkTheme(
+                themeMode = appearanceState.themeMode,
+                systemIsDark = isSystemInDarkTheme(),
+            )
+            LaunchedEffect(resolvedDarkTheme) {
+                val transparent = AndroidColor.TRANSPARENT
+                enableEdgeToEdge(
+                    statusBarStyle = if (resolvedDarkTheme) {
+                        SystemBarStyle.dark(transparent)
+                    } else {
+                        SystemBarStyle.light(transparent, DEFAULT_DARK_SCRIM)
+                    },
+                    navigationBarStyle = if (resolvedDarkTheme) {
+                        SystemBarStyle.dark(transparent)
+                    } else {
+                        SystemBarStyle.light(transparent, DEFAULT_DARK_SCRIM)
+                    },
+                )
+            }
             LaunchedEffect(Unit) {
                 syncSettingsViewModel.refresh()
                 dataRecoveryViewModel.refreshRecovery()
@@ -183,7 +208,13 @@ class MainActivity : AppCompatActivity() {
                 aboutState = aboutState,
                 appLanguage = currentAppLanguage(),
                 onAppLanguageChanged = ::setAppLanguage,
-                onDynamicColorChanged = appearanceSettingsViewModel::setDynamicColorEnabled,
+                onThemeModeChanged = appearanceSettingsViewModel::setThemeMode,
+                onPureBlackDarkChanged = appearanceSettingsViewModel::setPureBlackDarkEnabled,
+                onSelectSystemDynamicColor = appearanceSettingsViewModel::selectSystemDynamicColor,
+                onSelectPalettePreset = appearanceSettingsViewModel::selectPalettePreset,
+                onCustomSeedColorChanged = appearanceSettingsViewModel::setCustomSeedColor,
+                onPaletteStyleChanged = appearanceSettingsViewModel::setPaletteStyle,
+                onContrastLevelChanged = appearanceSettingsViewModel::setContrastLevel,
                 onAboutShown = aboutSettingsViewModel::checkIfNeeded,
                 onCheckForUpdates = aboutSettingsViewModel::checkForUpdates,
                 onRetryBootstrap = bootstrapViewModel::refresh,

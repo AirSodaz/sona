@@ -110,6 +110,7 @@ import com.sona.android.app.notification.SonaNotificationChannels
 import com.sona.android.app.ui.component.SonaWaveform
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.app.ui.theme.LocalSonaRecordingContainerColor
+import com.sona.android.app.ui.theme.LocalSonaSemanticColors
 import com.sona.android.application.recording.AsrMode
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AudioInputStatus
@@ -248,7 +249,7 @@ internal fun RecordMiniBar(
                     onClick = onStop,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = LocalSonaRecordingContainerColor.current,
-                        contentColor = recordingColor,
+                        contentColor = LocalSonaSemanticColors.current.onRecordingContainer,
                     ),
                     modifier = Modifier.size(36.dp),
                 ) {
@@ -675,7 +676,7 @@ internal fun RecordScreen(
                             },
                             contentColor = when {
                                 isError -> MaterialTheme.colorScheme.onErrorContainer
-                                isRecording && !isPaused -> recordingColor
+                                isRecording && !isPaused -> LocalSonaSemanticColors.current.onRecordingContainer
                                 isPaused -> MaterialTheme.colorScheme.onTertiaryContainer
                                 else -> MaterialTheme.colorScheme.onSecondaryContainer
                             },
@@ -997,7 +998,7 @@ private fun RecordControlDeck(
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = recordingColor,
-                                contentColor = Color.White,
+                                contentColor = LocalSonaSemanticColors.current.onRecording,
                             ),
                             modifier = Modifier
                                 .weight(1.25f)
