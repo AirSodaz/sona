@@ -206,6 +206,29 @@ describe('adaptModelDownloadsEntries', () => {
     entry.actions[0].run();
     expect(onRetry).toHaveBeenCalled();
   });
+
+  it('formats timestampLabel when given a real epoch timestamp', () => {
+    const now = 1_760_000_000_000;
+    const entries = adaptModelDownloadsEntries(
+      {
+        dlReal: {
+          id: 'dlReal',
+          modelId: 'sensevoice',
+          modelName: 'SenseVoice',
+          modelType: 'asr',
+          status: 'completed',
+          progress: 100,
+          timestamp: now - 30_000,
+          downloadId: 'dlReal',
+        },
+      },
+      mockT,
+      callbacks,
+      { now }
+    );
+
+    expect(entries[0].timestampLabel).toBe('Just now');
+  });
 });
 
 describe('modelDownloadStore', () => {

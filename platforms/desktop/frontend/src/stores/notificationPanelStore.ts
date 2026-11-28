@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 interface NotificationPanelState {
   isOpen: boolean;
-  /** Entry id to scroll to after opening (e.g. from a toast). */
+  /** Optional entry id to highlight and scroll to when opening the panel. */
   focusEntryId: string | null;
   toggle: () => void;
   open: (focusEntryId?: string) => void;

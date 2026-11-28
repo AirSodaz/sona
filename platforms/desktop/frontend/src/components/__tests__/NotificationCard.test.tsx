@@ -370,4 +370,71 @@ describe('NotificationCard Collapsible Feature', () => {
       'Failed to connect to huggingface.co: connection refused'
     );
   });
+
+  it('renders collapsible sub-items list and expands automatically when focused', () => {
+    const subAction = vi.fn();
+    const subClose = vi.fn();
+    const entry = createMockEntry({
+      id: 'group-batchImport-active',
+      title: 'Batch transcription · 2 files',
+      timestampLabel: 'Just now',
+      itemsLabel: 'Show files (2)',
+      items: [
+        {
+          id: 'batch-1',
+          title: 'first.wav',
+          subtitle: 'Running · Transcribing',
+          tone: 'accent',
+          progress: 40,
+          actions: [{ id: 'cancel', label: 'Cancel', variant: 'soft', run: subAction }],
+        },
+        {
+          id: 'batch-2',
+          title: 'second.wav',
+          subtitle: 'Pending · Queued',
+          tone: 'accent',
+          progress: 0,
+          closeAction: { id: 'close', label: 'Close second.wav', variant: 'soft', run: subClose },
+        },
+      ],
+    });
+
+    const { container, rerender } = render(<NotificationCard entry={entry} isFocused={false} />);
+
+    expect(screen.getByText('Just now')).toBeDefined();
+    expect(screen.queryByText('first.wav')).toBeNull();
+
+    // Expand manually
+    fireEvent.click(screen.getByRole('button', { name: 'Show files (2)' }));
+    expect(screen.getByText('first.wav')).toBeDefined();
+    expect(screen.getByText('40%')).toBeDefined();
+    expect(screen.getByText('second.wav')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(subAction).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close second.wav' }));
+    expect(subClose).toHaveBeenCalledTimes(1);
+
+    // Rerender collapsed card with isFocused=true
+    rerender(<NotificationCard entry={{ ...entry, id: 'other' }} isFocused={true} />);
+    expect(container.querySelector('.notification-center-item.is-focused')).not.toBeNull();
+    expect(screen.getByText('first.wav')).toBeDefined();
+
+    // User manually collapses sub-items; subsequent progress updates for the same focused id should keep it collapsed
+    fireEvent.click(screen.getByRole('button', { name: /Hide files/ }));
+    expect(screen.queryByText('first.wav')).toBeNull();
+
+    rerender(
+      <NotificationCard
+        entry={{
+          ...entry,
+          id: 'other',
+          items: entry.items?.map((item) => ({ ...item, progress: 55 })),
+        }}
+        isFocused={true}
+      />
+    );
+    expect(screen.queryByText('first.wav')).toBeNull();
+  });
 });

@@ -1,11 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TaskLedgerRecord } from '../../../types/taskLedger';
 import { adaptModelDownloadEntry, adaptOnboardingEntry } from '../onboardingAdapter';
-import { adaptTaskLedgerEntries } from '../taskLedgerAdapter';
+import { adaptSpeakerDegradedEntry } from '../speakerDiarizationAdapter';
+import { adaptTaskLedgerEntries, formatNotificationTimestamp } from '../taskLedgerAdapter';
 import { adaptUpdateEntry } from '../updateAdapter';
 
-const mockT = ((key: string, options?: { defaultValue?: string; stage?: string }) => {
-  if (options?.defaultValue) return options.defaultValue;
+function interpolate(template: string, options?: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
+}
+
+const mockT = ((
+  key: string,
+  options?: { defaultValue?: string; stage?: string } & Record<string, unknown>
+) => {
+  if (options?.defaultValue) return interpolate(options.defaultValue, options);
   if (options?.stage) return options.stage;
   return key;
 }) as any;
@@ -178,6 +186,238 @@ describe('Notification Adapters Evaluation', () => {
       const [entry] = adaptTaskLedgerEntries([task], true, mockT, mockActionRegistry);
       expect(entry).toBeDefined();
       expect(entry.detail).toBe('Source file is missing.');
+    });
+
+    it('suppresses leaked terminal or stale stages on completed batch tasks', () => {
+      const task: TaskLedgerRecord = {
+        id: 'batch-done-1',
+        kind: 'batchImport',
+        status: 'succeeded',
+        title: 'meeting.wav',
+        progress: 100,
+        createdAt: 1000,
+        updatedAt: 2000,
+        retryable: false,
+        cancelable: false,
+        recoverable: false,
+        stage: 'completed',
+      };
+
+      const [entry] = adaptTaskLedgerEntries([task], true, mockT, mockActionRegistry);
+      expect(entry.body).toBe('Batch import · Succeeded');
+      expect(entry.detail).toBeNull();
+    });
+
+    it('localizes generic LLM task titles and includes target language for translate', () => {
+      const tasks: TaskLedgerRecord[] = [
+        {
+          id: 'llm-polish-1',
+          kind: 'llmPolish',
+          status: 'running',
+          title: 'LLM Polish',
+          progress: 40,
+          createdAt: 1000,
+          updatedAt: 2000,
+          retryable: true,
+          cancelable: true,
+          recoverable: false,
+        },
+        {
+          id: 'llm-translate-1',
+          kind: 'llmTranslate',
+          status: 'succeeded',
+          title: 'Translate',
+          targetLanguage: 'ja',
+          progress: 100,
+          createdAt: 1000,
+          updatedAt: 3000,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        },
+      ];
+
+      const entries = adaptTaskLedgerEntries(tasks, true, mockT, mockActionRegistry);
+      const polishEntry = entries.find((e) => e.id === 'llm-polish-1');
+      const translateEntry = entries.find((e) => e.id === 'llm-translate-1');
+
+      expect(polishEntry?.title).toBe('LLM polish');
+      expect(polishEntry?.body).toBe('Running');
+      expect(translateEntry?.title).toBe('Translation (ja)');
+      expect(translateEntry?.body).toBe('Succeeded');
+    });
+
+    it('aggregates 2 or more batchImport tasks per priority bucket and keeps 1 ungrouped', () => {
+      const tasks: TaskLedgerRecord[] = [
+        {
+          id: 'batch-1',
+          kind: 'batchImport',
+          status: 'running',
+          title: 'a.wav',
+          progress: 60,
+          createdAt: 1000,
+          updatedAt: 3000,
+          retryable: true,
+          cancelable: true,
+          recoverable: false,
+        },
+        {
+          id: 'batch-2',
+          kind: 'batchImport',
+          status: 'pending',
+          title: 'b.wav',
+          progress: 0,
+          createdAt: 1000,
+          updatedAt: 2000,
+          retryable: true,
+          cancelable: true,
+          recoverable: false,
+        },
+        {
+          id: 'batch-3',
+          kind: 'batchImport',
+          status: 'succeeded',
+          title: 'c.wav',
+          progress: 100,
+          createdAt: 1000,
+          updatedAt: 1500,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        },
+      ];
+
+      const entries = adaptTaskLedgerEntries(tasks, true, mockT, mockActionRegistry);
+      expect(entries).toHaveLength(2);
+
+      const activeGroup = entries.find((e) => e.id === 'group-batchImport-active');
+      expect(activeGroup).toBeDefined();
+      expect(activeGroup?.title).toBe('Batch transcription · 2 files');
+      expect(activeGroup?.progress).toBe(30);
+      expect(activeGroup?.items).toHaveLength(2);
+
+      const singleDone = entries.find((e) => e.id === 'batch-3');
+      expect(singleDone).toBeDefined();
+      expect(singleDone?.title).toBe('c.wav');
+    });
+
+    it('aggregates automation tasks per ruleId with resolved rule name', () => {
+      const tasks: TaskLedgerRecord[] = [
+        {
+          id: 'batch-auto-1',
+          kind: 'automation',
+          status: 'failed',
+          title: 'one.wav',
+          automationRuleId: 'rule-podcast',
+          errorMessage: 'ASR error',
+          progress: 0,
+          createdAt: 1000,
+          updatedAt: 2000,
+          retryable: true,
+          cancelable: false,
+          recoverable: false,
+        },
+        {
+          id: 'batch-auto-2',
+          kind: 'automation',
+          status: 'failed',
+          title: 'two.wav',
+          automationRuleId: 'rule-podcast',
+          errorMessage: 'Timeout',
+          progress: 0,
+          createdAt: 1000,
+          updatedAt: 3000,
+          retryable: true,
+          cancelable: false,
+          recoverable: false,
+        },
+      ];
+
+      const entries = adaptTaskLedgerEntries(tasks, true, mockT, mockActionRegistry, {
+        ruleNameById: { 'rule-podcast': 'Podcast Watch' },
+      });
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].id).toBe('group-automation-rule-podcast-action');
+      expect(entries[0].title).toBe('Podcast Watch · 2 files failed');
+      expect(entries[0].items).toHaveLength(2);
+    });
+
+    it('keeps sub-item close in closeAction and omits redundant openTarget actions in aggregated recovery groups', () => {
+      const recoveryRegistry = {
+        ...mockActionRegistry,
+        getLedgerTaskActions: vi.fn((task: TaskLedgerRecord) => ({
+          row: [
+            { id: 'resume', label: 'Resume', variant: 'primary', run: vi.fn() },
+            { id: 'openTarget', label: 'Open Recovery Center', variant: 'secondary', run: vi.fn() },
+          ],
+          close: { id: 'close', label: 'Close', variant: 'soft', run: vi.fn() },
+          taskId: task.id,
+        })),
+      } as any;
+
+      const tasks: TaskLedgerRecord[] = [
+        {
+          id: 'recovery-1',
+          kind: 'recovery',
+          status: 'recoverable',
+          title: 'a.wav',
+          progress: 20,
+          createdAt: 1000,
+          updatedAt: 2000,
+          retryable: true,
+          cancelable: false,
+          recoverable: true,
+        },
+        {
+          id: 'recovery-2',
+          kind: 'recovery',
+          status: 'recoverable',
+          title: 'b.wav',
+          progress: 30,
+          createdAt: 1000,
+          updatedAt: 3000,
+          retryable: true,
+          cancelable: false,
+          recoverable: true,
+        },
+      ];
+
+      const entries = adaptTaskLedgerEntries(tasks, true, mockT, recoveryRegistry);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].items?.[0].actions?.map((a) => a.id)).toEqual(['resume']);
+      expect(entries[0].items?.[0].closeAction?.id).toBe('close');
+    });
+  });
+
+  describe('formatNotificationTimestamp', () => {
+    it('formats recent real timestamps and skips synthetic small test timestamps', () => {
+      const now = 1_760_000_000_000;
+      expect(formatNotificationTimestamp(1000, now, mockT)).toBeNull();
+      expect(formatNotificationTimestamp(now - 15_000, now, mockT)).toBe('Just now');
+      expect(formatNotificationTimestamp(now - 5 * 60_000, now, mockT)).toBe('5m ago');
+      expect(formatNotificationTimestamp(now - 2 * 3_600_000, now, mockT)).toBe('2h ago');
+    });
+  });
+
+  describe('adaptSpeakerDegradedEntry & pinnedRank', () => {
+    it('shows count when degradedCount > 1 and assigns deterministic pinnedRank', () => {
+      const single = adaptSpeakerDegradedEntry(true, mockT, vi.fn(), vi.fn(), 1);
+      const multiple = adaptSpeakerDegradedEntry(true, mockT, vi.fn(), vi.fn(), 4);
+      const onboarding = adaptOnboardingEntry(false, true, mockT, mockActionRegistry);
+      const update = adaptUpdateEntry(
+        'available',
+        { version: '1.2.0', currentVersion: '1.1.0', body: 'Notes' } as any,
+        0,
+        true,
+        mockT,
+        mockActionRegistry
+      );
+
+      expect(multiple?.body).toContain('4 tasks');
+      expect(single?.pinnedRank).toBe(1);
+      expect(update?.pinnedRank).toBe(3);
+      expect(onboarding?.pinnedRank).toBe(4);
     });
   });
 

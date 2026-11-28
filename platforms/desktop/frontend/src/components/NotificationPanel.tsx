@@ -10,6 +10,7 @@ interface NotificationPanelProps {
   hasEntries: boolean;
   succeededCount: number;
   totalClearableCount: number;
+  focusEntryId?: string | null;
   onClear: (scope: ClearScope) => void;
 }
 
@@ -19,6 +20,7 @@ export function NotificationPanel({
   hasEntries,
   succeededCount,
   totalClearableCount,
+  focusEntryId,
   onClear,
 }: NotificationPanelProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -53,16 +55,19 @@ export function NotificationPanel({
             priority="action"
             title={t('task_center.needs_action', { defaultValue: 'Needs action' })}
             entries={grouped.action}
+            focusEntryId={focusEntryId}
           />
           <NotificationSection
             priority="active"
             title={t('task_center.active', { defaultValue: 'Active' })}
             entries={grouped.active}
+            focusEntryId={focusEntryId}
           />
           <NotificationSection
             priority="info"
             title={t('task_center.recent', { defaultValue: 'Recent' })}
             entries={grouped.info}
+            focusEntryId={focusEntryId}
           />
         </>
       )}

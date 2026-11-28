@@ -26,6 +26,17 @@ export interface NotificationAction {
   run: () => void | Promise<void>;
 }
 
+export interface NotificationSubItem {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  tone: NotificationTone;
+  progress?: number;
+  detail?: string | null;
+  actions?: NotificationAction[];
+  closeAction?: NotificationAction;
+}
+
 export interface NotificationEntry {
   id: string;
   source: NotificationSource;
@@ -37,6 +48,10 @@ export interface NotificationEntry {
   bodyClassName?: string;
   /** Millisecond timestamp for sort ordering. */
   timestamp: number;
+  /** Explicit pinned rank (higher ranks appear above regular timestamped entries). */
+  pinnedRank?: number;
+  /** Formatted relative or clock timestamp label displayed subtly in the card. */
+  timestampLabel?: string | null;
   /** 0–100 progress value for tasks/downloads with a progress bar. */
   progress?: number;
   /** Primary row actions (retry, install, resume, etc.). */
@@ -45,6 +60,10 @@ export interface NotificationEntry {
   closeAction?: NotificationAction;
   /** Extra detail text rendered below the main content (stage label, error). */
   detail?: string | null;
+  /** Collapsible sub-items for aggregated notifications (e.g. batch transcription). */
+  items?: NotificationSubItem[];
+  /** Custom label for the sub-items expand toggle. */
+  itemsLabel?: string;
   /** Additional support ReactNode (progress bar, status badge). */
   support?: React.ReactNode;
   /** Optional CSS class on the card `<li>`. */
