@@ -15,11 +15,20 @@ const managedGradleRunner = path.join(repoRoot, 'scripts', 'run-managed-gradle.j
 const defaultAndroidAbis = ['arm64-v8a', 'x86_64'];
 const supportedAndroidAbis = new Set(defaultAndroidAbis);
 const buildRelease = process.env.SONA_ANDROID_BUILD_RELEASE === 'true';
+const hasReleaseSigning = [
+  'SONA_ANDROID_KEYSTORE_PATH',
+  'SONA_ANDROID_KEYSTORE_PASSWORD',
+  'SONA_ANDROID_KEY_ALIAS',
+  'SONA_ANDROID_KEY_PASSWORD',
+].every((name) => Boolean(process.env[name]?.trim()));
 const apkVariants = [
   { outputDir: 'debug', fileSuffix: 'debug' },
 ];
 if (buildRelease) {
-  apkVariants.push({ outputDir: 'release', fileSuffix: 'release-unsigned' });
+  apkVariants.push({
+    outputDir: 'release',
+    fileSuffix: hasReleaseSigning ? 'release' : 'release-unsigned',
+  });
 }
 
 function run(command, args, options = {}) {

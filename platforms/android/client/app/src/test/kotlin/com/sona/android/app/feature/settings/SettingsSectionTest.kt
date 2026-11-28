@@ -11,6 +11,7 @@ class SettingsSectionTest {
     fun `stable routes resolve to their settings sections`() {
         assertEquals(SettingsSection.APPEARANCE, SettingsSection.fromRoute("appearance"))
         assertEquals(SettingsSection.RECOGNITION, SettingsSection.fromRoute("recognition"))
+        assertEquals(SettingsSection.GENERAL_DIAGNOSTICS, SettingsSection.fromRoute("general-diagnostics"))
         assertEquals(SettingsSection.ABOUT, SettingsSection.fromRoute("about"))
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.sona.android.app.R
 
@@ -46,6 +47,12 @@ internal enum class SettingsSection(
         labelRes = R.string.settings_data_heading,
         summaryRes = R.string.settings_data_summary,
         icon = Icons.Rounded.Restore,
+    ),
+    GENERAL_DIAGNOSTICS(
+        route = "general-diagnostics",
+        labelRes = R.string.settings_general_heading,
+        summaryRes = R.string.settings_general_summary,
+        icon = Icons.Rounded.Tune,
     ),
     ABOUT(
         route = "about",

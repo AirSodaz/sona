@@ -42,6 +42,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -104,6 +106,7 @@ fun SonaFloatingDock(
     modifier: Modifier = Modifier,
     recordingState: LiveRecordingState = LiveRecordingState.Idle,
     currentSectionArg: String? = null,
+    hasSettingsBadge: Boolean = false,
     destinations: List<SonaDestination> = SonaDestination.entries,
     visible: Boolean = SonaFloatingDockDefaults.shouldShow(currentRoute, currentSectionArg),
 ) {
@@ -179,6 +182,7 @@ fun SonaFloatingDock(
                             SonaFloatingDockItem(
                                 destination = destination,
                                 isSelected = isSelected,
+                                showBadge = hasSettingsBadge && destination == SonaDestination.SETTINGS,
                                 onClick = { onDestinationSelected(destination) },
                                 modifier = Modifier
                                     .weight(1f)
@@ -253,6 +257,7 @@ private fun SonaFloatingDockItem(
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    showBadge: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val label = stringResource(destination.labelRes)
@@ -311,12 +316,23 @@ private fun SonaFloatingDockItem(
                 }
                 .alpha(if (isSelected) 1f else 0.86f),
         ) {
-            Icon(
-                imageVector = destination.icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(20.dp),
-            )
+            BadgedBox(
+                badge = {
+                    if (showBadge) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(8.dp),
+                        )
+                    }
+                },
+            ) {
+                Icon(
+                    imageVector = destination.icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,

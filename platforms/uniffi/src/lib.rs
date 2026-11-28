@@ -1256,6 +1256,24 @@ pub async fn download_local_asr_model(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn download_local_asr_model_with_mirror(
+    model_id: String,
+    models_dir: String,
+    num_threads: u32,
+    mirror: Option<String>,
+    observer: std::sync::Arc<dyn FfiModelDownloadObserver>,
+) -> SonaCoreBindingResult<FfiInstalledLocalAsrModel> {
+    model_bridge::download_local_asr_model_with_mirror(
+        model_id,
+        models_dir,
+        num_threads,
+        mirror,
+        observer,
+    )
+    .await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn validate_local_asr_model(
     model_id: String,
     models_dir: String,

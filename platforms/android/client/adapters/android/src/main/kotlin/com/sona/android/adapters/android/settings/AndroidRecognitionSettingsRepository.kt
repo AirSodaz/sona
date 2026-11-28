@@ -21,6 +21,8 @@ import com.sona.android.application.recording.LocalAsrModelValidation
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.RecognitionSettings
 import com.sona.android.application.recording.RecognitionSettingsPort
+import com.sona.android.application.settings.DownloadMirror
+import com.sona.android.application.settings.GeneralSettingsPort
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,7 @@ class AndroidRecognitionSettingsRepository internal constructor(
     private val dataStore: DataStore<Preferences>,
     private val storage: LocalAsrModelStoragePort,
     private val deviceCapabilities: LocalAsrDeviceCapabilitiesPort,
+    private val generalSettings: GeneralSettingsPort? = null,
 ) : RecognitionSettingsPort {
     private val modelOperationMutex = Mutex()
 
@@ -70,7 +73,8 @@ class AndroidRecognitionSettingsRepository internal constructor(
         ) {
             "Not enough storage for this model."
         }
-        val installed = storage.downloadModel(model.id, capabilities.recommendedThreads, progress)
+        val mirror = generalSettings?.load()?.downloadMirror ?: DownloadMirror.AUTO
+        val installed = storage.downloadModel(model.id, capabilities.recommendedThreads, mirror, progress)
         bumpRevision()
         installed
     }
@@ -133,6 +137,7 @@ class AndroidRecognitionSettingsRepository internal constructor(
             context: Context,
             storage: LocalAsrModelStoragePort,
             deviceCapabilities: LocalAsrDeviceCapabilitiesPort,
+            generalSettings: GeneralSettingsPort? = null,
         ): AndroidRecognitionSettingsRepository {
             val appContext = context.applicationContext
             return AndroidRecognitionSettingsRepository(
@@ -143,6 +148,7 @@ class AndroidRecognitionSettingsRepository internal constructor(
                 ),
                 storage = storage,
                 deviceCapabilities = deviceCapabilities,
+                generalSettings = generalSettings,
             )
         }
     }

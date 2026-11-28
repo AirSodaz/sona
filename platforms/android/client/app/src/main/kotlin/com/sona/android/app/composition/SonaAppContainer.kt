@@ -16,8 +16,12 @@ import com.sona.android.adapters.android.sync.AndroidSyncScheduler
 import com.sona.android.adapters.android.sync.SyncWorkerFactory
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
+import com.sona.android.adapters.android.settings.AndroidApkInstaller
 import com.sona.android.adapters.android.settings.AndroidAppUpdateAdapter
+import com.sona.android.adapters.android.settings.AndroidFileLogger
+import com.sona.android.adapters.android.settings.AndroidGeneralSettingsRepository
 import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
+import com.sona.android.adapters.android.settings.AndroidNetworkStatus
 import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
 import com.sona.android.adapters.android.llm.AndroidLlmConfigurationRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
@@ -28,6 +32,7 @@ import com.sona.android.adapters.uniffi.data.UniffiBackupAdapter
 import com.sona.android.adapters.uniffi.data.UniffiTranscriptExportAdapter
 import com.sona.android.adapters.uniffi.library.UniffiProjectWorkspaceAdapter
 import com.sona.android.adapters.uniffi.library.UniffiTranscriptEditorAdapter
+import com.sona.android.adapters.uniffi.logging.UniffiMobileLoggerAdapter
 import com.sona.android.adapters.uniffi.recovery.UniffiRecoveryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
@@ -38,8 +43,11 @@ import com.sona.android.adapters.uniffi.llm.UniffiLlmAdapter
 import com.sona.android.adapters.uniffi.llm.loadLlmProviders
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
+import com.sona.android.adapters.uniffi.settings.UniffiDiagnosticsAdapter
+import com.sona.android.adapters.uniffi.settings.UniffiStorageUsageAdapter
 import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
 import com.sona.android.adapters.uniffi.sync.UniffiSyncAdapter
+import com.sona.android.app.BuildConfig
 import com.sona.android.app.feature.recording.AndroidRecordingServiceCommandLauncher
 import com.sona.android.app.feature.recording.RecordingForegroundGateway
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
@@ -64,8 +72,16 @@ import com.sona.android.application.recording.RunAudioImport
 import com.sona.android.application.recording.ScheduleAudioImport
 import com.sona.android.application.recording.ScheduleAudioRetranscription
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
+import com.sona.android.application.settings.ApkInstallerPort
+import com.sona.android.application.settings.AppLogLevel
+import com.sona.android.application.settings.AppLogPort
+import com.sona.android.application.settings.AppUpdateDownloadPort
 import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.settings.CheckForAppUpdate
+import com.sona.android.application.settings.DiagnosticsPort
+import com.sona.android.application.settings.GeneralSettingsPort
+import com.sona.android.application.settings.NetworkStatusPort
+import com.sona.android.application.settings.StorageUsagePort
 import com.sona.android.application.sync.SyncSecretStorePort
 import com.sona.android.application.llm.LlmConfigurationPort
 import com.sona.android.application.llm.LlmTaskPort
@@ -81,7 +97,17 @@ class SonaAppContainer(context: Context) {
     private val appDataDir = appContext.filesDir.absolutePath
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
-    private val appUpdates = AndroidAppUpdateAdapter()
+    private val generalSettingsRepository = AndroidGeneralSettingsRepository.create(appContext, BuildConfig.DEBUG)
+    private val fileLogger = AndroidFileLogger(
+        context = appContext,
+        initialLevel = if (BuildConfig.DEBUG) AppLogLevel.DEBUG else AppLogLevel.INFO,
+        onLevelChanged = UniffiMobileLoggerAdapter::applyLevel,
+    ).also { logger ->
+        UniffiMobileLoggerAdapter.setSink(logger::append)
+    }
+    private val appUpdates = AndroidAppUpdateAdapter(appContext)
+    private val apkInstallerAdapter = AndroidApkInstaller(appContext)
+    private val networkStatusAdapter = AndroidNetworkStatus(appContext)
     private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
     private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
     private val localAsrModelStorage = UniffiLocalAsrModelStorageAdapter(
@@ -93,6 +119,7 @@ class SonaAppContainer(context: Context) {
         appContext,
         localAsrModelStorage,
         localAsrDeviceCapabilities,
+        generalSettingsRepository,
     )
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
@@ -144,7 +171,21 @@ class SonaAppContainer(context: Context) {
 
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
+    val generalSettings: GeneralSettingsPort = generalSettingsRepository
+    val appLogs: AppLogPort = fileLogger
     val checkForAppUpdate = CheckForAppUpdate(appUpdates)
+    val appUpdateDownloader: AppUpdateDownloadPort = appUpdates
+    val apkInstaller: ApkInstallerPort = apkInstallerAdapter
+    val networkStatus: NetworkStatusPort = networkStatusAdapter
+    val storageUsage: StorageUsagePort = UniffiStorageUsageAdapter(appDataDir, appContext.cacheDir)
+    val diagnostics: DiagnosticsPort = UniffiDiagnosticsAdapter(
+        appDataDir = appDataDir,
+        logDirPath = fileLogger.logDirectoryPath,
+        recognitionSettings = recognitionSettingsRepository,
+        batchCredentials = batchCredentialRepository,
+        deviceCapabilities = localAsrDeviceCapabilities,
+        appLogs = fileLogger,
+    )
     val recognitionSettings = recognitionSettingsRepository
     val recognitionModelCatalog = localAsrModelCatalog
     val recognitionDeviceCapabilities = localAsrDeviceCapabilities

@@ -18,8 +18,9 @@ use sona_core::models::preset_models::{
 };
 use sona_core::runtime::gpu::resolve_gpu_acceleration as core_resolve_gpu_acceleration;
 use sona_model_downloads::{
-    DownloadError, ModelDownloadStage, download_model_with_cancel, installed_model_is_complete,
-    installed_model_is_valid, remove_model_install_path,
+    DownloadError, DownloadMirror, ModelDownloadStage, download_model_with_cancel_and_mirror,
+    installed_model_is_complete, installed_model_is_valid, parse_download_mirror,
+    remove_model_install_path,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -135,14 +136,28 @@ pub(crate) async fn download_local_asr_model(
     num_threads: u32,
     observer: Arc<dyn FfiModelDownloadObserver>,
 ) -> SonaCoreBindingResult<FfiInstalledLocalAsrModel> {
+    download_local_asr_model_with_mirror(model_id, models_dir, num_threads, None, observer).await
+}
+
+pub(crate) async fn download_local_asr_model_with_mirror(
+    model_id: String,
+    models_dir: String,
+    num_threads: u32,
+    mirror: Option<String>,
+    observer: Arc<dyn FfiModelDownloadObserver>,
+) -> SonaCoreBindingResult<FfiInstalledLocalAsrModel> {
     validate_model_arguments(&models_dir, num_threads)?;
+    let parsed_mirror = mirror
+        .as_deref()
+        .map(parse_download_mirror)
+        .unwrap_or(DownloadMirror::Auto);
     let resolved = resolve_download(&model_id, Path::new(&models_dir))?;
     require_recognition_model(&resolved)?;
 
-    ensure_downloaded(&model_id, &resolved, observer.clone()).await?;
+    ensure_downloaded(&model_id, &resolved, parsed_mirror, observer.clone()).await?;
     for companion_id in companion_model_ids(&resolved) {
         let companion = resolve_download(&companion_id, Path::new(&models_dir))?;
-        ensure_downloaded(&model_id, &companion, observer.clone()).await?;
+        ensure_downloaded(&model_id, &companion, parsed_mirror, observer.clone()).await?;
     }
 
     if !model_bundle_is_complete(&resolved) {
@@ -307,6 +322,7 @@ async fn model_install_is_valid(
 async fn ensure_downloaded(
     requested_model_id: &str,
     resolved: &sona_core::models::downloads::ResolvedModelDownload,
+    mirror: DownloadMirror,
     observer: Arc<dyn FfiModelDownloadObserver>,
 ) -> SonaCoreBindingResult<()> {
     if model_install_is_valid(resolved)
@@ -318,9 +334,10 @@ async fn ensure_downloaded(
 
     let requested_model_id = requested_model_id.to_string();
     let component_model_id = resolved.model.id.clone();
-    download_model_with_cancel(
+    download_model_with_cancel_and_mirror(
         resolved,
         Arc::new(tokio::sync::Notify::new()),
+        mirror,
         move |progress| {
             notify_progress(
                 observer.as_ref(),

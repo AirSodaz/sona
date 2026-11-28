@@ -57,11 +57,31 @@ require(sonaAndroidAbis.isNotEmpty()) {
     "SONA_ANDROID_ABIS must select at least one Android ABI"
 }
 
+val sonaAndroidKeystorePath = environmentValue("SONA_ANDROID_KEYSTORE_PATH")
+val sonaAndroidKeystorePassword = environmentValue("SONA_ANDROID_KEYSTORE_PASSWORD")
+val sonaAndroidKeyAlias = environmentValue("SONA_ANDROID_KEY_ALIAS")
+val sonaAndroidKeyPassword = environmentValue("SONA_ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = sonaAndroidKeystorePath.isNotEmpty() &&
+    sonaAndroidKeystorePassword.isNotEmpty() &&
+    sonaAndroidKeyAlias.isNotEmpty() &&
+    sonaAndroidKeyPassword.isNotEmpty()
+
 android {
     namespace = "com.sona.android.app"
     compileSdk {
         version = release(37) {
             minorApiLevel = 2
+        }
+    }
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(sonaAndroidKeystorePath)
+                storePassword = sonaAndroidKeystorePassword
+                keyAlias = sonaAndroidKeyAlias
+                keyPassword = sonaAndroidKeyPassword
+            }
         }
     }
 
@@ -74,6 +94,14 @@ android {
         manifestPlaceholders["sonaAppName"] = sonaAndroidAppName
         buildConfigField("String", "APP_NAME", "\"$sonaAndroidAppName\"")
         buildConfigField("String", "UPDATE_CHANNEL", "\"$sonaAndroidChannel\"")
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     buildFeatures {

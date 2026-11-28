@@ -46,6 +46,7 @@ jobs:
       channel: ${{ startsWith(github.ref, 'refs/tags/v') && 'stable' || 'ci' }}
       version_name: ${{ needs.prepare-android-version.outputs.version_name }}
       version_code: ${{ needs.prepare-android-version.outputs.version_code }}
+    secrets: inherit
 
   build-tauri:
     permissions:
@@ -77,18 +78,30 @@ jobs:
           merge-multiple: true
 
       - name: Verify Android release artifacts
+        id: android-artifacts
         run: |
-          for apk in \
-            app-arm64-v8a-debug.apk \
-            app-x86_64-debug.apk \
-            app-arm64-v8a-release-unsigned.apk \
-            app-x86_64-release-unsigned.apk; do
+          SIGNING_KIND="debug"
+          for apk in app-arm64-v8a-debug.apk app-x86_64-debug.apk; do
             count=$(find all-artifacts -type f -name "$apk" | wc -l)
             if [ "$count" -ne 1 ]; then
               echo "::error::Expected exactly one $apk, found $count"
               exit 1
             fi
           done
+          signed_arm=$(find all-artifacts -type f -name "app-arm64-v8a-release.apk" | wc -l)
+          signed_x64=$(find all-artifacts -type f -name "app-x86_64-release.apk" | wc -l)
+          if [ "$signed_arm" -eq 1 ] && [ "$signed_x64" -eq 1 ]; then
+            SIGNING_KIND="release"
+          else
+            for apk in app-arm64-v8a-release-unsigned.apk app-x86_64-release-unsigned.apk; do
+              count=$(find all-artifacts -type f -name "$apk" | wc -l)
+              if [ "$count" -ne 1 ]; then
+                echo "::error::Expected exactly one $apk, found $count"
+                exit 1
+              fi
+            done
+          fi
+          echo "signing_kind=$SIGNING_KIND" >> "$GITHUB_OUTPUT"
 
       - name: Extract Release Notes
         run: |
@@ -252,6 +265,11 @@ jobs:
             --channel stable \
             --version-name "${{ needs.prepare-android-version.outputs.version_name }}" \
             --version-code "${{ needs.prepare-android-version.outputs.version_code }}" \
+            --artifacts-dir all-artifacts \
+            --download-base "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}" \
+            --signing "${{ steps.android-artifacts.outputs.signing_kind }}" \
+            --pub-date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --notes "Sona ${{ github.ref_name }}" \
             --output android-update.json
 
       - name: Collect release artifact paths
