@@ -12,6 +12,10 @@ import { Button, IconButton } from './ui/Button';
 export const MEDIA_SERVER_ICON_EMBY = 'system:emby';
 export const MEDIA_SERVER_ICON_JELLYFIN = 'system:jellyfin';
 
+export function getMediaServerLabel(serverType?: 'emby' | 'jellyfin'): 'Emby' | 'Jellyfin' {
+  return serverType === 'jellyfin' ? 'Jellyfin' : 'Emby';
+}
+
 export function getMediaServerIconId(serverType?: 'emby' | 'jellyfin'): string {
   return serverType === 'jellyfin' ? MEDIA_SERVER_ICON_JELLYFIN : MEDIA_SERVER_ICON_EMBY;
 }

@@ -32,6 +32,10 @@ export interface HistoryItem {
   draftSource?: HistoryDraftSource;
 }
 
+export type HistoryItemMetaUpdate = Omit<Partial<HistoryItem>, 'icon'> & {
+  icon?: string | null;
+};
+
 export function normalizeHistoryItemRecord(
   item: Partial<HistoryItemRecord> | null | undefined
 ): HistoryItem {

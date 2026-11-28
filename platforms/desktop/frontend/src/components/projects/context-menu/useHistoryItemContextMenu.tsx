@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Tags,
   Trash2,
-  Tv,
   X,
 } from 'lucide-react';
 import React from 'react';
@@ -18,6 +17,7 @@ import type { EmbyTaskContext } from '../../../types/batchQueue';
 import type { HistoryItem } from '../../../types/history';
 import type { ContextMenuOpenRequest } from '../../context-menu/trigger';
 import type { ContextMenuAction, OpenContextMenuOptions } from '../../context-menu/types';
+import { getMediaServerIconId, getMediaServerLabel, renderSystemIcon } from '../../IconPicker';
 import type { TranslationFn } from '../types';
 export interface UseHistoryItemContextMenuParams {
   getItemById: (id: string) => HistoryItem | undefined;
@@ -353,10 +353,14 @@ export function useHistoryItemContextMenu({
       });
       const embyContext = useEmbyHistoryStore.getState().getContext(id);
       if (onResyncEmby && embyContext) {
+        const mediaServerLabel = getMediaServerLabel(embyContext.serverType);
         actions.push({
           id: 'resync_emby',
-          label: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
-          icon: <Tv size={16} />,
+          label: t('media_server.resync', {
+            server: mediaServerLabel,
+            defaultValue: `Re-sync to ${mediaServerLabel}`,
+          }),
+          icon: renderSystemIcon(getMediaServerIconId(embyContext.serverType)),
           dividerBefore: true,
           disabled: locked || isOpenDisabled(id),
           onSelect: () => {

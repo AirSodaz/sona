@@ -70,8 +70,25 @@ vi.mock('../TranscriptVersionPanel', () => ({
 }));
 
 vi.mock('../../RenameModal', () => ({
-  RenameModal: ({ isOpen, resetIconValue }: { isOpen: boolean; resetIconValue?: string }) =>
-    isOpen ? <div data-reset-icon={resetIconValue ?? ''}>RenameModal</div> : null,
+  RenameModal: ({
+    isOpen,
+    resetIconValue,
+    initialTitle,
+    onRename,
+  }: {
+    isOpen: boolean;
+    resetIconValue?: string;
+    initialTitle: string;
+    onRename: (title: string, icon?: string) => void;
+  }) =>
+    isOpen ? (
+      <div data-reset-icon={resetIconValue ?? ''}>
+        RenameModal
+        <button type="button" onClick={() => onRename(initialTitle, undefined)}>
+          ClearIconAndSave
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('../../PolishButton', () => ({
@@ -454,5 +471,28 @@ describe('TranscriptWorkbench', () => {
       fireEvent.click(screen.getByRole('button', { name: 'common.rename' }));
     });
     expect(screen.getByText('RenameModal').getAttribute('data-reset-icon')).toBe('system:emby');
+  });
+
+  it('persists icon: null when clearing a customized icon on rename', async () => {
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-clear-icon',
+      title: 'Meeting Notes',
+      icon: '🎬',
+    });
+
+    render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'common.rename' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'ClearIconAndSave' }));
+    });
+
+    expect(mockUpdateItemMeta).toHaveBeenCalledWith('hist-clear-icon', {
+      title: 'Meeting Notes',
+      icon: null,
+    });
+    expect(useTranscriptStore.getState().sessions.default.icon).toBeNull();
   });
 });

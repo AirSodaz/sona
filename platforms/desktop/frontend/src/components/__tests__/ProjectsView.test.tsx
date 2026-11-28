@@ -14,6 +14,7 @@ import { transcriptAutoSaveRuntime } from '../../services/transcriptAutoSaveRunt
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
@@ -41,6 +42,16 @@ const aiRenameModuleState = vi.hoisted(() => ({
   loadCount: 0,
   generateAiTitleForHistoryItem: vi.fn().mockResolvedValue('AI Project Title'),
 }));
+const resyncMediaServerSubtitlesMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('../../services/mediaServer/mediaServerService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../services/mediaServer/mediaServerService')>();
+  return {
+    ...actual,
+    resyncMediaServerSubtitles: resyncMediaServerSubtitlesMock,
+  };
+});
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -3282,5 +3293,86 @@ describe('ProjectsView', () => {
     expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
     expect(getButtonByContent('Alpha').querySelector('.projects-rail-active-badge')).toBeNull();
     expect(getButtonByContent('Inbox').querySelector('.projects-rail-active-badge')).not.toBeNull();
+  });
+
+  it('uses server-specific Jellyfin copy when resyncing from the history context menu', async () => {
+    useEmbyHistoryStore.setState({
+      contexts: {
+        'hist-inbox': {
+          serverId: 'srv-jf',
+          serverType: 'jellyfin',
+          serverUrl: 'http://localhost:8096',
+          itemId: 'jf-1',
+          itemName: 'Jellyfin Episode',
+          audioStreamIndex: 0,
+          subtitleMode: 'bilingual',
+          targetLanguage: 'zh-CN',
+        },
+      },
+    });
+    vi.mocked(historyService.loadTranscript).mockResolvedValue([
+      { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true },
+    ]);
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValue(undefined);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 160,
+      clientY: 220,
+    });
+
+    await clickAsync(screen.getByRole('menuitem', { name: 'Re-sync to Jellyfin' }));
+
+    await waitFor(() => {
+      expect(resyncMediaServerSubtitlesMock).toHaveBeenCalledTimes(1);
+      expect(alertSpy).toHaveBeenCalledWith('Successfully synced subtitles to Jellyfin.', {
+        title: 'Re-sync to Jellyfin',
+        variant: 'success',
+      });
+    });
+
+    alertSpy.mockRestore();
+    useEmbyHistoryStore.setState({ contexts: {} });
+  });
+
+  it('sends icon: null when resetting a non-media-server item icon in RenameModal', async () => {
+    vi.mocked(historyService.getAll).mockResolvedValue([
+      {
+        id: 'hist-emoji',
+        title: 'Custom Icon Item',
+        icon: '🎬',
+        timestamp: 1000,
+        duration: 10,
+        audioPath: 'hist-emoji.wav',
+        transcriptPath: 'hist-emoji.json',
+        previewText: 'Hello',
+        type: 'recording',
+        projectId: null,
+      },
+    ]);
+
+    let iconInsideStoreDuringPersist: string | undefined = 'initial';
+    vi.mocked(historyService.updateItemMeta).mockImplementationOnce(async () => {
+      iconInsideStoreDuringPersist = useHistoryStore.getState().items[0]?.icon;
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(screen.getByRole('button', { name: 'Rename Custom Icon Item' }));
+    await screen.findByDisplayValue('Custom Icon Item');
+    await clickAsync(screen.getByRole('button', { name: '🎬' }));
+    await clickAsync(screen.getByRole('button', { name: 'Reset' }));
+    await clickAsync(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(historyService.updateItemMeta).toHaveBeenCalledWith('hist-emoji', {
+        title: 'Custom Icon Item',
+        icon: null,
+      });
+    });
+    expect(iconInsideStoreDuringPersist).toBeUndefined();
   });
 });

@@ -480,6 +480,57 @@ describe('BatchItemProcessor', () => {
       })
     );
   });
+
+  it('does not mutate historyItem in memory when updateItemMeta fails', async () => {
+    const { downloadMediaServerAudio } = await import('../../mediaServer/mediaServerService');
+    vi.mocked(downloadMediaServerAudio).mockResolvedValue('/tmp/downloaded_jf.mp3');
+    vi.mocked(mockPorts.useHistoryStore.getState().updateItemMeta).mockRejectedValueOnce(
+      new Error('db write failed')
+    );
+
+    const item: BatchQueueItem = {
+      id: 'batch-jf-meta-fail',
+      filePath: '',
+      filename: 'Jellyfin Episode',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'srv-jf',
+        serverType: 'jellyfin',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'jf-1',
+        itemName: 'Jellyfin Episode',
+        audioStreamIndex: 0,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(callbacks.onHistorySaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'hist-1',
+        title: 'Imported',
+      })
+    );
+    const savedArg = callbacks.onHistorySaved.mock.calls[0][0];
+    expect(savedArg.icon).toBeUndefined();
+  });
   it('propagates subtitle upload error when uploadEmbySubtitle fails', async () => {
     const item: BatchQueueItem = {
       id: 'batch-emby-fail',

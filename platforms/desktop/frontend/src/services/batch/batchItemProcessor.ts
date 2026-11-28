@@ -296,12 +296,7 @@ export class BatchItemProcessor {
           : 'system:emby'
         : undefined;
       if (nextTitle || mediaServerIcon) {
-        if (nextTitle) {
-          historyItem.title = nextTitle;
-        }
-        if (mediaServerIcon) {
-          historyItem.icon = mediaServerIcon;
-        }
+        let metaPersisted = true;
         if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
           try {
             await this.ports.useHistoryStore.getState().updateItemMeta(historyItem.id, {
@@ -309,7 +304,16 @@ export class BatchItemProcessor {
               ...(mediaServerIcon ? { icon: mediaServerIcon } : {}),
             });
           } catch (metaErr) {
+            metaPersisted = false;
             logger.warn('[BatchQueue] Failed to update stream history meta:', metaErr);
+          }
+        }
+        if (metaPersisted) {
+          if (nextTitle) {
+            historyItem.title = nextTitle;
+          }
+          if (mediaServerIcon) {
+            historyItem.icon = mediaServerIcon;
           }
         }
       }

@@ -3441,7 +3441,10 @@
     "confirm_delete": "이 미디어 서버 프로필을 삭제하시겠습니까?",
     "connection_successful": "성공적으로 연결되었습니다:",
     "jellyfin_native_active": "Jellyfin 기본 자막 통합 활성화됨 (서버 플러그인 필요 없음)",
+    "resync": "{{server}}에 다시 동기화",
     "resync_tooltip": "자막을 {{server}} 서버에 다시 동기화",
+    "resync_no_segments": "{{server}}에 다시 동기화할 수 없습니다: 전사 세그먼트가 없습니다.",
+    "resync_success": "{{server}}에 자막을 성공적으로 동기화했습니다.",
     "error_url_user_required": "서버 URL과 사용자 이름을 입력해야 합니다",
     "error_url_key_required": "서버 URL과 API 키/토큰을 입력해야 합니다"
   }

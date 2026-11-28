@@ -29,7 +29,12 @@ import { logger } from '../../utils/logger';
 import { AudioPlayer } from '../AudioPlayer';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ExportButton } from '../ExportButton';
-import { getMediaServerIconId, getMediaServerIconMeta, renderSystemIcon } from '../IconPicker';
+import {
+  getMediaServerIconId,
+  getMediaServerIconMeta,
+  getMediaServerLabel,
+  renderSystemIcon,
+} from '../IconPicker';
 import { CloseIcon, EditIcon, FileTextIcon, MicIcon, SummaryIcon } from '../Icons';
 import { PolishButton } from '../PolishButton';
 import { RenameModal } from '../RenameModal';
@@ -156,7 +161,10 @@ export function TranscriptWorkbench({
         useTranscriptStore.getState().sessions[boundSessionId]?.sourceHistoryId !== targetHistoryId
       )
         return;
-      logger.error('[TranscriptWorkbench] Failed to resync to Emby:', err);
+      logger.error(
+        `[TranscriptWorkbench] Failed to resync to ${getMediaServerLabel(embyContext.serverType)}:`,
+        err
+      );
       void useDialogStore.getState().showError({
         code: 'emby.resync_failed',
         messageKey: 'errors.common.operation_failed',
@@ -232,11 +240,7 @@ export function TranscriptWorkbench({
   const isManualHeaderActionsDisabled =
     isCurrentSessionRecording || isDocumentLocked || isBatchProcessing;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
-  const mediaServerLabel = embyContext
-    ? embyContext.serverType === 'jellyfin'
-      ? 'Jellyfin'
-      : 'Emby'
-    : null;
+  const mediaServerLabel = embyContext ? getMediaServerLabel(embyContext.serverType) : null;
   const mediaIconMeta = getMediaServerIconMeta(storeIcon);
   const mediaServerResetIcon = embyContext
     ? getMediaServerIconId(embyContext.serverType)
@@ -258,7 +262,7 @@ export function TranscriptWorkbench({
     setTitle(newTitle.trim());
     setIcon(newIcon || null);
     if (sourceHistoryId) {
-      await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim(), icon: newIcon });
+      await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim(), icon: newIcon || null });
     }
     setIsRenameModalOpen(false);
   };

@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEmbyHistoryStore } from '../../../../stores/embyHistoryStore';
 import type { HistoryItem } from '../../../../types/history';
 import type { ContextMenuOpenRequest } from '../../../context-menu/trigger';
 import type { OpenContextMenuOptions } from '../../../context-menu/types';
@@ -57,6 +58,10 @@ const t = ((key: string, options?: { defaultValue?: string }) =>
   options?.defaultValue ?? key) as any;
 
 describe('useHistoryItemContextMenu', () => {
+  beforeEach(() => {
+    useEmbyHistoryStore.setState({ contexts: {} });
+  });
+
   it('opens single item normal menu with open, copy, tags, move to inbox, rename, reveal, and delete', () => {
     let capturedOptions: OpenContextMenuOptions | null = null;
     const openContextMenu = vi.fn((opts) => {
@@ -337,5 +342,78 @@ describe('useHistoryItemContextMenu', () => {
 
     expect(onClearSelection).toHaveBeenCalledTimes(1);
     expect(openContextMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses server-specific resync label and colored media server icon for Jellyfin and Emby items', () => {
+    useEmbyHistoryStore.getState().setContext('item-1', {
+      serverId: 'srv-jf',
+      serverType: 'jellyfin',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'jf-1',
+      itemName: 'Jellyfin Movie',
+      audioStreamIndex: 0,
+      subtitleMode: 'bilingual',
+      targetLanguage: 'zh-CN',
+    });
+    useEmbyHistoryStore.getState().setContext('item-2', {
+      serverId: 'srv-emby',
+      serverType: 'emby',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'emby-1',
+      itemName: 'Emby Movie',
+      audioStreamIndex: 0,
+      subtitleMode: 'bilingual',
+      targetLanguage: 'zh-CN',
+    });
+
+    let capturedOptions: OpenContextMenuOptions | null = null;
+    const openContextMenu = vi.fn((opts) => {
+      capturedOptions = opts;
+    });
+    const onResyncEmby = vi.fn().mockResolvedValue(undefined);
+    const items = [dummyItem1, dummyItem2];
+
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: (id) => items.find((item) => item.id === id),
+        isAllSelected: false,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: false,
+        onAssignProject: vi.fn(),
+        onClearSelection: vi.fn(),
+        onDeleteHistoryItem: vi.fn(),
+        onDeleteHistoryItems: vi.fn(),
+        onMoveToInbox: vi.fn(),
+        onOpenItem: vi.fn(),
+        onRenameHistoryItem: vi.fn(),
+        onResyncEmby,
+        onRestoreHistoryItems: vi.fn(),
+        onSelectAllVisible: vi.fn(),
+        openContextMenu,
+        selectedIds: [],
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.openHistoryContextMenu('item-1', createDummyRequest());
+    });
+    const jfAction = capturedOptions!.actions.find((action) => action.id === 'resync_emby');
+    expect(jfAction?.label).toBe('Re-sync to Jellyfin');
+    expect(
+      (jfAction?.icon as React.ReactElement<{ style?: { color?: string } }> | undefined)?.props
+        .style?.color
+    ).toBe('#a855f7');
+
+    act(() => {
+      result.current.openHistoryContextMenu('item-2', createDummyRequest());
+    });
+    const embyAction = capturedOptions!.actions.find((action) => action.id === 'resync_emby');
+    expect(embyAction?.label).toBe('Re-sync to Emby');
+    expect(
+      (embyAction?.icon as React.ReactElement<{ style?: { color?: string } }> | undefined)?.props
+        .style?.color
+    ).toBe('var(--color-success, #52c41a)');
   });
 });

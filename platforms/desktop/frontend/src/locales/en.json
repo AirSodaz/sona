@@ -3441,7 +3441,10 @@
     "confirm_delete": "Delete this media server profile?",
     "connection_successful": "Connected successfully to",
     "jellyfin_native_active": "Native Jellyfin Subtitle Integration Active (No plugin required)",
+    "resync": "Re-sync to {{server}}",
     "resync_tooltip": "Re-sync subtitles to {{server}} server",
+    "resync_no_segments": "Cannot re-sync to {{server}}: Transcript has no segments.",
+    "resync_success": "Successfully synced subtitles to {{server}}.",
     "error_url_user_required": "Server URL and username are required",
     "error_url_key_required": "Server URL and API Key / Token are required"
   }
