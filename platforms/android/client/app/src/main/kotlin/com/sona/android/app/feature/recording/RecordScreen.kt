@@ -794,8 +794,8 @@ internal fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiSta
 private fun FlowingTranscriptStream(
     segments: List<TranscriptSegment>,
     isRecording: Boolean,
-    toastVisible: Boolean = false,
     modifier: Modifier = Modifier,
+    toastVisible: Boolean = false,
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
