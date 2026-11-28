@@ -19,6 +19,7 @@ import { storageOpenPath } from '../services/tauri/storage';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useEmbyHistoryStore } from '../stores/embyHistoryStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
@@ -34,6 +35,7 @@ import { isHistoryItemDraft } from '../types/history';
 import type { ProjectRecord } from '../types/project';
 import { logger } from '../utils/logger';
 import { useContextMenu } from './context-menu/useContextMenu';
+import { getMediaServerIconId, getMediaServerIconMeta } from './IconPicker';
 import { useHistoryItemContextMenu } from './projects/context-menu/useHistoryItemContextMenu';
 import { useProjectRailContextMenu } from './projects/context-menu/useProjectRailContextMenu';
 import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
@@ -763,7 +765,19 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
+    const embyContext = useEmbyHistoryStore.getState().getContext(id);
+    const resetIconValue = embyContext
+      ? getMediaServerIconId(embyContext.serverType)
+      : getMediaServerIconMeta(item.icon)
+        ? item.icon
+        : undefined;
+    setRenameTarget({
+      id,
+      title: item.title,
+      icon: item.icon,
+      resetIconValue,
+      type: item.type,
+    });
   };
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {

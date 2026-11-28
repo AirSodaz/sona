@@ -145,6 +145,7 @@ export function ProjectsModals({
         onClose={onCloseRenameModal}
         initialTitle={renameTarget?.title || ''}
         initialIcon={renameTarget?.icon}
+        resetIconValue={renameTarget?.resetIconValue}
         defaultType={renameTarget?.type}
         onRename={onPerformRename}
         onAiAction={onAiAction}

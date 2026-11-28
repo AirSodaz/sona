@@ -3441,6 +3441,7 @@
     "confirm_delete": "このメディアサーバープロファイルを削除しますか？",
     "connection_successful": "正常に接続されました:",
     "jellyfin_native_active": "Jellyfin ネイティブ字幕統合が有効（サーバープラグイン不要）",
+    "resync_tooltip": "字幕を {{server}} サーバーに再同期",
     "error_url_user_required": "サーバー URL とユーザー名は必須です",
     "error_url_key_required": "サーバー URL と API キー / トークンは必須です"
   }

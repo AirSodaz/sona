@@ -1229,6 +1229,7 @@
 /* Hide default panel headers for a cleaner look, or style them minimally */
 .panel-content {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   padding: 0;
   /* Remove padding here, handle in children */

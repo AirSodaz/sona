@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 
+import { Tv } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,35 @@ import { ColorSwatchPicker } from './ColorSwatchPicker';
 import { ChevronDownIcon, CodeIcon, FileTextIcon, FolderIcon, MicIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
 import { Button, IconButton } from './ui/Button';
+
+export const MEDIA_SERVER_ICON_EMBY = 'system:emby';
+export const MEDIA_SERVER_ICON_JELLYFIN = 'system:jellyfin';
+
+export function getMediaServerIconId(serverType?: 'emby' | 'jellyfin'): string {
+  return serverType === 'jellyfin' ? MEDIA_SERVER_ICON_JELLYFIN : MEDIA_SERVER_ICON_EMBY;
+}
+
+export function getMediaServerIconMeta(icon?: string | null): {
+  serverType: 'emby' | 'jellyfin';
+  label: 'Emby' | 'Jellyfin';
+  color: string;
+} | null {
+  if (icon === MEDIA_SERVER_ICON_JELLYFIN) {
+    return {
+      serverType: 'jellyfin',
+      label: 'Jellyfin',
+      color: '#a855f7',
+    };
+  }
+  if (icon === MEDIA_SERVER_ICON_EMBY) {
+    return {
+      serverType: 'emby',
+      label: 'Emby',
+      color: 'var(--color-success, #52c41a)',
+    };
+  }
+  return null;
+}
 
 export const SYSTEM_ICONS = [
   {
@@ -45,6 +75,35 @@ export const SYSTEM_ICONS = [
 
 export const RECOMMENDED_EMOJIS = ['📄', '🎙️', '📁', '📝', '🗣️', '💡', '⭐️', '🎯', '📌', '📅'];
 
+export function renderSystemIcon(icon: string, color?: string): React.ReactNode | null {
+  const mediaServerMeta = getMediaServerIconMeta(icon);
+  if (mediaServerMeta) {
+    const resolvedColor = color || mediaServerMeta.color;
+    return (
+      <span
+        style={{
+          color: resolvedColor,
+          display: 'inline-flex',
+          alignItems: 'center',
+        }}
+      >
+        <Tv size={16} />
+      </span>
+    );
+  }
+
+  const sysIcon = SYSTEM_ICONS.find((si) => si.id === icon);
+  if (!sysIcon) {
+    return null;
+  }
+  if (color) {
+    return (
+      <span style={{ color, display: 'inline-flex', alignItems: 'center' }}>{sysIcon.icon}</span>
+    );
+  }
+  return sysIcon.icon;
+}
+
 export function renderIcon(icon?: string, defaultIcon?: React.ReactNode, color?: string) {
   if (!icon) {
     const fallback = defaultIcon || <MicIcon />;
@@ -56,14 +115,17 @@ export function renderIcon(icon?: string, defaultIcon?: React.ReactNode, color?:
     return fallback;
   }
   if (icon.startsWith('system:')) {
-    const sysIcon = SYSTEM_ICONS.find((si) => si.id === icon);
-    const resolved = sysIcon ? sysIcon.icon : defaultIcon || <MicIcon />;
+    const resolved = renderSystemIcon(icon, color);
+    if (resolved) {
+      return resolved;
+    }
+    const fallback = defaultIcon || <MicIcon />;
     if (color) {
       return (
-        <span style={{ color, display: 'inline-flex', alignItems: 'center' }}>{resolved}</span>
+        <span style={{ color, display: 'inline-flex', alignItems: 'center' }}>{fallback}</span>
       );
     }
-    return resolved;
+    return fallback;
   }
   return <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{icon}</span>;
 }
@@ -72,6 +134,7 @@ export interface IconPickerProps {
   icon: string;
   onChange: (icon: string) => void;
   defaultIcon?: React.ReactNode;
+  resetIconValue?: string;
   color?: string;
   onColorChange?: (color: string) => void;
 }
@@ -80,6 +143,7 @@ export function IconPicker({
   icon,
   onChange,
   defaultIcon,
+  resetIconValue = '',
   color,
   onColorChange,
 }: IconPickerProps): React.JSX.Element {
@@ -361,7 +425,7 @@ export function IconPicker({
               fullWidth
               onClick={(e) => {
                 e.preventDefault();
-                onChange('');
+                onChange(resetIconValue);
                 setIsPickerOpen(false);
               }}
               tooltip={t('history.reset_icon', { defaultValue: 'Reset icon' })}

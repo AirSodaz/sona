@@ -135,4 +135,24 @@ describe('IconPicker', () => {
     expect(onChange).toHaveBeenCalledWith('system:mic');
     expect(document.querySelector('.icon-picker-popover')).toBeNull();
   });
+
+  it('keeps media server icons out of the picker grid and restores resetIconValue on Reset', () => {
+    const onChange = vi.fn();
+    render(
+      <IconPicker icon="system:jellyfin" resetIconValue="system:jellyfin" onChange={onChange} />
+    );
+
+    const triggerBtn = screen.getByRole('button', { name: 'Choose icon' }) as HTMLButtonElement;
+    const styledIcon = triggerBtn.querySelector('span[style*="color"]');
+    expect(styledIcon).not.toBeNull();
+    expect(styledIcon?.getAttribute('style')).toContain('rgb(168, 85, 247)');
+
+    fireEvent.click(triggerBtn);
+
+    expect(screen.queryByRole('button', { name: 'Emby' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Jellyfin' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(onChange).toHaveBeenCalledWith('system:jellyfin');
+  });
 });

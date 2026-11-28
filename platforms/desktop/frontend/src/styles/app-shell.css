@@ -460,6 +460,8 @@
   position: relative;
   display: flex;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -550,6 +552,8 @@
 .panel-container {
   display: flex;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -603,6 +607,7 @@
 
 .projects-mode-shell {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--color-bg-secondary);
@@ -611,6 +616,7 @@
 .tools-mode-shell {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   overflow: hidden;
@@ -619,8 +625,10 @@
 .workspace-mode-shell {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   background: var(--color-bg-secondary);
 }
 

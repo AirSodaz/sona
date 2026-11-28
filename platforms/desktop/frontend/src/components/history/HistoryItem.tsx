@@ -1,6 +1,7 @@
 import { Calendar, Clock } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { type HistoryItem as HistoryItemType, isHistoryItemDraft } from '../../types/history';
 import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
@@ -11,15 +12,8 @@ import {
   createPointerContextMenuRequest,
   isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
-import {
-  CodeIcon,
-  EditIcon,
-  FileTextIcon,
-  FolderIcon,
-  InboxIcon,
-  MicIcon,
-  TrashIcon,
-} from '../Icons';
+import { getMediaServerIconMeta, renderSystemIcon } from '../IconPicker';
+import { EditIcon, FileTextIcon, InboxIcon, MicIcon, TrashIcon } from '../Icons';
 import { ProjectBadge } from '../projects/ProjectVisual';
 import { IconButton } from '../ui/Button';
 import { Tooltip } from '../ui/Tooltip';
@@ -51,18 +45,9 @@ interface HistoryItemProps {
 function renderIcon(icon: string | undefined, type: string | undefined): React.ReactNode {
   if (icon) {
     if (icon.startsWith('system:')) {
-      const iconName = icon.replace('system:', '');
-      switch (iconName) {
-        case 'mic':
-          return <MicIcon />;
-        case 'file':
-          return <FileTextIcon />;
-        case 'folder':
-          return <FolderIcon />;
-        case 'code':
-          return <CodeIcon />;
-        default:
-          break;
+      const resolved = renderSystemIcon(icon);
+      if (resolved) {
+        return resolved;
       }
     } else {
       // Assume it's an emoji
@@ -179,8 +164,15 @@ export function HistoryItem({
       )}
     </span>
   );
-  const itemTypeLabel =
-    item.type === 'batch'
+  const mediaIconMeta = getMediaServerIconMeta(item.icon);
+  const embyContext = useEmbyHistoryStore((state) =>
+    mediaIconMeta ? state.contexts[item.id] : undefined
+  );
+  const itemTypeLabel = mediaIconMeta
+    ? embyContext
+      ? `${mediaIconMeta.label}: ${embyContext.itemName}`
+      : mediaIconMeta.label
+    : item.type === 'batch'
       ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
       : t('projects.filter_recordings', { defaultValue: 'Recordings' });
   const isDraft = isHistoryItemDraft(item);

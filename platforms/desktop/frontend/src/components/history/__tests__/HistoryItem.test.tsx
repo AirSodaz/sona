@@ -1,5 +1,6 @@
 import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { HistoryItem } from '../HistoryItem';
 
@@ -32,6 +33,7 @@ describe('HistoryItem', () => {
   } as const;
 
   beforeEach(() => {
+    useEmbyHistoryStore.setState({ contexts: {} });
     useProjectStore.setState({
       ...useProjectStore.getState(),
       projects: [
@@ -356,5 +358,55 @@ describe('HistoryItem', () => {
     );
 
     expect(screen.queryByText('Draft')).toBeNull();
+  });
+
+  it('renders media server icons with server label tooltips when persisted on the history item', () => {
+    useEmbyHistoryStore.getState().setContext('hist-jf', {
+      serverId: 'srv-jf',
+      serverType: 'jellyfin',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'jf-1',
+      itemName: 'Pilot Episode',
+      audioStreamIndex: 1,
+      subtitleMode: 'bilingual',
+      targetLanguage: 'zh-CN',
+    });
+
+    const { container, rerender } = render(
+      <HistoryItem
+        item={{
+          ...item,
+          id: 'hist-jf',
+          type: 'batch',
+          icon: 'system:jellyfin',
+        }}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const typeIcon = container.querySelector('.history-item-type-icon') as HTMLElement;
+    expect(typeIcon.querySelector('span[style*="rgb(168, 85, 247)"]')).not.toBeNull();
+    fireEvent.focus(typeIcon);
+    expect(screen.getByRole('tooltip').textContent).toBe('Jellyfin: Pilot Episode');
+    fireEvent.blur(typeIcon);
+
+    rerender(
+      <HistoryItem
+        item={{
+          ...item,
+          id: 'hist-emby-no-ctx',
+          type: 'batch',
+          icon: 'system:emby',
+        }}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const embyIcon = container.querySelector('.history-item-type-icon') as HTMLElement;
+    expect(embyIcon.querySelector('span[style*="color"]')).not.toBeNull();
+    fireEvent.focus(embyIcon);
+    expect(screen.getByRole('tooltip').textContent).toBe('Emby');
   });
 });

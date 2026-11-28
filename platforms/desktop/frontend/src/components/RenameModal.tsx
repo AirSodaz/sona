@@ -12,6 +12,7 @@ interface RenameModalProps {
   onClose: () => void;
   initialTitle: string;
   initialIcon?: string;
+  resetIconValue?: string;
   defaultType?: 'recording' | 'batch';
   onRename: (title: string, icon?: string) => void;
   onAiAction?: () => Promise<string>;
@@ -22,6 +23,7 @@ export function RenameModal({
   onClose,
   initialTitle,
   initialIcon,
+  resetIconValue,
   defaultType,
   onRename,
   onAiAction,
@@ -99,6 +101,7 @@ export function RenameModal({
           <IconPicker
             icon={icon}
             onChange={setIcon}
+            resetIconValue={resetIconValue}
             defaultIcon={defaultType === 'batch' ? <FileTextIcon /> : <MicIcon />}
           />
 

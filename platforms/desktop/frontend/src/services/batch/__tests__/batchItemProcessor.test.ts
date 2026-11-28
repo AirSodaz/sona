@@ -75,6 +75,7 @@ describe('BatchItemProcessor', () => {
         getState: vi.fn().mockReturnValue({
           addItem: vi.fn(),
           updateTranscript: vi.fn(),
+          updateItemMeta: vi.fn().mockResolvedValue(undefined),
         }),
       } as unknown as BatchItemProcessorPorts['useHistoryStore'],
       useProjectStore: {
@@ -456,6 +457,16 @@ describe('BatchItemProcessor', () => {
       { deleteExistingIndex: 2 }
     );
     expect(useEmbyHistoryStore.getState().getContext('hist-1')).toEqual(item.embyContext);
+    expect(mockPorts.useHistoryStore.getState().updateItemMeta).toHaveBeenCalledWith('hist-1', {
+      title: 'Emby Movie',
+      icon: 'system:emby',
+    });
+    expect(callbacks.onHistorySaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'hist-1',
+        icon: 'system:emby',
+      })
+    );
     expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
     expect(callbacks.updateFilePath).toHaveBeenLastCalledWith('');
     expect(item.filePath).toBe('');
