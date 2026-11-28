@@ -47,6 +47,7 @@ class GeneralDiagnosticsViewModel(
     private val appLogs: AppLogPort,
     private val fileTransfers: FileTransferPort,
     private val permissionChecker: () -> Pair<Boolean, Boolean>,
+    private val onUpdateCacheCleared: (() -> Unit)? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(GeneralDiagnosticsUiState())
     val state: StateFlow<GeneralDiagnosticsUiState> = mutableState.asStateFlow()
@@ -146,6 +147,7 @@ class GeneralDiagnosticsViewModel(
         viewModelScope.launch {
             try {
                 val freed = storageUsage.clearTempCaches()
+                onUpdateCacheCleared?.invoke()
                 val summary = storageUsage.loadSummary()
                 mutableState.update {
                     it.copy(
@@ -259,6 +261,7 @@ class GeneralDiagnosticsViewModel(
             appLogs: AppLogPort,
             fileTransfers: FileTransferPort,
             permissionChecker: () -> Pair<Boolean, Boolean>,
+            onUpdateCacheCleared: (() -> Unit)? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -270,6 +273,7 @@ class GeneralDiagnosticsViewModel(
                     appLogs = appLogs,
                     fileTransfers = fileTransfers,
                     permissionChecker = permissionChecker,
+                    onUpdateCacheCleared = onUpdateCacheCleared,
                 ) as T
             }
         }

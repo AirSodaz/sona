@@ -40,8 +40,13 @@ class UniffiStorageUsageAdapter(
 
     override suspend fun clearTempCaches(): Long = withContext(Dispatchers.IO) {
         var freed = 0L
-        for (dirName in listOf("updates", "exports", "backup-imports")) {
-            val dir = File(cacheDir, dirName)
+        val dirs = listOf(
+            File(cacheDir, "updates"),
+            File(cacheDir, "exports"),
+            File(cacheDir, "backup-imports"),
+            File(appDataDir, "api_temp"),
+        )
+        for (dir in dirs) {
             if (dir.isDirectory) {
                 dir.walkBottomUp().forEach { file ->
                     if (file.isFile) {

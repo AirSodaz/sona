@@ -222,6 +222,10 @@ internal fun SettingsScreen(
     )
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
+    val currentDetailSection = navigator.currentDestination
+        ?.takeIf { it.pane == ListDetailPaneScaffoldRole.Detail }
+        ?.contentKey
+    val activeSection = currentDetailSection ?: selectedSection
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
         PaneAdaptedValue.Expanded
     val detailPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] ==
@@ -272,6 +276,11 @@ internal fun SettingsScreen(
             currentOnShowingSinglePaneListChanged(false)
         }
     }
+    LaunchedEffect(currentDetailSection) {
+        if (currentDetailSection != null && currentDetailSection.route != selectedSectionRoute) {
+            selectedSectionRoute = currentDetailSection.route
+        }
+    }
     LaunchedEffect(initialSection, requestedSection, sectionRequestToken) {
         if (sectionRequestToken > 0 && sectionRequestToken != handledSectionRequestToken) {
             handledSectionRequestToken = sectionRequestToken
@@ -302,7 +311,7 @@ internal fun SettingsScreen(
                     enableScrim = !isTwoPane,
                 ) {
                     SettingsSectionList(
-                        selectedSection = selectedSection,
+                        selectedSection = activeSection,
                         showSelection = isTwoPane,
                         hasUpdateBadge = aboutState.hasActionableUpdateBadge,
                         extraBottomPadding = bottomOverlayPadding,
@@ -330,7 +339,7 @@ internal fun SettingsScreen(
                     enabled = !isTwoPane,
                 ) {
                     SettingsDetailPane(
-                        section = selectedSection,
+                        section = activeSection,
                         isTwoPane = isTwoPane,
                         showBack = showDetailBack,
                         bootstrapState = bootstrapState,
@@ -378,14 +387,26 @@ internal fun SettingsScreen(
                         onDismissGeneralNotice = onDismissGeneralNotice,
                         onOpenRecognitionSettings = {
                             selectedSectionRoute = SettingsSection.RECOGNITION.route
-                            scope.launch {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.RECOGNITION)
+                            val currentDestination = navigator.currentDestination
+                            if (
+                                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                                currentDestination.contentKey != SettingsSection.RECOGNITION
+                            ) {
+                                scope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.RECOGNITION)
+                                }
                             }
                         },
                         onOpenGeneralSettings = {
                             selectedSectionRoute = SettingsSection.GENERAL_DIAGNOSTICS.route
-                            scope.launch {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.GENERAL_DIAGNOSTICS)
+                            val currentDestination = navigator.currentDestination
+                            if (
+                                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                                currentDestination.contentKey != SettingsSection.GENERAL_DIAGNOSTICS
+                            ) {
+                                scope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.GENERAL_DIAGNOSTICS)
+                                }
                             }
                         },
                         onCloudProviderSelected = onCloudProviderSelected,

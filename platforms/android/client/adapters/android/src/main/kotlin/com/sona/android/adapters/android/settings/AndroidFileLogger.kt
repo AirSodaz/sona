@@ -29,6 +29,7 @@ class AndroidFileLogger internal constructor(
     @Volatile
     private var currentLevel: AppLogLevel = initialLevel
     private val writeLock = Any()
+    private val timestampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private val primaryFile: File get() = File(logsDir, PRIMARY_LOG_FILE)
     private val rotatedFile: File get() = File(logsDir, ROTATED_LOG_FILE)
 
@@ -45,9 +46,9 @@ class AndroidFileLogger internal constructor(
         val parsed = AppLogLevel.fromWireValue(level, AppLogLevel.INFO)
         if (!currentLevel.allows(parsed)) return
 
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
-        val line = "[$timestamp] [${parsed.wireValue.uppercase()}] [$target] ${message.trimEnd()}\n"
         synchronized(writeLock) {
+            val timestamp = timestampFormat.format(Date())
+            val line = "[$timestamp] [${parsed.wireValue.uppercase()}] [$target] ${message.trimEnd()}\n"
             runCatching {
                 logsDir.mkdirs()
                 if (primaryFile.exists() && primaryFile.length() >= maxFileBytes) {

@@ -96,6 +96,8 @@ class AboutSettingsViewModel(
     private val mutableState = MutableStateFlow(AboutSettingsUiState(build = build))
     val state: StateFlow<AboutSettingsUiState> = mutableState.asStateFlow()
     private var automaticCheckStarted = false
+    private var checkJob: Job? = null
+    private var activeCheckSilent = true
     private var downloadJob: Job? = null
 
     init {
@@ -156,16 +158,23 @@ class AboutSettingsViewModel(
 
     private fun performUpdateCheck(silent: Boolean) {
         val currentStatus = mutableState.value.updateStatus
-        if (currentStatus is AboutUpdateStatus.Checking ||
-            currentStatus is AboutUpdateStatus.Downloading ||
+        if (currentStatus is AboutUpdateStatus.Downloading ||
             currentStatus is AboutUpdateStatus.Verifying
         ) {
             return
         }
+        if (checkJob?.isActive == true) {
+            if (!silent && activeCheckSilent) {
+                activeCheckSilent = false
+                mutableState.update { it.copy(updateStatus = AboutUpdateStatus.Checking) }
+            }
+            return
+        }
+        activeCheckSilent = silent
         if (!silent) {
             mutableState.update { it.copy(updateStatus = AboutUpdateStatus.Checking) }
         }
-        viewModelScope.launch {
+        checkJob = viewModelScope.launch {
             try {
                 val mirror = runCatching { generalSettings?.load()?.downloadMirror }.getOrNull()
                     ?: mutableState.value.downloadMirror
@@ -197,11 +206,13 @@ class AboutSettingsViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                if (!silent) {
+                if (!activeCheckSilent) {
                     mutableState.update {
                         it.copy(updateStatus = AboutUpdateStatus.Error(AppUpdateErrorCategory.NETWORK))
                     }
                 }
+            } finally {
+                checkJob = null
             }
         }
     }
@@ -267,7 +278,9 @@ class AboutSettingsViewModel(
             try {
                 val mirror = mutableState.value.downloadMirror
                 val apkPath = downloader.downloadApk(asset, release.versionCode, mirror) { progress ->
-                    notificationPort?.updateProgress(release.versionName, progress)
+                    if (progress.stage != AppUpdateDownloadStage.READY) {
+                        notificationPort?.updateProgress(release.versionName, progress)
+                    }
                     mutableState.update { current ->
                         val nextStatus = when (progress.stage) {
                             AppUpdateDownloadStage.DOWNLOADING -> AboutUpdateStatus.Downloading(
@@ -414,7 +427,20 @@ class AboutSettingsViewModel(
 
     fun openInstallPermissionSettings() {
         mutableState.update { it.copy(showInstallPermissionDialog = false) }
-        apkInstaller?.openInstallPermissionSettings()
+        try {
+            apkInstaller?.openInstallPermissionSettings()
+        } catch (error: AppUpdateException) {
+            val release = currentReleaseFromState()
+            mutableState.update {
+                it.copy(
+                    pendingInstallApkPath = null,
+                    updateStatus = AboutUpdateStatus.Error(
+                        category = error.category,
+                        release = release,
+                    ),
+                )
+            }
+        }
     }
 
     fun dismissInstallPermissionDialog() {
@@ -429,13 +455,13 @@ class AboutSettingsViewModel(
     fun onHostResumed() {
         val pendingPath = mutableState.value.pendingInstallApkPath ?: return
         val installer = apkInstaller ?: return
-        if (!installer.canRequestPackageInstalls()) return
         mutableState.update {
             it.copy(
                 showInstallPermissionDialog = false,
                 pendingInstallApkPath = null,
             )
         }
+        if (!installer.canRequestPackageInstalls()) return
         try {
             installer.installApk(pendingPath)
         } catch (error: AppUpdateException) {
@@ -448,6 +474,24 @@ class AboutSettingsViewModel(
                     ),
                 )
             }
+        }
+    }
+
+    fun onUpdateCacheCleared() {
+        val ready = mutableState.value.updateStatus as? AboutUpdateStatus.ReadyToInstall ?: return
+        val supportedAbis = apkInstaller?.supportedAbis() ?: DEFAULT_SUPPORTED_ABIS
+        if (updateDownloader?.findCachedApk(ready.release, supportedAbis) != null) return
+        notificationPort?.cancel()
+        mutableState.update { current ->
+            current.copy(
+                showInstallPermissionDialog = false,
+                pendingInstallApkPath = null,
+                updateStatus = AboutUpdateStatus.UpdateAvailable(
+                    release = ready.release,
+                    matchingAsset = ready.release.selectAssetForAbis(supportedAbis),
+                    isIgnored = current.ignoredVersionCode == ready.release.versionCode,
+                ),
+            )
         }
     }
 

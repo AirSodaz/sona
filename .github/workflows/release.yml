@@ -107,6 +107,14 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           RAW_VERSION="${VERSION#v}"
+          SIGNING_KIND="${{ steps.android-artifacts.outputs.signing_kind }}"
+          if [ "$SIGNING_KIND" = "release" ]; then
+            ANDROID_RELEASE_SUFFIX="release"
+            ANDROID_RELEASE_LABEL="Signed release"
+          else
+            ANDROID_RELEASE_SUFFIX="release-unsigned"
+            ANDROID_RELEASE_LABEL="Unsigned release"
+          fi
           echo "Extracting release notes for version $VERSION"
 
           cat <<EOF > release_notes.md
@@ -123,7 +131,7 @@ jobs:
 
           **Android (preview builds)**
           Debug-signed: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-debug.apk)
-          Unsigned release: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-release-unsigned.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-release-unsigned.apk)
+          ${ANDROID_RELEASE_LABEL}: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-${ANDROID_RELEASE_SUFFIX}.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-${ANDROID_RELEASE_SUFFIX}.apk)
           EOF
 
       - name: Build updater.json from signatures

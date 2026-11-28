@@ -56,12 +56,30 @@ class AndroidApkInstaller(
 
     override fun openInstallPermissionSettings() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val intent = Intent(
+        val packageUri = "package:${appContext.packageName}".toUri()
+        val manageUnknownSourcesIntent = Intent(
             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            "package:${appContext.packageName}".toUri(),
+            packageUri,
         ).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        appContext.startActivity(intent)
+        val launched = runCatching { appContext.startActivity(manageUnknownSourcesIntent) }.isSuccess
+        if (launched) return
+
+        val appDetailsIntent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            packageUri,
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            appContext.startActivity(appDetailsIntent)
+        } catch (error: Throwable) {
+            throw AppUpdateException(
+                AppUpdateErrorCategory.INSTALL_FAILED,
+                error.message ?: "Unable to open app install permission settings.",
+                error,
+            )
+        }
     }
 }

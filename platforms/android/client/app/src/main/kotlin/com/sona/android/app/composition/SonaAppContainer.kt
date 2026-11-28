@@ -89,6 +89,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.io.File
 
 class SonaAppContainer(context: Context) {
@@ -104,6 +105,13 @@ class SonaAppContainer(context: Context) {
         onLevelChanged = UniffiMobileLoggerAdapter::applyLevel,
     ).also { logger ->
         UniffiMobileLoggerAdapter.setSink(logger::append)
+        processScope.launch(Dispatchers.IO) {
+            runCatching {
+                generalSettingsRepository.settings.collect { settings ->
+                    logger.applyLogLevel(settings.logLevel)
+                }
+            }
+        }
     }
     private val appUpdates = AndroidAppUpdateAdapter(appContext)
     private val apkInstallerAdapter = AndroidApkInstaller(appContext)

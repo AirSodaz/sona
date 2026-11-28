@@ -484,21 +484,58 @@ private fun UpdateStatus(
                 }
                 is AboutUpdateStatus.Error -> {
                     status.release?.let { errRelease ->
-                        TextButton(onClick = { onOpenRelease(errRelease.releasePageUrl) }) {
-                            Text(stringResource(R.string.about_view_update))
-                        }
-                        OutlinedButton(onClick = onSwitchMirror) {
-                            Text(
-                                stringResource(
-                                    R.string.about_switch_mirror,
-                                    stringResource(downloadMirror.labelRes()),
-                                ),
-                            )
-                        }
-                        Button(onClick = onDownloadUpdate) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.about_retry_download))
+                        when (status.category) {
+                            AppUpdateErrorCategory.UNSUPPORTED_ABI -> {
+                                FilledTonalButton(onClick = { onOpenRelease(errRelease.releasePageUrl) }) {
+                                    Text(stringResource(R.string.about_view_update))
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.OpenInNew,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            AppUpdateErrorCategory.INSTALL_FAILED,
+                            AppUpdateErrorCategory.INSTALL_PERMISSION_REQUIRED -> {
+                                TextButton(onClick = { onOpenRelease(errRelease.releasePageUrl) }) {
+                                    Text(stringResource(R.string.about_view_update))
+                                }
+                                Button(onClick = onDownloadUpdate) {
+                                    Icon(Icons.Rounded.InstallMobile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.about_install_now))
+                                }
+                            }
+                            AppUpdateErrorCategory.WIFI_REQUIRED -> {
+                                TextButton(onClick = { onOpenRelease(errRelease.releasePageUrl) }) {
+                                    Text(stringResource(R.string.about_view_update))
+                                }
+                                Button(onClick = onDownloadUpdate) {
+                                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.about_retry_download))
+                                }
+                            }
+                            AppUpdateErrorCategory.NETWORK,
+                            AppUpdateErrorCategory.VERIFICATION_FAILED -> {
+                                TextButton(onClick = { onOpenRelease(errRelease.releasePageUrl) }) {
+                                    Text(stringResource(R.string.about_view_update))
+                                }
+                                OutlinedButton(onClick = onSwitchMirror) {
+                                    Text(
+                                        stringResource(
+                                            R.string.about_switch_mirror,
+                                            stringResource(downloadMirror.labelRes()),
+                                        ),
+                                    )
+                                }
+                                Button(onClick = onDownloadUpdate) {
+                                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.about_retry_download))
+                                }
+                            }
                         }
                     } ?: run {
                         FilledTonalButton(onClick = onCheckForUpdates) {

@@ -203,6 +203,79 @@ class AboutSettingsViewModelTest {
         assertFalse(vm.state.value.showInstallPermissionDialog)
     }
 
+    @Test
+    fun `manual check during silent startup check promotes to visible checking without duplicate request`() = runTest {
+        val updates = FakeUpdatePort(release()).apply { gate = CompletableDeferred() }
+        val settings = FakeGeneralSettingsPort(GeneralSettings(autoCheckUpdates = true))
+        val vm = viewModel(updates = updates, settings = settings)
+
+        vm.checkOnStartupIfEnabled()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertEquals(1, updates.calls)
+
+        vm.checkForUpdates()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertEquals(1, updates.calls)
+        assertTrue(vm.state.value.updateStatus is AboutUpdateStatus.Checking)
+
+        updates.gate?.complete(Unit)
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertTrue(viewModelStatusIsUpdateAvailable(vm))
+    }
+
+    @Test
+    fun `clearing update cache reverts ready-to-install back to update available`() = runTest {
+        val updates = FakeUpdatePort(releaseWithAsset())
+        val installer = FakeApkInstaller(canInstall = true)
+        val downloader = FakeDownloader()
+        val notifications = FakeNotificationPort()
+        val vm = AboutSettingsViewModel(
+            build = build(),
+            checkForAppUpdate = CheckForAppUpdate(updates),
+            updateDownloader = downloader,
+            apkInstaller = installer,
+            networkStatus = NetworkStatusPort { false },
+            notificationPort = notifications,
+        )
+
+        vm.checkForUpdates()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        vm.startDownload()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertTrue(vm.state.value.updateStatus is AboutUpdateStatus.ReadyToInstall)
+        assertEquals(1, notifications.readyCount)
+
+        vm.onUpdateCacheCleared()
+        assertTrue(vm.state.value.updateStatus is AboutUpdateStatus.UpdateAvailable)
+        assertEquals(1, notifications.cancelCount)
+    }
+
+    @Test
+    fun `returning from install settings without permission clears pending install path`() = runTest {
+        val updates = FakeUpdatePort(releaseWithAsset())
+        val installer = FakeApkInstaller(canInstall = false)
+        val downloader = FakeDownloader()
+        val vm = viewModel(
+            updates = updates,
+            downloader = downloader,
+            installer = installer,
+            networkStatus = NetworkStatusPort { false },
+        )
+
+        vm.checkForUpdates()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        vm.startDownload()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertEquals("/cache/sona-update-12.apk", vm.state.value.pendingInstallApkPath)
+
+        vm.onHostResumed()
+        assertNull(vm.state.value.pendingInstallApkPath)
+        assertNull(installer.installedPath)
+    }
+
+    private fun viewModelStatusIsUpdateAvailable(vm: AboutSettingsViewModel): Boolean =
+        vm.state.value.updateStatus is AboutUpdateStatus.UpdateAvailable
+
     private fun viewModel(
         updates: AppUpdatePort,
         downloader: AppUpdateDownloadPort? = null,
@@ -252,6 +325,19 @@ class AboutSettingsViewModelTest {
         override fun findCachedApk(release: AppReleaseInfo, supportedAbis: List<String>) = null
         override suspend fun cleanupStaleUpdates(currentVersionCode: Int) = Unit
         override suspend fun clearCachedUpdates(): Long = 0L
+    }
+
+    private class FakeNotificationPort : AppUpdateNotificationPort {
+        var readyCount = 0
+        var cancelCount = 0
+        override fun updateProgress(versionName: String, progress: AppUpdateDownloadProgress) = Unit
+        override fun showReadyToInstall(versionName: String) {
+            readyCount += 1
+        }
+        override fun showFailed(versionName: String) = Unit
+        override fun cancel() {
+            cancelCount += 1
+        }
     }
 
     private class FakeApkInstaller(var canInstall: Boolean) : ApkInstallerPort {

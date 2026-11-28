@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,6 +65,7 @@ import com.sona.android.app.ui.component.springOverscroll
 import com.sona.android.application.settings.AppLogLevel
 import com.sona.android.application.settings.DownloadMirror
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun GeneralDiagnosticsPane(
@@ -97,21 +97,30 @@ internal fun GeneralDiagnosticsPane(
     ) { uri -> uri?.let { onExportLogs(it.toString()) } }
 
     LaunchedEffect(Unit) { onShown() }
+    LaunchedEffect(copiedBanner) {
+        if (copiedBanner) {
+            delay(2_500L)
+            copiedBanner = false
+        }
+    }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .springOverscroll()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 20.dp,
+                bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
                 .widthIn(max = 720.dp)
-                .fillMaxWidth()
-                .springOverscroll()
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    start = 24.dp,
-                    end = 24.dp,
-                    top = 20.dp,
-                    bottom = maxOf(navBarBottom + 16.dp, extraBottomPadding + 12.dp),
-                ),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             state.notice?.let { notice ->

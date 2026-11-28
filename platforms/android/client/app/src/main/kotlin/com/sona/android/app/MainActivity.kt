@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -103,7 +104,9 @@ class MainActivity : AppCompatActivity() {
                     notificationPort = AndroidAppUpdateNotificationManager(applicationContext),
                 ),
             )
-            onHostResumedInstallCheck = aboutSettingsViewModel::onHostResumed
+            SideEffect {
+                onHostResumedInstallCheck = aboutSettingsViewModel::onHostResumed
+            }
             val generalDiagnosticsViewModel: GeneralDiagnosticsViewModel = viewModel(
                 factory = GeneralDiagnosticsViewModel.factory(
                     generalSettings = container.generalSettings,
@@ -116,6 +119,7 @@ class MainActivity : AppCompatActivity() {
                         val notifGranted = SonaNotificationChannels.areNotificationsEnabled(applicationContext)
                         micGranted to notifGranted
                     },
+                    onUpdateCacheCleared = aboutSettingsViewModel::onUpdateCacheCleared,
                 ),
             )
             val cloudTranscriptionViewModel: CloudTranscriptionSettingsViewModel = viewModel(
