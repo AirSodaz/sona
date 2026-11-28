@@ -3,8 +3,6 @@ package com.sona.android.app.navigation
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -18,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -81,7 +80,7 @@ import com.sona.android.application.sync.WebDavSyncProvider
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SonaApp(
     bootstrapState: SonaBootstrapUiState,
@@ -217,6 +216,8 @@ internal fun SonaApp(
     onPendingOpenHistoryIdConsumed: () -> Unit = {},
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
+    var settingsSectionRequestToken by remember { mutableIntStateOf(0) }
+    var settingsSinglePaneDetailActive by remember { mutableStateOf(false) }
     var detailExitRequestToken by remember { mutableIntStateOf(0) }
     var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
     var recordingSheetExpanded by rememberSaveable { mutableStateOf(false) }
@@ -261,6 +262,7 @@ internal fun SonaApp(
                 onCloudProviderSelected(OnlineAsrProvider.VOLCENGINE_DOUBAO)
             }
             cloudCredentialFocusRequested = focusCloud
+            settingsSectionRequestToken += 1
             navController.navigate(settingsRoute(section)) {
                 popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
                 launchSingleTop = true
@@ -322,44 +324,55 @@ internal fun SonaApp(
                     exitTransition = { sonaExitTransition() },
                     popEnterTransition = { sonaPopEnterTransition() },
                     popExitTransition = { sonaPopExitTransition() },
+                    predictivePopEnterTransition = { swipeEdge ->
+                        sonaPredictivePopEnterTransition(swipeEdge)
+                    },
+                    predictivePopExitTransition = { swipeEdge ->
+                        sonaPredictivePopExitTransition(swipeEdge)
+                    },
                 ) {
                     composable(SonaDestination.LIBRARY.route) {
                         LaunchedEffect(Unit) { onRefreshLibrary() }
-                        LibraryScreen(
-                            state = libraryState,
-                            recognitionSettings = recognitionSettingsState,
-                            configuredProviders = cloudTranscriptionState.configuredProviders,
-                            onRefresh = onRefreshLibrary,
-                            onLoadMore = onLoadMoreLibrary,
-                            onRetry = onRetryLibrary,
-                            onOpenItem = { historyId ->
-                                navController.navigate(libraryDetailRoute(historyId))
-                            },
-                            onSearchChanged = onLibrarySearchChanged,
-                            onScopeChanged = onLibraryScopeChanged,
-                            onFilterChanged = onLibraryFilterChanged,
-                            onDateChanged = onLibraryDateChanged,
-                            onSortChanged = onLibrarySortChanged,
-                            onToggleSelection = onLibrarySelectionToggle(onToggleLibrarySelection),
-                            onClearSelection = onClearLibrarySelection,
-                            onTrashSelected = onTrashLibrarySelection,
-                            onRestoreSelected = onRestoreLibrarySelection,
-                            onPurgeSelected = onPurgeLibrarySelection,
-                            onTrashItem = onTrashLibraryItem,
-                            onRestoreItem = onRestoreLibraryItem,
-                            onMoveSelectedToProject = onMoveSelectedToProject,
-                            onCreateProject = onCreateHistoryProject,
-                            onRenameProject = onRenameHistoryProject,
-                            onDeleteProject = onDeleteHistoryProject,
-                            onCancelAudioImportJob = onCancelAudioImportJob,
-                            onDismissFailedImport = onDismissFailedAudioImport,
-                            onConfigureRecognition = onConfigureRecognition,
-                            recoveryPendingCount = recoveryPendingCount,
-                            onOpenRecovery = {
-                                navigateToSettingsSection(SettingsSection.DATA_RECOVERY, false)
-                            },
-                            extraBottomPadding = bottomOverlayPadding,
-                        )
+                        SonaParentPageTransitionContainer(
+                            scope = this,
+                            enableScrim = SonaNavMotion.isSubPage(currentRoute, currentSectionArg),
+                        ) {
+                            LibraryScreen(
+                                state = libraryState,
+                                recognitionSettings = recognitionSettingsState,
+                                configuredProviders = cloudTranscriptionState.configuredProviders,
+                                onRefresh = onRefreshLibrary,
+                                onLoadMore = onLoadMoreLibrary,
+                                onRetry = onRetryLibrary,
+                                onOpenItem = { historyId ->
+                                    navController.navigate(libraryDetailRoute(historyId))
+                                },
+                                onSearchChanged = onLibrarySearchChanged,
+                                onScopeChanged = onLibraryScopeChanged,
+                                onFilterChanged = onLibraryFilterChanged,
+                                onDateChanged = onLibraryDateChanged,
+                                onSortChanged = onLibrarySortChanged,
+                                onToggleSelection = onLibrarySelectionToggle(onToggleLibrarySelection),
+                                onClearSelection = onClearLibrarySelection,
+                                onTrashSelected = onTrashLibrarySelection,
+                                onRestoreSelected = onRestoreLibrarySelection,
+                                onPurgeSelected = onPurgeLibrarySelection,
+                                onTrashItem = onTrashLibraryItem,
+                                onRestoreItem = onRestoreLibraryItem,
+                                onMoveSelectedToProject = onMoveSelectedToProject,
+                                onCreateProject = onCreateHistoryProject,
+                                onRenameProject = onRenameHistoryProject,
+                                onDeleteProject = onDeleteHistoryProject,
+                                onCancelAudioImportJob = onCancelAudioImportJob,
+                                onDismissFailedImport = onDismissFailedAudioImport,
+                                onConfigureRecognition = onConfigureRecognition,
+                                recoveryPendingCount = recoveryPendingCount,
+                                onOpenRecovery = {
+                                    navigateToSettingsSection(SettingsSection.DATA_RECOVERY, false)
+                                },
+                                extraBottomPadding = bottomOverlayPadding,
+                            )
+                        }
                     }
                     composable(
                         route = LIBRARY_DETAIL_ROUTE,
@@ -375,69 +388,77 @@ internal fun SonaApp(
                         LaunchedEffect(historyId) {
                             onLoadLibraryTranscript(historyId)
                         }
-                        LibraryDetailScreen(
-                            historyId = historyId,
-                            item = libraryState.items.firstOrNull { it.historyId == historyId },
-                            detail = libraryState.detail,
-                            cloudTranscription = libraryState.cloudTranscription,
-                            projects = libraryState.projects,
-                            snapshots = libraryState.snapshots,
-                            snapshotDetail = libraryState.snapshotDetail,
-                            operationInProgress = libraryState.operationInProgress,
-                            operationError = libraryState.operationError,
-                            onRetry = { onLoadLibraryTranscript(historyId) },
-                            onTranscribeWithCloud = onTranscribeWithCloud,
-                            onTranscribeWithCurrentEngine = onTranscribeWithCurrentEngine,
-                            onUpdateTitle = { title -> onUpdateHistoryTitle(historyId, title) },
-                            onUpdateProject = { projectId -> onUpdateHistoryProject(historyId, projectId) },
-                            onCreateProject = onCreateHistoryProject,
-                            onLoadSnapshot = { snapshotId -> onLoadTranscriptSnapshot(historyId, snapshotId) },
-                            onCloseSnapshot = onCloseTranscriptSnapshot,
-                            onExportTranscript = onExportTranscript,
-                            playback = libraryState.playback,
-                            editor = libraryState.editor,
-                            llm = libraryState.llm,
-                            onSummarize = onSummarizeLibrary,
-                            onTranslate = onTranslateLibrary,
-                            onPolish = onPolishLibrary,
-                            onRetryLlm = onRetryLibraryLlm,
-                            onConfigureLlm = onConfigureLlm,
-                            onClearLlmConfigurationPrompt = onClearLibraryLlmConfigurationPrompt,
-                            appLanguage = appLanguage,
-                            exitRequestToken = detailExitRequestToken,
-                            onNavigateBack = {
-                                val destination = pendingDetailDestination
-                                pendingDetailDestination = null
-                                if (destination == null) {
-                                    navController.popBackStack()
-                                } else {
-                                    navController.navigate(destination) {
-                                        popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                        val isCoveredByAnotherSubPage = currentRoute != LIBRARY_DETAIL_ROUTE &&
+                            SonaNavMotion.isSubPage(currentRoute, currentSectionArg)
+                        SonaSubPageTransitionContainer(
+                            scope = this,
+                            enabled = !isCoveredByAnotherSubPage,
+                        ) {
+                            LibraryDetailScreen(
+                                historyId = historyId,
+                                item = libraryState.items.firstOrNull { it.historyId == historyId },
+                                detail = libraryState.detail,
+                                cloudTranscription = libraryState.cloudTranscription,
+                                projects = libraryState.projects,
+                                snapshots = libraryState.snapshots,
+                                snapshotDetail = libraryState.snapshotDetail,
+                                operationInProgress = libraryState.operationInProgress,
+                                operationError = libraryState.operationError,
+                                onRetry = { onLoadLibraryTranscript(historyId) },
+                                onTranscribeWithCloud = onTranscribeWithCloud,
+                                onTranscribeWithCurrentEngine = onTranscribeWithCurrentEngine,
+                                onUpdateTitle = { title -> onUpdateHistoryTitle(historyId, title) },
+                                onUpdateProject = { projectId -> onUpdateHistoryProject(historyId, projectId) },
+                                onCreateProject = onCreateHistoryProject,
+                                onLoadSnapshot = { snapshotId -> onLoadTranscriptSnapshot(historyId, snapshotId) },
+                                onCloseSnapshot = onCloseTranscriptSnapshot,
+                                onExportTranscript = onExportTranscript,
+                                playback = libraryState.playback,
+                                editor = libraryState.editor,
+                                llm = libraryState.llm,
+                                onSummarize = onSummarizeLibrary,
+                                onTranslate = onTranslateLibrary,
+                                onPolish = onPolishLibrary,
+                                onRetryLlm = onRetryLibraryLlm,
+                                onConfigureLlm = onConfigureLlm,
+                                onClearLlmConfigurationPrompt = onClearLibraryLlmConfigurationPrompt,
+                                appLanguage = appLanguage,
+                                exitRequestToken = detailExitRequestToken,
+                                onExitRequestConsumed = { detailExitRequestToken = 0 },
+                                onNavigateBack = {
+                                    val destination = pendingDetailDestination
+                                    pendingDetailDestination = null
+                                    if (destination == null) {
+                                        navController.popBackStack()
+                                    } else {
+                                        navController.navigate(destination) {
+                                            popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
-                                }
-                            },
-                            onTogglePlayback = onTogglePlayback,
-                            onSeekPlayback = onSeekPlayback,
-                            onSkipPlayback = onSkipPlayback,
-                            onSetPlaybackSpeed = onSetPlaybackSpeed,
-                            onPausePlayback = onPausePlayback,
-                            onReleasePlayback = onReleasePlayback,
-                            onStartEditing = { segmentId -> onStartTranscriptEdit(historyId, segmentId) },
-                            onEditSegment = onEditTranscriptSegment,
-                            onUpdateText = onUpdateTranscriptText,
-                            onUpdateTranslation = onUpdateTranscriptTranslation,
-                            onDeleteSegment = onDeleteTranscriptSegment,
-                            onMergeSegment = onMergeTranscriptSegment,
-                            onSplitSegment = onSplitTranscriptSegment,
-                            onUndoEdit = onUndoTranscriptEdit,
-                            onRedoEdit = onRedoTranscriptEdit,
-                            onSaveEdit = onSaveTranscriptEdit,
-                            onDiscardEdit = onDiscardTranscriptEdit,
-                            onFlushEdit = onFlushTranscriptEdit,
-                            extraBottomPadding = if (miniBarVisible) miniBarOverlayPadding else 0.dp,
-                        )
+                                },
+                                onTogglePlayback = onTogglePlayback,
+                                onSeekPlayback = onSeekPlayback,
+                                onSkipPlayback = onSkipPlayback,
+                                onSetPlaybackSpeed = onSetPlaybackSpeed,
+                                onPausePlayback = onPausePlayback,
+                                onReleasePlayback = onReleasePlayback,
+                                onStartEditing = { segmentId -> onStartTranscriptEdit(historyId, segmentId) },
+                                onEditSegment = onEditTranscriptSegment,
+                                onUpdateText = onUpdateTranscriptText,
+                                onUpdateTranslation = onUpdateTranscriptTranslation,
+                                onDeleteSegment = onDeleteTranscriptSegment,
+                                onMergeSegment = onMergeTranscriptSegment,
+                                onSplitSegment = onSplitTranscriptSegment,
+                                onUndoEdit = onUndoTranscriptEdit,
+                                onRedoEdit = onRedoTranscriptEdit,
+                                onSaveEdit = onSaveTranscriptEdit,
+                                onDiscardEdit = onDiscardTranscriptEdit,
+                                onFlushEdit = onFlushTranscriptEdit,
+                                extraBottomPadding = if (miniBarVisible) miniBarOverlayPadding else 0.dp,
+                            )
+                        }
                     }
                     composable(
                         route = SonaDestination.SETTINGS.routePattern,
@@ -449,112 +470,118 @@ internal fun SonaApp(
                             },
                         ),
                     ) { entry ->
-                        SettingsScreen(
-                            initialSection = SettingsSection.fromRoute(
-                                entry.arguments?.getString(SETTINGS_SECTION_ARGUMENT),
-                            ),
-                            bootstrapState = bootstrapState,
-                            appearanceState = appearanceState,
-                            cloudTranscriptionState = cloudTranscriptionState,
-                            recognitionSettingsState = recognitionSettingsState,
-                            syncState = syncState,
-                            dataRecoveryState = dataRecoveryState,
-                            llmState = llmState,
-                            aboutState = aboutState,
-                            appLanguage = appLanguage,
-                            requestCloudCredentialFocus = cloudCredentialFocusRequested,
-                            onAppLanguageChanged = onAppLanguageChanged,
-                            onThemeModeChanged = onThemeModeChanged,
-                            onPureBlackDarkChanged = onPureBlackDarkChanged,
-                            onSelectSystemDynamicColor = onSelectSystemDynamicColor,
-                            onSelectPalettePreset = onSelectPalettePreset,
-                            onCustomSeedColorChanged = onCustomSeedColorChanged,
-                            onPaletteStyleChanged = onPaletteStyleChanged,
-                            onContrastLevelChanged = onContrastLevelChanged,
-                            onAboutShown = onAboutShown,
-                            onCheckForUpdates = onCheckForUpdates,
-                            onCloudProviderSelected = onCloudProviderSelected,
-                            onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
-                            onSaveCloudApiKey = onSaveCloudApiKey,
-                            onClearCloudApiKey = onClearCloudApiKey,
-                            onSelectModel = onSelectModel,
-                            onDownloadLocalModel = onDownloadLocalModel,
-                            onValidateLocalModel = onValidateLocalModel,
-                            onDeleteLocalModel = onDeleteLocalModel,
-                            onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
-                            onRefreshSync = onRefreshSync,
-                            onTestSyncProvider = onTestSyncProvider,
-                            onCreateSync = onCreateSync,
-                            onPreviewSyncJoin = onPreviewSyncJoin,
-                            onJoinSync = onJoinSync,
-                            onUnlockSync = onUnlockSync,
-                            onUnlockSyncWithRecovery = onUnlockSyncWithRecovery,
-                            onRunSync = onRunSync,
-                            onPauseSync = onPauseSync,
-                            onLockSync = onLockSync,
-                            onDisconnectSync = onDisconnectSync,
-                            onGenerateSyncRecoveryKey = onGenerateSyncRecoveryKey,
-                            onExportSyncRecoveryKey = onExportSyncRecoveryKey,
-                            onConsumeSyncRecoveryKey = onConsumeSyncRecoveryKey,
-                            onResolveSyncConflict = onResolveSyncConflict,
-                            onLoadSyncConflict = onLoadSyncConflict,
-                            onChangeSyncPreset = onChangeSyncPreset,
-                            onChangeSyncPassword = onChangeSyncPassword,
-                            onDiscoverSyncVaults = onDiscoverSyncVaults,
-                            onCreateSyncWithVaultId = onCreateSyncWithVaultId,
-                            onApplySyncPairingToken = onApplySyncPairingToken,
-                            onClearSyncPairingNotice = onClearSyncPairingNotice,
-                            onGetSyncPairingToken = onGetSyncPairingToken,
-                            onExportBackup = onExportBackup,
-                            onInspectBackup = onInspectBackup,
-                            onConfirmBackupImport = onConfirmBackupImport,
-                            onCancelBackupImport = onCancelBackupImport,
-                            onRefreshRecovery = onRefreshRecovery,
-                            onResumeRecovery = { itemId ->
-                                val item = dataRecoveryState.recovery.items.firstOrNull { it.id == itemId }
-                                val transcriptHistoryId = item?.historyId
-                                if (item?.source == RecoverySource.TRANSCRIPT_EDIT && transcriptHistoryId != null) {
-                                    navController.navigate(libraryDetailRoute(transcriptHistoryId)) {
-                                        popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
-                                        launchSingleTop = true
+                        val entrySection = entry.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+                        SonaSubPageTransitionContainer(
+                            scope = this,
+                            enabled = !entrySection.isNullOrBlank(),
+                        ) {
+                            SettingsScreen(
+                                initialSection = SettingsSection.fromRoute(entrySection),
+                                sectionRequestToken = settingsSectionRequestToken,
+                                bootstrapState = bootstrapState,
+                                appearanceState = appearanceState,
+                                cloudTranscriptionState = cloudTranscriptionState,
+                                recognitionSettingsState = recognitionSettingsState,
+                                syncState = syncState,
+                                dataRecoveryState = dataRecoveryState,
+                                llmState = llmState,
+                                aboutState = aboutState,
+                                appLanguage = appLanguage,
+                                requestCloudCredentialFocus = cloudCredentialFocusRequested,
+                                onAppLanguageChanged = onAppLanguageChanged,
+                                onThemeModeChanged = onThemeModeChanged,
+                                onPureBlackDarkChanged = onPureBlackDarkChanged,
+                                onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                                onSelectPalettePreset = onSelectPalettePreset,
+                                onCustomSeedColorChanged = onCustomSeedColorChanged,
+                                onPaletteStyleChanged = onPaletteStyleChanged,
+                                onContrastLevelChanged = onContrastLevelChanged,
+                                onAboutShown = onAboutShown,
+                                onCheckForUpdates = onCheckForUpdates,
+                                onCloudProviderSelected = onCloudProviderSelected,
+                                onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                                onSaveCloudApiKey = onSaveCloudApiKey,
+                                onClearCloudApiKey = onClearCloudApiKey,
+                                onSelectModel = onSelectModel,
+                                onDownloadLocalModel = onDownloadLocalModel,
+                                onValidateLocalModel = onValidateLocalModel,
+                                onDeleteLocalModel = onDeleteLocalModel,
+                                onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
+                                onRefreshSync = onRefreshSync,
+                                onTestSyncProvider = onTestSyncProvider,
+                                onCreateSync = onCreateSync,
+                                onPreviewSyncJoin = onPreviewSyncJoin,
+                                onJoinSync = onJoinSync,
+                                onUnlockSync = onUnlockSync,
+                                onUnlockSyncWithRecovery = onUnlockSyncWithRecovery,
+                                onRunSync = onRunSync,
+                                onPauseSync = onPauseSync,
+                                onLockSync = onLockSync,
+                                onDisconnectSync = onDisconnectSync,
+                                onGenerateSyncRecoveryKey = onGenerateSyncRecoveryKey,
+                                onExportSyncRecoveryKey = onExportSyncRecoveryKey,
+                                onConsumeSyncRecoveryKey = onConsumeSyncRecoveryKey,
+                                onResolveSyncConflict = onResolveSyncConflict,
+                                onLoadSyncConflict = onLoadSyncConflict,
+                                onChangeSyncPreset = onChangeSyncPreset,
+                                onChangeSyncPassword = onChangeSyncPassword,
+                                onDiscoverSyncVaults = onDiscoverSyncVaults,
+                                onCreateSyncWithVaultId = onCreateSyncWithVaultId,
+                                onApplySyncPairingToken = onApplySyncPairingToken,
+                                onClearSyncPairingNotice = onClearSyncPairingNotice,
+                                onGetSyncPairingToken = onGetSyncPairingToken,
+                                onExportBackup = onExportBackup,
+                                onInspectBackup = onInspectBackup,
+                                onConfirmBackupImport = onConfirmBackupImport,
+                                onCancelBackupImport = onCancelBackupImport,
+                                onRefreshRecovery = onRefreshRecovery,
+                                onResumeRecovery = { itemId ->
+                                    val item = dataRecoveryState.recovery.items.firstOrNull { it.id == itemId }
+                                    val transcriptHistoryId = item?.historyId
+                                    if (item?.source == RecoverySource.TRANSCRIPT_EDIT && transcriptHistoryId != null) {
+                                        navController.navigate(libraryDetailRoute(transcriptHistoryId)) {
+                                            popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
+                                            launchSingleTop = true
+                                        }
+                                    } else {
+                                        onResumeRecovery(itemId)
                                     }
-                                } else {
-                                    onResumeRecovery(itemId)
-                                }
-                            },
-                            onResumeAllRecovery = onResumeAllRecovery,
-                            onDiscardRecovery = onDiscardRecovery,
-                            onClearResolvedRecovery = onClearResolvedRecovery,
-                            onLlmProvider = onLlmProvider,
-                            onLlmModel = onLlmModel,
-                            onLlmBaseUrl = onLlmBaseUrl,
-                            onLlmPath = onLlmPath,
-                            onLlmVersion = onLlmVersion,
-                            onLlmApiKey = onLlmApiKey,
-                            onLlmSave = onLlmSave,
-                            onLlmClear = onLlmClear,
-                            onCloudCredentialFocusConsumed = {
-                                cloudCredentialFocusRequested = false
-                            },
-                            onReturnedToSettingsList = {
-                                if (currentSectionArg != null) {
-                                    navController.navigate(SonaDestination.SETTINGS.route) {
-                                        popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
-                                        launchSingleTop = true
-                                    }
-                                }
-                            },
-                            onCloseToLibrary = {
-                                navController.popBackStack()
-                            },
-                            bottomOverlayPadding = bottomOverlayPadding,
-                        )
+                                },
+                                onResumeAllRecovery = onResumeAllRecovery,
+                                onDiscardRecovery = onDiscardRecovery,
+                                onClearResolvedRecovery = onClearResolvedRecovery,
+                                onLlmProvider = onLlmProvider,
+                                onLlmModel = onLlmModel,
+                                onLlmBaseUrl = onLlmBaseUrl,
+                                onLlmPath = onLlmPath,
+                                onLlmVersion = onLlmVersion,
+                                onLlmApiKey = onLlmApiKey,
+                                onLlmSave = onLlmSave,
+                                onLlmClear = onLlmClear,
+                                onCloudCredentialFocusConsumed = {
+                                    cloudCredentialFocusRequested = false
+                                },
+                                onShowingSinglePaneDetailChanged = { detailActive ->
+                                    settingsSinglePaneDetailActive = detailActive
+                                },
+                                onCloseToLibrary = {
+                                    navController.popBackStack()
+                                },
+                                bottomOverlayPadding = bottomOverlayPadding,
+                            )
+                        }
                     }
                 }
             }
 
             // Bottom Dock Area (Mini-Bar when recording minimized + Floating Capture/Nav Dock)
-            val showFloatingDock = SonaFloatingDockDefaults.shouldShow(currentRoute, currentSectionArg) &&
+            val inSettings = SonaDestination.SETTINGS.matches(currentRoute)
+            val showDockForDestination = if (inSettings) {
+                !settingsSinglePaneDetailActive
+            } else {
+                SonaFloatingDockDefaults.shouldShow(currentRoute, currentSectionArg)
+            }
+            val showFloatingDock = showDockForDestination &&
                 !recordingSheetExpanded &&
                 libraryState.selectedIds.isEmpty()
 
@@ -565,10 +592,21 @@ internal fun SonaApp(
                     .onSizeChanged { size -> bottomOverlayHeightPx = size.height },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val motionScheme = MaterialTheme.motionScheme
                 AnimatedVisibility(
                     visible = isRecordingActive && !recordingSheetExpanded,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut(),
+                    enter = slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = motionScheme.defaultSpatialSpec(),
+                    ) + fadeIn(
+                        animationSpec = motionScheme.defaultEffectsSpec(),
+                    ),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = motionScheme.fastSpatialSpec(),
+                    ) + fadeOut(
+                        animationSpec = motionScheme.fastEffectsSpec(),
+                    ),
                 ) {
                     RecordMiniBar(
                         recordingState = recordingState,
@@ -613,22 +651,21 @@ internal fun SonaApp(
             }
 
             // Full-Screen Live Recording Sheet Overlay
+            val overlayMotionScheme = MaterialTheme.motionScheme
             AnimatedVisibility(
                 visible = recordingSheetExpanded,
                 enter = slideInVertically(
                     initialOffsetY = { it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                ) + fadeIn(),
+                    animationSpec = overlayMotionScheme.defaultSpatialSpec(),
+                ) + fadeIn(
+                    animationSpec = overlayMotionScheme.defaultEffectsSpec(),
+                ),
                 exit = slideOutVertically(
                     targetOffsetY = { it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                ) + fadeOut(),
+                    animationSpec = overlayMotionScheme.fastSpatialSpec(),
+                ) + fadeOut(
+                    animationSpec = overlayMotionScheme.fastEffectsSpec(),
+                ),
             ) {
                 RecordScreen(
                     bootstrapState = bootstrapState,

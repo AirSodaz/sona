@@ -1,5 +1,6 @@
 package com.sona.android.app.navigation
 
+import androidx.compose.ui.graphics.TransformOrigin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -182,6 +183,49 @@ class SonaNavMotionTest {
                 "settings?section={section}",
                 targetSectionArg = "recognition",
             ),
+        )
+    }
+
+    @Test
+    fun `returning from settings subsection to settings root resolves none to avoid double transition`() {
+        assertEquals(
+            NavMotionDirection.NONE,
+            SonaNavMotion.resolveMotionDirection(
+                initialRoute = "settings?section={section}",
+                targetRoute = "settings?section={section}",
+                initialSectionArg = "recognition",
+                targetSectionArg = null,
+                isPop = false,
+            ),
+        )
+        assertEquals(
+            NavMotionDirection.NONE,
+            SonaNavMotion.resolveMotionDirection(
+                initialRoute = "settings?section={section}",
+                targetRoute = "settings",
+                initialSectionArg = "recognition",
+                targetSectionArg = null,
+                isPop = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `predictive back edge helpers align exit direction and transform origin`() {
+        assertEquals(1f, SonaNavMotion.resolvePredictiveBackSign(0), 0.0001f)
+        assertEquals(-1f, SonaNavMotion.resolvePredictiveBackSign(SonaNavMotion.SWIPE_EDGE_RIGHT), 0.0001f)
+        assertEquals(1f, SonaNavMotion.resolvePredictiveBackSign(2), 0.0001f)
+        assertEquals(
+            TransformOrigin(0.75f, 0.5f),
+            SonaNavMotion.resolvePredictiveBackTransformOrigin(0),
+        )
+        assertEquals(
+            TransformOrigin(0.25f, 0.5f),
+            SonaNavMotion.resolvePredictiveBackTransformOrigin(SonaNavMotion.SWIPE_EDGE_RIGHT),
+        )
+        assertEquals(
+            TransformOrigin(0.75f, 0.5f),
+            SonaNavMotion.resolvePredictiveBackTransformOrigin(2),
         )
     }
 }

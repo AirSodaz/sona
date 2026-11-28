@@ -4,18 +4,17 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -74,14 +73,6 @@ import com.sona.android.app.ui.theme.LocalSonaSemanticColors
 import com.sona.android.application.recording.LiveRecordingState
 
 /**
- * Spring specification for fluid navigation and state transitions.
- */
-internal val SonaFluidSpringSpec = spring<Float>(
-    dampingRatio = 0.78f,
-    stiffness = 420f,
-)
-
-/**
  * Layout and styling defaults for the Material 3 Expressive floating capture & navigation dock.
  */
 object SonaFloatingDockDefaults {
@@ -103,7 +94,7 @@ object SonaFloatingDockDefaults {
  * (`Library` + `Settings`) with a global quick-capture capsule (tap to record immediately,
  * long-press or tap the adjacent file-import button to transcribe an audio file).
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SonaFloatingDock(
     currentRoute: String?,
@@ -119,32 +110,21 @@ fun SonaFloatingDock(
     val isActiveRecording = recordingState is LiveRecordingState.Preparing ||
         recordingState is LiveRecordingState.Recording ||
         recordingState is LiveRecordingState.Stopping
+    val motionScheme = MaterialTheme.motionScheme
 
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(
             initialOffsetY = { it },
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
+            animationSpec = motionScheme.defaultSpatialSpec(),
         ) + fadeIn(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
+            animationSpec = motionScheme.defaultEffectsSpec(),
         ),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
+            animationSpec = motionScheme.fastSpatialSpec(),
         ) + fadeOut(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium,
-            ),
+            animationSpec = motionScheme.fastEffectsSpec(),
         ),
         modifier = modifier,
     ) {
@@ -262,6 +242,7 @@ fun SonaFloatingDock(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SonaFloatingDockItem(
     destination: SonaDestination,
@@ -271,6 +252,7 @@ private fun SonaFloatingDockItem(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val label = stringResource(destination.labelRes)
+    val motionScheme = MaterialTheme.motionScheme
 
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) {
@@ -278,7 +260,7 @@ private fun SonaFloatingDockItem(
         } else {
             Color.Transparent
         },
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 460f),
+        animationSpec = motionScheme.fastEffectsSpec(),
         label = "dockItemContainerColor",
     )
 
@@ -288,13 +270,13 @@ private fun SonaFloatingDockItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 460f),
+        animationSpec = motionScheme.fastEffectsSpec(),
         label = "dockItemContentColor",
     )
 
     val pillScale by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.94f,
-        animationSpec = SonaFluidSpringSpec,
+        animationSpec = motionScheme.fastSpatialSpec(),
         label = "dockItemPillScale",
     )
 
@@ -344,7 +326,7 @@ private fun SonaFloatingDockItem(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RecordCaptureCapsule(
     recordingState: LiveRecordingState,
@@ -359,6 +341,7 @@ private fun RecordCaptureCapsule(
         recordingState is LiveRecordingState.Stopping
     val isPaused = (recordingState as? LiveRecordingState.Recording)?.isPaused == true
     val elapsedMillis = (recordingState as? LiveRecordingState.Recording)?.elapsedMillis ?: 0L
+    val motionScheme = MaterialTheme.motionScheme
 
     val containerColor by animateColorAsState(
         targetValue = when {
@@ -366,7 +349,7 @@ private fun RecordCaptureCapsule(
             isActive && isPaused -> MaterialTheme.colorScheme.tertiaryContainer
             else -> MaterialTheme.colorScheme.primary
         },
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
+        animationSpec = motionScheme.fastEffectsSpec(),
         label = "captureCapsuleBg",
     )
     val contentColor by animateColorAsState(
@@ -375,7 +358,7 @@ private fun RecordCaptureCapsule(
             isActive && isPaused -> MaterialTheme.colorScheme.onTertiaryContainer
             else -> MaterialTheme.colorScheme.onPrimary
         },
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
+        animationSpec = motionScheme.fastEffectsSpec(),
         label = "captureCapsuleFg",
     )
 
@@ -407,7 +390,10 @@ private fun RecordCaptureCapsule(
     ) {
         AnimatedContent(
             targetState = isActive,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                fadeIn(animationSpec = motionScheme.fastEffectsSpec()) togetherWith
+                    fadeOut(animationSpec = motionScheme.fastEffectsSpec())
+            },
             label = "captureCapsuleContent",
         ) { active ->
             Row(
