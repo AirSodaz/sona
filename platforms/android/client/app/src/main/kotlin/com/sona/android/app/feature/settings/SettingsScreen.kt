@@ -1,6 +1,9 @@
 package com.sona.android.app.feature.settings
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,10 +60,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.navigation.SonaNavMotion
+import com.sona.android.app.navigation.SonaParentPageTransitionContainer
+import com.sona.android.app.navigation.SonaSubPageTransitionContainer
 import com.sona.android.app.navigation.sonaSubPageEnterFromLeft
 import com.sona.android.app.navigation.sonaSubPageEnterFromRight
 import com.sona.android.app.navigation.sonaSubPageExitToLeft
 import com.sona.android.app.navigation.sonaSubPageExitToRight
+import com.sona.android.app.navigation.sonaTwoPaneSectionTransition
 import com.sona.android.app.ui.component.SonaBackButton
 import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
@@ -81,6 +88,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun SettingsScreen(
     initialSection: SettingsSection?,
+    requestedSection: SettingsSection? = initialSection,
+    sectionRequestToken: Int = 0,
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
@@ -152,6 +161,8 @@ internal fun SettingsScreen(
     onLlmSave: () -> Unit = {},
     onLlmClear: () -> Unit = {},
     onReturnedToSettingsList: () -> Unit = {},
+    onShowingSinglePaneDetailChanged: (Boolean) -> Unit = {},
+    onShowingSinglePaneListChanged: (Boolean) -> Unit = {},
     onCloseToLibrary: (() -> Unit)? = null,
     bottomOverlayPadding: Dp = 0.dp,
 ) {
@@ -165,6 +176,9 @@ internal fun SettingsScreen(
     var selectedSectionRoute by rememberSaveable {
         mutableStateOf(initialSection?.route ?: SettingsSection.APPEARANCE.route)
     }
+    var handledSectionRequestToken by rememberSaveable {
+        mutableIntStateOf(sectionRequestToken)
+    }
     var cloudCredentialFocusSessionActive by remember {
         mutableStateOf(requestCloudCredentialFocus)
     }
@@ -172,6 +186,12 @@ internal fun SettingsScreen(
         onCloudCredentialFocusConsumed,
     )
     val currentOnReturnedToSettingsList by rememberUpdatedState(onReturnedToSettingsList)
+    val currentOnShowingSinglePaneDetailChanged by rememberUpdatedState(
+        onShowingSinglePaneDetailChanged,
+    )
+    val currentOnShowingSinglePaneListChanged by rememberUpdatedState(
+        onShowingSinglePaneListChanged,
+    )
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
@@ -181,6 +201,8 @@ internal fun SettingsScreen(
     val isTwoPane = listPaneVisible && detailPaneVisible
     val showingSinglePaneList = !isTwoPane &&
         navigator.currentDestination?.pane == ListDetailPaneScaffoldRole.List
+    val showingSinglePaneDetail = !isTwoPane &&
+        navigator.currentDestination?.pane == ListDetailPaneScaffoldRole.Detail
     val canNavigateBack = !listPaneVisible && navigator.canNavigateBack()
     val showDetailBack = canNavigateBack || (isTwoPane && initialSection != null && onCloseToLibrary != null)
     val consumeCloudCredentialFocusSession = {
@@ -198,8 +220,14 @@ internal fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(showingSinglePaneDetail) {
+        currentOnShowingSinglePaneDetailChanged(showingSinglePaneDetail)
+    }
+
     LaunchedEffect(showingSinglePaneList) {
+        currentOnShowingSinglePaneListChanged(showingSinglePaneList)
         if (showingSinglePaneList) {
+            consumeCloudCredentialFocusSession()
             currentOnReturnedToSettingsList()
         }
     }
@@ -210,22 +238,26 @@ internal fun SettingsScreen(
         }
     }
     DisposableEffect(Unit) {
-        onDispose { currentOnCloudCredentialFocusConsumed() }
-    }
-    LaunchedEffect(initialSection) {
-        initialSection?.let { section ->
-            selectedSectionRoute = section.route
-            val currentDestination = navigator.currentDestination
-            if (
-                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
-                currentDestination.contentKey != section
-            ) {
-                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
-            }
+        onDispose {
+            currentOnCloudCredentialFocusConsumed()
+            currentOnShowingSinglePaneDetailChanged(false)
+            currentOnShowingSinglePaneListChanged(false)
         }
     }
-    BackHandler(enabled = canNavigateBack) {
-        navigateBack()
+    LaunchedEffect(initialSection, requestedSection, sectionRequestToken) {
+        if (sectionRequestToken > 0 && sectionRequestToken != handledSectionRequestToken) {
+            handledSectionRequestToken = sectionRequestToken
+            (requestedSection ?: initialSection)?.let { section ->
+                selectedSectionRoute = section.route
+                val currentDestination = navigator.currentDestination
+                if (
+                    currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                    currentDestination.contentKey != section
+                ) {
+                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
+                }
+            }
+        }
     }
 
     NavigableListDetailPaneScaffold(
@@ -235,105 +267,116 @@ internal fun SettingsScreen(
             AnimatedPane(
                 enterTransition = sonaSubPageEnterFromLeft(),
                 exitTransition = sonaSubPageExitToLeft(),
-                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+                boundsAnimationSpec = SonaNavMotion.boundsSpringSpec(),
             ) {
-                SettingsSectionList(
-                    selectedSection = selectedSection,
-                    showSelection = isTwoPane,
-                    extraBottomPadding = bottomOverlayPadding,
-                    onSectionSelected = { section ->
-                        if (section != SettingsSection.RECOGNITION) {
-                            consumeCloudCredentialFocusSession()
-                        }
-                        selectedSectionRoute = section.route
-                        scope.launch {
-                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
-                        }
-                    },
-                )
+                SonaParentPageTransitionContainer(
+                    scope = this,
+                    enableScrim = !isTwoPane,
+                ) {
+                    SettingsSectionList(
+                        selectedSection = selectedSection,
+                        showSelection = isTwoPane,
+                        extraBottomPadding = bottomOverlayPadding,
+                        onSectionSelected = { section ->
+                            if (section != SettingsSection.RECOGNITION) {
+                                consumeCloudCredentialFocusSession()
+                            }
+                            selectedSectionRoute = section.route
+                            scope.launch {
+                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
+                            }
+                        },
+                    )
+                }
             }
         },
         detailPane = {
             AnimatedPane(
                 enterTransition = sonaSubPageEnterFromRight(),
                 exitTransition = sonaSubPageExitToRight(),
-                boundsAnimationSpec = SonaNavMotion.boundsTweenSpec(),
+                boundsAnimationSpec = SonaNavMotion.boundsSpringSpec(),
             ) {
-                SettingsDetailPane(
-                    section = selectedSection,
-                    showBack = showDetailBack,
-                    bootstrapState = bootstrapState,
-                    appearanceState = appearanceState,
-                    cloudTranscriptionState = cloudTranscriptionState,
-                    recognitionSettingsState = recognitionSettingsState,
-                    syncState = syncState,
-                    dataRecoveryState = dataRecoveryState,
-                    aboutState = aboutState,
-                    llmState = llmState,
-                    appLanguage = appLanguage,
-                    requestCloudCredentialFocus = cloudCredentialFocusSessionActive,
-                    onBack = navigateBack,
-                    onAppLanguageChanged = onAppLanguageChanged,
-                    onThemeModeChanged = onThemeModeChanged,
-                    onPureBlackDarkChanged = onPureBlackDarkChanged,
-                    onSelectSystemDynamicColor = onSelectSystemDynamicColor,
-                    onSelectPalettePreset = onSelectPalettePreset,
-                    onCustomSeedColorChanged = onCustomSeedColorChanged,
-                    onPaletteStyleChanged = onPaletteStyleChanged,
-                    onContrastLevelChanged = onContrastLevelChanged,
-                    onAboutShown = onAboutShown,
-                    onCheckForUpdates = onCheckForUpdates,
-                    onCloudProviderSelected = onCloudProviderSelected,
-                    onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
-                    onSaveCloudApiKey = onSaveCloudApiKey,
-                    onClearCloudApiKey = onClearCloudApiKey,
-                    onSelectModel = onSelectModel,
-                    onDownloadLocalModel = onDownloadLocalModel,
-                    onValidateLocalModel = onValidateLocalModel,
-                    onDeleteLocalModel = onDeleteLocalModel,
-                    onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
-                    onRefreshSync = onRefreshSync,
-                    onTestSyncProvider = onTestSyncProvider,
-                    onCreateSync = onCreateSync,
-                    onPreviewSyncJoin = onPreviewSyncJoin,
-                    onJoinSync = onJoinSync,
-                    onUnlockSync = onUnlockSync,
-                    onUnlockSyncWithRecovery = onUnlockSyncWithRecovery,
-                    onRunSync = onRunSync,
-                    onPauseSync = onPauseSync,
-                    onLockSync = onLockSync,
-                    onDisconnectSync = onDisconnectSync,
-                    onGenerateSyncRecoveryKey = onGenerateSyncRecoveryKey,
-                    onExportSyncRecoveryKey = onExportSyncRecoveryKey,
-                    onConsumeSyncRecoveryKey = onConsumeSyncRecoveryKey,
-                    onResolveSyncConflict = onResolveSyncConflict,
-                    onLoadSyncConflict = onLoadSyncConflict,
-                    onChangeSyncPreset = onChangeSyncPreset,
-                    onChangeSyncPassword = onChangeSyncPassword,
-                    onDiscoverSyncVaults = onDiscoverSyncVaults,
-                    onCreateSyncWithVaultId = onCreateSyncWithVaultId,
-                    onApplySyncPairingToken = onApplySyncPairingToken,
-                    onClearSyncPairingNotice = onClearSyncPairingNotice,
-                    onGetSyncPairingToken = onGetSyncPairingToken,
-                    onExportBackup = onExportBackup,
-                    onInspectBackup = onInspectBackup,
-                    onConfirmBackupImport = onConfirmBackupImport,
-                    onCancelBackupImport = onCancelBackupImport,
-                    onRefreshRecovery = onRefreshRecovery,
-                    onResumeRecovery = onResumeRecovery,
-                    onResumeAllRecovery = onResumeAllRecovery,
-                    onDiscardRecovery = onDiscardRecovery,
-                    onClearResolvedRecovery = onClearResolvedRecovery,
-                    onLlmProvider = onLlmProvider,
-                    onLlmModel = onLlmModel,
-                    onLlmBaseUrl = onLlmBaseUrl,
-                    onLlmPath = onLlmPath,
-                    onLlmVersion = onLlmVersion,
-                    onLlmApiKey = onLlmApiKey,
-                    onLlmSave = onLlmSave,
-                    onLlmClear = onLlmClear,
-                    extraBottomPadding = bottomOverlayPadding,
-                )
+                SonaSubPageTransitionContainer(
+                    scope = this,
+                    enabled = !isTwoPane,
+                ) {
+                    SettingsDetailPane(
+                        section = selectedSection,
+                        isTwoPane = isTwoPane,
+                        showBack = showDetailBack,
+                        bootstrapState = bootstrapState,
+                        appearanceState = appearanceState,
+                        cloudTranscriptionState = cloudTranscriptionState,
+                        recognitionSettingsState = recognitionSettingsState,
+                        syncState = syncState,
+                        dataRecoveryState = dataRecoveryState,
+                        aboutState = aboutState,
+                        llmState = llmState,
+                        appLanguage = appLanguage,
+                        requestCloudCredentialFocus = cloudCredentialFocusSessionActive,
+                        onBack = navigateBack,
+                        onAppLanguageChanged = onAppLanguageChanged,
+                        onThemeModeChanged = onThemeModeChanged,
+                        onPureBlackDarkChanged = onPureBlackDarkChanged,
+                        onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                        onSelectPalettePreset = onSelectPalettePreset,
+                        onCustomSeedColorChanged = onCustomSeedColorChanged,
+                        onPaletteStyleChanged = onPaletteStyleChanged,
+                        onContrastLevelChanged = onContrastLevelChanged,
+                        onAboutShown = onAboutShown,
+                        onCheckForUpdates = onCheckForUpdates,
+                        onCloudProviderSelected = onCloudProviderSelected,
+                        onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                        onSaveCloudApiKey = onSaveCloudApiKey,
+                        onClearCloudApiKey = onClearCloudApiKey,
+                        onSelectModel = onSelectModel,
+                        onDownloadLocalModel = onDownloadLocalModel,
+                        onValidateLocalModel = onValidateLocalModel,
+                        onDeleteLocalModel = onDeleteLocalModel,
+                        onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
+                        onRefreshSync = onRefreshSync,
+                        onTestSyncProvider = onTestSyncProvider,
+                        onCreateSync = onCreateSync,
+                        onPreviewSyncJoin = onPreviewSyncJoin,
+                        onJoinSync = onJoinSync,
+                        onUnlockSync = onUnlockSync,
+                        onUnlockSyncWithRecovery = onUnlockSyncWithRecovery,
+                        onRunSync = onRunSync,
+                        onPauseSync = onPauseSync,
+                        onLockSync = onLockSync,
+                        onDisconnectSync = onDisconnectSync,
+                        onGenerateSyncRecoveryKey = onGenerateSyncRecoveryKey,
+                        onExportSyncRecoveryKey = onExportSyncRecoveryKey,
+                        onConsumeSyncRecoveryKey = onConsumeSyncRecoveryKey,
+                        onResolveSyncConflict = onResolveSyncConflict,
+                        onLoadSyncConflict = onLoadSyncConflict,
+                        onChangeSyncPreset = onChangeSyncPreset,
+                        onChangeSyncPassword = onChangeSyncPassword,
+                        onDiscoverSyncVaults = onDiscoverSyncVaults,
+                        onCreateSyncWithVaultId = onCreateSyncWithVaultId,
+                        onApplySyncPairingToken = onApplySyncPairingToken,
+                        onClearSyncPairingNotice = onClearSyncPairingNotice,
+                        onGetSyncPairingToken = onGetSyncPairingToken,
+                        onExportBackup = onExportBackup,
+                        onInspectBackup = onInspectBackup,
+                        onConfirmBackupImport = onConfirmBackupImport,
+                        onCancelBackupImport = onCancelBackupImport,
+                        onRefreshRecovery = onRefreshRecovery,
+                        onResumeRecovery = onResumeRecovery,
+                        onResumeAllRecovery = onResumeAllRecovery,
+                        onDiscardRecovery = onDiscardRecovery,
+                        onClearResolvedRecovery = onClearResolvedRecovery,
+                        onLlmProvider = onLlmProvider,
+                        onLlmModel = onLlmModel,
+                        onLlmBaseUrl = onLlmBaseUrl,
+                        onLlmPath = onLlmPath,
+                        onLlmVersion = onLlmVersion,
+                        onLlmApiKey = onLlmApiKey,
+                        onLlmSave = onLlmSave,
+                        onLlmClear = onLlmClear,
+                        extraBottomPadding = bottomOverlayPadding,
+                    )
+                }
             }
         },
     )
@@ -442,6 +485,7 @@ private fun SettingsSectionList(
 @Composable
 private fun SettingsDetailPane(
     section: SettingsSection,
+    isTwoPane: Boolean,
     showBack: Boolean,
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
@@ -528,100 +572,116 @@ private fun SettingsDetailPane(
                 }
             },
         )
-        when (section) {
-            SettingsSection.APPEARANCE -> AppearanceSettingsPane(
-                state = appearanceState,
-                appLanguage = appLanguage,
-                onAppLanguageChanged = onAppLanguageChanged,
-                onThemeModeChanged = onThemeModeChanged,
-                onPureBlackDarkChanged = onPureBlackDarkChanged,
-                onSelectSystemDynamicColor = onSelectSystemDynamicColor,
-                onSelectPalettePreset = onSelectPalettePreset,
-                onCustomSeedColorChanged = onCustomSeedColorChanged,
-                onPaletteStyleChanged = onPaletteStyleChanged,
-                onContrastLevelChanged = onContrastLevelChanged,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
-            SettingsSection.RECOGNITION -> RecognitionSettingsPane(
-                bootstrapState = bootstrapState,
-                cloudTranscriptionState = cloudTranscriptionState,
-                recognitionSettingsState = recognitionSettingsState,
-                requestCloudCredentialFocus = requestCloudCredentialFocus,
-                onCloudProviderSelected = onCloudProviderSelected,
-                onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
-                onSaveCloudApiKey = onSaveCloudApiKey,
-                onClearCloudApiKey = onClearCloudApiKey,
-                onSelectModel = onSelectModel,
-                onDownloadLocalModel = onDownloadLocalModel,
-                onValidateLocalModel = onValidateLocalModel,
-                onDeleteLocalModel = onDeleteLocalModel,
-                onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
-            SettingsSection.LLM -> LlmSettingsPane(
-                state = llmState,
-                onProvider = onLlmProvider,
-                onModel = onLlmModel,
-                onBaseUrl = onLlmBaseUrl,
-                onPath = onLlmPath,
-                onVersion = onLlmVersion,
-                onApiKey = onLlmApiKey,
-                onSave = onLlmSave,
-                onClear = onLlmClear,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
-            SettingsSection.SYNC -> SyncSettingsPane(
-                state = syncState,
-                onRefresh = onRefreshSync,
-                onTestProvider = onTestSyncProvider,
-                onCreate = onCreateSync,
-                onPreviewJoin = onPreviewSyncJoin,
-                onJoin = onJoinSync,
-                onUnlock = onUnlockSync,
-                onUnlockWithRecovery = onUnlockSyncWithRecovery,
-                onRunNow = onRunSync,
-                onSetPaused = onPauseSync,
-                onLock = onLockSync,
-                onDisconnect = onDisconnectSync,
-                onGenerateRecoveryKey = onGenerateSyncRecoveryKey,
-                onExportRecoveryKey = onExportSyncRecoveryKey,
-                onConsumeRecoveryKey = onConsumeSyncRecoveryKey,
-                onResolveConflict = onResolveSyncConflict,
-                onLoadConflict = onLoadSyncConflict,
-                onChangePreset = onChangeSyncPreset,
-                onChangePassword = onChangeSyncPassword,
-                onDiscoverVaults = onDiscoverSyncVaults,
-                onCreateWithVaultId = onCreateSyncWithVaultId,
-                onApplyPairingToken = onApplySyncPairingToken,
-                onClearPairingNotice = onClearSyncPairingNotice,
-                onGetPairingToken = onGetSyncPairingToken,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
-            SettingsSection.DATA_RECOVERY -> DataRecoveryPane(
-                state = dataRecoveryState,
-                onExportBackup = onExportBackup,
-                onInspectBackup = onInspectBackup,
-                onConfirmImport = onConfirmBackupImport,
-                onCancelImport = onCancelBackupImport,
-                onRefresh = onRefreshRecovery,
-                onResume = onResumeRecovery,
-                onResumeAll = onResumeAllRecovery,
-                onDiscard = onDiscardRecovery,
-                onClearResolved = onClearResolvedRecovery,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
-            SettingsSection.ABOUT -> AboutSettingsPane(
-                state = aboutState,
-                onShown = onAboutShown,
-                onCheckForUpdates = onCheckForUpdates,
-                extraBottomPadding = extraBottomPadding,
-                modifier = Modifier.weight(1f),
-            )
+        val renderSectionContent: @Composable (SettingsSection, Modifier) -> Unit = { activeSection, contentModifier ->
+            when (activeSection) {
+                SettingsSection.APPEARANCE -> AppearanceSettingsPane(
+                    state = appearanceState,
+                    appLanguage = appLanguage,
+                    onAppLanguageChanged = onAppLanguageChanged,
+                    onThemeModeChanged = onThemeModeChanged,
+                    onPureBlackDarkChanged = onPureBlackDarkChanged,
+                    onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                    onSelectPalettePreset = onSelectPalettePreset,
+                    onCustomSeedColorChanged = onCustomSeedColorChanged,
+                    onPaletteStyleChanged = onPaletteStyleChanged,
+                    onContrastLevelChanged = onContrastLevelChanged,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+                SettingsSection.RECOGNITION -> RecognitionSettingsPane(
+                    bootstrapState = bootstrapState,
+                    cloudTranscriptionState = cloudTranscriptionState,
+                    recognitionSettingsState = recognitionSettingsState,
+                    requestCloudCredentialFocus = requestCloudCredentialFocus,
+                    onCloudProviderSelected = onCloudProviderSelected,
+                    onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                    onSaveCloudApiKey = onSaveCloudApiKey,
+                    onClearCloudApiKey = onClearCloudApiKey,
+                    onSelectModel = onSelectModel,
+                    onDownloadLocalModel = onDownloadLocalModel,
+                    onValidateLocalModel = onValidateLocalModel,
+                    onDeleteLocalModel = onDeleteLocalModel,
+                    onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+                SettingsSection.LLM -> LlmSettingsPane(
+                    state = llmState,
+                    onProvider = onLlmProvider,
+                    onModel = onLlmModel,
+                    onBaseUrl = onLlmBaseUrl,
+                    onPath = onLlmPath,
+                    onVersion = onLlmVersion,
+                    onApiKey = onLlmApiKey,
+                    onSave = onLlmSave,
+                    onClear = onLlmClear,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+                SettingsSection.SYNC -> SyncSettingsPane(
+                    state = syncState,
+                    onRefresh = onRefreshSync,
+                    onTestProvider = onTestSyncProvider,
+                    onCreate = onCreateSync,
+                    onPreviewJoin = onPreviewSyncJoin,
+                    onJoin = onJoinSync,
+                    onUnlock = onUnlockSync,
+                    onUnlockWithRecovery = onUnlockSyncWithRecovery,
+                    onRunNow = onRunSync,
+                    onSetPaused = onPauseSync,
+                    onLock = onLockSync,
+                    onDisconnect = onDisconnectSync,
+                    onGenerateRecoveryKey = onGenerateSyncRecoveryKey,
+                    onExportRecoveryKey = onExportSyncRecoveryKey,
+                    onConsumeRecoveryKey = onConsumeSyncRecoveryKey,
+                    onResolveConflict = onResolveSyncConflict,
+                    onLoadConflict = onLoadSyncConflict,
+                    onChangePreset = onChangeSyncPreset,
+                    onChangePassword = onChangeSyncPassword,
+                    onDiscoverVaults = onDiscoverSyncVaults,
+                    onCreateWithVaultId = onCreateSyncWithVaultId,
+                    onApplyPairingToken = onApplySyncPairingToken,
+                    onClearPairingNotice = onClearSyncPairingNotice,
+                    onGetPairingToken = onGetSyncPairingToken,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+                SettingsSection.DATA_RECOVERY -> DataRecoveryPane(
+                    state = dataRecoveryState,
+                    onExportBackup = onExportBackup,
+                    onInspectBackup = onInspectBackup,
+                    onConfirmImport = onConfirmBackupImport,
+                    onCancelImport = onCancelBackupImport,
+                    onRefresh = onRefreshRecovery,
+                    onResume = onResumeRecovery,
+                    onResumeAll = onResumeAllRecovery,
+                    onDiscard = onDiscardRecovery,
+                    onClearResolved = onClearResolvedRecovery,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+                SettingsSection.ABOUT -> AboutSettingsPane(
+                    state = aboutState,
+                    onShown = onAboutShown,
+                    onCheckForUpdates = onCheckForUpdates,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
+            }
+        }
+        AnimatedContent(
+            targetState = section,
+            transitionSpec = {
+                if (isTwoPane) {
+                    sonaTwoPaneSectionTransition()
+                } else {
+                    EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "settingsDetailSection",
+            modifier = Modifier.weight(1f),
+        ) { activeSection ->
+            renderSectionContent(activeSection, Modifier.fillMaxSize())
         }
     }
 }

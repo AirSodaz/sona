@@ -86,8 +86,6 @@
     <string name="audio_import_notification_failed">音声の文字起こしに失敗しました</string>
     <string name="microphone_silenced">システムによりマイク入力が一時停止されています</string>
     <string name="microphone_monitoring_unavailable">現在のマイク状態を監視できません</string>
-    <string name="microphone_device_changed">現在の入力：%1$s</string>
-    <string name="microphone_device_changed_unknown">マイク入力デバイスが変更されました</string>
     <string name="microphone_permission_rationale">録音にはマイクの権限が必要です</string>
     <string name="microphone_permission_settings">システム設定でマイクの権限を許可してください</string>
     <string name="notification_permission_notice">通知が無効です。バックグラウンドでの録音状態や進捗は通知バーに表示されません</string>

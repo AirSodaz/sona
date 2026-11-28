@@ -86,8 +86,6 @@
     <string name="audio_import_notification_failed">音频转写失败</string>
     <string name="microphone_silenced">系统已暂停麦克风输入</string>
     <string name="microphone_monitoring_unavailable">无法监测当前麦克风状态</string>
-    <string name="microphone_device_changed">当前输入：%1$s</string>
-    <string name="microphone_device_changed_unknown">麦克风输入设备已变更</string>
     <string name="microphone_permission_rationale">录音需要麦克风权限</string>
     <string name="microphone_permission_settings">请在系统设置中允许麦克风权限</string>
     <string name="notification_permission_notice">通知权限未开启，后台录音状态与转写进度将无法在通知栏显示</string>

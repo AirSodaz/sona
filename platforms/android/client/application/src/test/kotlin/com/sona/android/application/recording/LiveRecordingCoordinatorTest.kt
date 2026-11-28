@@ -1639,6 +1639,49 @@ class LiveRecordingCoordinatorTest {
     }
 
     @Test
+    fun `computePcm16AudioMetrics separates low mid and high frequency bands cleanly`() {
+        val silent = computePcm16AudioMetrics(ByteArray(640))
+        assertEquals(0f, silent.rmsLevel)
+        assertEquals(AudioEnergyBands(), silent.bands)
+
+        val lowTone = sineWavePcm16(frequencyHz = 180.0, sampleRateHz = 16_000, sampleCount = 640)
+        val midTone = sineWavePcm16(frequencyHz = 1_000.0, sampleRateHz = 16_000, sampleCount = 640)
+        val highTone = sineWavePcm16(frequencyHz = 4_500.0, sampleRateHz = 16_000, sampleCount = 640)
+
+        val lowMetrics = computePcm16AudioMetrics(lowTone)
+        val midMetrics = computePcm16AudioMetrics(midTone)
+        val highMetrics = computePcm16AudioMetrics(highTone)
+
+        assertTrue("180Hz tone should peak in low band: ${lowMetrics.bands}", lowMetrics.bands.low > lowMetrics.bands.mid && lowMetrics.bands.low > lowMetrics.bands.high)
+        assertTrue("1000Hz tone should peak in mid band: ${midMetrics.bands}", midMetrics.bands.mid > midMetrics.bands.low && midMetrics.bands.mid > midMetrics.bands.high)
+        assertTrue("4500Hz tone should peak in high band: ${highMetrics.bands}", highMetrics.bands.high > highMetrics.bands.mid && highMetrics.bands.high > highMetrics.bands.low)
+
+        listOf(lowMetrics, midMetrics, highMetrics).forEach { metrics ->
+            assertTrue(metrics.rmsLevel in 0f..1f)
+            assertTrue(metrics.bands.low in 0f..1f)
+            assertTrue(metrics.bands.mid in 0f..1f)
+            assertTrue(metrics.bands.high in 0f..1f)
+        }
+    }
+
+    private fun sineWavePcm16(
+        frequencyHz: Double,
+        sampleRateHz: Int,
+        sampleCount: Int,
+        amplitude: Double = 0.45,
+    ): ByteArray {
+        val bytes = ByteArray(sampleCount * 2)
+        for (i in 0 until sampleCount) {
+            val sample = (kotlin.math.sin(2.0 * kotlin.math.PI * frequencyHz * i / sampleRateHz) * amplitude * 32767.0)
+                .toInt()
+                .coerceIn(-32768, 32767)
+            bytes[i * 2] = (sample and 0xFF).toByte()
+            bytes[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
+        }
+        return bytes
+    }
+
+    @Test
     fun `pause and resume delegate to microphone capture session`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = createCoordinator(fakes, backgroundScope)

@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.sqrt
 
 class LiveRecordingCoordinator(
@@ -211,10 +213,13 @@ class LiveRecordingCoordinator(
                         val nowMillis = monotonicClock.elapsedRealtimeMillis()
                         if (nowMillis - session.lastRmsEmitMillis >= RMS_EMIT_INTERVAL_MILLIS) {
                             session.lastRmsEmitMillis = nowMillis
-                            val level = computeNormalizedPcm16Rms(frame.bytes)
+                            val metrics = computePcm16AudioMetrics(frame.bytes)
                             mutableState.update { current ->
                                 if (current is LiveRecordingState.Recording && !current.isPaused) {
-                                    current.copy(rmsLevel = level)
+                                    current.copy(
+                                        rmsLevel = metrics.rmsLevel,
+                                        audioBands = metrics.bands,
+                                    )
                                 } else {
                                     current
                                 }
@@ -476,7 +481,11 @@ class LiveRecordingCoordinator(
             session.publicationMutex.withLock {
                 mutableState.update { current ->
                     if (current is LiveRecordingState.Recording) {
-                        current.copy(isPaused = true, rmsLevel = 0f)
+                        current.copy(
+                            isPaused = true,
+                            rmsLevel = 0f,
+                            audioBands = AudioEnergyBands(),
+                        )
                     } else {
                         current
                     }
@@ -818,23 +827,73 @@ class LiveRecordingCoordinator(
     )
 
     private companion object {
-        private const val RMS_EMIT_INTERVAL_MILLIS = 55L
+        private const val RMS_EMIT_INTERVAL_MILLIS = 33L
     }
 }
 
-internal fun computeNormalizedPcm16Rms(bytes: ByteArray): Float {
+internal data class Pcm16AudioMetrics(
+    val rmsLevel: Float,
+    val bands: AudioEnergyBands,
+)
+
+internal fun computeNormalizedPcm16Rms(bytes: ByteArray): Float =
+    computePcm16AudioMetrics(bytes).rmsLevel
+
+internal fun computePcm16AudioMetrics(
+    bytes: ByteArray,
+    sampleRateHz: Int = 16_000,
+): Pcm16AudioMetrics {
     val sampleCount = bytes.size / 2
-    if (sampleCount == 0) return 0f
+    if (sampleCount == 0) return Pcm16AudioMetrics(0f, AudioEnergyBands())
+
+    // Two-stage cascaded 1-pole crossover filters (~270 Hz low, ~1930 Hz mid/high split at 16 kHz)
+    val twoPiOverFs = (2.0 * PI) / sampleRateHz.coerceAtLeast(8_000)
+    val alphaLow = 1.0 - exp(-420.0 * twoPiOverFs)
+    val alphaMid = 1.0 - exp(-3000.0 * twoPiOverFs)
+
+    var lpLow1 = 0.0
+    var lpLow2 = 0.0
+    var lpMid1 = 0.0
+    var lpMid2 = 0.0
+
     var sumSquares = 0.0
+    var sumLowSq = 0.0
+    var sumMidSq = 0.0
+    var sumHighSq = 0.0
+
     var index = 0
     while (index + 1 < bytes.size) {
-        val low = bytes[index].toInt() and 0xFF
-        val high = bytes[index + 1].toInt()
-        val sample = ((high shl 8) or low).toShort().toDouble() / 32768.0
+        val lowByte = bytes[index].toInt() and 0xFF
+        val highByte = bytes[index + 1].toInt()
+        val sample = ((highByte shl 8) or lowByte).toShort().toDouble() / 32768.0
+
+        lpLow1 += alphaLow * (sample - lpLow1)
+        lpLow2 += alphaLow * (lpLow1 - lpLow2)
+        lpMid1 += alphaMid * (sample - lpMid1)
+        lpMid2 += alphaMid * (lpMid1 - lpMid2)
+
+        val bandLow = lpLow2
+        val bandMid = lpMid2 - lpLow2
+        val bandHigh = sample - lpMid2
+
         sumSquares += sample * sample
+        sumLowSq += bandLow * bandLow
+        sumMidSq += bandMid * bandMid
+        sumHighSq += bandHigh * bandHigh
         index += 2
     }
+
     val rms = sqrt(sumSquares / sampleCount)
-    // Apply square-root perceptual curve scaled for natural speech levels
-    return sqrt((rms * 2.2).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f)
+    val lowRms = sqrt(sumLowSq / sampleCount)
+    val midRms = sqrt(sumMidSq / sampleCount)
+    val highRms = sqrt(sumHighSq / sampleCount)
+
+    // Apply square-root perceptual curve scaled for natural speech spectral tilt
+    val normalizedRms = sqrt((rms * 2.2).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f)
+    val bands = AudioEnergyBands(
+        low = sqrt((lowRms * 2.6).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f),
+        mid = sqrt((midRms * 2.6).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f),
+        high = sqrt((highRms * 4.2).coerceIn(0.0, 1.0)).toFloat().coerceIn(0f, 1f),
+    )
+    return Pcm16AudioMetrics(rmsLevel = normalizedRms, bands = bands)
 }

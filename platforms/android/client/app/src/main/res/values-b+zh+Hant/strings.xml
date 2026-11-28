@@ -86,8 +86,6 @@
     <string name="audio_import_notification_failed">音訊轉寫失敗</string>
     <string name="microphone_silenced">系統已暫停麥克風輸入</string>
     <string name="microphone_monitoring_unavailable">無法監測目前麥克風狀態</string>
-    <string name="microphone_device_changed">目前輸入：%1$s</string>
-    <string name="microphone_device_changed_unknown">麥克風輸入裝置已變更</string>
     <string name="microphone_permission_rationale">錄音需要麥克風權限</string>
     <string name="microphone_permission_settings">請在系統設定中允許麥克風權限</string>
     <string name="notification_permission_notice">通知權限未開啟，背景錄音狀態與轉寫進度將無法在通知欄顯示</string>

@@ -257,6 +257,7 @@ internal fun LibraryDetailScreen(
     onClearLlmConfigurationPrompt: () -> Unit = {},
     appLanguage: AppLanguage = AppLanguage.SYSTEM,
     exitRequestToken: Int,
+    onExitRequestConsumed: () -> Unit = {},
     onNavigateBack: () -> Unit,
     onTogglePlayback: () -> Unit,
     onSeekPlayback: (Long) -> Unit,
@@ -303,7 +304,10 @@ internal fun LibraryDetailScreen(
     BackHandler(enabled = editor.dirty, onBack = requestExit)
 
     LaunchedEffect(exitRequestToken) {
-        if (exitRequestToken > 0) requestExit()
+        if (exitRequestToken > 0) {
+            requestExit()
+            onExitRequestConsumed()
+        }
     }
     LaunchedEffect(editor.active, exitPending) {
         if (exitPending && !editor.active) {
