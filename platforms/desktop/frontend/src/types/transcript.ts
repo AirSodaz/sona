@@ -3,7 +3,7 @@
  * This is the "source of truth" for all transcription data.
  */
 import type {
-  HistorySummaryPayload_Serialize as CoreHistorySummaryPayload,
+  HistorySummaryPayload as CoreHistorySummaryPayload,
   TranscriptSummaryRecordPayload,
 } from '../bindings';
 import type { SummaryTemplateId as TranscriptSummaryTemplateId } from './llm';

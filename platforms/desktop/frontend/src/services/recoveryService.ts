@@ -2,7 +2,7 @@ import type {
   RecoveredQueueItem_Serialize as CoreRecoveredQueueItem,
   RecoverySnapshot_Serialize as CoreRecoverySnapshot,
   RecoveredTranscriptSegment_Serialize,
-  RecoveryItemInput_Serialize,
+  RecoveryItemInput_Deserialize,
 } from '../bindings';
 import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
 import type { BatchQueueItem } from '../types/batchQueue';
@@ -118,7 +118,7 @@ function normalizeRecoverySnapshot(snapshot: CoreRecoverySnapshot): RecoverySnap
   };
 }
 
-function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Serialize {
+function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Deserialize {
   const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
   return {
     id: item.id,
@@ -153,7 +153,7 @@ function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Seriali
   };
 }
 
-function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
+function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Deserialize {
   const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
   return {
     id: item.id,

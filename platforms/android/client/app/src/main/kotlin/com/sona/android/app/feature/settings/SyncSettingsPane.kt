@@ -3,7 +3,6 @@ package com.sona.android.app.feature.settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.Build
 import android.os.PersistableBundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1505,7 +1504,7 @@ private fun copyToClipboard(
     sensitive: Boolean,
 ) {
     val clip = ClipData.newPlainText(label, text).apply {
-        if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (sensitive) {
             description.extras = PersistableBundle().apply {
                 putBoolean("android.content.extra.IS_SENSITIVE", true)
             }

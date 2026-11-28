@@ -17,7 +17,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 23
+        minSdk = 24
     }
 
     publishing {

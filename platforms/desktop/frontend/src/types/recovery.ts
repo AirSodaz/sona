@@ -23,6 +23,7 @@ export interface RecoveredQueueItem
     | 'fileStat'
     | 'exportFileNamePrefix'
     | 'tagIds'
+    | 'lastError'
   > {
   segments: TranscriptSegment[];
   tagIds?: string[];
@@ -35,6 +36,7 @@ export interface RecoveredQueueItem
   resolvedConfigSnapshot?: AppConfig;
   exportConfig?: AutomationExportConfig | null;
   stageConfig?: AutomationStageConfig | null;
+  lastError?: string | null;
   sourceFingerprint?: string;
   fileStat?: {
     size: number;

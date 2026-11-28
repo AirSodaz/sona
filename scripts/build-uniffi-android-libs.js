@@ -235,7 +235,7 @@ function prepareOutputDirectory(outDir) {
 
 export async function main() {
   const profile = readOption('--profile', 'release');
-  const minSdk = readOption('--min-sdk', process.env.SONA_ANDROID_MIN_SDK ?? '23');
+  const minSdk = readOption('--min-sdk', process.env.SONA_ANDROID_MIN_SDK ?? '24');
   const targetDir = path.resolve(
     readOption('--target-dir', process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'target')),
   );

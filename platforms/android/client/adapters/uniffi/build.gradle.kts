@@ -6,10 +6,14 @@ plugins {
 
 android {
     namespace = "com.sona.android.adapters.uniffi"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
-        minSdk = 23
+        minSdk = 24
     }
 
     compileOptions {
@@ -21,7 +25,7 @@ android {
 dependencies {
     implementation(project(":application"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")

@@ -331,16 +331,12 @@ class FrameworkAudioRecordBackend internal constructor(
                 audioRecord.release()
                 throw IllegalStateException("AudioRecord failed to initialize.")
             }
-            val monitor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                if (audioManager == null) {
-                    audioRecord.release()
-                    throw IllegalStateException("Audio recording monitoring is unavailable.")
-                }
-                Api24PlatformAudioRecordingMonitor(audioManager)
-            } else {
-                null
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audioManager == null) {
+                audioRecord.release()
+                throw IllegalStateException("Audio recording monitoring is unavailable.")
             }
+            val monitor = Api24PlatformAudioRecordingMonitor(audioManager)
             return FrameworkAudioRecordBackend(
                 record = AndroidPlatformAudioRecord(audioRecord),
                 apiLevel = apiLevel,
@@ -368,7 +364,6 @@ private class AndroidPlatformAudioRecord(
     override fun release() = audioRecord.release()
 }
 
-@RequiresApi(Build.VERSION_CODES.N)
 private class Api24PlatformRecordingCallback(
     private val listener: (List<AudioRecordingSnapshot>) -> Unit,
 ) : AudioManager.AudioRecordingCallback(), PlatformRecordingCallback {
@@ -381,7 +376,6 @@ private class Api24PlatformRecordingCallback(
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.N)
 private class Api24PlatformAudioRecordingMonitor(
     private val audioManager: AudioManager,
 ) : PlatformAudioRecordingMonitor {
@@ -401,7 +395,6 @@ private class Api24PlatformAudioRecordingMonitor(
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.N)
 private fun AudioRecordingConfiguration.toSnapshot(): AudioRecordingSnapshot {
     val clientFormat = clientFormat
     return AudioRecordingSnapshot(

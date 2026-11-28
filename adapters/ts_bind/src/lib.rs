@@ -1292,7 +1292,7 @@ mod tests {
         for expected in [
             "export type AppConfig =",
             "appLanguage?: AppLanguagePreference | null",
-            "asr: AppAsrConfig_Deserialize | null",
+            "asr?: AppAsrConfig_Deserialize | null",
             "llmSettings?: unknown | null",
             "export type AppAsrSelections =",
             "voiceTyping: AppAsrModelSelection_Deserialize",

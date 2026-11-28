@@ -170,11 +170,11 @@ describe('embySettingsService', () => {
 
       const effectiveConfig = buildEmbyEffectiveConfig(mockBaseConfig, overrides);
 
-      expect(effectiveConfig.asr.selections.batch).toEqual(overrides.asrSelection);
+      expect(effectiveConfig.asr?.selections.batch).toEqual(overrides.asrSelection);
       // Realtime selection should remain untouched
-      expect(effectiveConfig.asr.selections.live).toEqual(mockBaseConfig.asr.selections.live);
+      expect(effectiveConfig.asr?.selections.live).toEqual(mockBaseConfig.asr?.selections.live);
       // Original config not mutated
-      expect(mockBaseConfig.asr.selections.batch.engine).toBe('local');
+      expect(mockBaseConfig.asr?.selections.batch.engine).toBe('local');
     });
 
     it('strictly honors asrLanguage override (including auto)', () => {
@@ -253,7 +253,7 @@ describe('embySettingsService', () => {
     it('preserves existing settings when overrides are empty or undefined', () => {
       const effectiveConfig = buildEmbyEffectiveConfig(mockBaseConfig, {});
       expect(effectiveConfig.language).toBe(mockBaseConfig.language);
-      expect(effectiveConfig.asr.selections.batch).toEqual(mockBaseConfig.asr.selections.batch);
+      expect(effectiveConfig.asr?.selections.batch).toEqual(mockBaseConfig.asr?.selections.batch);
       expect(effectiveConfig.llmSettings?.selections.translationModelId).toBe(
         mockBaseConfig.llmSettings?.selections.translationModelId
       );

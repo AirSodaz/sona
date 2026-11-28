@@ -361,7 +361,14 @@ export async function historyQueryWorkspace(
         match.matchedField === 'title' || match.matchedField === 'previewText'
           ? match.matchedField
           : 'searchContent';
-      return [itemId, { ...match, matchedField } satisfies WorkspaceItemSearchMatch];
+      return [
+        itemId,
+        {
+          ...match,
+          titleMatch: match.titleMatch ?? null,
+          matchedField,
+        } satisfies WorkspaceItemSearchMatch,
+      ];
     })
   );
   return {

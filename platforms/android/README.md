@@ -91,7 +91,7 @@ Run the Gradle-backed smoke check with a repo-managed Gradle distribution:
 pnpm run verify:android-uniffi:gradle
 ```
 
-The managed runner downloads Gradle `9.9.2` into `target/managed-gradle`,
+The managed runner downloads Gradle `9.9.3` into `target/managed-gradle`,
 checks the distribution SHA-256, and runs the sample project from there. It
 does not commit a Gradle wrapper jar to the repository.
 The smoke check assembles the sample debug AAR, runs
@@ -107,10 +107,10 @@ Kotlin coroutines. The verifier also checks the Gradle Module Metadata runtime
 variant so Gradle consumers resolve the same AAR and runtime dependencies.
 
 On networks that cannot reach the Gradle distribution CDN, pre-download the
-official `gradle-9.9.2-bin.zip` and point the runner at it:
+official `gradle-9.9.3-bin.zip` and point the runner at it:
 
 ```powershell
-$env:SONA_GRADLE_DISTRIBUTION_ZIP="D:\downloads\gradle-9.9.2-bin.zip"
+$env:SONA_GRADLE_DISTRIBUTION_ZIP="D:\downloads\gradle-9.9.3-bin.zip"
 pnpm run verify:android-uniffi:gradle
 ```
 
@@ -136,7 +136,7 @@ $env:SONA_ANDROID_ABIS="arm64-v8a,x86_64"
 ```
 
 Use `SONA_ANDROID_MIN_SDK` to override the Android linker API level. The
-default is `23`.
+default is `24`.
 
 ## Android client
 
@@ -265,8 +265,8 @@ credential editor provider, while a legacy local model populates only the modes
 it supports. Existing new-slot values are never overwritten, and legacy selection
 keys are removed only by the successful atomic migration.
 
-The client compiles and targets Android API 37 with min SDK 23. Install
-`platforms;android-37.0` through `sdkmanager`, then run the complete client
+The client compiles against Android API 37.2 (targeting API 37) with min SDK 24. Install
+`platforms;android-37.2` through `sdkmanager`, then run the complete client
 unit-test and APK gate from the repository root:
 
 ```powershell
@@ -289,7 +289,7 @@ app unit tests, assembles the adapter instrumentation-test APK, lints both the
 adapter and app, then assembles and validates both client APKs. Instrumentation
 assembly proves API compatibility but does not execute device APIs. Real
 microphone, recording callback, privacy-sensitive capture, and Android Keystore
-behavior must run on API 23 and API 37 emulators as the device QA gate.
+behavior must run on API 24 and API 37 emulators as the device QA gate.
 The API 37 gate uses a 16 KB page-size system image; the APK must launch without
 Android page-size compatibility mode, and every packaged native library must
 use at least `0x4000` ELF load-segment alignment.

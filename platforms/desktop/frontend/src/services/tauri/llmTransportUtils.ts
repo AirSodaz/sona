@@ -1,10 +1,10 @@
 import type {
-  BuiltinLlmProvider_Serialize as CoreBuiltinLlmProvider,
-  LlmConfig_Serialize as CoreLlmConfig,
-  LlmProvider_Serialize as CoreLlmProvider,
+  BuiltinLlmProvider_Deserialize as CoreBuiltinLlmProvider,
+  LlmConfig_Deserialize as CoreLlmConfig,
+  LlmProvider_Deserialize as CoreLlmProvider,
   LlmProviderStrategy as CoreLlmProviderStrategy,
-  TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
-  TranscriptSegment_Serialize as CoreTranscriptSegment,
+  TranscriptLlmJobRequest_Deserialize as CoreTranscriptLlmJobRequest,
+  TranscriptSegment_Deserialize as CoreTranscriptSegment,
 } from '../../bindings';
 import type { TranscriptLlmJobRequest } from '../../types/llmTask';
 import type { LlmConfig, LlmJsonValue } from '../../types/transcript';

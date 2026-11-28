@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import presetModelsData from '../../../../../../../core/src/models/preset-models.json';
 import type {
   RecoveredQueueItem_Serialize,
-  RecoveryItemInput_Serialize,
+  RecoveryItemInput_Deserialize,
   RecoverySnapshot_Serialize,
 } from '../../../bindings';
 import type { AutomationProcessedEntry, AutomationRule } from '../../../types/automation';
@@ -330,12 +330,11 @@ describe('tauri boundary wrappers', () => {
       hasSourceFile: true,
       canResume: true,
       attemptCount: 0,
-      lastError: null,
       retryable: false,
       exportConfig: null,
       stageConfig: null,
     };
-    const queueItem: RecoveryItemInput_Serialize = {
+    const queueItem: RecoveryItemInput_Deserialize = {
       id: 'queue-1',
       filename: 'meeting.wav',
       filePath: 'C:/watch/meeting.wav',
