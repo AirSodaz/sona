@@ -9,12 +9,14 @@ import com.sona.android.application.recording.LocalAsrModelSource
 import com.sona.android.application.recording.LocalAsrModelStoragePort
 import com.sona.android.application.recording.LocalSherpaConfig
 import com.sona.android.application.recording.LocalSherpaModelFiles
+import com.sona.android.application.settings.DownloadMirror
 import uniffi.sona_uniffi_bind.FfiInstalledLocalAsrModel
 import uniffi.sona_uniffi_bind.FfiModelDownloadObserver
 import uniffi.sona_uniffi_bind.FfiModelDownloadProgress
 import uniffi.sona_uniffi_bind.FfiModelDownloadStage
 import uniffi.sona_uniffi_bind.deleteLocalAsrModel
 import uniffi.sona_uniffi_bind.downloadLocalAsrModel
+import uniffi.sona_uniffi_bind.downloadLocalAsrModelWithMirror
 import uniffi.sona_uniffi_bind.listInstalledLocalAsrModels
 import uniffi.sona_uniffi_bind.validateLocalAsrModel
 
@@ -25,6 +27,7 @@ internal interface UniffiLocalAsrModelStorageBindings {
         modelId: String,
         modelsDir: String,
         numThreads: UInt,
+        mirror: String?,
         observer: FfiModelDownloadObserver,
     ): FfiInstalledLocalAsrModel
 
@@ -41,9 +44,13 @@ internal object GeneratedUniffiLocalAsrModelStorageBindings : UniffiLocalAsrMode
         modelId: String,
         modelsDir: String,
         numThreads: UInt,
+        mirror: String?,
         observer: FfiModelDownloadObserver,
-    ): FfiInstalledLocalAsrModel =
+    ): FfiInstalledLocalAsrModel = if (mirror.isNullOrBlank()) {
         downloadLocalAsrModel(modelId, modelsDir, numThreads, observer)
+    } else {
+        downloadLocalAsrModelWithMirror(modelId, modelsDir, numThreads, mirror, observer)
+    }
 
     override suspend fun validate(modelId: String, modelsDir: String): Boolean =
         validateLocalAsrModel(modelId, modelsDir)
@@ -83,10 +90,18 @@ class UniffiLocalAsrModelStorageAdapter internal constructor(
         modelId: String,
         numThreads: Int,
         progress: LocalAsrDownloadProgressListener,
+    ): LocalAsrModel = downloadModel(modelId, numThreads, DownloadMirror.AUTO, progress)
+
+    override suspend fun downloadModel(
+        modelId: String,
+        numThreads: Int,
+        mirror: DownloadMirror,
+        progress: LocalAsrDownloadProgressListener,
     ): LocalAsrModel = bindings.download(
         modelId = modelId,
         modelsDir = modelsDir,
         numThreads = numThreads.toBindingThreads(),
+        mirror = mirror.wireValue,
         observer = object : FfiModelDownloadObserver {
             override fun onProgress(event: FfiModelDownloadProgress) {
                 progress.onProgress(event.toApplication())

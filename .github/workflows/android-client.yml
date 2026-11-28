@@ -94,6 +94,25 @@ jobs:
           version: ${{ env.SHERPA_ONNX_VERSION }}
           tag: ${{ env.SHERPA_ONNX_TAG }}
 
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            KEYSTORE_FILE="$RUNNER_TEMP/sona-release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+            echo "SONA_ANDROID_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+            echo "SONA_ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "SONA_ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "SONA_ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "Configured Android release signing keystore."
+          else
+            echo "Android release signing secrets not set; release APK will remain unsigned."
+          fi
+
       - name: Build and verify Android client
         env:
           SONA_ANDROID_ABIS: arm64-v8a,x86_64
@@ -109,7 +128,7 @@ jobs:
           name: ${{ inputs.artifact_prefix }}-arm64-v8a
           path: |
             platforms/android/client/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-            platforms/android/client/app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+            platforms/android/client/app/build/outputs/apk/release/app-arm64-v8a-release*.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -119,7 +138,7 @@ jobs:
           name: ${{ inputs.artifact_prefix }}-x86_64
           path: |
             platforms/android/client/app/build/outputs/apk/debug/app-x86_64-debug.apk
-            platforms/android/client/app/build/outputs/apk/release/app-x86_64-release-unsigned.apk
+            platforms/android/client/app/build/outputs/apk/release/app-x86_64-release*.apk
           if-no-files-found: error
           retention-days: 14
 

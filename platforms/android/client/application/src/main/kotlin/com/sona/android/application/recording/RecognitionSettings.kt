@@ -1,5 +1,6 @@
 package com.sona.android.application.recording
 
+import com.sona.android.application.settings.DownloadMirror
 import kotlinx.coroutines.flow.Flow
 
 enum class AsrSelectionSlot {
@@ -153,6 +154,13 @@ interface LocalAsrModelStoragePort {
         numThreads: Int,
         progress: LocalAsrDownloadProgressListener,
     ): LocalAsrModel
+
+    suspend fun downloadModel(
+        modelId: String,
+        numThreads: Int,
+        mirror: DownloadMirror,
+        progress: LocalAsrDownloadProgressListener,
+    ): LocalAsrModel = downloadModel(modelId, numThreads, progress)
 
     suspend fun validateModel(modelId: String): Boolean
 

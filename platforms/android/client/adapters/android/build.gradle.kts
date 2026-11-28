@@ -25,6 +25,7 @@ android {
 
 dependencies {
     implementation(project(":application"))
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.datastore:datastore-preferences:1.3.0")
     implementation("androidx.media3:media3-common:1.11.1")
     implementation("androidx.media3:media3-exoplayer:1.11.1")

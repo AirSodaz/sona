@@ -4,6 +4,7 @@ import com.sona.android.application.recording.AsrMode
 import com.sona.android.application.recording.LocalAsrDownloadProgress
 import com.sona.android.application.recording.LocalAsrDownloadProgressListener
 import com.sona.android.application.recording.LocalAsrDownloadStage
+import com.sona.android.application.settings.DownloadMirror
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -25,10 +26,12 @@ class UniffiLocalAsrModelStorageAdapterTest {
         val downloaded = adapter.downloadModel(
             "sensevoice",
             4,
+            DownloadMirror.GH_NET,
             LocalAsrDownloadProgressListener(progress::add),
         )
 
         assertEquals("sensevoice", listed.id)
+        assertEquals("ghnet", bindings.lastDownloadMirror)
         assertEquals("SenseVoice", listed.displayName)
         assertEquals("/data/models/sensevoice", listed.config.modelPath)
         assertEquals("model.int8.onnx", listed.config.fileConfig?.model)
@@ -74,6 +77,7 @@ private class FakeBindings(
 ) : UniffiLocalAsrModelStorageBindings {
     var deletedModelId: String? = null
     var deletedModelsDir: String? = null
+    var lastDownloadMirror: String? = null
 
     override fun list(modelsDir: String, numThreads: UInt): List<FfiInstalledLocalAsrModel> =
         customModels ?: listOf(installedModel(numThreads))
@@ -82,8 +86,10 @@ private class FakeBindings(
         modelId: String,
         modelsDir: String,
         numThreads: UInt,
+        mirror: String?,
         observer: FfiModelDownloadObserver,
     ): FfiInstalledLocalAsrModel {
+        lastDownloadMirror = mirror
         observer.onProgress(
             FfiModelDownloadProgress(
                 modelId = modelId,

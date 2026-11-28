@@ -47,18 +47,22 @@ import com.sona.android.app.feature.recording.RecordMiniBar
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.recording.RecordingCompletedToast
 import com.sona.android.app.feature.settings.AboutSettingsUiState
+import com.sona.android.app.feature.settings.AboutUpdateStatus
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
 import com.sona.android.app.feature.settings.DataRecoveryUiState
+import com.sona.android.app.feature.settings.GeneralDiagnosticsUiState
 import com.sona.android.app.feature.settings.LlmSettingsUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.feature.settings.SyncSettingsUiState
 import com.sona.android.app.ui.theme.SonaTheme
+import com.sona.android.application.settings.AppLogLevel
 import com.sona.android.application.settings.ColorPalettePreset
 import com.sona.android.application.settings.ContrastLevel
+import com.sona.android.application.settings.DownloadMirror
 import com.sona.android.application.settings.PaletteStyle
 import com.sona.android.application.settings.ThemeMode
 import com.sona.android.application.data.TranscriptExportFormat
@@ -95,6 +99,7 @@ internal fun SonaApp(
     recognitionSettingsState: RecognitionSettingsUiState,
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
+    generalDiagnosticsState: GeneralDiagnosticsUiState = GeneralDiagnosticsUiState(),
     llmState: LlmSettingsUiState = LlmSettingsUiState(),
     aboutState: AboutSettingsUiState,
     appLanguage: AppLanguage,
@@ -108,6 +113,28 @@ internal fun SonaApp(
     onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: () -> Unit = {},
+    onCancelUpdateDownload: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onIgnoreUpdate: () -> Unit = {},
+    onClearIgnoredUpdate: () -> Unit = {},
+    onConfirmCellularUpdateDownload: () -> Unit = {},
+    onDismissCellularUpdateDownload: () -> Unit = {},
+    onOpenInstallPermissionSettings: () -> Unit = {},
+    onDismissInstallPermissionDialog: () -> Unit = {},
+    onRetryUpdateWithMirror: (DownloadMirror) -> Unit = {},
+    onDismissStartupUpdateBanner: () -> Unit = {},
+    onGeneralDiagnosticsShown: () -> Unit = {},
+    onAutoCheckUpdatesChanged: (Boolean) -> Unit = {},
+    onWifiOnlyUpdatesChanged: (Boolean) -> Unit = {},
+    onDownloadMirrorChanged: (DownloadMirror) -> Unit = {},
+    onLogLevelChanged: (AppLogLevel) -> Unit = {},
+    onRefreshDiagnostics: () -> Unit = {},
+    onClearTempCaches: () -> Unit = {},
+    onExportLogs: (String) -> Unit = {},
+    onClearLogs: () -> Unit = {},
+    onBuildDiagnosticReport: () -> String = { "" },
+    onDismissGeneralNotice: () -> Unit = {},
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
     onPauseRecording: () -> Unit = {},
@@ -444,6 +471,20 @@ internal fun SonaApp(
                                 onOpenRecovery = {
                                     navigateToSettingsSection(SettingsSection.DATA_RECOVERY, false)
                                 },
+                                startupUpdateVersionName = if (aboutState.showStartupBanner) {
+                                    when (val update = aboutState.updateStatus) {
+                                        is AboutUpdateStatus.UpdateAvailable -> update.release.versionName
+                                        is AboutUpdateStatus.ReadyToInstall -> update.release.versionName
+                                        else -> null
+                                    }
+                                } else {
+                                    null
+                                },
+                                startupUpdateReadyToInstall = aboutState.updateStatus is AboutUpdateStatus.ReadyToInstall,
+                                onOpenAppUpdate = {
+                                    navigateToSettingsSection(SettingsSection.ABOUT, false)
+                                },
+                                onDismissAppUpdate = onDismissStartupUpdateBanner,
                                 extraBottomPadding = bottomOverlayPadding,
                             )
                         }
@@ -559,6 +600,7 @@ internal fun SonaApp(
                                 recognitionSettingsState = recognitionSettingsState,
                                 syncState = syncState,
                                 dataRecoveryState = dataRecoveryState,
+                                generalDiagnosticsState = generalDiagnosticsState,
                                 llmState = llmState,
                                 aboutState = aboutState,
                                 appLanguage = appLanguage,
@@ -573,6 +615,27 @@ internal fun SonaApp(
                                 onContrastLevelChanged = onContrastLevelChanged,
                                 onAboutShown = onAboutShown,
                                 onCheckForUpdates = onCheckForUpdates,
+                                onDownloadUpdate = onDownloadUpdate,
+                                onCancelUpdateDownload = onCancelUpdateDownload,
+                                onInstallUpdate = onInstallUpdate,
+                                onIgnoreUpdate = onIgnoreUpdate,
+                                onClearIgnoredUpdate = onClearIgnoredUpdate,
+                                onConfirmCellularUpdateDownload = onConfirmCellularUpdateDownload,
+                                onDismissCellularUpdateDownload = onDismissCellularUpdateDownload,
+                                onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
+                                onDismissInstallPermissionDialog = onDismissInstallPermissionDialog,
+                                onRetryUpdateWithMirror = onRetryUpdateWithMirror,
+                                onGeneralDiagnosticsShown = onGeneralDiagnosticsShown,
+                                onAutoCheckUpdatesChanged = onAutoCheckUpdatesChanged,
+                                onWifiOnlyUpdatesChanged = onWifiOnlyUpdatesChanged,
+                                onDownloadMirrorChanged = onDownloadMirrorChanged,
+                                onLogLevelChanged = onLogLevelChanged,
+                                onRefreshDiagnostics = onRefreshDiagnostics,
+                                onClearTempCaches = onClearTempCaches,
+                                onExportLogs = onExportLogs,
+                                onClearLogs = onClearLogs,
+                                onBuildDiagnosticReport = onBuildDiagnosticReport,
+                                onDismissGeneralNotice = onDismissGeneralNotice,
                                 onCloudProviderSelected = onCloudProviderSelected,
                                 onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                                 onSaveCloudApiKey = onSaveCloudApiKey,

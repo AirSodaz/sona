@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +23,7 @@ import com.sona.android.adapters.android.audio.EXTRA_AUDIO_IMPORT_HISTORY_ID
 import com.sona.android.app.composition.SonaAppContainer
 import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
 import com.sona.android.app.feature.library.LibraryViewModel
+import com.sona.android.app.feature.recording.MicrophonePermissionPolicy
 import com.sona.android.app.feature.recording.RecordingViewModel
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AboutSettingsViewModel
@@ -31,7 +33,10 @@ import com.sona.android.app.feature.settings.RecognitionSettingsViewModel
 import com.sona.android.app.feature.settings.SyncSettingsViewModel
 import com.sona.android.app.feature.settings.LlmSettingsViewModel
 import com.sona.android.app.feature.settings.DataRecoveryViewModel
+import com.sona.android.app.feature.settings.GeneralDiagnosticsViewModel
 import com.sona.android.app.navigation.SonaApp
+import com.sona.android.app.notification.AndroidAppUpdateNotificationManager
+import com.sona.android.app.notification.SonaNotificationChannels
 import com.sona.android.app.ui.theme.resolveDarkTheme
 import com.sona.android.application.data.DataTransferBlocker
 import com.sona.android.application.recording.AudioImportJobState
@@ -48,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         (application as SonaApplication).container
     }
     private var pendingOpenHistoryId by mutableStateOf<String?>(null)
+    private var onHostResumedInstallCheck: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +97,30 @@ class MainActivity : AppCompatActivity() {
                         channel = AppUpdateChannel.fromWireValue(BuildConfig.UPDATE_CHANNEL),
                     ),
                     checkForAppUpdate = container.checkForAppUpdate,
+                    updateDownloader = container.appUpdateDownloader,
+                    apkInstaller = container.apkInstaller,
+                    generalSettings = container.generalSettings,
+                    networkStatus = container.networkStatus,
+                    notificationPort = AndroidAppUpdateNotificationManager(applicationContext),
+                ),
+            )
+            SideEffect {
+                onHostResumedInstallCheck = aboutSettingsViewModel::onHostResumed
+            }
+            val generalDiagnosticsViewModel: GeneralDiagnosticsViewModel = viewModel(
+                factory = GeneralDiagnosticsViewModel.factory(
+                    generalSettings = container.generalSettings,
+                    storageUsage = container.storageUsage,
+                    diagnostics = container.diagnostics,
+                    appLogs = container.appLogs,
+                    fileTransfers = container.fileTransfers,
+                    permissionChecker = {
+                        val micGranted = MicrophonePermissionPolicy.isGranted(applicationContext)
+                        val notifGranted = SonaNotificationChannels.areNotificationsEnabled(applicationContext)
+                        micGranted to notifGranted
+                    },
+                    onBeforeClearTempCaches = aboutSettingsViewModel::cancelDownloadAndAwait,
+                    onUpdateCacheCleared = aboutSettingsViewModel::onUpdateCacheCleared,
                 ),
             )
             val cloudTranscriptionViewModel: CloudTranscriptionSettingsViewModel = viewModel(
@@ -135,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                 .collectAsStateWithLifecycle()
             val syncState by syncSettingsViewModel.state.collectAsStateWithLifecycle()
             val dataRecoveryState by dataRecoveryViewModel.state.collectAsStateWithLifecycle()
+            val generalDiagnosticsState by generalDiagnosticsViewModel.state.collectAsStateWithLifecycle()
             val llmSettingsState by llmSettingsViewModel.state.collectAsStateWithLifecycle()
             val resolvedDarkTheme = resolveDarkTheme(
                 themeMode = appearanceState.themeMode,
@@ -158,6 +189,7 @@ class MainActivity : AppCompatActivity() {
             LaunchedEffect(Unit) {
                 syncSettingsViewModel.refresh()
                 dataRecoveryViewModel.refreshRecovery()
+                aboutSettingsViewModel.checkOnStartupIfEnabled()
             }
             LaunchedEffect(recordingState, libraryState.audioImport, syncState.status, dataRecoveryState.recovery) {
                 val blockers = buildSet {
@@ -196,6 +228,7 @@ class MainActivity : AppCompatActivity() {
                 recognitionSettingsState = recognitionSettingsState,
                 syncState = syncState,
                 dataRecoveryState = dataRecoveryState,
+                generalDiagnosticsState = generalDiagnosticsState,
                 llmState = llmSettingsState,
                 onLlmProvider = llmSettingsViewModel::provider,
                 onLlmModel = llmSettingsViewModel::model,
@@ -217,6 +250,28 @@ class MainActivity : AppCompatActivity() {
                 onContrastLevelChanged = appearanceSettingsViewModel::setContrastLevel,
                 onAboutShown = aboutSettingsViewModel::checkIfNeeded,
                 onCheckForUpdates = aboutSettingsViewModel::checkForUpdates,
+                onDownloadUpdate = { aboutSettingsViewModel.startDownload() },
+                onCancelUpdateDownload = aboutSettingsViewModel::cancelDownload,
+                onInstallUpdate = aboutSettingsViewModel::installDownloadedApk,
+                onIgnoreUpdate = aboutSettingsViewModel::ignoreAvailableUpdate,
+                onClearIgnoredUpdate = aboutSettingsViewModel::clearIgnoredUpdate,
+                onConfirmCellularUpdateDownload = aboutSettingsViewModel::confirmCellularDownload,
+                onDismissCellularUpdateDownload = aboutSettingsViewModel::dismissCellularConfirmDialog,
+                onOpenInstallPermissionSettings = aboutSettingsViewModel::openInstallPermissionSettings,
+                onDismissInstallPermissionDialog = aboutSettingsViewModel::dismissInstallPermissionDialog,
+                onRetryUpdateWithMirror = aboutSettingsViewModel::retryDownloadWithMirror,
+                onDismissStartupUpdateBanner = aboutSettingsViewModel::dismissBannerForSession,
+                onGeneralDiagnosticsShown = generalDiagnosticsViewModel::refresh,
+                onAutoCheckUpdatesChanged = generalDiagnosticsViewModel::setAutoCheckUpdates,
+                onWifiOnlyUpdatesChanged = generalDiagnosticsViewModel::setWifiOnlyUpdates,
+                onDownloadMirrorChanged = generalDiagnosticsViewModel::setDownloadMirror,
+                onLogLevelChanged = generalDiagnosticsViewModel::setLogLevel,
+                onRefreshDiagnostics = generalDiagnosticsViewModel::refresh,
+                onClearTempCaches = generalDiagnosticsViewModel::clearTemporaryCaches,
+                onExportLogs = generalDiagnosticsViewModel::exportLogs,
+                onClearLogs = generalDiagnosticsViewModel::clearLogs,
+                onBuildDiagnosticReport = generalDiagnosticsViewModel::buildDiagnosticReportText,
+                onDismissGeneralNotice = generalDiagnosticsViewModel::dismissNotice,
                 onRetryBootstrap = bootstrapViewModel::refresh,
                 onStartRecording = recordingViewModel::startRecording,
                 onPauseRecording = recordingViewModel::pauseRecording,
@@ -331,6 +386,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        onHostResumedInstallCheck?.invoke()
         lifecycleScope.launch {
             val syncState = runCatching { container.syncOperations.status().state }.getOrNull()
             if (syncState != null && syncState !in setOf(

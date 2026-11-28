@@ -2,6 +2,7 @@ package com.sona.android.application.settings
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,8 +33,29 @@ class AppUpdateTest {
         build(versionCode = 0)
     }
 
+    @Test
+    fun `selectAssetForAbis picks first matching device ABI`() {
+        val arm = AppApkAsset(
+            abi = "arm64-v8a",
+            url = "https://github.com/AirSodaz/sona/releases/download/v1.2.4/app-arm64-v8a-debug.apk",
+            sha256 = "a".repeat(64),
+            sizeBytes = 1024L,
+        )
+        val x64 = AppApkAsset(
+            abi = "x86_64",
+            url = "https://github.com/AirSodaz/sona/releases/download/v1.2.4/app-x86_64-debug.apk",
+            sha256 = "b".repeat(64),
+            sizeBytes = 2048L,
+        )
+        val release = release().copy(assets = mapOf("arm64-v8a" to arm, "x86_64" to x64))
+
+        assertEquals(arm, release.selectAssetForAbis(listOf("arm64-v8a", "armeabi-v7a")))
+        assertEquals(x64, release.selectAssetForAbis(listOf("x86_64")))
+        assertNull(release.selectAssetForAbis(listOf("armeabi-v7a")))
+    }
+
     private fun checker(release: AppReleaseInfo) = CheckForAppUpdate(
-        AppUpdatePort { release },
+        AppUpdatePort { _, _ -> release },
     )
 
     private fun build(versionCode: Int = 11) = AppBuildInfo(

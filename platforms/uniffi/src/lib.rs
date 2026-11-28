@@ -497,19 +497,19 @@ pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
     runtime_bridge::normalize_export_format(value)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
     export_bridge::export_transcript_file_json(input_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn export_transcript_file_v1(
     request: FfiExportTranscriptFileRequestV1,
 ) -> SonaCoreBindingResult<FfiExportTranscriptFileResultV1> {
     export_bridge::export_transcript_file_v1(request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn export_backup_archive_json(
     app_data_dir: String,
     archive_path: String,
@@ -518,12 +518,12 @@ pub async fn export_backup_archive_json(
     backup_bridge::export_backup_archive_json(app_data_dir, archive_path, app_version).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn inspect_backup_archive_json(archive_path: String) -> SonaCoreBindingResult<String> {
     backup_bridge::inspect_backup_archive_json(archive_path).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn import_backup_archive_json(
     app_data_dir: String,
     archive_path: String,
@@ -539,7 +539,7 @@ pub async fn import_backup_archive_json(
     .await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn export_backup_archive_v1(
     app_data_dir: String,
     archive_path: String,
@@ -548,14 +548,14 @@ pub async fn export_backup_archive_v1(
     backup_bridge::export_backup_archive_v1(app_data_dir, archive_path, app_version).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn inspect_backup_archive_v1(
     archive_path: String,
 ) -> SonaCoreBindingResult<FfiPreparedBackupImportV1> {
     backup_bridge::inspect_backup_archive_v1(archive_path).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn import_backup_archive_v1(
     app_data_dir: String,
     archive_path: String,
@@ -722,20 +722,20 @@ pub fn sync_resolve_conflict_json(
     sync_bridge::resolve_conflict_json(app_data_dir, conflict_id, resolution_json)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_test_provider_v1(
     provider: FfiSyncProviderInputV1,
 ) -> SonaCoreBindingResult<FfiSyncProviderDescriptorV1> {
     sync_bridge::test_provider_v1(provider).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_get_status_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
     sync_bridge::get_status_v1(app_data_dir).await
 }
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_discover_vaults_v1(
     app_data_dir: String,
     provider: FfiSyncProviderInputV1,
@@ -750,7 +750,7 @@ pub fn sync_get_pairing_info_v1(
     sync_bridge::get_pairing_info_v1(app_data_dir)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_create_vault_v1(
     app_data_dir: String,
     request: FfiSyncCreateRequestV1,
@@ -758,7 +758,7 @@ pub async fn sync_create_vault_v1(
     sync_bridge::create_vault_v1(app_data_dir, request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_preview_join_v1(
     app_data_dir: String,
     request: FfiSyncJoinRequestV1,
@@ -766,7 +766,7 @@ pub async fn sync_preview_join_v1(
     sync_bridge::preview_join_v1(app_data_dir, request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_join_vault_v1(
     app_data_dir: String,
     request: FfiSyncJoinRequestV1,
@@ -774,7 +774,7 @@ pub async fn sync_join_vault_v1(
     sync_bridge::join_vault_v1(app_data_dir, request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_unlock_v1(
     app_data_dir: String,
     request: FfiSyncUnlockRequestV1,
@@ -782,7 +782,7 @@ pub async fn sync_unlock_v1(
     sync_bridge::unlock_v1(app_data_dir, request, false).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_unlock_with_recovery_v1(
     app_data_dir: String,
     request: FfiSyncUnlockRequestV1,
@@ -790,7 +790,7 @@ pub async fn sync_unlock_with_recovery_v1(
     sync_bridge::unlock_v1(app_data_dir, request, true).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_set_paused_v1(
     app_data_dir: String,
     paused: bool,
@@ -798,19 +798,19 @@ pub async fn sync_set_paused_v1(
     sync_bridge::set_paused_v1(app_data_dir, paused).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_disconnect_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
     sync_bridge::disconnect_v1(app_data_dir).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_run_now_v1(app_data_dir: String) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
     sync_bridge::run_now_v1(app_data_dir).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_change_preset_v1(
     app_data_dir: String,
     preset: FfiSyncPresetV1,
@@ -819,7 +819,7 @@ pub async fn sync_change_preset_v1(
     sync_bridge::change_preset_v1(app_data_dir, preset, confirm_shrink).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_change_master_password_v1(
     app_data_dir: String,
     request: FfiSyncChangePasswordRequestV1,
@@ -1256,6 +1256,24 @@ pub async fn download_local_asr_model(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn download_local_asr_model_with_mirror(
+    model_id: String,
+    models_dir: String,
+    num_threads: u32,
+    mirror: Option<String>,
+    observer: std::sync::Arc<dyn FfiModelDownloadObserver>,
+) -> SonaCoreBindingResult<FfiInstalledLocalAsrModel> {
+    model_bridge::download_local_asr_model_with_mirror(
+        model_id,
+        models_dir,
+        num_threads,
+        mirror,
+        observer,
+    )
+    .await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn validate_local_asr_model(
     model_id: String,
     models_dir: String,
@@ -1324,7 +1342,7 @@ pub fn set_app_setting_json(
     app_config_repository_bridge::set_app_setting_json(app_data_dir, key, value_json)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_dashboard_snapshot_json(
     app_data_dir: String,
     deep: bool,
@@ -1332,7 +1350,7 @@ pub async fn load_dashboard_snapshot_json(
     dashboard_bridge::load_dashboard_snapshot_json(app_data_dir, deep).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_dashboard_snapshot_v1(
     app_data_dir: String,
     deep: bool,
@@ -1340,7 +1358,7 @@ pub async fn load_dashboard_snapshot_v1(
     dashboard_bridge::load_dashboard_snapshot_v1(app_data_dir, deep).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_diagnostics_snapshot_json(
     app_data_dir: String,
     input_json: String,
@@ -1348,7 +1366,7 @@ pub async fn load_diagnostics_snapshot_json(
     diagnostics_bridge::load_diagnostics_snapshot_json(app_data_dir, input_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_diagnostics_snapshot_v1(
     app_data_dir: String,
     input: FfiDiagnosticsInputV1,
@@ -1356,14 +1374,14 @@ pub async fn load_diagnostics_snapshot_v1(
     diagnostics_bridge::load_diagnostics_snapshot_v1(app_data_dir, input).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_storage_usage_snapshot_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
     storage_usage_bridge::load_storage_usage_snapshot_json(app_data_dir).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_storage_usage_snapshot_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiStorageUsageSnapshotV1> {
@@ -1453,28 +1471,28 @@ pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlm
     llm_bridge::llm_config_from_json(config_json)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_llm_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
     llm_runtime_bridge::complete_llm_json(request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_llm_v1(
     request: FfiLlmCompletionRequestV1,
 ) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
     llm_runtime_bridge::complete_llm_v1(request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_llm_models_json(
     request_json: String,
 ) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
     llm_runtime_bridge::list_llm_models_json(request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn describe_llm_model_json(
     config_json: String,
 ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
@@ -1488,21 +1506,21 @@ pub fn validate_llm_generate_request_v1(
     llm_runtime_bridge::validate_llm_generate_request_v1(request)
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_llm_models_v1(
     request: FfiLlmModelsRequestV1,
 ) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
     llm_runtime_bridge::list_llm_models_v1(request).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn describe_llm_model_v1(
     config: FfiLlmConfig,
 ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
     llm_runtime_bridge::describe_llm_model_v1(config).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_polish_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1510,7 +1528,7 @@ pub async fn run_llm_polish_json(
     llm_task_bridge::run_llm_polish_json(request_json, observer).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_translate_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1518,7 +1536,7 @@ pub async fn run_llm_translate_json(
     llm_task_bridge::run_llm_translate_json(request_json, observer).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_summary_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1526,7 +1544,7 @@ pub async fn run_llm_summary_json(
     llm_task_bridge::run_llm_summary_json(request_json, observer).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_polish_v1(
     request: FfiPolishSegmentsRequest,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1534,7 +1552,7 @@ pub async fn run_llm_polish_v1(
     llm_task_bridge::run_llm_polish_v1(request, observer).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_translate_v1(
     request: FfiTranslateSegmentsRequest,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1542,7 +1560,7 @@ pub async fn run_llm_translate_v1(
     llm_task_bridge::run_llm_translate_v1(request, observer).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn run_llm_summary_v1(
     request: FfiSummarizeTranscriptRequest,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,8 +72,10 @@ import com.sona.android.app.navigation.sonaTwoPaneSectionTransition
 import com.sona.android.app.ui.component.SonaBackButton
 import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
+import com.sona.android.application.settings.AppLogLevel
 import com.sona.android.application.settings.ColorPalettePreset
 import com.sona.android.application.settings.ContrastLevel
+import com.sona.android.application.settings.DownloadMirror
 import com.sona.android.application.settings.PaletteStyle
 import com.sona.android.application.settings.ThemeMode
 import com.sona.android.application.recording.OnlineAsrProvider
@@ -96,6 +100,7 @@ internal fun SettingsScreen(
     recognitionSettingsState: RecognitionSettingsUiState,
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
+    generalDiagnosticsState: GeneralDiagnosticsUiState = GeneralDiagnosticsUiState(),
     aboutState: AboutSettingsUiState,
     llmState: LlmSettingsUiState = LlmSettingsUiState(),
     appLanguage: AppLanguage,
@@ -111,6 +116,29 @@ internal fun SettingsScreen(
     onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: () -> Unit = {},
+    onCancelUpdateDownload: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onIgnoreUpdate: () -> Unit = {},
+    onClearIgnoredUpdate: () -> Unit = {},
+    onConfirmCellularUpdateDownload: () -> Unit = {},
+    onDismissCellularUpdateDownload: () -> Unit = {},
+    onOpenInstallPermissionSettings: () -> Unit = {},
+    onDismissInstallPermissionDialog: () -> Unit = {},
+    onRetryUpdateWithMirror: (DownloadMirror) -> Unit = {},
+    onGeneralDiagnosticsShown: () -> Unit = {},
+    onAutoCheckUpdatesChanged: (Boolean) -> Unit = {},
+    onWifiOnlyUpdatesChanged: (Boolean) -> Unit = {},
+    onDownloadMirrorChanged: (DownloadMirror) -> Unit = {},
+    onLogLevelChanged: (AppLogLevel) -> Unit = {},
+    onRefreshDiagnostics: () -> Unit = {},
+    onClearTempCaches: () -> Unit = {},
+    onExportLogs: (String) -> Unit = {},
+    onClearLogs: () -> Unit = {},
+    onBuildDiagnosticReport: () -> String = { "" },
+    onDismissGeneralNotice: () -> Unit = {},
+    onOpenRecognitionSettings: () -> Unit = {},
+    onOpenGeneralSettings: () -> Unit = {},
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -194,6 +222,10 @@ internal fun SettingsScreen(
     )
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
+    val currentDetailSection = navigator.currentDestination
+        ?.takeIf { it.pane == ListDetailPaneScaffoldRole.Detail }
+        ?.contentKey
+    val activeSection = currentDetailSection ?: selectedSection
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
         PaneAdaptedValue.Expanded
     val detailPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] ==
@@ -244,6 +276,11 @@ internal fun SettingsScreen(
             currentOnShowingSinglePaneListChanged(false)
         }
     }
+    LaunchedEffect(currentDetailSection) {
+        if (currentDetailSection != null && currentDetailSection.route != selectedSectionRoute) {
+            selectedSectionRoute = currentDetailSection.route
+        }
+    }
     LaunchedEffect(initialSection, requestedSection, sectionRequestToken) {
         if (sectionRequestToken > 0 && sectionRequestToken != handledSectionRequestToken) {
             handledSectionRequestToken = sectionRequestToken
@@ -274,8 +311,9 @@ internal fun SettingsScreen(
                     enableScrim = !isTwoPane,
                 ) {
                     SettingsSectionList(
-                        selectedSection = selectedSection,
+                        selectedSection = activeSection,
                         showSelection = isTwoPane,
+                        hasUpdateBadge = aboutState.hasActionableUpdateBadge,
                         extraBottomPadding = bottomOverlayPadding,
                         onSectionSelected = { section ->
                             if (section != SettingsSection.RECOGNITION) {
@@ -301,7 +339,7 @@ internal fun SettingsScreen(
                     enabled = !isTwoPane,
                 ) {
                     SettingsDetailPane(
-                        section = selectedSection,
+                        section = activeSection,
                         isTwoPane = isTwoPane,
                         showBack = showDetailBack,
                         bootstrapState = bootstrapState,
@@ -310,6 +348,7 @@ internal fun SettingsScreen(
                         recognitionSettingsState = recognitionSettingsState,
                         syncState = syncState,
                         dataRecoveryState = dataRecoveryState,
+                        generalDiagnosticsState = generalDiagnosticsState,
                         aboutState = aboutState,
                         llmState = llmState,
                         appLanguage = appLanguage,
@@ -325,6 +364,51 @@ internal fun SettingsScreen(
                         onContrastLevelChanged = onContrastLevelChanged,
                         onAboutShown = onAboutShown,
                         onCheckForUpdates = onCheckForUpdates,
+                        onDownloadUpdate = onDownloadUpdate,
+                        onCancelUpdateDownload = onCancelUpdateDownload,
+                        onInstallUpdate = onInstallUpdate,
+                        onIgnoreUpdate = onIgnoreUpdate,
+                        onClearIgnoredUpdate = onClearIgnoredUpdate,
+                        onConfirmCellularUpdateDownload = onConfirmCellularUpdateDownload,
+                        onDismissCellularUpdateDownload = onDismissCellularUpdateDownload,
+                        onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
+                        onDismissInstallPermissionDialog = onDismissInstallPermissionDialog,
+                        onRetryUpdateWithMirror = onRetryUpdateWithMirror,
+                        onGeneralDiagnosticsShown = onGeneralDiagnosticsShown,
+                        onAutoCheckUpdatesChanged = onAutoCheckUpdatesChanged,
+                        onWifiOnlyUpdatesChanged = onWifiOnlyUpdatesChanged,
+                        onDownloadMirrorChanged = onDownloadMirrorChanged,
+                        onLogLevelChanged = onLogLevelChanged,
+                        onRefreshDiagnostics = onRefreshDiagnostics,
+                        onClearTempCaches = onClearTempCaches,
+                        onExportLogs = onExportLogs,
+                        onClearLogs = onClearLogs,
+                        onBuildDiagnosticReport = onBuildDiagnosticReport,
+                        onDismissGeneralNotice = onDismissGeneralNotice,
+                        onOpenRecognitionSettings = {
+                            selectedSectionRoute = SettingsSection.RECOGNITION.route
+                            val currentDestination = navigator.currentDestination
+                            if (
+                                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                                currentDestination.contentKey != SettingsSection.RECOGNITION
+                            ) {
+                                scope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.RECOGNITION)
+                                }
+                            }
+                        },
+                        onOpenGeneralSettings = {
+                            selectedSectionRoute = SettingsSection.GENERAL_DIAGNOSTICS.route
+                            val currentDestination = navigator.currentDestination
+                            if (
+                                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                                currentDestination.contentKey != SettingsSection.GENERAL_DIAGNOSTICS
+                            ) {
+                                scope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsSection.GENERAL_DIAGNOSTICS)
+                                }
+                            }
+                        },
                         onCloudProviderSelected = onCloudProviderSelected,
                         onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                         onSaveCloudApiKey = onSaveCloudApiKey,
@@ -408,6 +492,7 @@ internal fun settingsDestinationHistory(
 private fun SettingsSectionList(
     selectedSection: SettingsSection,
     showSelection: Boolean,
+    hasUpdateBadge: Boolean = false,
     onSectionSelected: (SettingsSection) -> Unit,
     extraBottomPadding: Dp = 0.dp,
 ) {
@@ -468,6 +553,28 @@ private fun SettingsSectionList(
                                     }
                                 }
                             },
+                            trailingContent = if (hasUpdateBadge && section == SettingsSection.ABOUT) {
+                                {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(8.dp),
+                                        )
+                                        if (!showSelection) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                null
+                            },
                             showDefaultTrailingChevron = !showSelection,
                             onClick = { onSectionSelected(section) },
                         )
@@ -493,6 +600,7 @@ private fun SettingsDetailPane(
     recognitionSettingsState: RecognitionSettingsUiState,
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
+    generalDiagnosticsState: GeneralDiagnosticsUiState,
     aboutState: AboutSettingsUiState,
     llmState: LlmSettingsUiState,
     appLanguage: AppLanguage,
@@ -508,6 +616,29 @@ private fun SettingsDetailPane(
     onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: () -> Unit = {},
+    onCancelUpdateDownload: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    onIgnoreUpdate: () -> Unit = {},
+    onClearIgnoredUpdate: () -> Unit = {},
+    onConfirmCellularUpdateDownload: () -> Unit = {},
+    onDismissCellularUpdateDownload: () -> Unit = {},
+    onOpenInstallPermissionSettings: () -> Unit = {},
+    onDismissInstallPermissionDialog: () -> Unit = {},
+    onRetryUpdateWithMirror: (DownloadMirror) -> Unit = {},
+    onGeneralDiagnosticsShown: () -> Unit = {},
+    onAutoCheckUpdatesChanged: (Boolean) -> Unit = {},
+    onWifiOnlyUpdatesChanged: (Boolean) -> Unit = {},
+    onDownloadMirrorChanged: (DownloadMirror) -> Unit = {},
+    onLogLevelChanged: (AppLogLevel) -> Unit = {},
+    onRefreshDiagnostics: () -> Unit = {},
+    onClearTempCaches: () -> Unit = {},
+    onExportLogs: (String) -> Unit = {},
+    onClearLogs: () -> Unit = {},
+    onBuildDiagnosticReport: () -> String = { "" },
+    onDismissGeneralNotice: () -> Unit = {},
+    onOpenRecognitionSettings: () -> Unit = {},
+    onOpenGeneralSettings: () -> Unit = {},
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -660,10 +791,39 @@ private fun SettingsDetailPane(
                     extraBottomPadding = extraBottomPadding,
                     modifier = contentModifier,
                 )
+                SettingsSection.GENERAL_DIAGNOSTICS -> GeneralDiagnosticsPane(
+                    state = generalDiagnosticsState,
+                    onShown = onGeneralDiagnosticsShown,
+                    onAutoCheckUpdatesChanged = onAutoCheckUpdatesChanged,
+                    onWifiOnlyUpdatesChanged = onWifiOnlyUpdatesChanged,
+                    onDownloadMirrorChanged = onDownloadMirrorChanged,
+                    onLogLevelChanged = onLogLevelChanged,
+                    onClearIgnoredUpdate = onClearIgnoredUpdate,
+                    onRefreshDiagnostics = onRefreshDiagnostics,
+                    onClearTempCaches = onClearTempCaches,
+                    onExportLogs = onExportLogs,
+                    onClearLogs = onClearLogs,
+                    onOpenRecognitionSettings = onOpenRecognitionSettings,
+                    onBuildDiagnosticReport = onBuildDiagnosticReport,
+                    onDismissNotice = onDismissGeneralNotice,
+                    extraBottomPadding = extraBottomPadding,
+                    modifier = contentModifier,
+                )
                 SettingsSection.ABOUT -> AboutSettingsPane(
                     state = aboutState,
                     onShown = onAboutShown,
                     onCheckForUpdates = onCheckForUpdates,
+                    onDownloadUpdate = onDownloadUpdate,
+                    onCancelDownload = onCancelUpdateDownload,
+                    onInstallUpdate = onInstallUpdate,
+                    onIgnoreUpdate = onIgnoreUpdate,
+                    onClearIgnoredUpdate = onClearIgnoredUpdate,
+                    onConfirmCellularDownload = onConfirmCellularUpdateDownload,
+                    onDismissCellularDownload = onDismissCellularUpdateDownload,
+                    onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
+                    onDismissInstallPermissionDialog = onDismissInstallPermissionDialog,
+                    onRetryWithMirror = onRetryUpdateWithMirror,
+                    onOpenGeneralSettings = onOpenGeneralSettings,
                     extraBottomPadding = extraBottomPadding,
                     modifier = contentModifier,
                 )

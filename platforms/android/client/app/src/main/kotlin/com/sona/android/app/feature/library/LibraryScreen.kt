@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -165,6 +166,10 @@ internal fun LibraryScreen(
     onConfigureRecognition: () -> Unit,
     recoveryPendingCount: Int,
     onOpenRecovery: () -> Unit,
+    startupUpdateVersionName: String? = null,
+    startupUpdateReadyToInstall: Boolean = false,
+    onOpenAppUpdate: () -> Unit = {},
+    onDismissAppUpdate: () -> Unit = {},
     extraBottomPadding: Dp = 0.dp,
 ) {
     val listState = rememberLazyListState()
@@ -531,13 +536,56 @@ internal fun LibraryScreen(
                 }
             }
 
-            // 3. Inline Notices (Recovery + Audio Import Queue)
+            // 3. Inline Notices (Update + Recovery + Audio Import Queue)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (startupUpdateVersionName != null) {
+                    Surface(
+                        onClick = onOpenAppUpdate,
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = stringResource(
+                                    if (startupUpdateReadyToInstall) {
+                                        R.string.about_update_ready_to_install
+                                    } else {
+                                        R.string.about_update_available
+                                    },
+                                    startupUpdateVersionName,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick = onDismissAppUpdate,
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.action_dismiss),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (recoveryPendingCount > 0) {
                     Surface(
                         onClick = onOpenRecovery,

@@ -13,6 +13,11 @@ class SettingsRouteTest {
     }
 
     @Test
+    fun `general diagnostics uses the settings section route`() {
+        assertEquals("settings?section=general-diagnostics", settingsRoute(SettingsSection.GENERAL_DIAGNOSTICS))
+    }
+
+    @Test
     fun `about uses the settings section route`() {
         assertEquals("settings?section=about", settingsRoute(SettingsSection.ABOUT))
     }
