@@ -1100,4 +1100,65 @@ describe('NotificationCenter task center', () => {
     expect(batchQueueState.removeItem).toHaveBeenCalledWith('f1');
     expect(batchQueueState.removeItem).toHaveBeenCalledWith('f2');
   });
+
+  it('awaits recovery item discard sequentially during Clear all and skips clearAllNonActive on discard error', async () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'recovery-r1',
+        kind: 'recovery',
+        status: 'recoverable',
+        title: 'r1.wav',
+        recoverable: true,
+      }),
+      makeTask({
+        id: 'batch-done',
+        kind: 'batchImport',
+        status: 'succeeded',
+        title: 'done.wav',
+      }),
+    ];
+    recoveryState.discardItem.mockRejectedValueOnce(new Error('disk error'));
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    fireEvent.click(screen.getByTestId('notification-clear-trigger'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: /Clear all/i }));
+      await Promise.resolve();
+    });
+
+    expect(recoveryState.discardItem).toHaveBeenCalledWith('r1');
+    expect(taskLedgerState.clearAllNonActive).not.toHaveBeenCalled();
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-done');
+  });
+
+  it('refreshes relative timestamp labels when the panel is opened later', () => {
+    const baseTime = 1_760_000_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseTime);
+
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'recent-task',
+        status: 'succeeded',
+        title: 'done.wav',
+        progress: 100,
+        updatedAt: baseTime,
+      }),
+    ];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    // Advance clock by 5 minutes before opening the panel
+    nowSpy.mockReturnValue(baseTime + 5 * 60_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('5m ago');
+    nowSpy.mockRestore();
+  });
 });

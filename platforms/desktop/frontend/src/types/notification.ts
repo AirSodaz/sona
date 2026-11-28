@@ -34,6 +34,7 @@ export interface NotificationSubItem {
   progress?: number;
   detail?: string | null;
   actions?: NotificationAction[];
+  closeAction?: NotificationAction;
 }
 
 export interface NotificationEntry {

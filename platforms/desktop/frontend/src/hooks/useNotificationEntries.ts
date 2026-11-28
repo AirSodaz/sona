@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { speakerService } from '../services/speakerService';
@@ -13,7 +13,7 @@ import { useSpeakerNotificationStore } from '../stores/speakerNotificationStore'
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import type { NotificationEntry, NotificationGroup } from '../types/notification';
 import type { SettingsTab } from '../types/settings';
-import { isTaskLedgerActiveStatus } from '../types/taskLedger';
+import { isTaskLedgerActiveStatus, type TaskLedgerRecord } from '../types/taskLedger';
 import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/onboarding';
 import { adaptModelDownloadsEntries } from './notifications/modelDownloadAdapter';
 import { adaptModelDownloadEntry, adaptOnboardingEntry } from './notifications/onboardingAdapter';
@@ -29,6 +29,7 @@ export interface UseNotificationEntriesInput {
   onOpenSettingsTab?: (tab: SettingsTab) => void;
   onOpenModelSettings?: () => void;
   closePanel: () => void;
+  isPanelOpen?: boolean;
 }
 
 export interface UseNotificationEntriesResult {
@@ -50,17 +51,24 @@ function getBadgeLabel(count: number): string {
   return count > 9 ? '9+' : String(count);
 }
 
+function isRecoveryLedgerTask(task: TaskLedgerRecord): boolean {
+  return task.kind === 'recovery' || task.id.startsWith('recovery-');
+}
+
 export function useNotificationEntries({
   onOpenRecoveryCenter,
   onOpenAutomationSettings,
   onOpenSettingsTab,
   onOpenModelSettings,
   closePanel,
+  isPanelOpen = false,
 }: UseNotificationEntriesInput): UseNotificationEntriesResult {
   const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
 
   // --- Store selectors ---
   const tasks = useTaskLedgerStore((state) => state.tasks);
+  const removeTask = useTaskLedgerStore((state) => state.removeTask);
   const clearSucceededTasks = useTaskLedgerStore((state) => state.clearSucceeded);
   const clearAllNonActiveTasks = useTaskLedgerStore((state) => state.clearAllNonActive);
   const isRecoveryLoaded = useRecoveryStore((state) => state.isLoaded);
@@ -73,6 +81,19 @@ export function useNotificationEntries({
   const dismissSpeakerNotice = useSpeakerNotificationStore((state) => state.dismissNotice);
 
   const prevConfigRef = useRef(config);
+
+  useEffect(() => {
+    if (!isPanelOpen) {
+      return undefined;
+    }
+    setNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isPanelOpen]);
 
   useEffect(() => {
     const prevConfig = prevConfigRef.current;
@@ -203,16 +224,46 @@ export function useNotificationEntries({
           : undefined;
 
       const clearableTasks = tasks.filter((task) => !isTaskLedgerActiveStatus(task.status));
-      for (const task of clearableTasks) {
-        void cleanupLedgerTaskSideEffects(task, {
-          discardRecoveryItem: recoveryStore?.discardItem,
-          removeBatchQueueItem: batchQueueStore?.removeItem,
-          dismissAutomationNotification: automationStore?.dismissNotification,
-        });
+      const recoveryTasks = clearableTasks.filter(isRecoveryLedgerTask);
+      const nonRecoveryTasks = clearableTasks.filter((task) => !isRecoveryLedgerTask(task));
+      const cleanupPorts = {
+        discardRecoveryItem: recoveryStore?.discardItem,
+        removeBatchQueueItem: batchQueueStore?.removeItem,
+        dismissAutomationNotification: automationStore?.dismissNotification,
+      };
+
+      for (const task of nonRecoveryTasks) {
+        void cleanupLedgerTaskSideEffects(task, cleanupPorts);
       }
-      void clearAllNonActiveTasks();
+
+      if (recoveryTasks.length === 0) {
+        void clearAllNonActiveTasks();
+        return;
+      }
+
+      void (async () => {
+        let hasRecoveryFailure = false;
+        for (const task of recoveryTasks) {
+          try {
+            await cleanupLedgerTaskSideEffects(task, cleanupPorts);
+          } catch {
+            hasRecoveryFailure = true;
+          }
+        }
+        if (!hasRecoveryFailure) {
+          await clearAllNonActiveTasks();
+          return;
+        }
+        for (const task of nonRecoveryTasks) {
+          try {
+            await removeTask(task.id);
+          } catch {
+            // Keep remaining non-recovery cleanup isolated per task.
+          }
+        }
+      })();
     },
-    [clearAllNonActiveTasks, clearSucceededTasks, tasks]
+    [clearAllNonActiveTasks, clearSucceededTasks, removeTask, tasks]
   );
 
   // --- Entry aggregation ---
@@ -231,7 +282,6 @@ export function useNotificationEntries({
   }, [automationRules]);
 
   const entries = useMemo<NotificationEntry[]>(() => {
-    const now = Date.now();
     const result: NotificationEntry[] = [];
 
     // 1. Task ledger entries
@@ -337,6 +387,7 @@ export function useNotificationEntries({
     modelDownloadStatus,
     modelDownloads,
     notificationVisible,
+    now,
     ruleNameById,
     showOnboardingReminder,
     t,

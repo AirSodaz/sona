@@ -469,4 +469,38 @@ describe('createTaskCenterActionRegistry', () => {
     expect(ports.removeBatchQueueItem).toHaveBeenCalledWith('a1');
     expect(ports.dismissAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-7');
   });
+
+  it('continues retryAll for remaining tasks even if an earlier task fails preflight', async () => {
+    const retryAutomationTask = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Source file missing'))
+      .mockResolvedValueOnce(undefined);
+    const deps = makeDeps({ retryAutomationTask });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const tasks = [
+      makeTask({
+        id: 'automation-1',
+        kind: 'automation',
+        status: 'failed',
+        automationRuleId: 'rule-1',
+        filePath: 'C:\\watch\\missing.wav',
+      }),
+      makeTask({
+        id: 'automation-2',
+        kind: 'automation',
+        status: 'failed',
+        automationRuleId: 'rule-1',
+        filePath: 'C:\\watch\\valid.wav',
+      }),
+    ];
+
+    const groupActions = registry.getLedgerTaskGroupActions?.('automation', 'action', tasks);
+    const retryAll = getAction(groupActions?.row ?? [], 'retryAll');
+
+    await expect(retryAll.run()).resolves.toBeUndefined();
+    expect(retryAutomationTask).toHaveBeenCalledTimes(2);
+    expect(deps.removeTask).toHaveBeenCalledTimes(1);
+    expect(deps.removeTask).toHaveBeenCalledWith('automation-2');
+  });
 });

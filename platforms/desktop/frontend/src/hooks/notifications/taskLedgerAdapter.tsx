@@ -413,9 +413,8 @@ function buildSubItem(
     tone: getTone(task),
     progress: isTaskLedgerActiveStatus(task.status) ? task.progress : undefined,
     detail: task.errorMessage?.trim() || null,
-    actions: ledgerActions.close
-      ? [...ledgerActions.row, ledgerActions.close]
-      : [...ledgerActions.row],
+    actions: ledgerActions.row.filter((action) => action.id !== 'openTarget'),
+    closeAction: ledgerActions.close,
   };
 }
 
@@ -459,7 +458,7 @@ function buildRecoveryGroupCopy(
       ? t('task_center.recovery_group_body_missing', {
           count,
           missingCount,
-          defaultValue: '{{missingCount}} source file(s) missing. Latest: {{fileName}}',
+          defaultValue: '{{missingCount}} source file(s) missing · Latest: {{fileName}}',
           fileName: latestTitle,
         })
       : t('task_center.recovery_group_body', {

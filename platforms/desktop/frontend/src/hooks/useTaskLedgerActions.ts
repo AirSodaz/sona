@@ -258,13 +258,24 @@ async function retrySingleTask(
   }
 }
 
+async function runSequentiallyBestEffort(
+  tasks: TaskLedgerRecord[],
+  runner: (task: TaskLedgerRecord) => Promise<void>
+): Promise<void> {
+  for (const task of tasks) {
+    try {
+      await runner(task);
+    } catch {
+      // Individual task errors are logged/recorded by the underlying task service or store.
+    }
+  }
+}
+
 async function closeTaskGroup(
   deps: TaskCenterActionDependencies,
   tasks: TaskLedgerRecord[]
 ): Promise<void> {
-  for (const task of tasks) {
-    await closeLedgerTask(deps, task);
-  }
+  await runSequentiallyBestEffort(tasks, (task) => closeLedgerTask(deps, task));
 }
 
 export function createTaskCenterActionRegistry(
@@ -345,11 +356,10 @@ export function createTaskCenterActionRegistry(
               label: deps.t('task_center.resume_all', { defaultValue: 'Resume All' }),
               variant: 'primary',
               disabled: recoverableTasks.length === 0,
-              run: async () => {
-                for (const task of recoverableTasks) {
-                  await deps.resumeRecoveryItem(getRecoveryIdForTask(task.id));
-                }
-              },
+              run: () =>
+                runSequentiallyBestEffort(recoverableTasks, (task) =>
+                  deps.resumeRecoveryItem(getRecoveryIdForTask(task.id))
+                ),
             },
             createOpenRecoveryAction(deps),
           ],
@@ -376,11 +386,8 @@ export function createTaskCenterActionRegistry(
                   : deps.t('task_center.cancel_all', { defaultValue: 'Cancel All' }),
               variant: 'soft',
               disabled: cancelableTasks.length === 0,
-              run: async () => {
-                for (const task of cancelableTasks) {
-                  await cancelSingleTask(deps, task);
-                }
-              },
+              run: () =>
+                runSequentiallyBestEffort(cancelableTasks, (task) => cancelSingleTask(deps, task)),
             },
           ],
           close: undefined,
@@ -399,11 +406,8 @@ export function createTaskCenterActionRegistry(
             id: 'retryAll',
             label: deps.t('task_center.retry_all', { defaultValue: 'Retry All' }),
             variant: 'primary',
-            run: async () => {
-              for (const task of retryableTasks) {
-                await retrySingleTask(deps, task);
-              }
-            },
+            run: () =>
+              runSequentiallyBestEffort(retryableTasks, (task) => retrySingleTask(deps, task)),
           });
         }
         if (hasRuleLevelAutomationFailure) {

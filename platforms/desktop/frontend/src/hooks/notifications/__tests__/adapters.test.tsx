@@ -342,6 +342,52 @@ describe('Notification Adapters Evaluation', () => {
       expect(entries[0].title).toBe('Podcast Watch · 2 files failed');
       expect(entries[0].items).toHaveLength(2);
     });
+
+    it('keeps sub-item close in closeAction and omits redundant openTarget actions in aggregated recovery groups', () => {
+      const recoveryRegistry = {
+        ...mockActionRegistry,
+        getLedgerTaskActions: vi.fn((task: TaskLedgerRecord) => ({
+          row: [
+            { id: 'resume', label: 'Resume', variant: 'primary', run: vi.fn() },
+            { id: 'openTarget', label: 'Open Recovery Center', variant: 'secondary', run: vi.fn() },
+          ],
+          close: { id: 'close', label: 'Close', variant: 'soft', run: vi.fn() },
+          taskId: task.id,
+        })),
+      } as any;
+
+      const tasks: TaskLedgerRecord[] = [
+        {
+          id: 'recovery-1',
+          kind: 'recovery',
+          status: 'recoverable',
+          title: 'a.wav',
+          progress: 20,
+          createdAt: 1000,
+          updatedAt: 2000,
+          retryable: true,
+          cancelable: false,
+          recoverable: true,
+        },
+        {
+          id: 'recovery-2',
+          kind: 'recovery',
+          status: 'recoverable',
+          title: 'b.wav',
+          progress: 30,
+          createdAt: 1000,
+          updatedAt: 3000,
+          retryable: true,
+          cancelable: false,
+          recoverable: true,
+        },
+      ];
+
+      const entries = adaptTaskLedgerEntries(tasks, true, mockT, recoveryRegistry);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].items?.[0].actions?.map((a) => a.id)).toEqual(['resume']);
+      expect(entries[0].items?.[0].closeAction?.id).toBe('close');
+    });
   });
 
   describe('formatNotificationTimestamp', () => {

@@ -38,6 +38,7 @@ export function NotificationCenter({
       onOpenSettingsTab,
       onOpenModelSettings,
       closePanel: close,
+      isPanelOpen: isOpen,
     });
 
   // Close on outside click

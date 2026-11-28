@@ -373,6 +373,7 @@ describe('NotificationCard Collapsible Feature', () => {
 
   it('renders collapsible sub-items list and expands automatically when focused', () => {
     const subAction = vi.fn();
+    const subClose = vi.fn();
     const entry = createMockEntry({
       id: 'group-batchImport-active',
       title: 'Batch transcription · 2 files',
@@ -393,6 +394,7 @@ describe('NotificationCard Collapsible Feature', () => {
           subtitle: 'Pending · Queued',
           tone: 'accent',
           progress: 0,
+          closeAction: { id: 'close', label: 'Close second.wav', variant: 'soft', run: subClose },
         },
       ],
     });
@@ -410,6 +412,9 @@ describe('NotificationCard Collapsible Feature', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(subAction).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close second.wav' }));
+    expect(subClose).toHaveBeenCalledTimes(1);
 
     // Rerender collapsed card with isFocused=true
     rerender(<NotificationCard entry={{ ...entry, id: 'other' }} isFocused={true} />);

@@ -34,7 +34,10 @@ function renderActions(actions: NotificationAction[]): React.ReactNode {
   ));
 }
 
-function renderCloseButton(action?: NotificationAction): React.ReactNode {
+function renderCloseButton(
+  action?: NotificationAction,
+  options?: { className?: string; stopPropagation?: boolean }
+): React.ReactNode {
   if (!action) {
     return null;
   }
@@ -43,13 +46,23 @@ function renderCloseButton(action?: NotificationAction): React.ReactNode {
     <IconButton
       tier="ghost"
       size="xs"
-      className="notification-center-item-close"
+      className={options?.className ?? 'notification-center-item-close'}
       icon={<CloseIcon />}
-      onClick={() => {
+      onClick={(e) => {
+        if (options?.stopPropagation) {
+          e.stopPropagation();
+        }
         if (!action.disabled) {
           void action.run();
         }
       }}
+      onKeyDown={
+        options?.stopPropagation
+          ? (e) => {
+              e.stopPropagation();
+            }
+          : undefined
+      }
       aria-label={action.label}
       tooltipPos="left"
       disabled={action.disabled}
@@ -306,9 +319,9 @@ export function NotificationCard({
                       <div className="notification-center-subitem-detail">{subItem.detail}</div>
                     ) : null}
                   </div>
-                  {subItem.actions && subItem.actions.length > 0 ? (
+                  {(subItem.actions && subItem.actions.length > 0) || subItem.closeAction ? (
                     <div className="notification-center-subitem-actions">
-                      {subItem.actions.map((subAction) => (
+                      {subItem.actions?.map((subAction) => (
                         <Button
                           key={subAction.id}
                           tier={getActionButtonTier(subAction)}
@@ -321,10 +334,17 @@ export function NotificationCard({
                               void subAction.run();
                             }
                           }}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                          }}
                         >
                           {subAction.label}
                         </Button>
                       ))}
+                      {renderCloseButton(subItem.closeAction, {
+                        className: 'notification-center-subitem-close',
+                        stopPropagation: true,
+                      })}
                     </div>
                   ) : null}
                 </li>

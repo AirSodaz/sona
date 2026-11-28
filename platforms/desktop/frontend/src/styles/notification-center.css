@@ -230,8 +230,12 @@
   gap: 2px;
 }
 
-.notification-center-item {
+.notification-center-item,
+.notification-center-subitem {
   --notification-center-accent: var(--color-brand);
+}
+
+.notification-center-item {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -411,7 +415,6 @@
 }
 
 .notification-center-subitem {
-  --notification-center-accent: var(--color-brand);
   display: flex;
   align-items: flex-start;
   gap: 7px;
@@ -484,7 +487,9 @@
 
 .notification-center-subitem-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -493,6 +498,10 @@
   min-block-size: auto;
   padding: 2px 6px;
   font-size: 0.7rem;
+}
+
+.notification-center-subitem-close {
+  flex-shrink: 0;
 }
 
 .notification-center-item-body-container {
