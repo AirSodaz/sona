@@ -1009,4 +1009,95 @@ describe('NotificationCenter task center', () => {
     fireEvent.click(settingsBtn);
     expect(onOpenModelSettings).toHaveBeenCalled();
   });
+
+  it('aggregates multiple active batch tasks into 1 card with badge count 1 and supports Cancel All', async () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-1',
+        status: 'running',
+        title: 'one.wav',
+        progress: 50,
+        updatedAt: 300,
+      }),
+      makeTask({ id: 'batch-2', status: 'pending', title: 'two.wav', progress: 0, updatedAt: 200 }),
+      makeTask({
+        id: 'batch-3',
+        status: 'pending',
+        title: 'three.wav',
+        progress: 0,
+        updatedAt: 100,
+      }),
+    ];
+
+    const { container } = render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('Batch transcription · 3 files');
+    expect(screen.queryByText('two.wav')).toBeNull();
+
+    // Expand file list
+    fireEvent.click(screen.getByRole('button', { name: 'Files (3)' }));
+    screen.getByText('one.wav');
+    screen.getByText('two.wav');
+    screen.getByText('three.wav');
+
+    // Cancel All
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel All' }));
+      await Promise.resolve();
+    });
+
+    expect(taskLedgerState.requestCancel).toHaveBeenCalledTimes(3);
+    expect(taskLedgerState.requestCancel).toHaveBeenCalledWith('batch-1');
+    expect(taskLedgerState.requestCancel).toHaveBeenCalledWith('batch-2');
+    expect(taskLedgerState.requestCancel).toHaveBeenCalledWith('batch-3');
+  });
+
+  it('aggregates failed batch tasks and supports Retry All and group Close', async () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-f1',
+        status: 'failed',
+        title: 'f1.wav',
+        filePath: 'C:\\audio\\f1.wav',
+        updatedAt: 200,
+      }),
+      makeTask({
+        id: 'batch-f2',
+        status: 'failed',
+        title: 'f2.wav',
+        filePath: 'C:\\audio\\f2.wav',
+        updatedAt: 100,
+      }),
+    ];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    screen.getByText('Batch transcription · 2 files failed');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry All' }));
+      await Promise.resolve();
+    });
+
+    expect(batchQueueState.addFiles).toHaveBeenCalledTimes(2);
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-f1');
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-f2');
+
+    vi.clearAllMocks();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      await Promise.resolve();
+    });
+    expect(batchQueueState.removeItem).toHaveBeenCalledWith('f1');
+    expect(batchQueueState.removeItem).toHaveBeenCalledWith('f2');
+  });
 });

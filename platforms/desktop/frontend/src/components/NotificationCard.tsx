@@ -56,18 +56,43 @@ function renderCloseButton(action?: NotificationAction): React.ReactNode {
     />
   );
 }
-export function NotificationCard({ entry }: { entry: NotificationEntry }): React.JSX.Element {
+export function NotificationCard({
+  entry,
+  isFocused = false,
+}: {
+  entry: NotificationEntry;
+  isFocused?: boolean;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const [isBodyExpanded, setIsBodyExpanded] = useState(entry.defaultExpanded ?? false);
   const [isDetailExpanded, setIsDetailExpanded] = useState(entry.defaultExpanded ?? false);
+  const [isItemsExpanded, setIsItemsExpanded] = useState(entry.defaultExpanded ?? false);
   const [isCopied, setIsCopied] = useState(false);
+  const cardRef = useRef<HTMLLIElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
+  const prevFocusedIdRef = useRef<string | null>(null);
+  const hasSubItems = Boolean(entry.items && entry.items.length > 0);
 
   useEffect(() => {
     return () => {
       clearTimeout(copyTimeoutRef.current ?? undefined);
     };
   }, []);
+
+  useEffect(() => {
+    const focusKey = isFocused ? entry.id : null;
+    if (!focusKey || prevFocusedIdRef.current === focusKey) {
+      if (!focusKey) {
+        prevFocusedIdRef.current = null;
+      }
+      return;
+    }
+    prevFocusedIdRef.current = focusKey;
+    if (hasSubItems) {
+      setIsItemsExpanded(true);
+    }
+    cardRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [isFocused, entry.id, hasSubItems]);
 
   const isBodyCollapsible = Boolean(
     entry.body &&
@@ -153,7 +178,12 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
         {entry.icon}
       </span>
       <span className="notification-center-item-copy">
-        <strong className="notification-center-item-title">{entry.title}</strong>
+        <span className="notification-center-item-title-row">
+          <strong className="notification-center-item-title">{entry.title}</strong>
+          {entry.timestampLabel ? (
+            <span className="notification-center-item-time">{entry.timestampLabel}</span>
+          ) : null}
+        </span>
         {bodyElement}
       </span>
     </>
@@ -163,11 +193,14 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
 
   return (
     <li
+      ref={cardRef}
       className={`notification-center-item notification-center-item-tone-${entry.tone}${
         entry.itemClassName ? ` ${entry.itemClassName}` : ''
-      }${isCollapsible ? ' notification-center-item-collapsible' : ''}${
-        isCollapsible && isAnyExpanded ? ' is-expanded' : ''
-      }${isCollapsible && !isAnyExpanded ? ' is-collapsed' : ''}`}
+      }${isFocused ? ' is-focused' : ''}${
+        isCollapsible ? ' notification-center-item-collapsible' : ''
+      }${isCollapsible && isAnyExpanded ? ' is-expanded' : ''}${
+        isCollapsible && !isAnyExpanded ? ' is-collapsed' : ''
+      }`}
     >
       <div className="notification-center-item-header">
         {entry.onOpen ? (
@@ -215,6 +248,90 @@ export function NotificationCard({ entry }: { entry: NotificationEntry }): React
       ) : null}
       {entry.support ? (
         <div className="notification-center-item-support">{entry.support}</div>
+      ) : null}
+      {hasSubItems && entry.items ? (
+        <div className="notification-center-sublist-wrapper">
+          <Button
+            tier="ghost"
+            size="xs"
+            className="notification-center-expand-btn notification-center-sublist-toggle"
+            rightIcon={
+              <ChevronDownIcon
+                className={`notification-center-expand-btn-icon${isItemsExpanded ? ' is-expanded' : ''}`}
+              />
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsItemsExpanded((prev) => !prev);
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+            }}
+            aria-expanded={isItemsExpanded}
+          >
+            <span>
+              {isItemsExpanded
+                ? t('task_center.items_collapse', {
+                    count: entry.items.length,
+                    defaultValue: 'Hide files ({{count}})',
+                  })
+                : (entry.itemsLabel ??
+                  t('task_center.items_expand', {
+                    count: entry.items.length,
+                    defaultValue: 'Show files ({{count}})',
+                  }))}
+            </span>
+          </Button>
+          {isItemsExpanded ? (
+            <ul className="notification-center-sublist">
+              {entry.items.map((subItem) => (
+                <li
+                  key={subItem.id}
+                  className={`notification-center-subitem notification-center-item-tone-${subItem.tone}`}
+                >
+                  <span className="notification-center-subitem-dot" aria-hidden="true" />
+                  <div className="notification-center-subitem-content">
+                    <div className="notification-center-subitem-main">
+                      <span className="notification-center-subitem-title">{subItem.title}</span>
+                      {subItem.progress != null ? (
+                        <span className="notification-center-subitem-progress">
+                          {Math.round(subItem.progress)}%
+                        </span>
+                      ) : null}
+                    </div>
+                    {subItem.subtitle ? (
+                      <div className="notification-center-subitem-subtitle">{subItem.subtitle}</div>
+                    ) : null}
+                    {subItem.detail ? (
+                      <div className="notification-center-subitem-detail">{subItem.detail}</div>
+                    ) : null}
+                  </div>
+                  {subItem.actions && subItem.actions.length > 0 ? (
+                    <div className="notification-center-subitem-actions">
+                      {subItem.actions.map((subAction) => (
+                        <Button
+                          key={subAction.id}
+                          tier={getActionButtonTier(subAction)}
+                          size="xs"
+                          className="notification-center-subitem-action-btn"
+                          disabled={subAction.disabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!subAction.disabled) {
+                              void subAction.run();
+                            }
+                          }}
+                        >
+                          {subAction.label}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       {entry.detail ? (
         <div

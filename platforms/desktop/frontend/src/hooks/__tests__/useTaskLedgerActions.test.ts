@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 import {
+  cleanupLedgerTaskSideEffects,
   createTaskCenterActionRegistry,
   type TaskCenterAction,
   type TaskCenterActionDependencies,
@@ -438,5 +439,34 @@ describe('createTaskCenterActionRegistry', () => {
 
     actions.close?.run();
     expect(deps.onboard.dismiss).toHaveBeenCalled();
+  });
+
+  it('cleans up recovery, batch, and automation side effects through shared helper', async () => {
+    const ports = {
+      discardRecoveryItem: vi.fn(),
+      removeBatchQueueItem: vi.fn(),
+      dismissAutomationNotification: vi.fn(),
+    };
+
+    const recoveryOutcome = cleanupLedgerTaskSideEffects(
+      makeTask({ id: 'recovery-r1', kind: 'recovery', status: 'recoverable' }),
+      ports
+    );
+    expect(recoveryOutcome).toBeInstanceOf(Promise);
+    await recoveryOutcome;
+    expect(ports.discardRecoveryItem).toHaveBeenCalledWith('r1');
+
+    const automationOutcome = cleanupLedgerTaskSideEffects(
+      makeTask({
+        id: 'batch-a1',
+        kind: 'automation',
+        status: 'failed',
+        automationRuleId: 'rule-7',
+      }),
+      ports
+    );
+    expect(automationOutcome).toBeUndefined();
+    expect(ports.removeBatchQueueItem).toHaveBeenCalledWith('a1');
+    expect(ports.dismissAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-7');
   });
 });

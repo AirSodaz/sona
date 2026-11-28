@@ -1,7 +1,11 @@
 import { CheckIcon, DownloadIcon, SparklesIcon } from '../../components/Icons';
 import type { NotificationAction, NotificationEntry } from '../../types/notification';
 import type { TaskCenterActionRegistry } from '../useTaskLedgerActions';
-import { type TFunction, toNotificationAction } from './adapterUtils';
+import {
+  createCloseNotificationAction,
+  NOTIFICATION_PINNED_RANK,
+  type TFunction,
+} from './adapterUtils';
 
 /**
  * Produces the "Complete Setup" onboarding reminder entry when the user hasn't
@@ -27,9 +31,10 @@ export function adaptOnboardingEntry(
     icon: <SparklesIcon />,
     title: t('first_run.banner.title'),
     body: t('first_run.banner.body'),
-    timestamp: Number.MAX_SAFE_INTEGER,
-    actions: registryActions.row.map(toNotificationAction),
-    closeAction: registryActions.close ? toNotificationAction(registryActions.close) : undefined,
+    timestamp: 0,
+    pinnedRank: NOTIFICATION_PINNED_RANK.ONBOARDING,
+    actions: registryActions.row,
+    closeAction: registryActions.close,
     itemClassName: 'notification-center-item-onboarding',
   };
 }
@@ -100,14 +105,10 @@ export function adaptModelDownloadEntry(
     });
   }
 
-  const closeAction: NotificationAction | undefined = !isActive
-    ? {
-        id: 'close',
-        label: t('common.close', { defaultValue: 'Close' }),
-        variant: 'soft',
-        run: callbacks.setModelDownloadIdle,
-      }
+  const closeAction = !isActive
+    ? createCloseNotificationAction(t, callbacks.setModelDownloadIdle)
     : undefined;
+
   return {
     id: 'onboarding-download',
     source: 'download',
@@ -117,7 +118,8 @@ export function adaptModelDownloadEntry(
     title,
     body,
     detail,
-    timestamp: Number.MAX_SAFE_INTEGER,
+    timestamp: 0,
+    pinnedRank: NOTIFICATION_PINNED_RANK.ONBOARDING_DOWNLOAD,
     progress: isActive ? download.progress : undefined,
     actions,
     closeAction,

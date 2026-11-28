@@ -3,7 +3,7 @@ import type { Update } from '../../services/tauri/platform/updater';
 import type { UpdateStatus } from '../../stores/appUpdaterStore';
 import type { NotificationEntry, NotificationPriority } from '../../types/notification';
 import type { TaskCenterActionRegistry } from '../useTaskLedgerActions';
-import { type TFunction, toNotificationAction } from './adapterUtils';
+import { NOTIFICATION_PINNED_RANK, type TFunction } from './adapterUtils';
 
 /**
  * Produces a NotificationEntry for the app-update notification when visible,
@@ -48,10 +48,11 @@ export function adaptUpdateEntry(
     title: t('settings.update_available', { version: updateInfo.version }),
     body,
     bodyClassName: 'notification-center-update-body',
-    timestamp: Number.MAX_SAFE_INTEGER,
+    timestamp: 0,
+    pinnedRank: NOTIFICATION_PINNED_RANK.UPDATE,
     progress: isBusy ? progress : undefined,
-    actions: registryActions.row.map(toNotificationAction),
-    closeAction: registryActions.close ? toNotificationAction(registryActions.close) : undefined,
+    actions: registryActions.row,
+    closeAction: registryActions.close,
     support: statusBadge,
     itemClassName: 'notification-center-item-update',
   };

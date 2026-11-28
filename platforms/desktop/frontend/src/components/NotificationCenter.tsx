@@ -27,6 +27,7 @@ export function NotificationCenter({
   const panelId = useId();
 
   const isOpen = useNotificationPanelStore((state) => state.isOpen);
+  const focusEntryId = useNotificationPanelStore((state) => state.focusEntryId);
   const toggle = useNotificationPanelStore((state) => state.toggle);
   const close = useNotificationPanelStore((state) => state.close);
 
@@ -98,6 +99,7 @@ export function NotificationCenter({
           hasEntries={entries.length > 0}
           succeededCount={succeededCount}
           totalClearableCount={totalClearableCount}
+          focusEntryId={focusEntryId}
           onClear={handleClear}
         />
       ) : null}

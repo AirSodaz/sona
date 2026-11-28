@@ -6,7 +6,11 @@ import type {
   NotificationPriority,
   NotificationTone,
 } from '../../types/notification';
-import type { TFunction } from './adapterUtils';
+import {
+  createCloseNotificationAction,
+  formatNotificationTimestamp,
+  type TFunction,
+} from './adapterUtils';
 
 export function formatBytes(bytes?: number | null): string {
   if (bytes == null || bytes < 0 || !Number.isFinite(bytes)) return '';
@@ -25,12 +29,18 @@ export interface ModelDownloadAdapterCallbacks {
   dismissDownload: (modelId: string) => void;
 }
 
+export interface AdaptModelDownloadsOptions {
+  now?: number;
+}
+
 export function adaptModelDownloadsEntries(
   downloads: Record<string, ModelDownloadItem>,
   t: TFunction,
-  callbacks: ModelDownloadAdapterCallbacks
+  callbacks: ModelDownloadAdapterCallbacks,
+  options?: AdaptModelDownloadsOptions
 ): NotificationEntry[] {
   const entries: NotificationEntry[] = [];
+  const now = options?.now ?? Date.now();
 
   for (const item of Object.values(downloads)) {
     const isActive = item.status === 'downloading';
@@ -126,13 +136,8 @@ export function adaptModelDownloadsEntries(
       });
     }
 
-    const closeAction: NotificationAction | undefined = !isActive
-      ? {
-          id: `close-${item.modelId}`,
-          label: t('common.close', { defaultValue: 'Close' }),
-          variant: 'soft',
-          run: () => callbacks.dismissDownload(item.modelId),
-        }
+    const closeAction = !isActive
+      ? createCloseNotificationAction(t, () => callbacks.dismissDownload(item.modelId))
       : undefined;
 
     entries.push({
@@ -145,6 +150,7 @@ export function adaptModelDownloadsEntries(
       body,
       detail,
       timestamp: item.timestamp,
+      timestampLabel: formatNotificationTimestamp(item.timestamp, now, t),
       progress:
         isActive && typeof item.progress === 'number' && Number.isFinite(item.progress)
           ? Math.max(0, Math.min(100, Math.round(item.progress)))

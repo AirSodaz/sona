@@ -24,6 +24,22 @@ export class TaskLedgerBuilders {
     return `recovery-${recoveryId}`;
   };
 
+  parseBatchQueueIdFromTaskId = (taskId: string): string | null => {
+    return taskId.startsWith('batch-') ? taskId.slice('batch-'.length) : null;
+  };
+
+  parseRecoveryIdFromTaskId = (taskId: string): string | null => {
+    return taskId.startsWith('recovery-') ? taskId.slice('recovery-'.length) : null;
+  };
+
+  getRecoveryIdForTask = (taskId: string): string => {
+    return this.parseRecoveryIdFromTaskId(taskId) ?? taskId;
+  };
+
+  getAutomationFailureNotificationId = (ruleId: string): string => {
+    return `automation-failure-${ruleId}`;
+  };
+
   nowTaskLedgerTimestamp = (): number => {
     return Date.now();
   };
@@ -199,6 +215,10 @@ export const {
   createBatchTaskLedgerId,
   createLlmTaskLedgerId,
   createRecoveryTaskLedgerId,
+  parseBatchQueueIdFromTaskId,
+  parseRecoveryIdFromTaskId,
+  getRecoveryIdForTask,
+  getAutomationFailureNotificationId,
   nowTaskLedgerTimestamp,
   buildBatchTaskLedgerRecord,
   buildRecoveryTaskLedgerRecord,

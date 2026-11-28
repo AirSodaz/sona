@@ -1,16 +1,29 @@
 import { ModelIcon } from '../../components/Icons';
 import type { NotificationEntry } from '../../types/notification';
-import type { TFunction } from './adapterUtils';
+import { NOTIFICATION_PINNED_RANK, type TFunction } from './adapterUtils';
 
 export function adaptSpeakerDegradedEntry(
   hasNotice: boolean,
   t: TFunction,
   onGoToSettings: () => void,
-  onDismiss: () => void
+  onDismiss: () => void,
+  degradedCount = 1
 ): NotificationEntry | null {
   if (!hasNotice) {
     return null;
   }
+
+  const body =
+    degradedCount > 1
+      ? t('notifications.speaker_degraded_body_count', {
+          count: degradedCount,
+          defaultValue:
+            'Speaker diarization was skipped for {{count}} tasks because required models are not configured. Transcription completed normally.',
+        })
+      : t('notifications.speaker_degraded_body', {
+          defaultValue:
+            'Speaker diarization was requested but required models are not configured. Transcription completed normally. Configure models in Settings to enable speaker labels.',
+        });
 
   return {
     id: 'speaker-missing-model',
@@ -21,11 +34,9 @@ export function adaptSpeakerDegradedEntry(
     title: t('notifications.speaker_degraded_title', {
       defaultValue: 'Speaker Diarization Skipped',
     }),
-    body: t('notifications.speaker_degraded_body', {
-      defaultValue:
-        'Speaker diarization was requested but required models are not configured. Transcription completed normally. Configure models in Settings to enable speaker labels.',
-    }),
-    timestamp: Number.MAX_SAFE_INTEGER,
+    body,
+    timestamp: 0,
+    pinnedRank: NOTIFICATION_PINNED_RANK.SPEAKER_DEGRADED,
     actions: [
       {
         id: 'go-to-settings',
@@ -37,7 +48,7 @@ export function adaptSpeakerDegradedEntry(
     closeAction: {
       id: 'dismiss-speaker-degraded',
       label: t('common.dismiss', { defaultValue: 'Dismiss' }),
-      variant: 'secondary',
+      variant: 'soft',
       run: onDismiss,
     },
     itemClassName: 'notification-center-item-speaker-degraded',
