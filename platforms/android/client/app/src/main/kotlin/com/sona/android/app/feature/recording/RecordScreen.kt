@@ -15,6 +15,7 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -66,6 +67,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -124,7 +126,6 @@ import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.StreamingStatus
 import com.sona.android.application.recording.TranscriptSegment
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -252,13 +253,16 @@ internal fun RecordMiniBar(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun RecordScreen(
     bootstrapState: SonaBootstrapUiState,
     recordingState: LiveRecordingState,
     configuredProviders: Set<OnlineAsrProvider>,
     recognitionSettings: RecognitionSettingsUiState,
+    isExpanded: Boolean = true,
+    persistedSegments: List<TranscriptSegment> = emptyList(),
+    completedToast: LiveRecordingState.Completed? = null,
     autoStartRequestToken: Int = 0,
     hasRequestedMicPermission: Boolean = false,
     hasRequestedNotificationPermission: Boolean = false,
@@ -281,7 +285,7 @@ internal fun RecordScreen(
         onMinimize()
     }
 
-    BackHandler(onBack = minimizeRecordScreen)
+    BackHandler(enabled = isExpanded, onBack = minimizeRecordScreen)
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -302,9 +306,6 @@ internal fun RecordScreen(
     }
     var permissionRevision by remember { mutableIntStateOf(0) }
     var permissionIssue by remember { mutableStateOf<MicrophonePermissionDecision?>(null) }
-    var displayedSegments by remember { mutableStateOf(emptyList<TranscriptSegment>()) }
-    var dismissedCompletedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var visibleCompletedState by remember { mutableStateOf<LiveRecordingState.Completed?>(null) }
     var engineSheetVisible by remember { mutableStateOf(false) }
     var setupSheetVisible by remember { mutableStateOf(false) }
 
@@ -392,29 +393,10 @@ internal fun RecordScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(recordingState) {
-        when (recordingState) {
-            is LiveRecordingState.Preparing -> {
-                displayedSegments = emptyList()
-                visibleCompletedState = null
-                dismissedCompletedId = null
-            }
-            is LiveRecordingState.Recording -> {
-                displayedSegments = recordingState.segments
-                visibleCompletedState = null
-            }
-            is LiveRecordingState.Completed -> {
-                if (recordingState.historyId != dismissedCompletedId) {
-                    visibleCompletedState = recordingState
-                    delay(if (recordingState.warning != null) 5_500L else 3_500L)
-                    visibleCompletedState = null
-                    dismissedCompletedId = recordingState.historyId
-                }
-            }
-            else -> {
-                visibleCompletedState = null
-            }
-        }
+    val displayedSegments = when (recordingState) {
+        is LiveRecordingState.Preparing -> emptyList()
+        is LiveRecordingState.Recording -> recordingState.segments
+        else -> persistedSegments
     }
 
     val presentation = recordingState.toRecordingPresentation()
@@ -576,9 +558,13 @@ internal fun RecordScreen(
                             .padding(horizontal = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        val topBarMotionScheme = MaterialTheme.motionScheme
                         AnimatedContent(
                             targetState = isActive,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            transitionSpec = {
+                                fadeIn(animationSpec = topBarMotionScheme.fastEffectsSpec()) togetherWith
+                                    fadeOut(animationSpec = topBarMotionScheme.fastEffectsSpec())
+                            },
                             label = "topBarCenter",
                         ) { active ->
                             if (!active) {
@@ -740,28 +726,35 @@ internal fun RecordScreen(
                     FlowingTranscriptStream(
                         segments = displayedSegments,
                         isRecording = isRecording,
+                        toastVisible = completedToast != null,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 24.dp),
                     )
 
-                    val activeCompletedToast = visibleCompletedState
+                    val toastMotionScheme = MaterialTheme.motionScheme
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = activeCompletedToast != null,
-                        enter = slideInVertically { it / 2 } + fadeIn(),
-                        exit = slideOutVertically { it / 2 } + fadeOut(),
+                        visible = completedToast != null,
+                        enter = slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = toastMotionScheme.defaultSpatialSpec(),
+                        ) + fadeIn(
+                            animationSpec = toastMotionScheme.defaultEffectsSpec(),
+                        ),
+                        exit = slideOutVertically(
+                            targetOffsetY = { it / 2 },
+                            animationSpec = toastMotionScheme.fastSpatialSpec(),
+                        ) + fadeOut(
+                            animationSpec = toastMotionScheme.fastEffectsSpec(),
+                        ),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                     ) {
-                        if (activeCompletedToast != null) {
+                        if (completedToast != null) {
                             RecordingCompletedToast(
-                                completed = activeCompletedToast,
-                                onView = {
-                                    visibleCompletedState = null
-                                    dismissedCompletedId = activeCompletedToast.historyId
-                                    onViewCompleted(activeCompletedToast.historyId)
-                                },
+                                completed = completedToast,
+                                onView = { onViewCompleted(completedToast.historyId) },
                             )
                         }
                     }
@@ -796,15 +789,23 @@ internal fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiSta
         null -> stringResource(R.string.local_model_not_installed)
     }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FlowingTranscriptStream(
     segments: List<TranscriptSegment>,
     isRecording: Boolean,
+    toastVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val lastSegment = segments.lastOrNull()
+    val motionScheme = MaterialTheme.motionScheme
+    val jumpButtonBottomPadding by animateDpAsState(
+        targetValue = if (toastVisible) 76.dp else 12.dp,
+        animationSpec = motionScheme.fastSpatialSpec(),
+        label = "jumpToLatestBottomPadding",
+    )
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -859,11 +860,11 @@ private fun FlowingTranscriptStream(
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = !isAtBottom,
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = fadeIn(animationSpec = motionScheme.fastEffectsSpec()),
+                exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec()),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = jumpButtonBottomPadding),
             ) {
                 FilledTonalButton(
                     onClick = {
@@ -1074,13 +1075,14 @@ private fun RecordControlDeck(
 }
 
 @Composable
-private fun RecordingCompletedToast(
+internal fun RecordingCompletedToast(
     completed: LiveRecordingState.Completed,
     onView: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val hasWarning = completed.warning != null
     Surface(
-        modifier = Modifier.widthIn(max = 420.dp),
+        modifier = modifier.widthIn(max = 420.dp),
         shape = RoundedCornerShape(14.dp),
         color = if (hasWarning) {
             MaterialTheme.colorScheme.errorContainer

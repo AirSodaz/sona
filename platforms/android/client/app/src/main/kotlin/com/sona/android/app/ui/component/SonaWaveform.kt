@@ -108,6 +108,8 @@ internal fun evaluateWaveDisplacement(
     return (amplitudePx * window * envelopeShape).coerceAtLeast(0f)
 }
 
+internal const val WAVEFORM_PHASE_WRAP_RADIANS: Float = 5000f * PI.toFloat()
+
 private class WaveformPhysicsState {
     var low: Float = 0f
     var mid: Float = 0f
@@ -157,7 +159,7 @@ private class WaveformPhysicsState {
         high = smoothEnvelopeStep(high, targetHigh, dtSeconds)
 
         val energyBoost = ((low + mid * 1.2f + high * 0.8f) / 3f) * 3.8f
-        phaseRad = (phaseRad + (baseAngularSpeed + energyBoost) * dtSeconds) % (200f * PI.toFloat())
+        phaseRad = (phaseRad + (baseAngularSpeed + energyBoost) * dtSeconds) % WAVEFORM_PHASE_WRAP_RADIANS
     }
 }
 

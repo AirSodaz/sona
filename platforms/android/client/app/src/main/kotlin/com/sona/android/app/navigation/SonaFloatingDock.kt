@@ -189,7 +189,11 @@ fun SonaFloatingDock(
                 }
 
                 // File Import Quick Button (shown when not actively recording)
-                AnimatedVisibility(visible = !isActiveRecording) {
+                AnimatedVisibility(
+                    visible = !isActiveRecording,
+                    enter = fadeIn(animationSpec = motionScheme.fastEffectsSpec()),
+                    exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec()),
+                ) {
                     val importDesc = stringResource(R.string.file_select_audio)
                     Surface(
                         modifier = Modifier

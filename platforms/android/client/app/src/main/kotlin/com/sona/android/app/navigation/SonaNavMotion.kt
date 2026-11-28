@@ -146,6 +146,17 @@ internal object SonaNavMotion {
             TransformOrigin(0.75f, 0.5f)
         }
 
+    fun resolveEffectiveSettingsSectionArg(
+        route: String?,
+        rawSectionArg: String?,
+        singlePaneListActive: Boolean,
+    ): String? =
+        if (SonaDestination.SETTINGS.matches(route) && singlePaneListActive) {
+            null
+        } else {
+            rawSectionArg
+        }
+
     fun resolveMotionDirection(
         initialRoute: String?,
         targetRoute: String?,
@@ -206,11 +217,16 @@ internal object SonaNavMotion {
     }
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.resolveMotionDirection(isPop: Boolean): NavMotionDirection {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.resolveMotionDirection(
+    isPop: Boolean,
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): NavMotionDirection {
     val initialRoute = initialState.destination.route
     val targetRoute = targetState.destination.route
-    val initialSection = initialState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
-    val targetSection = targetState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    val initialSection = sectionArgResolver(initialState)
+    val targetSection = sectionArgResolver(targetState)
     return SonaNavMotion.resolveMotionDirection(
         initialRoute = initialRoute,
         targetRoute = targetRoute,
@@ -220,11 +236,15 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.resolveMotionDire
     )
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.isPeerTabTransition(): Boolean {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.isPeerTabTransition(
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): Boolean {
     val initialRoute = initialState.destination.route
     val targetRoute = targetState.destination.route
-    val initialSection = initialState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
-    val targetSection = targetState.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    val initialSection = sectionArgResolver(initialState)
+    val targetSection = sectionArgResolver(targetState)
     return SonaNavMotion.isPeerTabTransition(
         initialRoute = initialRoute,
         targetRoute = targetRoute,
@@ -331,9 +351,13 @@ private fun peerTabExitTransition(direction: NavMotionDirection): ExitTransition
     NavMotionDirection.NONE -> ExitTransition.None
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaEnterTransition(): EnterTransition {
-    val direction = resolveMotionDirection(isPop = false)
-    if (isPeerTabTransition()) {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaEnterTransition(
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): EnterTransition {
+    val direction = resolveMotionDirection(isPop = false, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         return peerTabEnterTransition(direction)
     }
     return when (direction) {
@@ -343,9 +367,13 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaEnterTransiti
     }
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaExitTransition(): ExitTransition {
-    val direction = resolveMotionDirection(isPop = false)
-    if (isPeerTabTransition()) {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaExitTransition(
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): ExitTransition {
+    val direction = resolveMotionDirection(isPop = false, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         return peerTabExitTransition(direction)
     }
     return when (direction) {
@@ -355,38 +383,48 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaExitTransitio
     }
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopEnterTransition(): EnterTransition {
-    val direction = resolveMotionDirection(isPop = true)
-    if (isPeerTabTransition()) {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopEnterTransition(
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): EnterTransition {
+    val direction = resolveMotionDirection(isPop = true, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         return peerTabEnterTransition(direction)
     }
     return when (direction) {
-        NavMotionDirection.BACKWARD -> sonaSubPageEnterFromLeft()
-        NavMotionDirection.FORWARD -> sonaSubPageEnterFromRight()
+        NavMotionDirection.BACKWARD,
+        NavMotionDirection.FORWARD,
+        -> sonaSubPageEnterFromLeft()
         NavMotionDirection.NONE -> EnterTransition.None
     }
 }
 
-internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopExitTransition(): ExitTransition {
-    val direction = resolveMotionDirection(isPop = true)
-    if (isPeerTabTransition()) {
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPopExitTransition(
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
+): ExitTransition {
+    val direction = resolveMotionDirection(isPop = true, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         return peerTabExitTransition(direction)
     }
     return when (direction) {
-        NavMotionDirection.BACKWARD -> sonaSubPageExitToRight()
-        NavMotionDirection.FORWARD -> sonaSubPageExitToRight(
-            directionSign = -1f,
-            transformOrigin = TransformOrigin(0.25f, 0.5f),
-        )
+        NavMotionDirection.BACKWARD,
+        NavMotionDirection.FORWARD,
+        -> sonaSubPageExitToRight()
         NavMotionDirection.NONE -> ExitTransition.None
     }
 }
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPredictivePopEnterTransition(
     swipeEdge: Int,
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
 ): EnterTransition {
-    val direction = resolveMotionDirection(isPop = true)
-    if (isPeerTabTransition()) {
+    val direction = resolveMotionDirection(isPop = true, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         val mirrored = if (swipeEdge == SonaNavMotion.SWIPE_EDGE_RIGHT) {
             when (direction) {
                 NavMotionDirection.BACKWARD -> NavMotionDirection.FORWARD
@@ -411,9 +449,12 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPredictivePop
 
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.sonaPredictivePopExitTransition(
     swipeEdge: Int,
+    sectionArgResolver: (NavBackStackEntry) -> String? = {
+        it.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+    },
 ): ExitTransition {
-    val direction = resolveMotionDirection(isPop = true)
-    if (isPeerTabTransition()) {
+    val direction = resolveMotionDirection(isPop = true, sectionArgResolver = sectionArgResolver)
+    if (isPeerTabTransition(sectionArgResolver = sectionArgResolver)) {
         val mirrored = if (swipeEdge == SonaNavMotion.SWIPE_EDGE_RIGHT) {
             when (direction) {
                 NavMotionDirection.BACKWARD -> NavMotionDirection.FORWARD

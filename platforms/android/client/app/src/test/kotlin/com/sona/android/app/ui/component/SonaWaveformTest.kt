@@ -111,4 +111,35 @@ class SonaWaveformTest {
         assertEquals(WaveformVisualMode.ACTIVE, active.toWaveformVisualMode())
         assertEquals(WaveformVisualMode.PAUSED, active.copy(isPaused = true).toWaveformVisualMode())
     }
+
+    @Test
+    fun `evaluateWaveDisplacement stays continuous across phase wrap boundary for all ribbon multipliers`() {
+        val layerSpecs = listOf(
+            Triple(1.45f, 0.78f, 0.0f),
+            Triple(2.25f, -1.0f, 1.7f),
+            Triple(3.45f, 1.32f, 3.1f),
+        )
+        for ((cycles, phaseMultiplier, phaseOffset) in layerSpecs) {
+            val beforeWrap = evaluateWaveDisplacement(
+                fraction = 0.42f,
+                cycles = cycles,
+                phaseRad = WAVEFORM_PHASE_WRAP_RADIANS * phaseMultiplier + phaseOffset,
+                amplitudePx = 24f,
+                peakCenterFraction = 0.5f,
+            )
+            val afterWrap = evaluateWaveDisplacement(
+                fraction = 0.42f,
+                cycles = cycles,
+                phaseRad = phaseOffset,
+                amplitudePx = 24f,
+                peakCenterFraction = 0.5f,
+            )
+            assertEquals(
+                "Phase wrap discontinuity for multiplier $phaseMultiplier",
+                afterWrap,
+                beforeWrap,
+                0.01f,
+            )
+        }
+    }
 }

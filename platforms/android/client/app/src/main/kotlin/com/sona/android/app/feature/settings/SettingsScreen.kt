@@ -88,6 +88,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun SettingsScreen(
     initialSection: SettingsSection?,
+    requestedSection: SettingsSection? = initialSection,
     sectionRequestToken: Int = 0,
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
@@ -161,6 +162,7 @@ internal fun SettingsScreen(
     onLlmClear: () -> Unit = {},
     onReturnedToSettingsList: () -> Unit = {},
     onShowingSinglePaneDetailChanged: (Boolean) -> Unit = {},
+    onShowingSinglePaneListChanged: (Boolean) -> Unit = {},
     onCloseToLibrary: (() -> Unit)? = null,
     bottomOverlayPadding: Dp = 0.dp,
 ) {
@@ -186,6 +188,9 @@ internal fun SettingsScreen(
     val currentOnReturnedToSettingsList by rememberUpdatedState(onReturnedToSettingsList)
     val currentOnShowingSinglePaneDetailChanged by rememberUpdatedState(
         onShowingSinglePaneDetailChanged,
+    )
+    val currentOnShowingSinglePaneListChanged by rememberUpdatedState(
+        onShowingSinglePaneListChanged,
     )
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
@@ -220,6 +225,7 @@ internal fun SettingsScreen(
     }
 
     LaunchedEffect(showingSinglePaneList) {
+        currentOnShowingSinglePaneListChanged(showingSinglePaneList)
         if (showingSinglePaneList) {
             consumeCloudCredentialFocusSession()
             currentOnReturnedToSettingsList()
@@ -235,12 +241,13 @@ internal fun SettingsScreen(
         onDispose {
             currentOnCloudCredentialFocusConsumed()
             currentOnShowingSinglePaneDetailChanged(false)
+            currentOnShowingSinglePaneListChanged(false)
         }
     }
-    LaunchedEffect(initialSection, sectionRequestToken) {
+    LaunchedEffect(initialSection, requestedSection, sectionRequestToken) {
         if (sectionRequestToken > 0 && sectionRequestToken != handledSectionRequestToken) {
             handledSectionRequestToken = sectionRequestToken
-            initialSection?.let { section ->
+            (requestedSection ?: initialSection)?.let { section ->
                 selectedSectionRoute = section.route
                 val currentDestination = navigator.currentDestination
                 if (

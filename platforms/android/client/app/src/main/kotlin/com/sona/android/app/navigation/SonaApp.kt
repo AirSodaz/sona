@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,6 +45,7 @@ import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.library.LibraryUiState
 import com.sona.android.app.feature.recording.RecordMiniBar
 import com.sona.android.app.feature.recording.RecordScreen
+import com.sona.android.app.feature.recording.RecordingCompletedToast
 import com.sona.android.app.feature.settings.AboutSettingsUiState
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
@@ -70,6 +72,7 @@ import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AsrSelectionSlot
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
+import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.recovery.RecoveryResolution
 import com.sona.android.application.recovery.RecoverySource
 import com.sona.android.application.sync.DiscoveredVaultSummary
@@ -79,6 +82,7 @@ import com.sona.android.application.sync.SyncPreset
 import com.sona.android.application.sync.WebDavSyncProvider
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -216,14 +220,19 @@ internal fun SonaApp(
     onPendingOpenHistoryIdConsumed: () -> Unit = {},
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
+    var requestedSettingsSection by remember { mutableStateOf<SettingsSection?>(null) }
     var settingsSectionRequestToken by remember { mutableIntStateOf(0) }
     var settingsSinglePaneDetailActive by remember { mutableStateOf(false) }
+    var settingsSinglePaneListActive by remember { mutableStateOf(false) }
     var detailExitRequestToken by remember { mutableIntStateOf(0) }
     var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
     var recordingSheetExpanded by rememberSaveable { mutableStateOf(false) }
     var autoStartRequestToken by remember { mutableIntStateOf(0) }
     var hasRequestedMicPermission by rememberSaveable { mutableStateOf(false) }
     var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var lastRecordingSegments by remember { mutableStateOf<List<TranscriptSegment>>(emptyList()) }
+    var dismissedCompletedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var visibleCompletedToast by remember { mutableStateOf<LiveRecordingState.Completed?>(null) }
     var bottomOverlayHeightPx by remember { mutableIntStateOf(0) }
     var miniBarHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
@@ -234,11 +243,43 @@ internal fun SonaApp(
         it.resolution == RecoveryResolution.PENDING
     }
 
+    LaunchedEffect(recordingState) {
+        when (recordingState) {
+            is LiveRecordingState.Preparing -> {
+                lastRecordingSegments = emptyList()
+                visibleCompletedToast = null
+                dismissedCompletedId = null
+            }
+            is LiveRecordingState.Recording -> {
+                lastRecordingSegments = recordingState.segments
+                visibleCompletedToast = null
+            }
+            is LiveRecordingState.Completed -> {
+                if (recordingState.historyId != dismissedCompletedId) {
+                    visibleCompletedToast = recordingState
+                    delay(if (recordingState.warning != null) 5_500L else 3_500L)
+                    visibleCompletedToast = null
+                    dismissedCompletedId = recordingState.historyId
+                }
+            }
+            else -> {
+                visibleCompletedToast = null
+            }
+        }
+    }
+
     SonaTheme(appearanceSettings = appearanceState.toDomainSettings()) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.LIBRARY.route
-        val currentSectionArg = backStackEntry?.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
+        val resolveEffectiveSectionArg: (NavBackStackEntry) -> String? = { entry ->
+            SonaNavMotion.resolveEffectiveSettingsSectionArg(
+                route = entry.destination.route,
+                rawSectionArg = entry.arguments?.getString(SETTINGS_SECTION_ARGUMENT),
+                singlePaneListActive = settingsSinglePaneListActive,
+            )
+        }
+        val currentSectionArg = backStackEntry?.let(resolveEffectiveSectionArg)
         val registeredRoute = backStackEntry?.destination?.route
         val isLibraryDetail = registeredRoute == LIBRARY_DETAIL_ROUTE ||
             (currentRoute.startsWith("${SonaDestination.LIBRARY.route}/") && currentRoute != SonaDestination.LIBRARY.route)
@@ -262,11 +303,30 @@ internal fun SonaApp(
                 onCloudProviderSelected(OnlineAsrProvider.VOLCENGINE_DOUBAO)
             }
             cloudCredentialFocusRequested = focusCloud
+            requestedSettingsSection = section
+            settingsSinglePaneListActive = false
             settingsSectionRequestToken += 1
             navController.navigate(settingsRoute(section)) {
                 popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
                 launchSingleTop = true
-                restoreState = true
+            }
+        }
+
+        val openCompletedHistory: (String) -> Unit = { historyId ->
+            visibleCompletedToast = null
+            dismissedCompletedId = historyId
+            recordingSheetExpanded = false
+            val targetRoute = libraryDetailRoute(historyId)
+            val currentHistoryId = backStackEntry?.arguments?.getString(LIBRARY_HISTORY_ID_ARGUMENT)
+            if (isLibraryDetail && currentHistoryId == historyId) {
+                // Already viewing the completed recording
+            } else if (isLibraryDetail && libraryState.editor.dirty) {
+                pendingDetailDestination = targetRoute
+                detailExitRequestToken += 1
+            } else {
+                navController.navigate(targetRoute) {
+                    launchSingleTop = true
+                }
             }
         }
 
@@ -320,15 +380,29 @@ internal fun SonaApp(
                     navController = navController,
                     startDestination = SonaDestination.LIBRARY.route,
                     modifier = Modifier.fillMaxSize(),
-                    enterTransition = { sonaEnterTransition() },
-                    exitTransition = { sonaExitTransition() },
-                    popEnterTransition = { sonaPopEnterTransition() },
-                    popExitTransition = { sonaPopExitTransition() },
+                    enterTransition = {
+                        sonaEnterTransition(sectionArgResolver = resolveEffectiveSectionArg)
+                    },
+                    exitTransition = {
+                        sonaExitTransition(sectionArgResolver = resolveEffectiveSectionArg)
+                    },
+                    popEnterTransition = {
+                        sonaPopEnterTransition(sectionArgResolver = resolveEffectiveSectionArg)
+                    },
+                    popExitTransition = {
+                        sonaPopExitTransition(sectionArgResolver = resolveEffectiveSectionArg)
+                    },
                     predictivePopEnterTransition = { swipeEdge ->
-                        sonaPredictivePopEnterTransition(swipeEdge)
+                        sonaPredictivePopEnterTransition(
+                            swipeEdge = swipeEdge,
+                            sectionArgResolver = resolveEffectiveSectionArg,
+                        )
                     },
                     predictivePopExitTransition = { swipeEdge ->
-                        sonaPredictivePopExitTransition(swipeEdge)
+                        sonaPredictivePopExitTransition(
+                            swipeEdge = swipeEdge,
+                            sectionArgResolver = resolveEffectiveSectionArg,
+                        )
                     },
                 ) {
                     composable(SonaDestination.LIBRARY.route) {
@@ -473,10 +547,11 @@ internal fun SonaApp(
                         val entrySection = entry.arguments?.getString(SETTINGS_SECTION_ARGUMENT)
                         SonaSubPageTransitionContainer(
                             scope = this,
-                            enabled = !entrySection.isNullOrBlank(),
+                            enabled = !entrySection.isNullOrBlank() && !settingsSinglePaneListActive,
                         ) {
                             SettingsScreen(
                                 initialSection = SettingsSection.fromRoute(entrySection),
+                                requestedSection = requestedSettingsSection,
                                 sectionRequestToken = settingsSectionRequestToken,
                                 bootstrapState = bootstrapState,
                                 appearanceState = appearanceState,
@@ -564,6 +639,9 @@ internal fun SonaApp(
                                 onShowingSinglePaneDetailChanged = { detailActive ->
                                     settingsSinglePaneDetailActive = detailActive
                                 },
+                                onShowingSinglePaneListChanged = { listActive ->
+                                    settingsSinglePaneListActive = listActive
+                                },
                                 onCloseToLibrary = {
                                     navController.popBackStack()
                                 },
@@ -593,6 +671,37 @@ internal fun SonaApp(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val motionScheme = MaterialTheme.motionScheme
+                val toast = visibleCompletedToast
+                AnimatedVisibility(
+                    visible = toast != null && !recordingSheetExpanded,
+                    enter = slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = motionScheme.defaultSpatialSpec(),
+                    ) + fadeIn(
+                        animationSpec = motionScheme.defaultEffectsSpec(),
+                    ),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = motionScheme.fastSpatialSpec(),
+                    ) + fadeOut(
+                        animationSpec = motionScheme.fastEffectsSpec(),
+                    ),
+                ) {
+                    if (toast != null) {
+                        RecordingCompletedToast(
+                            completed = toast,
+                            onView = { openCompletedHistory(toast.historyId) },
+                            modifier = if (showFloatingDock) {
+                                Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                            } else {
+                                Modifier
+                                    .windowInsetsPadding(WindowInsets.navigationBars)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            },
+                        )
+                    }
+                }
+
                 AnimatedVisibility(
                     visible = isRecordingActive && !recordingSheetExpanded,
                     enter = slideInVertically(
@@ -638,6 +747,9 @@ internal fun SonaApp(
                             pendingDetailDestination = destination.route
                             detailExitRequestToken += 1
                         } else {
+                            if (destination == SonaDestination.SETTINGS) {
+                                requestedSettingsSection = null
+                            }
                             navController.navigate(destination.route) {
                                 popUpTo(SonaDestination.LIBRARY.route) { saveState = true }
                                 launchSingleTop = true
@@ -672,6 +784,9 @@ internal fun SonaApp(
                     recordingState = recordingState,
                     configuredProviders = cloudTranscriptionState.configuredProviders,
                     recognitionSettings = recognitionSettingsState,
+                    isExpanded = recordingSheetExpanded,
+                    persistedSegments = lastRecordingSegments,
+                    completedToast = visibleCompletedToast,
                     autoStartRequestToken = autoStartRequestToken,
                     hasRequestedMicPermission = hasRequestedMicPermission,
                     hasRequestedNotificationPermission = hasRequestedNotificationPermission,
@@ -687,10 +802,7 @@ internal fun SonaApp(
                     },
                     onConfigureCredential = onConfigureCredential,
                     onConfigureRecognition = onConfigureRecognition,
-                    onViewCompleted = { historyId ->
-                        recordingSheetExpanded = false
-                        navController.navigate(libraryDetailRoute(historyId))
-                    },
+                    onViewCompleted = openCompletedHistory,
                     onMinimize = { recordingSheetExpanded = false },
                 )
             }

@@ -228,4 +228,32 @@ class SonaNavMotionTest {
             SonaNavMotion.resolvePredictiveBackTransformOrigin(2),
         )
     }
+
+    @Test
+    fun `effective settings section arg clears when single-pane list is active`() {
+        assertEquals(
+            null,
+            SonaNavMotion.resolveEffectiveSettingsSectionArg(
+                route = "settings?section={section}",
+                rawSectionArg = "recognition",
+                singlePaneListActive = true,
+            ),
+        )
+        assertEquals(
+            "recognition",
+            SonaNavMotion.resolveEffectiveSettingsSectionArg(
+                route = "settings?section={section}",
+                rawSectionArg = "recognition",
+                singlePaneListActive = false,
+            ),
+        )
+        assertEquals(
+            "recognition",
+            SonaNavMotion.resolveEffectiveSettingsSectionArg(
+                route = "library/{historyId}",
+                rawSectionArg = "recognition",
+                singlePaneListActive = true,
+            ),
+        )
+    }
 }
