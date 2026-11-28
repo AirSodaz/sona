@@ -100,6 +100,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
+import com.sona.android.app.ui.theme.LocalSonaSemanticColors
 import com.sona.android.application.sync.DiscoveredVaultSummary
 import com.sona.android.application.sync.SYNC_PROVIDER_PRESETS
 import com.sona.android.application.sync.SyncConflictResolution
@@ -734,10 +735,11 @@ internal fun SyncSettingsPane(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
+                                    val semanticColors = LocalSonaSemanticColors.current
                                     val dotColor = when (state.status.state) {
-                                        SyncLifecycleState.IDLE -> Color(0xFF22C55E)
+                                        SyncLifecycleState.IDLE -> semanticColors.statusIdle
                                         SyncLifecycleState.SYNCING -> MaterialTheme.colorScheme.primary
-                                        SyncLifecycleState.PAUSED -> Color(0xFFF59E0B)
+                                        SyncLifecycleState.PAUSED -> semanticColors.statusWarning
                                         SyncLifecycleState.ERROR -> MaterialTheme.colorScheme.error
                                         else -> MaterialTheme.colorScheme.outline
                                     }

@@ -56,6 +56,10 @@ import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.feature.settings.SyncSettingsUiState
 import com.sona.android.app.ui.theme.SonaTheme
+import com.sona.android.application.settings.ColorPalettePreset
+import com.sona.android.application.settings.ContrastLevel
+import com.sona.android.application.settings.PaletteStyle
+import com.sona.android.application.settings.ThemeMode
 import com.sona.android.application.data.TranscriptExportFormat
 import com.sona.android.application.data.TranscriptExportMode
 import com.sona.android.application.library.HistoryDateFilter
@@ -92,7 +96,13 @@ internal fun SonaApp(
     aboutState: AboutSettingsUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
-    onDynamicColorChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit = {},
+    onPureBlackDarkChanged: (Boolean) -> Unit = {},
+    onSelectSystemDynamicColor: () -> Unit = {},
+    onSelectPalettePreset: (ColorPalettePreset) -> Unit = {},
+    onCustomSeedColorChanged: (Int) -> Unit = {},
+    onPaletteStyleChanged: (PaletteStyle) -> Unit = {},
+    onContrastLevelChanged: (ContrastLevel) -> Unit = {},
     onAboutShown: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onRetryBootstrap: () -> Unit,
@@ -223,7 +233,7 @@ internal fun SonaApp(
         it.resolution == RecoveryResolution.PENDING
     }
 
-    SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
+    SonaTheme(appearanceSettings = appearanceState.toDomainSettings()) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.LIBRARY.route
@@ -454,7 +464,13 @@ internal fun SonaApp(
                             appLanguage = appLanguage,
                             requestCloudCredentialFocus = cloudCredentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
-                            onDynamicColorChanged = onDynamicColorChanged,
+                            onThemeModeChanged = onThemeModeChanged,
+                            onPureBlackDarkChanged = onPureBlackDarkChanged,
+                            onSelectSystemDynamicColor = onSelectSystemDynamicColor,
+                            onSelectPalettePreset = onSelectPalettePreset,
+                            onCustomSeedColorChanged = onCustomSeedColorChanged,
+                            onPaletteStyleChanged = onPaletteStyleChanged,
+                            onContrastLevelChanged = onContrastLevelChanged,
                             onAboutShown = onAboutShown,
                             onCheckForUpdates = onCheckForUpdates,
                             onCloudProviderSelected = onCloudProviderSelected,
