@@ -202,12 +202,6 @@
     <string name="theme_mode_dark">Dark</string>
     <string name="appearance_pure_black_title">Pure black dark mode</string>
     <string name="appearance_pure_black_description">Use true #000000 surfaces in dark theme for OLED screens</string>
-    <string name="appearance_pure_black_short">AMOLED</string>
-    <string name="appearance_preview_title">Preview</string>
-    <string name="appearance_preview_recording_chip">Live</string>
-    <string name="appearance_preview_sample_title">Product sync meeting</string>
-    <string name="appearance_preview_sample_subtitle">Colors, surfaces, and contrast update across the entire app.</string>
-    <string name="appearance_preview_action">Done</string>
     <string name="appearance_color_heading">Colors</string>
     <string name="color_source_system_dynamic">System</string>
     <string name="color_source_custom">Custom</string>

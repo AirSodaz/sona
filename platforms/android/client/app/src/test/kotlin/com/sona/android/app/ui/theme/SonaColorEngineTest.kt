@@ -226,4 +226,50 @@ class SonaColorEngineTest {
         assertNotEquals(SonaLightColorScheme.primary, scheme.primary)
         assertTrue(scheme.primary.blue > scheme.primary.red)
     }
+
+    @Test
+    fun `system dynamic fallback in static resolver preserves default brand schemes`() {
+        val dynamicDefault = AppearanceSettings(colorSource = ColorSource.SYSTEM_DYNAMIC)
+        assertEquals(
+            SonaLightColorScheme,
+            SonaColorEngine.resolveStaticColorScheme(dynamicDefault, isDark = false),
+        )
+        assertEquals(
+            SonaDarkColorScheme,
+            SonaColorEngine.resolveStaticColorScheme(dynamicDefault, isDark = true),
+        )
+    }
+
+    @Test
+    fun `pure black dark mode adjusts surfaceVariant and honors high contrast thresholds`() {
+        val pureBlackHigh = AppearanceSettings(
+            themeMode = ThemeMode.DARK,
+            pureBlackDarkEnabled = true,
+            palettePreset = ColorPalettePreset.OCEAN_SLATE,
+            contrastLevel = ContrastLevel.HIGH,
+        )
+        val scheme = SonaColorEngine.resolveStaticColorScheme(pureBlackHigh, isDark = true)
+        assertEquals(Color(0xFF1E1E1E), scheme.surfaceVariant)
+        assertTrue(SonaColorEngine.contrastRatio(scheme.onSurface, scheme.surfaceContainerHighest) >= 7.0)
+        assertTrue(SonaColorEngine.contrastRatio(scheme.onSurfaceVariant, scheme.surfaceContainerHighest) >= 7.0)
+        assertTrue(SonaColorEngine.contrastRatio(scheme.onSurfaceVariant, scheme.surfaceVariant) >= 7.0)
+        assertTrue(SonaColorEngine.contrastRatio(scheme.outline, scheme.surfaceContainer) >= 4.0)
+        assertTrue(SonaColorEngine.contrastRatio(scheme.outlineVariant, scheme.surfaceContainer) >= 2.2)
+    }
+
+    @Test
+    fun `applyContrastAdjustment enforces contrast when dark surfaceVariant is brighter than surfaceContainerHighest`() {
+        val trickyDark = darkColorScheme(
+            surfaceContainerHighest = Color(0xFF282828),
+            surfaceVariant = Color(0xFF49454F),
+            onSurfaceVariant = Color(0xFFCAC4D0),
+        )
+        val adjusted = SonaColorEngine.applyContrastAdjustment(
+            scheme = trickyDark,
+            isDark = true,
+            contrastLevel = ContrastLevel.HIGH,
+        )
+        assertTrue(SonaColorEngine.contrastRatio(adjusted.onSurfaceVariant, adjusted.surfaceVariant) >= 7.0)
+        assertTrue(SonaColorEngine.contrastRatio(adjusted.onSurfaceVariant, adjusted.surfaceContainerHighest) >= 7.0)
+    }
 }

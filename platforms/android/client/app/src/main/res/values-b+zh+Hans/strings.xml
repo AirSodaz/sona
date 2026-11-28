@@ -186,12 +186,6 @@
     <string name="theme_mode_dark">深色</string>
     <string name="appearance_pure_black_title">纯黑深色模式</string>
     <string name="appearance_pure_black_description">深色主题下使用 #000000 纯黑背景，适合 OLED 屏幕</string>
-    <string name="appearance_pure_black_short">纯黑</string>
-    <string name="appearance_preview_title">实时预览</string>
-    <string name="appearance_preview_recording_chip">录音中</string>
-    <string name="appearance_preview_sample_title">产品同步会议</string>
-    <string name="appearance_preview_sample_subtitle">主题、色彩层级与对比度会实时应用到整个应用。</string>
-    <string name="appearance_preview_action">完成</string>
     <string name="appearance_color_heading">配色</string>
     <string name="color_source_system_dynamic">系统取色</string>
     <string name="color_source_custom">自定义</string>

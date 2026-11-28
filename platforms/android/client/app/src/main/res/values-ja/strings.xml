@@ -186,12 +186,6 @@
     <string name="theme_mode_dark">ダーク</string>
     <string name="appearance_pure_black_title">ピュアブラック（AMOLED）</string>
     <string name="appearance_pure_black_description">ダークテーマで #000000 の背景を使用し、OLED 画面に最適化します</string>
-    <string name="appearance_pure_black_short">AMOLED</string>
-    <string name="appearance_preview_title">プレビュー</string>
-    <string name="appearance_preview_recording_chip">録音中</string>
-    <string name="appearance_preview_sample_title">プロダクト定例ミーティング</string>
-    <string name="appearance_preview_sample_subtitle">色やサーフェス、コントラストがアプリ全体に即座に反映されます。</string>
-    <string name="appearance_preview_action">完了</string>
     <string name="appearance_color_heading">配色</string>
     <string name="color_source_system_dynamic">システム</string>
     <string name="color_source_custom">カスタム</string>

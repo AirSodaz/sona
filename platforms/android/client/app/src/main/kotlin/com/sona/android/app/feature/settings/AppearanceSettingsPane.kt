@@ -144,8 +144,6 @@ internal fun AppearanceSettingsPane(
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            AppearanceThemePreviewCard(state = state)
-
             if (state.hasError) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),

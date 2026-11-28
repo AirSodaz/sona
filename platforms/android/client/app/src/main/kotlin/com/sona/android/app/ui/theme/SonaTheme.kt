@@ -46,7 +46,7 @@ internal fun resolveSonaColorScheme(
             contrastLevel = settings.contrastLevel,
         )
         return if (isDark && settings.pureBlackDarkEnabled) {
-            SonaColorEngine.applyPureBlackSurfaces(contrastAdjusted)
+            SonaColorEngine.applyPureBlackSurfaces(contrastAdjusted, settings.contrastLevel)
         } else {
             contrastAdjusted
         }

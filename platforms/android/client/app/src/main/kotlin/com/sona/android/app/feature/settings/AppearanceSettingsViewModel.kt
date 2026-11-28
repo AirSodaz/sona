@@ -53,8 +53,7 @@ class AppearanceSettingsViewModel(
     val state: StateFlow<AppearanceSettingsUiState> = mutableState.asStateFlow()
 
     private val writeMutex = Mutex()
-    private var latestRepositorySettings = AppearanceSettings()
-    private var repositoryEmissionVersion = 0L
+    private var confirmedSettings = AppearanceSettings()
     private var pendingMutationCount = 0
 
     init {
@@ -65,15 +64,15 @@ class AppearanceSettingsViewModel(
                     mutableState.update { it.copy(isLoaded = true, hasError = true) }
                 }
                 .collect { appearanceSettings ->
-                    latestRepositorySettings = appearanceSettings
-                    repositoryEmissionVersion += 1
                     mutableState.update { current ->
                         if (pendingMutationCount > 0) {
                             current.copy(isLoaded = true)
                         } else {
+                            val matchesConfirmed = current.isLoaded && appearanceSettings == confirmedSettings
+                            confirmedSettings = appearanceSettings
                             current.applyDomainSettings(appearanceSettings).copy(
                                 isLoaded = true,
-                                hasError = false,
+                                hasError = if (matchesConfirmed) current.hasError else false,
                             )
                         }
                     }
@@ -85,6 +84,7 @@ class AppearanceSettingsViewModel(
         if (mutableState.value.themeMode == mode) return
         performOptimisticUpdate(
             transform = { it.copy(themeMode = mode) },
+            applyDomain = { it.copy(themeMode = mode) },
             persist = { settings.setThemeMode(mode) },
         )
     }
@@ -93,6 +93,7 @@ class AppearanceSettingsViewModel(
         if (mutableState.value.pureBlackDarkEnabled == enabled) return
         performOptimisticUpdate(
             transform = { it.copy(pureBlackDarkEnabled = enabled) },
+            applyDomain = { it.copy(pureBlackDarkEnabled = enabled) },
             persist = { settings.setPureBlackDarkEnabled(enabled) },
         )
     }
@@ -101,6 +102,7 @@ class AppearanceSettingsViewModel(
         if (mutableState.value.colorSource == ColorSource.SYSTEM_DYNAMIC) return
         performOptimisticUpdate(
             transform = { it.copy(colorSource = ColorSource.SYSTEM_DYNAMIC) },
+            applyDomain = { it.copy(colorSource = ColorSource.SYSTEM_DYNAMIC) },
             persist = { settings.selectSystemDynamicColor() },
         )
     }
@@ -110,6 +112,12 @@ class AppearanceSettingsViewModel(
         if (current.colorSource == ColorSource.PRESET && current.palettePreset == preset) return
         performOptimisticUpdate(
             transform = {
+                it.copy(
+                    colorSource = ColorSource.PRESET,
+                    palettePreset = preset,
+                )
+            },
+            applyDomain = {
                 it.copy(
                     colorSource = ColorSource.PRESET,
                     palettePreset = preset,
@@ -132,6 +140,12 @@ class AppearanceSettingsViewModel(
                     customSeedColorArgb = normalizedArgb,
                 )
             },
+            applyDomain = {
+                it.copy(
+                    colorSource = ColorSource.CUSTOM,
+                    customSeedColorArgb = normalizedArgb,
+                )
+            },
             persist = { settings.setCustomSeedColor(normalizedArgb) },
         )
     }
@@ -140,6 +154,7 @@ class AppearanceSettingsViewModel(
         if (mutableState.value.paletteStyle == style) return
         performOptimisticUpdate(
             transform = { it.copy(paletteStyle = style) },
+            applyDomain = { it.copy(paletteStyle = style) },
             persist = { settings.setPaletteStyle(style) },
         )
     }
@@ -148,45 +163,43 @@ class AppearanceSettingsViewModel(
         if (mutableState.value.contrastLevel == level) return
         performOptimisticUpdate(
             transform = { it.copy(contrastLevel = level) },
+            applyDomain = { it.copy(contrastLevel = level) },
             persist = { settings.setContrastLevel(level) },
         )
     }
 
     private fun performOptimisticUpdate(
         transform: (AppearanceSettingsUiState) -> AppearanceSettingsUiState,
+        applyDomain: (AppearanceSettings) -> AppearanceSettings,
         persist: suspend () -> Unit,
     ) {
         val current = mutableState.value
         if (!current.isLoaded) return
 
+        val startingNewBatch = pendingMutationCount == 0
         pendingMutationCount += 1
         mutableState.value = transform(current).copy(
             operationInProgress = true,
-            hasError = false,
+            hasError = if (startingNewBatch) false else current.hasError,
         )
         viewModelScope.launch {
             writeMutex.withLock {
-                val versionBefore = repositoryEmissionVersion
                 try {
                     persist()
+                    confirmedSettings = applyDomain(confirmedSettings)
                     pendingMutationCount = (pendingMutationCount - 1).coerceAtLeast(0)
                     if (pendingMutationCount == 0) {
                         mutableState.update { state ->
-                            if (repositoryEmissionVersion > versionBefore) {
-                                state.applyDomainSettings(latestRepositorySettings).copy(
-                                    operationInProgress = false,
-                                    hasError = false,
-                                )
-                            } else {
-                                state.copy(operationInProgress = false)
-                            }
+                            state.applyDomainSettings(confirmedSettings).copy(
+                                operationInProgress = false,
+                            )
                         }
                     }
                 } catch (error: CancellationException) {
                     pendingMutationCount = (pendingMutationCount - 1).coerceAtLeast(0)
                     if (pendingMutationCount == 0) {
                         mutableState.update { state ->
-                            state.applyDomainSettings(latestRepositorySettings).copy(
+                            state.applyDomainSettings(confirmedSettings).copy(
                                 operationInProgress = false,
                             )
                         }
@@ -196,7 +209,7 @@ class AppearanceSettingsViewModel(
                     pendingMutationCount = (pendingMutationCount - 1).coerceAtLeast(0)
                     mutableState.update { state ->
                         if (pendingMutationCount == 0) {
-                            state.applyDomainSettings(latestRepositorySettings).copy(
+                            state.applyDomainSettings(confirmedSettings).copy(
                                 operationInProgress = false,
                                 hasError = true,
                             )

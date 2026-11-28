@@ -47,7 +47,12 @@ internal object SonaColorEngine {
         settings: AppearanceSettings,
         isDark: Boolean,
     ): ColorScheme {
-        val isBrandDefault = settings.colorSource == ColorSource.PRESET &&
+        val effectiveColorSource = if (settings.colorSource == ColorSource.SYSTEM_DYNAMIC) {
+            ColorSource.PRESET
+        } else {
+            settings.colorSource
+        }
+        val isBrandDefault = effectiveColorSource == ColorSource.PRESET &&
             settings.palettePreset == ColorPalettePreset.TERRACOTTA &&
             settings.paletteStyle == PaletteStyle.TONAL_SPOT &&
             settings.contrastLevel == ContrastLevel.STANDARD
@@ -55,7 +60,7 @@ internal object SonaColorEngine {
         val baseScheme = if (isBrandDefault) {
             if (isDark) SonaDarkColorScheme else SonaLightColorScheme
         } else {
-            val seedArgb = when (settings.colorSource) {
+            val seedArgb = when (effectiveColorSource) {
                 ColorSource.CUSTOM -> settings.customSeedColorArgb
                 ColorSource.PRESET, ColorSource.SYSTEM_DYNAMIC -> settings.palettePreset.seedColorArgb
             }
@@ -68,7 +73,7 @@ internal object SonaColorEngine {
         }
 
         return if (isDark && settings.pureBlackDarkEnabled) {
-            applyPureBlackSurfaces(baseScheme)
+            applyPureBlackSurfaces(baseScheme, settings.contrastLevel)
         } else {
             baseScheme
         }
@@ -403,7 +408,7 @@ internal object SonaColorEngine {
         if (contrastLevel == ContrastLevel.STANDARD) return scheme
         val minTextContrast = contrastThreshold(contrastLevel)
         val preferLighter = isDark
-        val worstCaseSurface = if (isDark) scheme.surfaceContainerHighest else scheme.surfaceContainerHighest
+        val worstCaseSurface = scheme.surfaceContainerHighest
 
         val (primary, onPrimary) = ensureAccentAndLabel(
             accent = scheme.primary,
@@ -435,7 +440,10 @@ internal object SonaColorEngine {
         )
 
         val onSurface = ensureContrast(scheme.onSurface, worstCaseSurface, minTextContrast, preferLighter)
-        val onSurfaceVariant = ensureContrast(scheme.onSurfaceVariant, worstCaseSurface, minTextContrast, preferLighter)
+        var onSurfaceVariant = ensureContrast(scheme.onSurfaceVariant, worstCaseSurface, minTextContrast, preferLighter)
+        if (scheme.surfaceVariant != Color.Unspecified) {
+            onSurfaceVariant = ensureContrast(onSurfaceVariant, scheme.surfaceVariant, minTextContrast, preferLighter)
+        }
         val onPrimaryContainer = ensureContrast(scheme.onPrimaryContainer, scheme.primaryContainer, minTextContrast, preferLighter)
         val onSecondaryContainer = ensureContrast(scheme.onSecondaryContainer, scheme.secondaryContainer, minTextContrast, preferLighter)
         val onTertiaryContainer = ensureContrast(scheme.onTertiaryContainer, scheme.tertiaryContainer, minTextContrast, preferLighter)
@@ -466,25 +474,39 @@ internal object SonaColorEngine {
         )
     }
 
-    fun applyPureBlackSurfaces(scheme: ColorScheme): ColorScheme {
+    fun applyPureBlackSurfaces(
+        scheme: ColorScheme,
+        contrastLevel: ContrastLevel = ContrastLevel.STANDARD,
+    ): ColorScheme {
         val pureSurfaceContainer = Color(0xFF121212)
+        val pureSurfaceVariant = Color(0xFF1E1E1E)
         val pureSurfaceContainerHighest = Color(0xFF232323)
+        val minTextContrast = contrastThreshold(contrastLevel)
+        val minOutlineContrast = if (contrastLevel == ContrastLevel.HIGH) 4.0 else 3.0
+        val minOutlineVariantContrast = if (contrastLevel == ContrastLevel.HIGH) 2.2 else 1.6
+
         val boostedOutlineVariant = ensureContrast(
             scheme.outlineVariant,
             pureSurfaceContainer,
-            minRatio = 1.6,
+            minRatio = minOutlineVariantContrast,
             preferLighter = true,
         )
         val checkedOutline = ensureContrast(
             scheme.outline,
             pureSurfaceContainer,
-            minRatio = 3.0,
+            minRatio = minOutlineContrast,
+            preferLighter = true,
+        )
+        val checkedOnSurface = ensureContrast(
+            scheme.onSurface,
+            pureSurfaceContainerHighest,
+            minRatio = minTextContrast,
             preferLighter = true,
         )
         val checkedOnSurfaceVariant = ensureContrast(
             scheme.onSurfaceVariant,
             pureSurfaceContainerHighest,
-            minRatio = 4.5,
+            minRatio = minTextContrast,
             preferLighter = true,
         )
         return scheme.copy(
@@ -492,11 +514,14 @@ internal object SonaColorEngine {
             surface = Color.Black,
             surfaceDim = Color.Black,
             surfaceBright = Color(0xFF1F1F1F),
+            surfaceVariant = pureSurfaceVariant,
             surfaceContainerLowest = Color.Black,
             surfaceContainerLow = Color(0xFF0A0A0A),
             surfaceContainer = pureSurfaceContainer,
             surfaceContainerHigh = Color(0xFF1A1A1A),
             surfaceContainerHighest = pureSurfaceContainerHighest,
+            onBackground = checkedOnSurface,
+            onSurface = checkedOnSurface,
             onSurfaceVariant = checkedOnSurfaceVariant,
             outline = checkedOutline,
             outlineVariant = boostedOutlineVariant,

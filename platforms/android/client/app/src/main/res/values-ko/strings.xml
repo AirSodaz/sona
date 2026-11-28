@@ -186,12 +186,6 @@
     <string name="theme_mode_dark">다크</string>
     <string name="appearance_pure_black_title">퓨어 블랙 다크 모드</string>
     <string name="appearance_pure_black_description">OLED 화면을 위해 다크 테마에서 #000000 배경을 사용합니다</string>
-    <string name="appearance_pure_black_short">AMOLED</string>
-    <string name="appearance_preview_title">미리보기</string>
-    <string name="appearance_preview_recording_chip">녹음 중</string>
-    <string name="appearance_preview_sample_title">제품 동기화 회의</string>
-    <string name="appearance_preview_sample_subtitle">색상, 표면 계층 및 대비가 앱 전체에 즉시 반영됩니다.</string>
-    <string name="appearance_preview_action">완료</string>
     <string name="appearance_color_heading">색상</string>
     <string name="color_source_system_dynamic">시스템</string>
     <string name="color_source_custom">사용자 지정</string>

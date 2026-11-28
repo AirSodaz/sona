@@ -195,6 +195,49 @@ class AppearanceSettingsViewModelTest {
         )
     }
 
+    @Test
+    fun `partial failure in rapid sequential updates preserves earlier write and retains error across delayed emission`() = runTest {
+        val delayedEmission = MutableStateFlow(AppearanceSettings())
+        val firstWriteGate = CompletableDeferred<Unit>()
+        val sequencedPort = object : AppearanceSettingsPort {
+            override val settings: Flow<AppearanceSettings> = delayedEmission
+
+            override suspend fun setThemeMode(mode: ThemeMode) {
+                firstWriteGate.await()
+            }
+
+            override suspend fun setPureBlackDarkEnabled(enabled: Boolean) {
+                throw IllegalStateException("second write failed")
+            }
+
+            override suspend fun selectSystemDynamicColor() = Unit
+            override suspend fun selectPalettePreset(preset: ColorPalettePreset) = Unit
+            override suspend fun setCustomSeedColor(argb: Int) = Unit
+            override suspend fun setPaletteStyle(style: PaletteStyle) = Unit
+            override suspend fun setContrastLevel(level: ContrastLevel) = Unit
+        }
+        val sequencedViewModel = AppearanceSettingsViewModel(sequencedPort)
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+
+        sequencedViewModel.setThemeMode(ThemeMode.DARK)
+        sequencedViewModel.setPureBlackDarkEnabled(true)
+        firstWriteGate.complete(Unit)
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+
+        assertEquals(ThemeMode.DARK, sequencedViewModel.state.value.themeMode)
+        assertFalse(sequencedViewModel.state.value.pureBlackDarkEnabled)
+        assertFalse(sequencedViewModel.state.value.operationInProgress)
+        assertTrue(sequencedViewModel.state.value.hasError)
+
+        // Delayed DataStore emission for the first successful write must not clear the second write's error
+        delayedEmission.value = AppearanceSettings(themeMode = ThemeMode.DARK)
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+
+        assertEquals(ThemeMode.DARK, sequencedViewModel.state.value.themeMode)
+        assertFalse(sequencedViewModel.state.value.pureBlackDarkEnabled)
+        assertTrue(sequencedViewModel.state.value.hasError)
+    }
+
     private class FakeAppearanceSettings(
         initial: AppearanceSettings = AppearanceSettings(),
         private val writeGate: CompletableDeferred<Unit>? = null,

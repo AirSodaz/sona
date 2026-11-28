@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -86,6 +87,9 @@ internal fun CustomColorPickerDialog(
     val initialHsv = remember(initialSeedArgb) {
         FloatArray(3).apply { AndroidColor.colorToHSV(initialSeedArgb or 0xFF000000.toInt(), this) }
     }
+    var selectedArgb by rememberSaveable(initialSeedArgb) {
+        mutableIntStateOf(initialSeedArgb or 0xFF000000.toInt())
+    }
     var hue by rememberSaveable(initialSeedArgb) { mutableFloatStateOf(initialHsv[0]) }
     var saturation by rememberSaveable(initialSeedArgb) { mutableFloatStateOf(initialHsv[1]) }
     var value by rememberSaveable(initialSeedArgb) { mutableFloatStateOf(initialHsv[2]) }
@@ -101,9 +105,7 @@ internal fun CustomColorPickerDialog(
     val showHexError = (hexInput.length == 6 && !isHexValid) ||
         (showValidationOnIncomplete && !isHexValid)
 
-    val currentArgb = remember(hue, saturation, value) {
-        AndroidColor.HSVToColor(floatArrayOf(hue, saturation, value)) or 0xFF000000.toInt()
-    }
+    val currentArgb = selectedArgb
     val currentColor = Color(currentArgb)
     val generatedPreviewScheme = remember(currentArgb, paletteStyle, contrastLevel, pureBlackDarkEnabled, isDark) {
         val raw = SonaColorEngine.generateColorScheme(
@@ -113,7 +115,7 @@ internal fun CustomColorPickerDialog(
             isDark = isDark,
         )
         if (isDark && pureBlackDarkEnabled) {
-            SonaColorEngine.applyPureBlackSurfaces(raw)
+            SonaColorEngine.applyPureBlackSurfaces(raw, contrastLevel)
         } else {
             raw
         }
@@ -123,6 +125,7 @@ internal fun CustomColorPickerDialog(
         val opaque = argb or 0xFF000000.toInt()
         val hsv = FloatArray(3)
         AndroidColor.colorToHSV(opaque, hsv)
+        selectedArgb = opaque
         hue = hsv[0]
         saturation = hsv[1]
         value = hsv[2]
@@ -293,7 +296,8 @@ internal fun CustomColorPickerDialog(
                             value = hue,
                             onValueChange = { nextHue ->
                                 hue = nextHue
-                                val nextArgb = AndroidColor.HSVToColor(floatArrayOf(nextHue, saturation, value))
+                                val nextArgb = AndroidColor.HSVToColor(floatArrayOf(nextHue, saturation, value)) or 0xFF000000.toInt()
+                                selectedArgb = nextArgb
                                 hexInput = formatHex(nextArgb)
                                 showValidationOnIncomplete = false
                             },
@@ -317,7 +321,8 @@ internal fun CustomColorPickerDialog(
                     activeColor = currentColor,
                     onValueChange = { nextSat ->
                         saturation = nextSat
-                        val nextArgb = AndroidColor.HSVToColor(floatArrayOf(hue, nextSat, value))
+                        val nextArgb = AndroidColor.HSVToColor(floatArrayOf(hue, nextSat, value)) or 0xFF000000.toInt()
+                        selectedArgb = nextArgb
                         hexInput = formatHex(nextArgb)
                         showValidationOnIncomplete = false
                     },
@@ -330,7 +335,8 @@ internal fun CustomColorPickerDialog(
                     activeColor = currentColor,
                     onValueChange = { nextVal ->
                         value = nextVal
-                        val nextArgb = AndroidColor.HSVToColor(floatArrayOf(hue, saturation, nextVal))
+                        val nextArgb = AndroidColor.HSVToColor(floatArrayOf(hue, saturation, nextVal)) or 0xFF000000.toInt()
+                        selectedArgb = nextArgb
                         hexInput = formatHex(nextArgb)
                         showValidationOnIncomplete = false
                     },
@@ -350,6 +356,7 @@ internal fun CustomColorPickerDialog(
                                 val argb = parsed or 0xFF000000.toInt()
                                 val hsv = FloatArray(3)
                                 AndroidColor.colorToHSV(argb, hsv)
+                                selectedArgb = argb
                                 hue = hsv[0]
                                 saturation = hsv[1]
                                 value = hsv[2]
